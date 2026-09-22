@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img" aria-labelledby="title desc">
+  <title id="title">Audiobook cover placeholder</title>
+  <desc id="desc">A warm illustrated placeholder cover for an audiobook.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12343b"/>
+      <stop offset="1" stop-color="#e07a5f"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" fill="url(#background)"/>
+  <circle cx="620" cy="120" r="170" fill="#f2cc8f" opacity="0.85"/>
+  <path d="M0 420c125-92 218-80 322 0 104 80 198 89 298 5 62-52 120-60 180-20v95H0z" fill="#0b2024" opacity="0.8"/>
+  <path d="M90 110h210v18H90zm0 34h150v12H90z" fill="#f4f1de" opacity="0.9"/>
+  <text x="90" y="365" fill="#f4f1de" font-family="Georgia, serif" font-size="48" font-weight="700">AUDIOBOOK</text>
+  <text x="90" y="405" fill="#f4f1de" font-family="Arial, sans-serif" font-size="20" letter-spacing="3">YOUR LIBRARY</text>
+</svg>

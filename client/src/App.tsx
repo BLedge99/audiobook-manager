@@ -74,7 +74,7 @@ function App() {
                 {audiobooks.slice(0, 3).map(book => (
                   <div key={book.id} className="bg-slate-800 rounded-lg overflow-hidden hover:bg-slate-700 transition-colors cursor-pointer group">
                     <img 
-                      src="/placeholder-cover.jpg" 
+                      src="/placeholder-cover.svg" 
                       alt={book.title}
                       className="w-full h-48 object-cover group-hover:opacity-90 transition-opacity"
                     />
@@ -97,7 +97,7 @@ function App() {
                 {audiobooks.map(book => (
                   <div key={book.id} className="bg-slate-800 rounded-lg overflow-hidden hover:bg-slate-700 transition-colors cursor-pointer group">
                     <img 
-                      src="/placeholder-cover.jpg" 
+                      src="/placeholder-cover.svg" 
                       alt={book.title}
                       className="w-full h-32 object-cover group-hover:opacity-90 transition-opacity"
                     />

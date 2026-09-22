@@ -12,6 +12,9 @@ model LibraryRoot {
   path      String @unique
   label     String?
   createdAt DateTime @default(now())
+
+  mediaItems MediaItem[]
+  scanState  ScanState?
 }
 
 model MediaItem {
@@ -23,22 +26,25 @@ model MediaItem {
   coverImagePath    String?
   coverImageUrl     String?
   releaseDate       DateTime?
-  genre             String[]
+  genre             String?   // comma-separated genres until a normalized genre model is needed
   isbn              String?
   asin              String?
   filePath          String
   fileFormat        String   // mp3, m4b, flac, ogg, wav, etc.
   duration          Float    @default(0) // in seconds
-  chapters          Json?    // array of { start, end, title }
+  chapters          String?  // JSON-encoded array of { start, end, title }
   metadataSource    String?  // embedded, openlibrary, googlebooks, audnexus
   metadataConfidence Float?  // 0-1 confidence score
-  libraryRootId     Int      @unique
+  libraryRootId     Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   tracks             Track[]
   contributors       ContributorMediaItem[]
   candidates         MetadataCandidate[]
+  listeningHistory   ListeningHistory[]
+
+  libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id])
 }
 
 model Track {
@@ -68,6 +74,8 @@ model ContributorMediaItem {
 
   contributor Contributor @relation(fields: [contributorId], references: [id])
   mediaItem   MediaItem   @relation(fields: [mediaItemId], references: [id])
+
+  @@id([contributorId, mediaItemId])
 }
 
 model MetadataCandidate {
@@ -79,7 +87,7 @@ model MetadataCandidate {
   coverUrl    String?
   description String?
   confidence  Float?
-  raw         Json?
+  raw         String? // JSON-encoded provider response
 
   mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
 }
