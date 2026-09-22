@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  client:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile.client
+    working_dir: /app/client
+    command: npm run dev -- --host
+    volumes:
+      - ./client:/app/client
+      - client_node_modules:/app/client/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000/api
+
+  server:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile.server
+    working_dir: /app/server
+    command: npm run dev
+    volumes:
+      - ./server:/app/server
+      - server_node_modules:/app/server/node_modules
+      - audiobook_data:/data/audiobooks
+      - app_data:/app/data
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DATABASE_URL=file:/app/data/library.db
+      - LIBRARY_ROOT=/data/audiobooks
+
+volumes:
+  client_node_modules:
+  server_node_modules:
+  audiobook_data:
+  app_data:

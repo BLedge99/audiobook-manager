@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model LibraryRoot {
+  id        Int    @id @default(autoincrement())
+  path      String @unique
+  label     String?
+  createdAt DateTime @default(now())
+}
+
+model MediaItem {
+  id                Int       @id @default(autoincrement())
+  title             String
+  author            String
+  narrator          String?
+  description       String?
+  coverImagePath    String?
+  coverImageUrl     String?
+  releaseDate       DateTime?
+  genre             String[]
+  isbn              String?
+  asin              String?
+  filePath          String
+  fileFormat        String   // mp3, m4b, flac, ogg, wav, etc.
+  duration          Float    @default(0) // in seconds
+  chapters          Json?    // array of { start, end, title }
+  metadataSource    String?  // embedded, openlibrary, googlebooks, audnexus
+  metadataConfidence Float?  // 0-1 confidence score
+  libraryRootId     Int      @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tracks             Track[]
+  contributors       ContributorMediaItem[]
+  candidates         MetadataCandidate[]
+}
+
+model Track {
+  id          Int    @id @default(autoincrement())
+  mediaItemId Int
+  filePath    String
+  title       String?
+  duration    Float
+  trackNumber Int
+  sizeBytes   BigInt?
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
+}
+
+model Contributor {
+  id          Int    @id @default(autoincrement())
+  name        String
+  role        String // author, narrator, actor, etc.
+  createdAt   DateTime @default(now())
+
+  mediaItems ContributorMediaItem[]
+}
+
+model ContributorMediaItem {
+  contributorId Int
+  mediaItemId   Int
+
+  contributor Contributor @relation(fields: [contributorId], references: [id])
+  mediaItem   MediaItem   @relation(fields: [mediaItemId], references: [id])
+}
+
+model MetadataCandidate {
+  id          Int    @id @default(autoincrement())
+  mediaItemId Int
+  source      String // openlibrary, googlebooks, audnexus
+  title       String
+  author      String?
+  coverUrl    String?
+  description String?
+  confidence  Float?
+  raw         Json?
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
+}
+
+model ListeningHistory {
+  id          Int       @id @default(autoincrement())
+  mediaItemId Int
+  position    Float    // seconds into the audiobook
+  completed   Boolean  @default(false)
+  lastPlayed  DateTime @updatedAt
+  playedAt    DateTime @default(now())
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
+}
+
+model ScanState {
+  id          Int       @id @default(autoincrement())
+  libraryRootId Int     @unique
+  lastScanAt  DateTime?
+  filesFound  Int      @default(0)
+  status      String   // idle, scanning, complete, error
+  message     String?
+
+  libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id])
+}

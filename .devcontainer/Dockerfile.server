@@ -1,0 +1,10 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install system dependencies including FFmpeg for audio processing
+RUN apk add --no-cache git python3 make g++ libc-dev ffmpeg curl wget
+
+ENV NODE_ENV=development
+
+CMD ["npm", "run", "dev"]

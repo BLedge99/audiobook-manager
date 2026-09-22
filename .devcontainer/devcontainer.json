@@ -1,0 +1,19 @@
+{
+  "name": "Audiobook Webapp",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "server",
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker",
+        "prisma.prisma"
+      ]
+    }
+  },
+  "forwardPorts": [3000, 5173],
+  "postCreateCommand": "cd server && npm install && cd ../client && npm install",
+  "mounts": ["source=${localWorkspaceFolder}/audiobooks,target=/data/audiobooks,type=bind"]
+}
