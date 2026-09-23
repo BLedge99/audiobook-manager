@@ -1,5 +1,8 @@
 services:
   client:
+    depends_on:
+      server:
+        condition: service_healthy
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile.client
@@ -18,10 +21,11 @@ services:
       context: .
       dockerfile: .devcontainer/Dockerfile.server
     working_dir: /app/server
-    command: sh -c "npx prisma db push --skip-generate && npm run dev"
+    command: sh -c "echo '[compose] starting prisma generate'; npx prisma generate; echo '[compose] prisma generate exited with code '$$?; echo '[compose] starting prisma db push'; npx prisma db push --accept-data-loss; echo '[compose] prisma db push exited with code '$$?; echo '[compose] starting Fastify'; npm run dev"
     volumes:
       - ./server:/app/server
       - server_node_modules:/app/server/node_modules
+      - ./test:/test:ro
       - audiobook_data:/data/audiobooks
       - app_data:/app/data
     ports:
@@ -30,6 +34,12 @@ services:
       - PORT=3000
       - DATABASE_URL=file:/app/data/library.db
       - LIBRARY_ROOT=/data/audiobooks
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
 volumes:
   client_node_modules:

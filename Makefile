@@ -1,4 +1,4 @@
-.PHONY: start stop logs scan reset install client server test
+.PHONY: start stop logs scan migrate reset install client server test
 
 start:
 	docker compose up -d
@@ -12,6 +12,9 @@ logs:
 scan:
 	@echo "Triggering library scan..."
 	curl -s -X POST http://localhost:3000/api/scan || echo "Scan endpoint not available (is the server running?)"
+
+migrate:
+	docker compose run --rm server npm run migrate
 
 reset:
 	docker compose down -v --remove-orphans

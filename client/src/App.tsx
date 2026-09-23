@@ -1,124 +1,71 @@
-import { useState, useEffect } from 'react';
-import { BookOpen, Home, Library, Search } from 'lucide-react';
-
-// Types matching our Prisma schema
-interface MediaItem {
-  id: number;
-  title: string;
-  author: string;
-  narrator?: string;
-  description?: string;
-  coverImagePath?: string;
-  duration: number;
-}
-
-// Mock data for development until API is connected
-const mockAudiobooks: MediaItem[] = [
-  { id: 1, title: 'Dune', author: 'Frank Herbert', narrator: 'Scott Brick', description: 'In the vast desert of Arrakis...', duration: 3600 },
-  { id: 2, title: 'Project Hail Mary', author: 'Andy Weir', narrator: 'Ray Porter', description: 'Rymer Wilson wakes up on a spaceship...', duration: 4800 },
-  { id: 3, title: 'The Hobbit', author: 'J.R.R. Tolkien', narrator: 'Robbie Coltrane', description: 'Bilbo Baggins sets out on an adventure...', duration: 5100 },
-];
+import { FormEvent, useState } from "react";
+import { BookOpen, FolderPlus, Library, LoaderCircle, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { AudiobookDetail } from "./components/AudiobookDetail";
+import { AudiobookGrid } from "./components/AudiobookGrid";
+import { useLibrary } from "./useLibrary";
+import type { Audiobook } from "./types";
 
 function App() {
-  const [audiobooks, setAudiobooks] = useState<MediaItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { audiobooks, roots, loading, error, refresh, addRoot, removeRoot, scan } = useLibrary();
+  const [selectedBook, setSelectedBook] = useState<Audiobook>();
+  const [path, setPath] = useState("");
+  const [label, setLabel] = useState("");
+  const [showRootForm, setShowRootForm] = useState(false);
+  const [working, setWorking] = useState(false);
 
-  useEffect(() => {
-    // TODO: Replace with actual API call when server is ready
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => {
-        console.log('Server status:', data.status);
-        setAudiobooks(mockAudiobooks);
-        setLoading(false);
-      })
-      .catch(() => {
-        setAudiobooks(mockAudiobooks);
-        setLoading(false);
-      });
-  }, []);
+  const submitRoot = async (event: FormEvent) => {
+    event.preventDefault();
+    setWorking(true);
+    try {
+      await addRoot(path, label);
+      setPath("");
+      setLabel("");
+      setShowRootForm(false);
+    } catch (requestError) {
+      window.alert(requestError instanceof Error ? requestError.message : "Unable to add library root");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const runScan = async (rootId?: number) => {
+    setWorking(true);
+    try { await scan(rootId); } catch (requestError) { window.alert(requestError instanceof Error ? requestError.message : "Unable to start scan"); } finally { setWorking(false); }
+  };
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <header className="fixed top-0 w-full bg-slate-950/90 backdrop-blur-sm z-50 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BookOpen size={28} className="text-blue-500" />
-            <h1 className="text-xl font-bold text-white">Audiobook Manager</h1>
+    <div className="min-h-screen bg-[#0b1117] text-slate-100">
+      <header className="border-b border-slate-800/80 bg-[#0b1117]/95">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5">
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 place-items-center bg-cyan-400 text-slate-950"><BookOpen size={22} /></span>
+            <div><p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400">Local library</p><h1 className="text-xl font-bold">Audiobook Manager</h1></div>
           </div>
-          <nav className="flex items-center gap-6 text-slate-300">
-            <button className="hover:text-white transition-colors flex items-center gap-2">
-              <Home size={20} /> Home
-            </button>
-            <button className="hover:text-white transition-colors flex items-center gap-2">
-              <Library size={20} /> Library
-            </button>
-            <button className="hover:text-white transition-colors flex items-center gap-2">
-              <Search size={20} /> Search
-            </button>
-          </nav>
+          <button onClick={() => void refresh()} aria-label="Refresh library" className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><RefreshCw size={20} /></button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="pt-16 px-4 max-w-7xl mx-auto">
-        {loading ? (
-          <p className="text-slate-400 text-center py-20">Loading...</p>
-        ) : audiobooks.length > 0 ? (
-          <>
-            {/* Featured Row */}
-            <section className="mb-8">
-              <h2 className="text-lg font-semibold mb-4 text-white">Featured</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {audiobooks.slice(0, 3).map(book => (
-                  <div key={book.id} className="bg-slate-800 rounded-lg overflow-hidden hover:bg-slate-700 transition-colors cursor-pointer group">
-                    <img 
-                      src="/placeholder-cover.svg" 
-                      alt={book.title}
-                      className="w-full h-48 object-cover group-hover:opacity-90 transition-opacity"
-                    />
-                    <div className="p-4">
-                      <h3 className="font-semibold text-white mb-1">{book.title}</h3>
-                      <p className="text-sm text-slate-400">by {book.author}</p>
-                      {book.narrator && (
-                        <p className="text-xs text-slate-500 mt-1">Narrated by {book.narrator}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+      <main className="mx-auto max-w-7xl px-5 py-10">
+        <section className="mb-10 flex flex-col justify-between gap-5 border-b border-slate-800 pb-8 sm:flex-row sm:items-end">
+          <div><p className="mb-2 text-sm font-medium text-cyan-400">Your collection</p><h2 className="text-4xl font-bold tracking-tight">Browse your books.</h2><p className="mt-3 max-w-xl text-slate-400">Scan local folders to bring your audiobook metadata and artwork into one calm shelf.</p></div>
+          <button onClick={() => void runScan()} disabled={working || !roots.length} className="flex items-center justify-center gap-2 bg-cyan-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"><ScanLine size={18} /> Scan library</button>
+        </section>
 
-            {/* All Audiobooks Row */}
-            <section className="mb-8">
-              <h2 className="text-lg font-semibold mb-4 text-white">All Audiobooks</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                {audiobooks.map(book => (
-                  <div key={book.id} className="bg-slate-800 rounded-lg overflow-hidden hover:bg-slate-700 transition-colors cursor-pointer group">
-                    <img 
-                      src="/placeholder-cover.svg" 
-                      alt={book.title}
-                      className="w-full h-32 object-cover group-hover:opacity-90 transition-opacity"
-                    />
-                    <div className="p-2">
-                      <h3 className="text-sm font-medium text-white truncate">{book.title}</h3>
-                      <p className="text-xs text-slate-400 truncate">{book.author}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </>
-        ) : (
-          <p className="text-slate-400 text-center py-20">No audiobooks found. Scan your library to get started.</p>
-        )}
+        <section className="mb-10">
+          <div className="mb-4 flex items-center justify-between"><h2 className="flex items-center gap-2 text-lg font-semibold"><Library size={19} className="text-cyan-400" /> Library folders</h2><button onClick={() => setShowRootForm((visible) => !visible)} className="flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300"><FolderPlus size={17} /> Add folder</button></div>
+          {showRootForm && <form onSubmit={submitRoot} className="mb-4 grid gap-3 border border-slate-800 bg-slate-900 p-4 sm:grid-cols-[1fr_180px_auto]"><input value={path} onChange={(event) => setPath(event.target.value)} placeholder="/data/audiobooks" required className="border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-cyan-400" /><input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Label (optional)" className="border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-cyan-400" /><button disabled={working} className="bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-white">Add folder</button></form>}
+          {roots.length ? <div className="grid gap-3 md:grid-cols-2">{roots.map((root) => <div key={root.id} className="flex items-center justify-between border border-slate-800 bg-slate-900/70 px-4 py-3"><div className="min-w-0"><p className="truncate font-medium">{root.label || root.path}</p><p className="truncate text-xs text-slate-500">{root.path} {root.scanState?.status && `· ${root.scanState.status}`}</p>{root.scanState?.message && <p className="mt-1 text-xs text-red-300">{root.scanState.message}</p>}</div><div className="ml-3 flex items-center gap-1"><button onClick={() => void runScan(root.id)} disabled={working} aria-label={`Scan ${root.label || root.path}`} className="rounded p-2 text-cyan-400 hover:bg-slate-800"><ScanLine size={16} /></button><button onClick={() => void removeRoot(root.id)} aria-label={`Remove ${root.label || root.path}`} className="rounded p-2 text-slate-500 hover:bg-slate-800 hover:text-red-400"><Trash2 size={16} /></button></div></div>)}</div> : <p className="text-sm text-slate-500">No folders configured yet.</p>}
+        </section>
+
+        {error && <div className="mb-6 border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">{error}</div>}
+        <section>
+          <div className="mb-5 flex items-center justify-between"><div><h2 className="text-2xl font-bold">All audiobooks</h2><p className="mt-1 text-sm text-slate-500">{audiobooks.length} {audiobooks.length === 1 ? "title" : "titles"} in your library</p></div>{working && <LoaderCircle className="animate-spin text-cyan-400" size={20} />}</div>
+          {loading ? <div className="py-20 text-center text-slate-500">Loading library...</div> : <AudiobookGrid books={audiobooks} onSelect={setSelectedBook} />}
+        </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800 mt-16 pt-8 pb-4 px-4 text-center text-slate-500 text-sm">
-        Audiobook Manager v0.1.0 — Local-first audiobook management
-      </footer>
+      <footer className="border-t border-slate-800 px-5 py-6 text-center text-xs text-slate-600">Audiobook Manager · local-first listening</footer>
+      {selectedBook && <AudiobookDetail book={selectedBook} onClose={() => setSelectedBook(undefined)} />}
     </div>
   );
 }

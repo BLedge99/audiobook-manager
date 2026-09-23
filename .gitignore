@@ -40,6 +40,9 @@ pnpm-debug.log*
 # Docker volume data (if mounted locally during dev)
 data/
 
+# Test folder
+test/
+
 # Test coverage
 coverage/
 .nyc_output/

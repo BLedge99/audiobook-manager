@@ -44,7 +44,9 @@ model MediaItem {
   candidates         MetadataCandidate[]
   listeningHistory   ListeningHistory[]
 
-  libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id])
+  libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id], onDelete: Cascade)
+
+  @@unique([libraryRootId, filePath])
 }
 
 model Track {
@@ -111,5 +113,5 @@ model ScanState {
   status      String   // idle, scanning, complete, error
   message     String?
 
-  libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id])
+  libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id], onDelete: Cascade)
 }
