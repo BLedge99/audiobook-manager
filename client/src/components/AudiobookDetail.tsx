@@ -1,5 +1,6 @@
-import { X, Play, Clock3, FileAudio } from "lucide-react";
+import { X, Clock3, FileAudio } from "lucide-react";
 import type { Audiobook } from "../types";
+import { ChapterPlayer } from "./ChapterPlayer";
 
 function durationLabel(seconds: number) {
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
@@ -21,8 +22,7 @@ export function AudiobookDetail({ book, onClose }: { book: Audiobook; onClose: (
             <span className="flex items-center gap-2"><FileAudio size={16} /> {book.fileFormat.toUpperCase()}</span>
           </div>
           {book.description && <p className="mt-6 leading-7 text-slate-400">{book.description}</p>}
-          <audio className="mt-8 w-full" controls src={`/api/audiobooks/${book.id}/stream`} />
-          <button className="mt-4 flex items-center gap-2 bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300"><Play size={16} fill="currentColor" /> Play audiobook</button>
+          <ChapterPlayer key={book.id} book={book} />
         </div>
       </article>
     </div>

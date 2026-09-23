@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
 import { createReadStream } from "node:fs";
-import { access } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
 
@@ -125,26 +125,43 @@ app.get<{ Params: { id: string } }>("/api/audiobooks/:id/stream", async (request
   const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
   if (!item) return reply.code(404).send({ message: "Audiobook not found" });
   try {
-    const details = await import("node:fs/promises").then(({ stat }) => stat(item.filePath));
-    const range = request.headers.range;
-    if (!range) {
-      reply.header("Content-Length", details.size).type("audio/mpeg");
-      return reply.send(createReadStream(item.filePath));
-    }
-    const [startValue, endValue] = range.replace("bytes=", "").split("-");
-    const start = Number(startValue);
-    const end = endValue ? Number(endValue) : details.size - 1;
-    reply.code(206).headers({
-      "Accept-Ranges": "bytes",
-      "Content-Range": `bytes ${start}-${end}/${details.size}`,
-      "Content-Length": end - start + 1,
-      "Content-Type": "audio/mpeg",
-    });
-    return reply.send(createReadStream(item.filePath, { start, end }));
+    return streamAudioFile(item.filePath, request.headers.range, reply);
   } catch {
     return reply.code(404).send({ message: "Audio file not found" });
   }
 });
+
+app.get<{ Params: { id: string } }>("/api/tracks/:id/stream", async (request, reply) => {
+  const id = Number(request.params.id);
+  if (!Number.isInteger(id) || id < 1) return reply.code(400).send({ message: "Invalid track ID" });
+  const track = await prisma.track.findUnique({ where: { id } });
+  if (!track) return reply.code(404).send({ message: "Track not found" });
+  try {
+    return await streamAudioFile(track.filePath, request.headers.range, reply);
+  } catch {
+    return reply.code(404).send({ message: "Audio file not found" });
+  }
+});
+
+async function streamAudioFile(filePath: string, range: string | undefined, reply: import("fastify").FastifyReply) {
+  const details = await stat(filePath);
+  reply.header("Accept-Ranges", "bytes").type("audio/mpeg");
+  if (!range) {
+    reply.header("Content-Length", details.size);
+    return reply.send(createReadStream(filePath));
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+  if (!match || (!match[1] && !match[2])) return reply.code(416).header("Content-Range", `bytes */${details.size}`).send();
+  const start = match[1] ? Number(match[1]) : Math.max(0, details.size - Number(match[2]));
+  const end = match[1] && match[2] ? Number(match[2]) : match[1] ? details.size - 1 : details.size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start >= details.size || start > end) {
+    return reply.code(416).header("Content-Range", `bytes */${details.size}`).send();
+  }
+  const boundedEnd = Math.min(end, details.size - 1);
+  reply.code(206).headers({ "Content-Range": `bytes ${start}-${boundedEnd}/${details.size}`, "Content-Length": boundedEnd - start + 1 });
+  return reply.send(createReadStream(filePath, { start, end: boundedEnd }));
+}
 
 console.log("[server] all routes registered");
 
