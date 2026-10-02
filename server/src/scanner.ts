@@ -187,7 +187,8 @@ export function createScanManager(prisma: PrismaClient) {
 
       for (const group of groupFiles(audioFiles)) {
         const primary = group[0];
-        const coverImagePath = await saveCover(primary, "/app/data/covers");
+        const coverDir = process.env.COVER_DIR || "/app/data/covers";
+        const coverImagePath = await saveCover(primary, coverDir);
         const existingRow = await prisma.mediaItem.findUnique({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
           select: { metadataSource: true },

@@ -36,9 +36,9 @@ defensive requirements and the automated security test suite.
 
 ## Acceptance criteria
 
-- [ ] Every test above is automated and green.
-- [ ] Code review checklist item: "does this touch the filesystem? root-confined + tested?"
-- [ ] `npm audit` documented result in last change.
+- [x] Every test above is automated and green.
+- [x] Code review checklist item: "does this touch the filesystem? root-confined + tested?"
+- [x] `npm audit` documented result in last change.
 
 ## Not in this spec
 

@@ -8,6 +8,7 @@ import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
 import { COVER_DIR, candidateCoverFilename, downloadCover, searchGoogleBooks, searchOpenLibrary } from "./enrichment";
+import { resolveInsideRoot } from "./safePath";
 
 export interface BuildAppOptions {
   prisma?: PrismaClient;
@@ -53,7 +54,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.post<{ Body: { password?: string } }>("/api/auth/login", async (request, reply) => {
-    const password = request.body?.password ?? "";
+    const password = request.body?.password;
+    if (typeof password !== "string") return reply.code(400).send({ message: "Password must be a string" });
     if (!authEnabled) return { token: "disabled" };
     const expected = Buffer.from(appPassword as string);
     const provided = Buffer.from(password);
@@ -71,6 +73,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     reply.clearCookie("house_session", { path: "/" });
     return { ok: true };
   });
+
+  function parseIdParam(raw: string | undefined): number | null {
+    const id = Number(raw);
+    return Number.isInteger(id) && id >= 1 ? id : null;
+  }
 
   app.get("/api/health", async () => ({ status: "ok" }));
 
@@ -124,7 +131,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.delete<{ Params: { id: string } }>("/api/library-roots/:id", async (request, reply) => {
-    const id = Number(request.params.id);
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
     await prisma.libraryRoot.delete({ where: { id } });
     return reply.code(204).send();
   });
@@ -148,8 +156,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/cover", async (request, reply) => {
-    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    const item = await prisma.mediaItem.findUnique({
+      where: { id: parseIdParam(request.params.id) ?? -1 },
+      include: { libraryRoot: true },
+    });
     if (!item?.coverImagePath) return reply.code(404).send({ message: "Cover not found" });
+    // Covers may legitimately live in the app covers dir OR beside the media,
+    // so allow both roots.
+    const allowed = [item.libraryRoot.path, COVER_DIR].some((root) => resolveInsideRoot(item.coverImagePath as string, root) !== null);
+    if (!allowed) return reply.code(403).send({ message: "Forbidden" });
     try {
       await access(item.coverImagePath);
     } catch {
@@ -160,8 +175,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/stream", async (request, reply) => {
-    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    const item = await prisma.mediaItem.findUnique({
+      where: { id: parseIdParam(request.params.id) ?? -1 },
+      include: { libraryRoot: true },
+    });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (resolveInsideRoot(item.filePath, item.libraryRoot.path) === null) {
+      return reply.code(403).send({ message: "Forbidden" });
+    }
     try {
       return await streamAudioFile(item.filePath, request.headers.range, reply);
     } catch {
@@ -170,10 +191,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.get<{ Params: { id: string } }>("/api/tracks/:id/stream", async (request, reply) => {
-    const id = Number(request.params.id);
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
     if (!Number.isInteger(id) || id < 1) return reply.code(400).send({ message: "Invalid track ID" });
-    const track = await prisma.track.findUnique({ where: { id } });
+    const track = await prisma.track.findUnique({
+      where: { id },
+      include: { mediaItem: { include: { libraryRoot: true } } },
+    });
     if (!track) return reply.code(404).send({ message: "Track not found" });
+    if (resolveInsideRoot(track.filePath, track.mediaItem.libraryRoot.path) === null) {
+      return reply.code(403).send({ message: "Forbidden" });
+    }
     try {
       return await streamAudioFile(track.filePath, request.headers.range, reply);
     } catch {
@@ -182,7 +210,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.post<{ Params: { id: string } }>("/api/audiobooks/:id/enrich", async (request, reply) => {
-    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
     const [openLibrary, googleBooks] = await Promise.allSettled([
       searchOpenLibrary(item.title, item.author === "Unknown author" ? undefined : item.author),
@@ -211,14 +239,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/candidates", async (request, reply) => {
-    const id = Number(request.params.id);
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
     const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
     return prisma.metadataCandidate.findMany({ where: { mediaItemId: id }, orderBy: { confidence: "desc" } });
   });
 
   app.post<{ Params: { id: string }; Body: { candidateId?: number; title?: string; author?: string; description?: string; coverUrl?: string } }>("/api/audiobooks/:id/metadata", async (request, reply) => {
-    const id = Number(request.params.id);
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
     const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
 
@@ -256,7 +286,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/progress", async (request, reply) => {
     const profileId = Number(request.headers["x-profile-id"]);
     if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
-    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
     const row = await prisma.listeningHistory.findFirst({ where: { mediaItemId: item.id, profileId } });
     return { position: row?.position ?? 0, completed: row?.completed ?? false };
@@ -265,7 +295,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.put<{ Params: { id: string }; Body: { position?: number; completed?: boolean } }>("/api/audiobooks/:id/progress", async (request, reply) => {
     const profileId = Number(request.headers["x-profile-id"]);
     if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
-    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
 
     const rawPosition = typeof request.body?.position === "number" && Number.isFinite(request.body.position) ? request.body.position : 0;
@@ -284,7 +314,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.post<{ Params: { id: string }; Body: { fromPosition?: number; toPosition?: number; speed?: number; startedAt?: string; endedAt?: string } }>("/api/audiobooks/:id/sessions", async (request, reply) => {
     const profileId = Number(request.headers["x-profile-id"]);
     if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
-    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
     const toPosition = Number(request.body?.toPosition);
     const fromPosition = Number(request.body?.fromPosition);
@@ -322,7 +352,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.delete<{ Params: { id: string } }>("/api/profiles/:id", async (request, reply) => {
-    await prisma.profile.delete({ where: { id: Number(request.params.id) } });
+    await prisma.profile.delete({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     return reply.code(204).send();
   });
 
