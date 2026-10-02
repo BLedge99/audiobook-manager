@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { ChapterPlayer } from "./ChapterPlayer";
 import type { Audiobook } from "../types";
 
@@ -26,6 +26,7 @@ describe("ChapterPlayer", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     window.localStorage.clear();
@@ -42,5 +43,21 @@ describe("ChapterPlayer", () => {
     render(<ChapterPlayer book={book} />);
     expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("saves the latest seek position when switching books immediately", () => {
+    window.localStorage.setItem("profileId", "42");
+    const fetchMock = vi.mocked(fetch);
+    const { unmount } = render(<ChapterPlayer book={book} />);
+    const audio = document.querySelector("audio") as HTMLAudioElement;
+    audio.currentTime = 1800;
+
+    unmount();
+
+    const progressSave = fetchMock.mock.calls.find(([url, options]) =>
+      url === `/api/audiobooks/${book.id}/progress` && options?.method === "PUT",
+    );
+    expect(progressSave).toBeDefined();
+    expect(JSON.parse(String(progressSave?.[1]?.body))).toEqual({ position: 1800 });
   });
 });

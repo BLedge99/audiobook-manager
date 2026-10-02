@@ -26,6 +26,7 @@ test("reopening a book resumes at the saved position", async ({ page }) => {
     data: { position: 500 },
   });
   expect(saved.ok()).toBeTruthy();
+  expect((await saved.json()).position).toBe(500);
 
   // Open the book: the player must pick up the saved position.
   await page.getByRole("heading", { name: book.title }).click();
@@ -37,4 +38,55 @@ test("reopening a book resumes at the saved position", async ({ page }) => {
     headers: { "x-profile-id": profileId as string },
     data: { position: 0 },
   });
+});
+
+test("switching books saves and restores the latest seek position", async ({ page }) => {
+  await page.goto("/");
+  await login(page);
+
+  const books = await (await page.request.get("/api/audiobooks")).json() as { id: number; title: string; duration: number }[];
+  const book = books.find((candidate) => candidate.duration > 1800);
+  const otherBook = books.find((candidate) => candidate.id !== book?.id);
+  test.skip(!book || !otherBook, "need two books and one longer than 30 minutes");
+
+  await pickProfile(page, "Playwright");
+  const profileId = await page.evaluate(() => window.localStorage.getItem("profileId"));
+  expect(profileId).toBeTruthy();
+  const headers = { "x-profile-id": profileId as string };
+
+  const openBook = async (title: string) => {
+    await page.getByRole("heading", { name: title }).click();
+    await expect(page.getByLabel("Audiobook player")).toBeVisible();
+  };
+  const closeBook = async () => page.getByRole("button", { name: "Close details" }).click();
+  const readPosition = async () => {
+    const response = await page.request.get(`/api/audiobooks/${book.id}/progress`, { headers });
+    return (await response.json()).position as number;
+  };
+
+  try {
+    await openBook(book.title);
+    const progress = page.getByLabel("Audiobook progress");
+    await progress.evaluate((element) => {
+      const slider = element as HTMLInputElement;
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setValue?.call(slider, "1800");
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect(progress).toHaveValue("1800");
+    await closeBook();
+    await expect.poll(readPosition).toBeCloseTo(1800, 0);
+
+    await openBook(otherBook.title);
+    await closeBook();
+    await openBook(book.title);
+    await expect(page.getByLabel("Audiobook progress")).toHaveValue("1800");
+  } finally {
+    if (await page.getByRole("button", { name: "Close details" }).count()) await closeBook();
+    await page.request.put(`/api/audiobooks/${book.id}/progress`, {
+      headers,
+      data: { position: 0 },
+    });
+  }
 });

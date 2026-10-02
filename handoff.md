@@ -45,6 +45,69 @@
 
 ## Current task
 
+**Session 2026-10-02 (late): playback resume when switching books — in progress.**
+
+User reports that seeking well into a book, opening another book, then returning
+to the first resumes at the beginning. Reviewed this handoff, `specs/04-progress-listening-history.md`,
+the progress routes, `ChapterPlayer`, and existing resume tests.
+
+Completed in this continuation:
+- Found a client-side teardown bug in `client/src/components/ChapterPlayer.tsx`:
+  the unmount cleanup read `audioRef.current`, but React clears the ref before
+  passive cleanup runs. The cleanup therefore skipped its final progress PUT
+  when the detail modal closed/book changed.
+- Changed teardown to capture the audio element while mounted and calculate
+  the final position from `audio.currentTime` plus the active track offset.
+  `currentIndexRef` keeps the active track index current without relying on a
+  stale effect closure.
+- Added a component regression test for seeking to 1800 seconds and immediately
+  unmounting. Focused test passes: 3 tests in `ChapterPlayer.test.tsx`.
+- Added an E2E test to `e2e/progress-resume.spec.ts` for seek to 30 minutes,
+  switch to a second book, then reopen the first and verify persistence.
+- Fixed another resume race: seeking before the active track's source was
+  switched could be lost by `audio.load()`. Restore now defers the seek until
+  metadata for the new track arrives.
+- Updated React's displayed position when applying a restore seek, since
+  assigning `audio.currentTime` while paused does not emit `timeupdate`.
+- Prevented source changes from overwriting saved progress with zero: browsers
+  can emit a synthetic `pause` while setting/loading a source, so pause saves
+  now require an active listening session.
+- Added an API response check to the resume E2E and a tolerance for fractional
+  media duration math.
+
+Still unresolved / next steps:
+- The focused browser tests still fail: although the test's direct progress
+  PUT returns `{ position: 500 }`, the reopened player's slider remains at 0.
+  Temporary response logging showed the player first GETs 500, then progress
+  later reads as 0. A synthetic-pause guard was added, but the failure persists
+  after restarting Vite; inspect the latest network/trace details and determine
+  which request writes zero before accepting the fix.
+- The server/client networking issue is resolved for tests: WSL can reach the
+  API through `VITE_API_URL=http://localhost:3000`; the 401 from direct shell
+  curls was expected because they omitted the household cookie.
+- Temporary response logging has been removed. Do not mark spec 04's browser
+  acceptance complete until the resume E2E passes.
+- The test currently uses the seeded `Playwright` profile and resets its test
+  book position to 0 in `finally`. Keep its data isolated from the existing
+  resume E2E, which uses `Testing`.
+
+Current validation:
+- `client`: `npm test -- --run src/components/ChapterPlayer.test.tsx` — pass,
+  3/3 tests.
+- `get_errors` on the touched player and test files — no errors.
+- `e2e`: first run was invalidated by stale Vite code; after restarting, the
+  latest run fails at the new test's `/api/audiobooks` response shape as noted
+  above. Do not report the end-to-end feature as verified yet.
+
+Working environment:
+- Backend is responding on `http://localhost:3000` (health check passed).
+- Client dev server is running on `http://localhost:5173` with
+  `VITE_API_URL=http://localhost:3000`; if it stops, start from `client/` in
+  WSL with `export PATH=/home/benle/node/bin:/usr/local/bin:/usr/bin:/bin`
+  and `export VITE_API_URL=http://localhost:3000` before `npm run dev -- --host 0.0.0.0`.
+- For tests from WSL, use the clean PATH above; inherited Windows PATH entries
+  contain spaces/parentheses and can break shell expansion.
+
 **Session 2026-10-02 (evening): fixed the two user-reported bugs.**
 
 Done this session:

@@ -47,6 +47,8 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   }, [tracks, chapters, book]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [shouldPlay, setShouldPlay] = useState(false);
@@ -112,11 +114,16 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
         }
         const seekTarget = remaining + (isChapterBook ? segments[index].offset : 0);
         pendingSeekRef.current = seekTarget;
+        const trackChanged = index !== currentIndexRef.current;
         setCurrentIndex(index);
-        // If metadata already loaded, apply the seek immediately
+        // Apply immediately only when the current source is already the
+        // requested segment. On a track change, streamUrl still points at
+        // the old source until React commits the new index; seeking it now
+        // would be discarded by the following audio.load().
         const audio = audioRef.current;
-        if (audio && audio.readyState >= 1) {
+        if (audio && !trackChanged && audio.readyState >= 1) {
           audio.currentTime = seekTarget;
+          setCurrentTime(seekTarget);
           pendingSeekRef.current = null;
         }
       })
@@ -136,7 +143,14 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
 
   // Flush progress + session when pausing or the page unloads.
   useEffect(() => {
-    const onPauseAndSave = () => { saveProgress(overallPosition); flushSession(overallPosition); };
+    const onPauseAndSave = () => {
+      // Setting/changing a source can emit `pause` even when the user never
+      // started playback. Do not let that synthetic pause overwrite a saved
+      // resume position with the initial zero.
+      if (!sessionRef.current) return;
+      saveProgress(overallPosition);
+      flushSession(overallPosition);
+    };
     const audio = audioRef.current;
     audio?.addEventListener("pause", onPauseAndSave);
     window.addEventListener("pagehide", onPauseAndSave);
@@ -165,7 +179,11 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
         }
       }
     };
-    const onPlay = () => { setPlaying(true); setError(""); };
+    const onPlay = () => {
+      sessionRef.current = sessionRef.current ?? { fromPosition: overallPositionRef.current, startedAt: new Date().toISOString() };
+      setPlaying(true);
+      setError("");
+    };
     const onPause = () => setPlaying(false);
     const onEnded = () => {
       saveProgress(overallPosition);
@@ -193,6 +211,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     const onLoadedMetadata = () => {
       if (pendingSeekRef.current !== null) {
         audio.currentTime = pendingSeekRef.current;
+        setCurrentTime(pendingSeekRef.current);
         pendingSeekRef.current = null;
       }
     };
@@ -224,16 +243,22 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamUrl]);
 
-  // Save progress on unmount (the pause listener is removed before this runs)
-  useEffect(() => () => {
+  // Capture the element while mounted; React clears refs before passive
+  // effect cleanup runs during unmount.
+  useEffect(() => {
     const audio = audioRef.current;
-    if (audio) {
-      saveProgress(overallPositionRef.current);
-      flushSession(overallPositionRef.current);
+    return () => {
+      if (!audio) return;
+      const activeSegment = segments[currentIndexRef.current];
+      const position = tracks.length > 0
+        ? (activeSegment?.offset ?? 0) + audio.currentTime
+        : audio.currentTime;
+      saveProgress(position);
+      flushSession(position);
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
-    }
+    };
   }, []);
 
   function selectSegment(index: number) {
