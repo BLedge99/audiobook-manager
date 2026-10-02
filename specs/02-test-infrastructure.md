@@ -32,12 +32,12 @@ automatically. This is a prerequisite for doing TDD-style specs.
 
 ## Acceptance criteria
 
-- [ ] `cd server && npm test` runs and passes.
-- [ ] `cd client && npm test` runs and passes.
-- [ ] `npx playwright test` runs at least one passing smoke flow: load app,
+- [x] `cd server && npm test` runs and passes.
+- [x] `cd client && npm test` runs and passes.
+- [x] `npx playwright test` runs at least one passing smoke flow: load app,
       see library, open a book.
-- [ ] Temp DBs and Playwright artifacts are gitignored.
-- [ ] `specs/02` document covers how to add tests for a new feature.
+- [x] Temp DBs and Playwright artifacts are gitignored.
+- [x] `specs/02` document covers how to add tests for a new feature.
 
 ## Testing of the testing
 

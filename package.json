@@ -1,0 +1,13 @@
+{
+  "name": "audiobook-manager",
+  "private": true,
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:security": "playwright test --project=security",
+    "test:server": "npm --prefix server test",
+    "test:client": "npm --prefix client test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
