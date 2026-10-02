@@ -26,6 +26,73 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   const overallPosition = tracks.slice(0, currentIndex).reduce((sum, track) => sum + track.duration, 0) + currentTime;
   const streamUrl = book.tracks.length ? `/api/tracks/${current.id}/stream` : `/api/audiobooks/${book.id}/stream`;
 
+  const profileHeaders = (): Record<string, string> => {
+    const profileId = window.localStorage.getItem("profileId");
+    return profileId ? { "x-profile-id": profileId } : {};
+  };
+
+  const sessionRef = useRef<{ fromPosition: number; startedAt: string } | null>(null);
+  const flushSession = (toPosition: number) => {
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    if (!session) return;
+    void fetch(`/api/audiobooks/${book.id}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...profileHeaders() },
+      body: JSON.stringify({ fromPosition: session.fromPosition, toPosition, speed: 1, startedAt: session.startedAt, endedAt: new Date().toISOString() }),
+    }).catch(() => undefined);
+  };
+
+  const saveProgress = (position: number) => {
+    void fetch(`/api/audiobooks/${book.id}/progress`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...profileHeaders() },
+      body: JSON.stringify({ position }),
+    }).catch(() => undefined);
+  };
+
+  // Restore saved resume position once per book.
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/audiobooks/${book.id}/progress`, { headers: profileHeaders() })
+      .then((res) => (res.ok ? res.json() : { position: 0 }))
+      .then(({ position }: { position: number }) => {
+        if (cancelled || !position || position <= 0) return;
+        let remaining = position;
+        let index = 0;
+        while (index < tracks.length - 1 && remaining >= tracks[index].duration) {
+          remaining -= tracks[index].duration;
+          index += 1;
+        }
+        pendingSeekRef.current = remaining;
+        setCurrentIndex(index);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book.id]);
+
+  // Periodic progress save while playing.
+  useEffect(() => {
+    if (!playing) return;
+    sessionRef.current = sessionRef.current ?? { fromPosition: overallPosition, startedAt: new Date().toISOString() };
+    const timer = window.setInterval(() => saveProgress(overallPosition), 10_000);
+    return () => window.clearInterval(timer);
+  }, [playing, overallPosition]);
+
+  // Flush progress + session when pausing or the page unloads.
+  useEffect(() => {
+    const onPauseAndSave = () => { saveProgress(overallPosition); flushSession(overallPosition); };
+    const audio = audioRef.current;
+    audio?.addEventListener("pause", onPauseAndSave);
+    window.addEventListener("pagehide", onPauseAndSave);
+    return () => {
+      audio?.removeEventListener("pause", onPauseAndSave);
+      window.removeEventListener("pagehide", onPauseAndSave);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overallPosition]);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;

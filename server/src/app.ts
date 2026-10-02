@@ -165,6 +165,65 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   });
 
+  // Progress (profile-scoped)
+  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/progress", async (request, reply) => {
+    const profileId = Number(request.headers["x-profile-id"]);
+    if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
+    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    const row = await prisma.listeningHistory.findFirst({ where: { mediaItemId: item.id, profileId } });
+    return { position: row?.position ?? 0, completed: row?.completed ?? false };
+  });
+
+  app.put<{ Params: { id: string }; Body: { position?: number; completed?: boolean } }>("/api/audiobooks/:id/progress", async (request, reply) => {
+    const profileId = Number(request.headers["x-profile-id"]);
+    if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
+    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+
+    const rawPosition = typeof request.body?.position === "number" && Number.isFinite(request.body.position) ? request.body.position : 0;
+    const position = Math.min(Math.max(rawPosition, 0), item.duration || rawPosition);
+    const completed = request.body?.completed ?? position >= 0.95 * (item.duration || Infinity);
+
+    const existing = await prisma.listeningHistory.findFirst({ where: { mediaItemId: item.id, profileId } });
+    if (existing) {
+      await prisma.listeningHistory.update({ where: { id: existing.id }, data: { position, completed } });
+    } else {
+      await prisma.listeningHistory.create({ data: { mediaItemId: item.id, profileId, position, completed } });
+    }
+    return { position, completed };
+  });
+
+  app.post<{ Params: { id: string }; Body: { fromPosition?: number; toPosition?: number; speed?: number; startedAt?: string; endedAt?: string } }>("/api/audiobooks/:id/sessions", async (request, reply) => {
+    const profileId = Number(request.headers["x-profile-id"]);
+    if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
+    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    const toPosition = Number(request.body?.toPosition);
+    const fromPosition = Number(request.body?.fromPosition);
+    if (!Number.isFinite(toPosition) || !Number.isFinite(fromPosition)) {
+      return reply.code(400).send({ message: "fromPosition and toPosition are required" });
+    }
+    const session = await prisma.playSession.create({
+      data: {
+        profileId,
+        mediaItemId: item.id,
+        fromPosition: Math.max(0, fromPosition),
+        toPosition: Math.max(0, toPosition),
+        speed: Number.isFinite(Number(request.body?.speed)) ? Number(request.body?.speed) : 1,
+        startedAt: request.body?.startedAt ? new Date(request.body.startedAt) : new Date(),
+        endedAt: request.body?.endedAt ? new Date(request.body.endedAt) : new Date(),
+      },
+    });
+    return reply.code(201).send(session);
+  });
+
+  app.get("/api/history", async (request, reply) => {
+    const profileId = Number(request.headers["x-profile-id"]);
+    if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
+    return prisma.playSession.findMany({ where: { profileId }, orderBy: { startedAt: "desc" }, take: 100 });
+  });
+
   // Profiles
   app.get("/api/profiles", async () => prisma.profile.findMany({ orderBy: { createdAt: "asc" } }));
 

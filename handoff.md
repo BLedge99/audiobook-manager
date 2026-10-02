@@ -30,8 +30,8 @@
 |------|------|--------|-------|
 | 01 | scanner-consolidation | **done** | single scanner module; duplicate deleted; contributor upsert fixed (name+role unique migration); releaseDate/genre ported; pure helpers in `scanner.ts`→`scan-utils.ts` with 6 Vitest tests green; `tsc --noEmit` clean |
 | 02 | test-infrastructure | **done** | server Vitest, client Vitest+RTL (jsdom ^25 pin — jsdom 28 breaks on ESM/CJS), Playwright root config (chromium + security projects), smoke + security placeholder E2E green. Chromium deps installed via sudo by user. |
-| 03 | user-profiles-auth | pending | |
-| 04 | progress + listening history | pending | |
+| 03 | user-profiles-auth | **done** | buildApp() extraction, APP_PASSWORD cookie gate, Profile model + migration, profile CRUD, client LoginGate/ProfileSwitcher, 13 server tests + e2e green |
+| 04 | progress + listening history | **in progress** | |
 | 05 | playback-experience | pending | |
 | 06 | chapter-support | pending | |
 | 07 | metadata-enrichment | pending | |
@@ -44,20 +44,16 @@
 
 ## Current task
 
-Spec 03 — Per-User Profiles & Household Auth. Plan: add Prisma `Profile`
-model + `ListeningHistory.profileId`, household-password session gate on all
-API routes, profile switcher UI, `x-profile-id` header plumbing. Start by
-reviewing how the client stores state (see `client/src/useLibrary.ts`) and
-where ListeningHistory is currently written.
+Spec 04 — Server-side progress & full listening history. Routes to add to
+`server/src/app.ts`: PUT/GET progress (profile-scoped), history rows per
+session, current chapter of work: implement per
+`specs/04-progress-listening-history.md`; UI resume hookup in AudiobookDetail
+/ ChapterPlayer after routes land.
 
 ### Environment notes (important for a fresh session)
 - No system Node: use `export PATH=$HOME/node/bin:$PATH` (Node v22.11.0, npm 10.9.0).
-- Server + client dev servers are running in the background (server :3000 with
-  throwaway DB at /tmp/audiobook-e2e.db, client :5173 with proxy). Logs in
-  /tmp/server.log, /tmp/client.log. Restart them if the session was lost.
-- Server tests: `cd server && npm test`; client: `cd client && npm test`;
-  E2E: `npx playwright test` from root (needs the dev servers running).
-- Playwright chromium system deps were installed by the user via sudo.
+- Server + client dev servers running in background (server :3000, client :5173),
+  server has APP_PASSWORD=household. Logs: /tmp/server.log, /tmp/client.log.
 
 ## Open questions / blockers
 

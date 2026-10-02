@@ -27,11 +27,11 @@ laptop, resumes on a phone. The server is the source of truth.
 
 ## Acceptance criteria
 
-- [ ] Position updates persist; reloading the page resumes at last position.
-- [ ] Switching device/browser with same profile resumes correctly.
-- [ ] Finishing a book sets completed=true; opening it again offers restart/0.
-- [ ] History rows exist for sessions; a session boundary = pause + gap > X.
-- [ ] Route tests cover clamping, idempotency, and profile isolation.
+- [x] Position updates persist; reloading the page resumes at last position.
+- [x] Switching device/browser with same profile resumes correctly.
+- [x] Finishing a book sets completed=true; opening it again offers restart/0.
+- [x] History rows exist for sessions; a session boundary = pause + gap > X.
+- [x] Route tests cover clamping, idempotency, and profile isolation.
 
 ## Testing
 
