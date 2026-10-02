@@ -21,6 +21,10 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   const [playing, setPlaying] = useState(false);
   const [shouldPlay, setShouldPlay] = useState(false);
   const [error, setError] = useState("");
+  const [speed, setSpeed] = useState<number>(() => Number(window.localStorage.getItem("playbackRate")) || 1);
+  const [sleepMinutes, setSleepMinutes] = useState<number | null>(null);
+  const sleepTimerRef = useRef<number | null>(null);
+  const stopAtChapterEndRef = useRef(false);
   const current = tracks[currentIndex];
   const totalDuration = tracks.reduce((sum, track) => sum + track.duration, 0) || book.duration;
   const overallPosition = tracks.slice(0, currentIndex).reduce((sum, track) => sum + track.duration, 0) + currentTime;
@@ -100,12 +104,25 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     const onPlay = () => { setPlaying(true); setError(""); };
     const onPause = () => setPlaying(false);
     const onEnded = () => {
+      saveProgress(overallPosition);
+      flushSession(overallPosition);
+      if (stopAtChapterEndRef.current) {
+        stopAtChapterEndRef.current = false;
+        setShouldPlay(false);
+        setPlaying(false);
+        return;
+      }
       if (currentIndex < tracks.length - 1) {
         setShouldPlay(true);
         setCurrentIndex((index) => index + 1);
       } else {
         setShouldPlay(false);
         setPlaying(false);
+        void fetch(`/api/audiobooks/${book.id}/progress`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", ...profileHeaders() },
+          body: JSON.stringify({ position: totalDuration, completed: true }),
+        }).catch(() => undefined);
       }
     };
     const onError = () => { setPlaying(false); setShouldPlay(false); setError("This audio file could not be loaded."); };
@@ -173,6 +190,61 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     if (next !== currentIndex) selectTrack(next);
   }
 
+  function skipSeconds(delta: number) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + delta));
+  }
+
+  function changeSpeed(next: number) {
+    setSpeed(next);
+    window.localStorage.setItem("playbackRate", String(next));
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  }
+
+  function setSleepTimer(minutes: number | null) {
+    if (sleepTimerRef.current !== null) {
+      window.clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
+    stopAtChapterEndRef.current = false;
+    setSleepMinutes(minutes);
+    if (minutes === null) return;
+    if (minutes === -1) {
+      stopAtChapterEndRef.current = true;
+      return;
+    }
+    sleepTimerRef.current = window.setTimeout(() => {
+      audioRef.current?.pause();
+      setShouldPlay(false);
+      setSleepMinutes(null);
+    }, minutes * 60_000);
+  }
+
+  // Apply playback speed to the audio element whenever it changes.
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = speed;
+  }, [speed, streamUrl]);
+
+  // Media Session API: lock-screen / notification controls.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({ title: current.title || book.title, artist: book.author, album: book.title });
+    navigator.mediaSession.setActionHandler("play", () => void audioRef.current?.play());
+    navigator.mediaSession.setActionHandler("pause", () => audioRef.current?.pause());
+    navigator.mediaSession.setActionHandler("seekbackward", () => skipSeconds(-15));
+    navigator.mediaSession.setActionHandler("seekforward", () => skipSeconds(15));
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler("play", null);
+        navigator.mediaSession.setActionHandler("pause", null);
+        navigator.mediaSession.setActionHandler("seekbackward", null);
+        navigator.mediaSession.setActionHandler("seekforward", null);
+      } catch { /* noop */ }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, book.title, book.author]);
+
   return (
     <section className="mt-8 rounded-lg border border-slate-700 bg-slate-950/50 p-4" aria-label="Audiobook player">
       <audio ref={audioRef} preload="metadata" />
@@ -182,6 +254,18 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
         </button>
         <button type="button" onClick={() => skip(-1)} aria-label="Previous chapter" disabled={currentIndex === 0} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipBack size={18} /></button>
         <button type="button" onClick={() => skip(1)} aria-label="Next chapter" disabled={currentIndex === tracks.length - 1} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipForward size={18} /></button>
+        <button type="button" onClick={() => skipSeconds(-15)} aria-label="Back 15 seconds" className="rounded p-2 text-slate-300 hover:text-white">−15s</button>
+        <button type="button" onClick={() => skipSeconds(15)} aria-label="Forward 15 seconds" className="rounded p-2 text-slate-300 hover:text-white">+15s</button>
+        <select aria-label="Playback speed" value={speed} onChange={(event) => changeSpeed(Number(event.target.value))} className="border border-slate-700 bg-slate-950 px-2 py-1 text-sm">
+          {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((rate) => <option key={rate} value={rate}>{rate}x</option>)}
+        </select>
+        <select aria-label="Sleep timer" value={sleepMinutes ?? "off"} onChange={(event) => setSleepTimer(event.target.value === "off" ? null : Number(event.target.value))} className="border border-slate-700 bg-slate-950 px-2 py-1 text-sm">
+          <option value="off">Sleep: off</option>
+          <option value="15">15 min</option>
+          <option value="30">30 min</option>
+          <option value="60">60 min</option>
+          <option value="-1">End of chapter</option>
+        </select>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-white">{current.title || `Track ${current.trackNumber}`}</p>
           <p className="text-xs text-slate-400">Chapter {currentIndex + 1} of {tracks.length}</p>

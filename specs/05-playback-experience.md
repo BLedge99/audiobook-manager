@@ -23,12 +23,12 @@ browsers, not a tech demo. This spec defines the core player UX end-to-end.
 
 ## Acceptance criteria
 
-- [ ] All controls work with touch on a phone-sized viewport.
-- [ ] Speed change persists per profile.
-- [ ] Sleep timer pauses and survives a page refresh (timer ends at absolute time).
-- [ ] Next-track auto-advance works for multi-file books.
-- [ ] Media Session shows metadata/controls on Android Chrome.
-- [ ] Playwright E2E: play → seek → pause → resume → next chapter → complete.
+- [x] All controls work with touch on a phone-sized viewport.
+- [x] Speed change persists per profile.
+- [x] Sleep timer pauses and survives a page refresh (timer ends at absolute time).
+- [x] Next-track auto-advance works for multi-file books.
+- [x] Media Session shows metadata/controls on Android Chrome.
+- [x] Playwright E2E: play → seek → pause → resume → next chapter → complete.
 
 ## Testing
 
