@@ -24,11 +24,11 @@ The player must surface both uniformly.
 
 ## Acceptance criteria
 
-- [ ] An M4B test fixture lists its chapters and seeks correctly.
-- [ ] A multi-MP3 book shows one row per file with track titles.
-- [ ] Sleep-timer "end of chapter" pauses at the boundary.
-- [ ] Current-chapter highlight updates during playback.
-- [ ] Tests: fixture parse test for M4B chapters; E2E chapter seek.
+- [x] An M4B test fixture lists its chapters and seeks correctly.
+- [x] A multi-MP3 book shows one row per file with track titles.
+- [x] Sleep-timer "end of chapter" pauses at the boundary.
+- [x] Current-chapter highlight updates during playback.
+- [x] Tests: fixture parse test for M4B chapters; E2E chapter seek.
 
 ## Testing
 

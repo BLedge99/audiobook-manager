@@ -16,6 +16,7 @@ export interface Audiobook {
   duration: number;
   fileFormat: string;
   filePath: string;
+  chapters?: string | null;
   tracks: Track[];
   createdAt: string;
 }

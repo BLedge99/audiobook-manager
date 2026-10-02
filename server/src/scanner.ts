@@ -3,6 +3,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import ffmpeg from "fluent-ffmpeg";
+import { execFile } from "node:child_process";
 import * as musicMetadata from "music-metadata";
 import { PrismaClient } from "@prisma/client";
 import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./scan-utils";
@@ -19,6 +20,7 @@ type AudioFile = {
   sizeBytes: number;
   releaseDate?: Date;
   genre?: string;
+  chapters?: ChapterInfo[];
   cover?: { data: Uint8Array; format: string };
 };
 
@@ -70,6 +72,27 @@ function probeDuration(filePath: string): Promise<number | undefined> {
   });
 }
 
+type ChapterInfo = { start: number; end: number; title: string };
+
+function probeChapters(filePath: string): Promise<ChapterInfo[] | undefined> {
+  return new Promise((resolve) => {
+    execFile("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_chapters", filePath], (error, stdout) => {
+      if (error) return resolve(undefined);
+      try {
+        const data = JSON.parse(stdout) as { chapters?: { start_time?: string; end_time?: string; tags?: { title?: string } }[] };
+        const chapters = (data.chapters ?? []).map((chapter, index) => ({
+          start: Number(chapter.start_time) || 0,
+          end: Number(chapter.end_time) || 0,
+          title: chapter.tags?.title?.trim() || `Chapter ${index + 1}`,
+        })).filter((chapter) => chapter.end > chapter.start);
+        resolve(chapters.length ? chapters : undefined);
+      } catch {
+        resolve(undefined);
+      }
+    });
+  });
+}
+
 async function readAudioFile(filePath: string): Promise<AudioFile> {
   const metadata = await parseAudioFile(filePath);
   const fileStats = await stat(filePath);
@@ -89,6 +112,7 @@ async function readAudioFile(filePath: string): Promise<AudioFile> {
     releaseDate: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : undefined,
     genre: common.genre?.filter(Boolean).join(", ") || undefined,
     cover: picture ? { data: picture.data, format: picture.format } : undefined,
+    chapters: ["m4b", "m4a", "mp4"].includes(path.extname(filePath).slice(1).toLowerCase()) ? await probeChapters(filePath) : undefined,
   };
 }
 
@@ -177,6 +201,7 @@ export function createScanManager(prisma: PrismaClient) {
             coverImagePath,
             releaseDate: primary.releaseDate,
             genre: primary.genre,
+            chapters: group.length === 1 && primary.chapters ? JSON.stringify(primary.chapters) : null,
             metadataSource: "embedded",
           },
           update: {
@@ -188,6 +213,7 @@ export function createScanManager(prisma: PrismaClient) {
             coverImagePath,
             releaseDate: primary.releaseDate,
             genre: primary.genre,
+            chapters: group.length === 1 && primary.chapters ? JSON.stringify(primary.chapters) : null,
             metadataSource: "embedded",
           },
         });

@@ -10,12 +10,42 @@ function timeLabel(seconds: number) {
   return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
+type Segment = { key: string; title?: string; duration: number; offset: number; trackId?: number };
+
+function parseChapters(book: Audiobook): { start: number; end: number; title: string }[] {
+  if (!book.chapters) return [];
+  try {
+    const parsed = JSON.parse(book.chapters);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function ChapterPlayer({ book }: { book: Audiobook }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingSeekRef = useRef<number | null>(null);
   const tracks = useMemo<Track[]>(() => book.tracks.length
     ? [...book.tracks].sort((a, b) => a.trackNumber - b.trackNumber)
-    : [{ id: book.id, title: book.title, duration: book.duration, trackNumber: 1 }], [book]);
+    : [], [book]);
+  const chapters = useMemo(() => parseChapters(book), [book]);
+  const isChapterBook = tracks.length === 0 && chapters.length > 0;
+
+  const segments = useMemo<Segment[]>(() => {
+    if (tracks.length > 0) {
+      let offset = 0;
+      return tracks.map((track) => {
+        const segment = { key: String(track.id), title: track.title, duration: track.duration, offset, trackId: track.id };
+        offset += track.duration;
+        return segment;
+      });
+    }
+    if (chapters.length > 0) {
+      return chapters.map((chapter, index) => ({ key: String(index), title: chapter.title, duration: chapter.end - chapter.start, offset: chapter.start }));
+    }
+    return [{ key: "full", title: book.title, duration: book.duration, offset: 0 }];
+  }, [tracks, chapters, book]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -25,10 +55,15 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   const [sleepMinutes, setSleepMinutes] = useState<number | null>(null);
   const sleepTimerRef = useRef<number | null>(null);
   const stopAtChapterEndRef = useRef(false);
-  const current = tracks[currentIndex];
-  const totalDuration = tracks.reduce((sum, track) => sum + track.duration, 0) || book.duration;
-  const overallPosition = tracks.slice(0, currentIndex).reduce((sum, track) => sum + track.duration, 0) + currentTime;
-  const streamUrl = book.tracks.length ? `/api/tracks/${current.id}/stream` : `/api/audiobooks/${book.id}/stream`;
+
+  const current = segments[currentIndex];
+  const totalDuration = segments.reduce((sum, segment) => sum + segment.duration, 0) || book.duration;
+  const overallPosition = (isChapterBook || tracks.length === 0) ? currentTime : segments[currentIndex].offset + currentTime;
+  const streamUrl = isChapterBook
+    ? `/api/audiobooks/${book.id}/stream`
+    : tracks.length > 0
+      ? `/api/tracks/${segments[currentIndex].trackId}/stream`
+      : `/api/audiobooks/${book.id}/stream`;
 
   const profileHeaders = (): Record<string, string> => {
     const profileId = window.localStorage.getItem("profileId");
@@ -43,7 +78,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     void fetch(`/api/audiobooks/${book.id}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...profileHeaders() },
-      body: JSON.stringify({ fromPosition: session.fromPosition, toPosition, speed: 1, startedAt: session.startedAt, endedAt: new Date().toISOString() }),
+      body: JSON.stringify({ fromPosition: session.fromPosition, toPosition, speed, startedAt: session.startedAt, endedAt: new Date().toISOString() }),
     }).catch(() => undefined);
   };
 
@@ -64,11 +99,11 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
         if (cancelled || !position || position <= 0) return;
         let remaining = position;
         let index = 0;
-        while (index < tracks.length - 1 && remaining >= tracks[index].duration) {
-          remaining -= tracks[index].duration;
+        while (index < segments.length - 1 && remaining >= segments[index].duration) {
+          remaining -= segments[index].duration;
           index += 1;
         }
-        pendingSeekRef.current = remaining;
+        pendingSeekRef.current = remaining + (isChapterBook ? segments[index].offset : 0);
         setCurrentIndex(index);
       })
       .catch(() => undefined);
@@ -82,6 +117,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     sessionRef.current = sessionRef.current ?? { fromPosition: overallPosition, startedAt: new Date().toISOString() };
     const timer = window.setInterval(() => saveProgress(overallPosition), 10_000);
     return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, overallPosition]);
 
   // Flush progress + session when pausing or the page unloads.
@@ -100,7 +136,21 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    const updateTime = () => setCurrentTime(audio.currentTime);
+    const updateTime = () => {
+      setCurrentTime(audio.currentTime);
+      if (isChapterBook) {
+        const index = segments.findIndex((segment) => audio.currentTime >= segment.offset && audio.currentTime < segment.offset + segment.duration);
+        if (index !== -1) setCurrentIndex(index);
+        if (stopAtChapterEndRef.current) {
+          const segment = segments[currentIndex];
+          if (segment && audio.currentTime >= segment.offset + segment.duration - 0.05) {
+            stopAtChapterEndRef.current = false;
+            audio.pause();
+            setSleepMinutes(null);
+          }
+        }
+      }
+    };
     const onPlay = () => { setPlaying(true); setError(""); };
     const onPause = () => setPlaying(false);
     const onEnded = () => {
@@ -112,7 +162,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
         setPlaying(false);
         return;
       }
-      if (currentIndex < tracks.length - 1) {
+      if (currentIndex < segments.length - 1) {
         setShouldPlay(true);
         setCurrentIndex((index) => index + 1);
       } else {
@@ -146,16 +196,18 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       audio.removeEventListener("error", onError);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
-  }, [currentIndex, tracks.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, segments.length]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    setCurrentTime(0);
+    if (!isChapterBook) setCurrentTime(0);
     setError("");
     audio.src = streamUrl;
     audio.load();
     if (shouldPlay) void audio.play().catch(() => { setShouldPlay(false); setError("Playback could not start. Try again."); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamUrl]);
 
   useEffect(() => () => {
@@ -163,10 +215,20 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); }
   }, []);
 
-  function selectTrack(index: number) {
+  function selectSegment(index: number) {
     setShouldPlay(true);
     if (index === currentIndex && audioRef.current) {
-      audioRef.current.currentTime = 0;
+      if (isChapterBook) {
+        audioRef.current.currentTime = segments[index].offset;
+      } else {
+        audioRef.current.currentTime = 0;
+      }
+      void audioRef.current.play().catch(() => setError("Playback could not start. Try again."));
+      return;
+    }
+    if (isChapterBook && audioRef.current) {
+      setCurrentIndex(index);
+      audioRef.current.currentTime = segments[index].offset;
       void audioRef.current.play().catch(() => setError("Playback could not start. Try again."));
       return;
     }
@@ -186,8 +248,8 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   }
 
   function skip(delta: number) {
-    const next = Math.max(0, Math.min(tracks.length - 1, currentIndex + delta));
-    if (next !== currentIndex) selectTrack(next);
+    const next = Math.max(0, Math.min(segments.length - 1, currentIndex + delta));
+    if (next !== currentIndex) selectSegment(next);
   }
 
   function skipSeconds(delta: number) {
@@ -224,6 +286,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   // Apply playback speed to the audio element whenever it changes.
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = speed;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speed, streamUrl]);
 
   // Media Session API: lock-screen / notification controls.
@@ -253,7 +316,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
           {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
         </button>
         <button type="button" onClick={() => skip(-1)} aria-label="Previous chapter" disabled={currentIndex === 0} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipBack size={18} /></button>
-        <button type="button" onClick={() => skip(1)} aria-label="Next chapter" disabled={currentIndex === tracks.length - 1} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipForward size={18} /></button>
+        <button type="button" onClick={() => skip(1)} aria-label="Next chapter" disabled={currentIndex === segments.length - 1} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipForward size={18} /></button>
         <button type="button" onClick={() => skipSeconds(-15)} aria-label="Back 15 seconds" className="rounded p-2 text-slate-300 hover:text-white">−15s</button>
         <button type="button" onClick={() => skipSeconds(15)} aria-label="Forward 15 seconds" className="rounded p-2 text-slate-300 hover:text-white">+15s</button>
         <select aria-label="Playback speed" value={speed} onChange={(event) => changeSpeed(Number(event.target.value))} className="border border-slate-700 bg-slate-950 px-2 py-1 text-sm">
@@ -267,30 +330,37 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
           <option value="-1">End of chapter</option>
         </select>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">{current.title || `Track ${current.trackNumber}`}</p>
-          <p className="text-xs text-slate-400">Chapter {currentIndex + 1} of {tracks.length}</p>
+          <p className="truncate text-sm font-semibold text-white">{current.title || `Track ${currentIndex + 1}`}</p>
+          <p className="text-xs text-slate-400">Chapter {currentIndex + 1} of {segments.length}</p>
         </div>
       </div>
       <div className="mt-4">
         <input aria-label="Audiobook progress" type="range" min={0} max={totalDuration || 1} step={1} value={Math.min(overallPosition, totalDuration)} onChange={(event) => {
           const target = Number(event.target.value);
-          const index = tracks.findIndex((_track, position) => target < tracks.slice(0, position + 1).reduce((sum, item) => sum + item.duration, 0));
-          const targetIndex = index === -1 ? tracks.length - 1 : index;
-          const offset = target - tracks.slice(0, targetIndex).reduce((sum, item) => sum + item.duration, 0);
+          const index = segments.findIndex((segment) => target < segment.offset + segment.duration);
+          const targetIndex = index === -1 ? segments.length - 1 : index;
+          const offset = target - segments[targetIndex].offset;
           if (targetIndex !== currentIndex) {
-            pendingSeekRef.current = Math.max(0, offset);
-            setCurrentIndex(targetIndex);
-            setShouldPlay(playing);
-          } else if (audioRef.current) audioRef.current.currentTime = Math.max(0, offset);
+            if (isChapterBook && audioRef.current) {
+              setCurrentIndex(targetIndex);
+              audioRef.current.currentTime = target;
+            } else {
+              pendingSeekRef.current = Math.max(0, offset);
+              setCurrentIndex(targetIndex);
+              setShouldPlay(playing);
+            }
+          } else if (audioRef.current) {
+            audioRef.current.currentTime = isChapterBook ? target : Math.max(0, offset);
+          }
         }} className="w-full accent-cyan-400" />
         <div className="flex justify-between text-xs text-slate-400"><span>{timeLabel(overallPosition)}</span><span>{timeLabel(totalDuration)}</span></div>
       </div>
       {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}
-      {tracks.length > 1 && <ol className="mt-4 max-h-48 divide-y divide-slate-800 overflow-auto">
-        {tracks.map((track, index) => <li key={track.id}>
-          <button type="button" onClick={() => selectTrack(index)} className={`flex w-full items-center justify-between gap-4 py-2 text-left text-sm hover:text-white ${index === currentIndex ? "text-cyan-300" : "text-slate-300"}`} aria-current={index === currentIndex ? "true" : undefined}>
-            <span className="min-w-0 truncate"><span className="mr-2 text-slate-500">{track.trackNumber}.</span>{track.title || `Track ${track.trackNumber}`}</span>
-            <span className="shrink-0 text-xs text-slate-500">{index === currentIndex ? `${timeLabel(currentTime)} / ` : ""}{timeLabel(track.duration)}</span>
+      {segments.length > 1 && <ol className="mt-4 max-h-48 divide-y divide-slate-800 overflow-auto">
+        {segments.map((segment, index) => <li key={segment.key}>
+          <button type="button" onClick={() => selectSegment(index)} className={`flex w-full items-center justify-between gap-4 py-2 text-left text-sm hover:text-white ${index === currentIndex ? "text-cyan-300" : "text-slate-300"}`} aria-current={index === currentIndex ? "true" : undefined}>
+            <span className="min-w-0 truncate"><span className="mr-2 text-slate-500">{index + 1}.</span>{segment.title || `Track ${index + 1}`}</span>
+            <span className="shrink-0 text-xs text-slate-500">{index === currentIndex ? `${timeLabel(currentTime - (isChapterBook ? 0 : 0))} / ` : ""}{timeLabel(segment.duration)}</span>
           </button>
         </li>)}
       </ol>}
