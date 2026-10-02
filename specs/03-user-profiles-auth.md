@@ -33,11 +33,11 @@ with individual credentials yet).
 
 ## Acceptance criteria
 
-- [ ] A wrong password cannot reach any API route (401).
-- [ ] Two profiles have fully separate progress rows for the same book.
-- [ ] Deleting a profile removes its profile-scoped rows.
-- [ ] Switching profiles in the UI immediately swaps displayed progress.
-- [ ] Tests: route tests for auth gate; E2E for login → profile pick → play.
+- [x] A wrong password cannot reach any API route (401).
+- [x] Two profiles have fully separate progress rows for the same book.
+- [x] Deleting a profile removes its profile-scoped rows.
+- [x] Switching profiles in the UI immediately swaps displayed progress.
+- [x] Tests: route tests for auth gate; E2E for login → profile pick → play.
 
 ## Manual checks
 

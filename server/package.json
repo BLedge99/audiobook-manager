@@ -12,6 +12,7 @@
     "scan": "tsx src/scripts/scan.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^9.4.0",
     "@fastify/cors": "^9.0.1",
     "@prisma/client": "^5.20.0",
     "fastify": "^4.28.0",

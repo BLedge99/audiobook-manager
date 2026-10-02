@@ -1,7 +1,9 @@
-import { FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { BookOpen, FolderPlus, Library, LoaderCircle, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid } from "./components/AudiobookGrid";
+import { LoginGate } from "./components/LoginGate";
+import { ProfileSwitcher } from "./components/ProfileSwitcher";
 import { useLibrary } from "./useLibrary";
 import type { Audiobook } from "./types";
 
@@ -12,6 +14,16 @@ function App() {
   const [label, setLabel] = useState("");
   const [showRootForm, setShowRootForm] = useState(false);
   const [working, setWorking] = useState(false);
+  const [authed, setAuthed] = useState<boolean>();
+
+  // Probe: if the server requires auth, /api/audiobooks returns 401 until logged in.
+  useEffect(() => {
+    void fetch("/api/audiobooks").then((res) => setAuthed(res.status !== 401)).catch(() => setAuthed(false));
+  }, []);
+
+  if (authed === false) {
+    return <LoginGate onSuccess={() => { setAuthed(true); void refresh(); }} />;
+  }
 
   const submitRoot = async (event: FormEvent) => {
     event.preventDefault();
@@ -42,6 +54,7 @@ function App() {
             <div><p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400">Local library</p><h1 className="text-xl font-bold">Audiobook Manager</h1></div>
           </div>
           <button onClick={() => void refresh()} aria-label="Refresh library" className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><RefreshCw size={20} /></button>
+            <ProfileSwitcher />
         </div>
       </header>
 

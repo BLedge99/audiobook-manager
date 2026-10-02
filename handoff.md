@@ -29,7 +29,7 @@
 | Item | Spec | Status | Notes |
 |------|------|--------|-------|
 | 01 | scanner-consolidation | **done** | single scanner module; duplicate deleted; contributor upsert fixed (name+role unique migration); releaseDate/genre ported; pure helpers in `scanner.ts`→`scan-utils.ts` with 6 Vitest tests green; `tsc --noEmit` clean |
-| 02 | test-infrastructure | **in progress** | Node v22.11.0 installed at `~/node`; server deps installed; Vitest runs (6/6); Playwright + client tests still pending |
+| 02 | test-infrastructure | **done** | server Vitest, client Vitest+RTL (jsdom ^25 pin — jsdom 28 breaks on ESM/CJS), Playwright root config (chromium + security projects), smoke + security placeholder E2E green. Chromium deps installed via sudo by user. |
 | 03 | user-profiles-auth | pending | |
 | 04 | progress + listening history | pending | |
 | 05 | playback-experience | pending | |
@@ -44,20 +44,20 @@
 
 ## Current task
 
-Spec 02 — Test Infrastructure. Done so far: local Node toolchain, server
-npm install, prisma generate, Vitest wired via `npm test`, first unit test file.
-Remaining: client Vitest + Testing Library setup, Playwright against docker
-compose, security project scaffold, test fixture notes.
+Spec 03 — Per-User Profiles & Household Auth. Plan: add Prisma `Profile`
+model + `ListeningHistory.profileId`, household-password session gate on all
+API routes, profile switcher UI, `x-profile-id` header plumbing. Start by
+reviewing how the client stores state (see `client/src/useLibrary.ts`) and
+where ListeningHistory is currently written.
 
 ### Environment notes (important for a fresh session)
 - No system Node: use `export PATH=$HOME/node/bin:$PATH` (Node v22.11.0, npm 10.9.0).
-- Server deps installed at `server/node_modules`; client likely NOT installed yet.
-- `@rollup/rollup-linux-x64-gnu` was added as a devDep to work around an npm
-  optional-deps bug (rollup native binding missing) when running vitest locally.
-- Prisma: migration `..._contributor_name_role_unique` added; `npx prisma generate` run.
-  Local DATABASE_URL used for migration was a throwaway at /tmp.
-- `server/src/scripts/scan.ts` referenced by package.json "scan" script does
-  not exist — pre-existing quirk, flagged.
+- Server + client dev servers are running in the background (server :3000 with
+  throwaway DB at /tmp/audiobook-e2e.db, client :5173 with proxy). Logs in
+  /tmp/server.log, /tmp/client.log. Restart them if the session was lost.
+- Server tests: `cd server && npm test`; client: `cd client && npm test`;
+  E2E: `npx playwright test` from root (needs the dev servers running).
+- Playwright chromium system deps were installed by the user via sudo.
 
 ## Open questions / blockers
 

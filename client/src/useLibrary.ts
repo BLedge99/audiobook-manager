@@ -2,8 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const headers = options?.body ? { "Content-Type": "application/json" } : undefined;
-  const response = await fetch(url, { ...options, ...(headers ? { headers } : {}) });
+  const profileId = typeof window !== "undefined" ? window.localStorage.getItem("profileId") : null;
+  const headers: Record<string, string> = {};
+  if (options?.body) headers["Content-Type"] = "application/json";
+  if (profileId) headers["x-profile-id"] = profileId;
+  const response = await fetch(url, { ...options, headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) } });
   if (!response.ok) {
     const body = await response.text();
     let message = body;

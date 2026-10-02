@@ -99,12 +99,23 @@ model MetadataCandidate {
 model ListeningHistory {
   id          Int       @id @default(autoincrement())
   mediaItemId Int
+  profileId   Int?
   position    Float    // seconds into the audiobook
   completed   Boolean  @default(false)
   lastPlayed  DateTime @updatedAt
   playedAt    DateTime @default(now())
 
   mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
+  profile   Profile?  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model Profile {
+  id        Int      @id @default(autoincrement())
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+
+  listeningHistory ListeningHistory[]
 }
 
 model ScanState {

@@ -123,7 +123,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       <div className="mt-4">
         <input aria-label="Audiobook progress" type="range" min={0} max={totalDuration || 1} step={1} value={Math.min(overallPosition, totalDuration)} onChange={(event) => {
           const target = Number(event.target.value);
-          const index = tracks.findIndex((track, position) => target < tracks.slice(0, position + 1).reduce((sum, item) => sum + item.duration, 0));
+          const index = tracks.findIndex((_track, position) => target < tracks.slice(0, position + 1).reduce((sum, item) => sum + item.duration, 0));
           const targetIndex = index === -1 ? tracks.length - 1 : index;
           const offset = target - tracks.slice(0, targetIndex).reduce((sum, item) => sum + item.duration, 0);
           if (targetIndex !== currentIndex) {
