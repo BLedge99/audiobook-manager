@@ -40,10 +40,14 @@ pnpm-debug.log*
 # Docker volume data (if mounted locally during dev)
 data/
 
-# Test folder
+# Test folder (sample media, not committed)
 test/
+
+# Playwright
+playwright-report/
+test-results/
+playwright/.cache/
 
 # Test coverage
 coverage/
 .nyc_output/
-test/
