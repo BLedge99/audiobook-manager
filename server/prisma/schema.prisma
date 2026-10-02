@@ -68,6 +68,8 @@ model Contributor {
   createdAt   DateTime @default(now())
 
   mediaItems ContributorMediaItem[]
+
+  @@unique([name, role])
 }
 
 model ContributorMediaItem {

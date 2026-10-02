@@ -5,8 +5,9 @@ import path from "node:path";
 import ffmpeg from "fluent-ffmpeg";
 import * as musicMetadata from "music-metadata";
 import { PrismaClient } from "@prisma/client";
+import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./scan-utils";
 
-const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".wav", ".aac"]);
+export const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".wav", ".aac"]);
 
 type AudioFile = {
   filePath: string;
@@ -16,6 +17,8 @@ type AudioFile = {
   narrator?: string;
   duration: number;
   sizeBytes: number;
+  releaseDate?: Date;
+  genre?: string;
   cover?: { data: Uint8Array; format: string };
 };
 
@@ -45,7 +48,7 @@ async function walkAudioFiles(directory: string): Promise<string[]> {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...await walkAudioFiles(entryPath));
-    } else if (entry.isFile() && AUDIO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+    } else if (entry.isFile() && isAudioFile(entry.name)) {
       files.push(entryPath);
     }
   }
@@ -72,29 +75,21 @@ async function readAudioFile(filePath: string): Promise<AudioFile> {
   const fileStats = await stat(filePath);
   const common = metadata.common;
   const picture = common.picture?.[0];
-  const title = common.title?.trim() || path.basename(filePath, path.extname(filePath));
+  const date = common.date?.trim();
+  const parsedDate = date ? new Date(date) : undefined;
 
   return {
     filePath,
     format: path.extname(filePath).slice(1).toLowerCase(),
-    title,
+    title: common.title?.trim() || titleFromFilename(filePath),
     author: firstTagValue(common.artist) || firstTagValue(common.albumartist) || "Unknown author",
     narrator: firstTagValue(common.composer),
     duration: (await probeDuration(filePath)) || metadata.format.duration || 0,
     sizeBytes: fileStats.size,
+    releaseDate: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : undefined,
+    genre: common.genre?.filter(Boolean).join(", ") || undefined,
     cover: picture ? { data: picture.data, format: picture.format } : undefined,
   };
-}
-
-function groupFiles(files: AudioFile[]): AudioFile[][] {
-  const groups = new Map<string, AudioFile[]>();
-  for (const file of files) {
-    const directory = path.dirname(file.filePath);
-    const group = groups.get(directory) || [];
-    group.push(file);
-    groups.set(directory, group);
-  }
-  return [...groups.values()];
 }
 
 async function saveCover(file: AudioFile, coverDirectory: string): Promise<string | undefined> {
@@ -111,9 +106,29 @@ async function saveCover(file: AudioFile, coverDirectory: string): Promise<strin
   return coverPath;
 }
 
-function audiobookTitle(group: AudioFile[]): string {
-  if (group.length === 1) return group[0].title;
-  return path.basename(path.dirname(group[0].filePath));
+async function syncContributors(
+  prisma: PrismaClient,
+  mediaItemId: number,
+  author: string | undefined,
+  narrator: string | undefined,
+): Promise<void> {
+  const entries: { name: string; role: string }[] = [];
+  if (author && author !== "Unknown author") entries.push({ name: author, role: "author" });
+  if (narrator) entries.push({ name: narrator, role: "narrator" });
+
+  for (const entry of entries) {
+    const contributor = await prisma.contributor.upsert({
+      where: { name_role: { name: entry.name, role: entry.role } },
+      create: { name: entry.name, role: entry.role },
+      update: {},
+    });
+    const existing = await prisma.contributorMediaItem.findUnique({
+      where: { contributorId_mediaItemId: { contributorId: contributor.id, mediaItemId } },
+    });
+    if (!existing) {
+      await prisma.contributorMediaItem.create({ data: { contributorId: contributor.id, mediaItemId } });
+    }
+  }
 }
 
 export function createScanManager(prisma: PrismaClient) {
@@ -160,6 +175,8 @@ export function createScanManager(prisma: PrismaClient) {
             fileFormat: primary.format,
             duration: group.reduce((total, file) => total + file.duration, 0),
             coverImagePath,
+            releaseDate: primary.releaseDate,
+            genre: primary.genre,
             metadataSource: "embedded",
           },
           update: {
@@ -169,9 +186,13 @@ export function createScanManager(prisma: PrismaClient) {
             fileFormat: primary.format,
             duration: group.reduce((total, file) => total + file.duration, 0),
             coverImagePath,
+            releaseDate: primary.releaseDate,
+            genre: primary.genre,
             metadataSource: "embedded",
           },
         });
+
+        await syncContributors(prisma, item.id, primary.author, primary.narrator);
 
         await prisma.track.deleteMany({ where: { mediaItemId: item.id } });
         if (group.length > 1) {

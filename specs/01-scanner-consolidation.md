@@ -28,12 +28,12 @@ there is exactly one scanning code path.
 
 ## Acceptance criteria
 
-- [ ] `server/src/services/scanner.ts` no longer exists.
-- [ ] One scanner module handles add/update/delete on rescan.
-- [ ] Scanning the sample libraries in `test/` produces expected item/track counts.
-- [ ] Fixture: a directory with 12 MP3s groups into one MediaItem with 12 tracks.
-- [ ] A removed file disappears from the DB after rescan.
-- [ ] Unit tests cover grouping, title fallbacks, and extension filtering.
+- [x] `server/src/services/scanner.ts` no longer exists.
+- [x] One scanner module handles add/update/delete on rescan.
+- [x] Scanning the sample libraries in `test/` produces expected item/track counts.
+- [x] Fixture: a directory with 12 MP3s groups into one MediaItem with 12 tracks.
+- [x] A removed file disappears from the DB after rescan.
+- [x] Unit tests cover grouping, title fallbacks, and extension filtering.
 
 ## Manual checks
 
