@@ -7,6 +7,7 @@ import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
+import { LMStudioAdapter } from "./ai/llm";
 import { COVER_DIR, candidateCoverFilename, downloadCover, searchGoogleBooks, searchOpenLibrary } from "./enrichment";
 import { resolveInsideRoot } from "./safePath";
 
@@ -280,6 +281,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       data: { ...data, metadataSource: "user" },
     });
     return updated;
+  });
+
+  // AI: optional metadata match assistant (works only if LM Studio is up)
+  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/ai-suggest", async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    const adapter = new LMStudioAdapter();
+    if (!(await adapter.available())) {
+      return { available: false, suggestion: null };
+    }
+    const candidates = await prisma.metadataCandidate.findMany({ where: { mediaItemId: id }, orderBy: { confidence: "desc" }, take: 5 });
+    if (candidates.length === 0) return { available: true, suggestion: null };
+    const prompt = `Embedded metadata: title="${item.title}", author="${item.author}", path="${item.filePath}".\nCandidates:\n${candidates.map((c, i) => `${i + 1}. ${c.title} — ${c.author ?? "unknown"} (${c.source})`).join("\n")}\nReply with just the number of the best match, or 0 for none.`;
+    const answer = await adapter.chat([{ role: "user", content: prompt }]).catch(() => "");
+    const pick = Number(answer.trim().match(/\d+/)?.[0]);
+    const suggestion = pick >= 1 && pick <= candidates.length ? candidates[pick - 1] : null;
+    return { available: true, suggestion };
   });
 
   // Progress (profile-scoped)
