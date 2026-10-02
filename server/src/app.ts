@@ -74,6 +74,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get("/api/health", async () => ({ status: "ok" }));
 
+  // Serve the built client (production single-origin). In dev the Vite dev
+  // server runs separately on :5173, so this only kicks in when client/dist exists.
+  const { existsSync } = await import("node:fs");
+  const clientDist = process.env.CLIENT_DIST || path.resolve(__dirname, "../../client/dist");
+  if (existsSync(clientDist)) {
+    const fastifyStatic = (await import("@fastify/static")).default;
+    await app.register(fastifyStatic, { root: clientDist, prefix: "/", wildcard: false });
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith("/api/")) {
+        return reply.code(404).send({ message: "Not found" });
+      }
+      reply.sendFile("index.html");
+    });
+  }
+
   app.get("/api/audiobooks", async () => {
     return prisma.mediaItem.findMany({ include: { tracks: true, contributors: true } });
   });

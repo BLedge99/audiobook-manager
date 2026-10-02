@@ -19,10 +19,10 @@ documented path from dev PC to Raspberry Pi.
 
 ## Acceptance criteria
 
-- [ ] Fresh `docker compose up` serves the whole app from one URL.
-- [ ] Server auto-restarts after reboot and `docker compose restart`.
-- [ ] Media volume is mounted read-only; scans work; nothing mutates media.
-- [ ] README documents hardware move and hostname/IP setup.
+- [x] Fresh `docker compose up` serves the whole app from one URL.
+- [x] Server auto-restarts after reboot and `docker compose restart`.
+- [x] Media volume is mounted read-only; scans work; nothing mutates media.
+- [x] README documents hardware move and hostname/IP setup.
 
 ## Testing
 

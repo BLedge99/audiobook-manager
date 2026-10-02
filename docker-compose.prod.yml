@@ -1,0 +1,21 @@
+# Production-style deployment: one container serves the built client + API.
+# Usage: docker compose -f docker-compose.prod.yml up --build
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: file:/data/library.db
+      APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD before deploying}
+      COVER_DIR: /data/covers
+    volumes:
+      - app_data:/data
+      - ${MEDIA_PATH:-./test}:/media:ro
+
+volumes:
+  app_data:
