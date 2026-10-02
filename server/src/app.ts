@@ -7,6 +7,7 @@ import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
+import { COVER_DIR, candidateCoverFilename, downloadCover, searchGoogleBooks, searchOpenLibrary } from "./enrichment";
 
 export interface BuildAppOptions {
   prisma?: PrismaClient;
@@ -163,6 +164,77 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     } catch {
       return reply.code(404).send({ message: "Audio file not found" });
     }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/enrich", async (request, reply) => {
+    const item = await prisma.mediaItem.findUnique({ where: { id: Number(request.params.id) } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    const [openLibrary, googleBooks] = await Promise.allSettled([
+      searchOpenLibrary(item.title, item.author === "Unknown author" ? undefined : item.author),
+      searchGoogleBooks(item.title, item.author === "Unknown author" ? undefined : item.author),
+    ]);
+    const candidates = [
+      ...(openLibrary.status === "fulfilled" ? openLibrary.value : []),
+      ...(googleBooks.status === "fulfilled" ? googleBooks.value : []),
+    ].sort((a, b) => b.confidence - a.confidence);
+    await prisma.metadataCandidate.deleteMany({ where: { mediaItemId: item.id } });
+    for (const candidate of candidates) {
+      await prisma.metadataCandidate.create({
+        data: {
+          mediaItemId: item.id,
+          source: candidate.source,
+          title: candidate.title,
+          author: candidate.author,
+          coverUrl: candidate.coverUrl,
+          description: candidate.description,
+          confidence: candidate.confidence,
+          raw: JSON.stringify(candidate.raw),
+        },
+      });
+    }
+    return candidates;
+  });
+
+  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/candidates", async (request, reply) => {
+    const id = Number(request.params.id);
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    return prisma.metadataCandidate.findMany({ where: { mediaItemId: id }, orderBy: { confidence: "desc" } });
+  });
+
+  app.post<{ Params: { id: string }; Body: { candidateId?: number; title?: string; author?: string; description?: string; coverUrl?: string } }>("/api/audiobooks/:id/metadata", async (request, reply) => {
+    const id = Number(request.params.id);
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+
+    let data: { title?: string; author?: string; description?: string; coverImagePath?: string | null; coverImageUrl?: string | null } = {};
+    if (request.body?.candidateId) {
+      const candidate = await prisma.metadataCandidate.findUnique({ where: { id: request.body.candidateId } });
+      if (!candidate || candidate.mediaItemId !== id) return reply.code(400).send({ message: "Candidate not found for this book" });
+      data = { title: candidate.title, author: candidate.author ?? item.author, description: candidate.description ?? undefined, coverImageUrl: candidate.coverUrl };
+      if (candidate.coverUrl) {
+        const dest = path.join(COVER_DIR, candidateCoverFilename(candidate.source, candidate.id));
+        if (await downloadCover(candidate.coverUrl, dest)) data.coverImagePath = dest;
+      }
+    } else {
+      data = {
+        title: request.body?.title?.trim() || undefined,
+        author: request.body?.author?.trim() || undefined,
+        description: request.body?.description?.trim() || undefined,
+        coverImageUrl: request.body?.coverUrl?.trim() || undefined,
+      };
+      const cover = request.body?.coverUrl?.trim();
+      if (cover) {
+        const dest = path.join(COVER_DIR, `manual_${id}_${Date.now()}.jpg`);
+        if (await downloadCover(cover, dest)) data.coverImagePath = dest;
+      }
+    }
+
+    const updated = await prisma.mediaItem.update({
+      where: { id },
+      data: { ...data, metadataSource: "user" },
+    });
+    return updated;
   });
 
   // Progress (profile-scoped)

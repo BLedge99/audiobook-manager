@@ -1,9 +1,73 @@
-import { X, Clock3, FileAudio } from "lucide-react";
+import { X, Clock3, FileAudio, Sparkles } from "lucide-react";
+import { useState } from "react";
 import type { Audiobook } from "../types";
 import { ChapterPlayer } from "./ChapterPlayer";
 
 function durationLabel(seconds: number) {
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
+
+interface Candidate {
+  id: number;
+  source: string;
+  title: string;
+  author?: string;
+  coverUrl?: string;
+  description?: string;
+  confidence?: number;
+}
+
+function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () => void }) {
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+
+  const enrich = async () => {
+    setState("loading");
+    try {
+      const res = await fetch(`/api/audiobooks/${book.id}/enrich`, { method: "POST" });
+      if (!res.ok) throw new Error();
+      const list = await res.json();
+      const rows: Candidate[] = list.map((candidate: { source: string; title: string; author?: string; coverUrl?: string; description?: string; confidence?: number }, index: number) => ({ id: index, ...candidate }));
+      // Re-fetch stored candidates so we have real ids
+      const stored = await fetch(`/api/audiobooks/${book.id}/candidates`);
+      setCandidates(stored.ok ? await stored.json() : rows);
+      setState("ready");
+    } catch {
+      setState("error");
+    }
+  };
+
+  const apply = async (candidateId: number) => {
+    const res = await fetch(`/api/audiobooks/${book.id}/metadata`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId }),
+    });
+    if (res.ok) onUpdated();
+  };
+
+  return (
+    <div className="mt-6 border-t border-slate-800 pt-4">
+      <button type="button" onClick={() => void enrich()} className="flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300">
+        <Sparkles size={16} /> {state === "loading" ? "Looking up…" : "Find metadata online"}
+      </button>
+      {state === "error" && <p className="mt-2 text-sm text-rose-300">Metadata lookup failed. Try again later.</p>}
+      {state === "ready" && (
+        <ul className="mt-3 space-y-2">
+          {candidates.length === 0 && <li className="text-sm text-slate-500">No matches found.</li>}
+          {candidates.map((candidate) => (
+            <li key={candidate.id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate text-slate-300">
+                {candidate.title} {candidate.author && <span className="text-slate-500">— {candidate.author}</span>}
+                <span className="ml-2 text-xs uppercase text-slate-600">{candidate.source}</span>
+              </span>
+              <button type="button" onClick={() => void apply(candidate.id)} className="shrink-0 border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:border-cyan-400">Use</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 export function AudiobookDetail({ book, onClose }: { book: Audiobook; onClose: () => void }) {
@@ -22,6 +86,7 @@ export function AudiobookDetail({ book, onClose }: { book: Audiobook; onClose: (
             <span className="flex items-center gap-2"><FileAudio size={16} /> {book.fileFormat.toUpperCase()}</span>
           </div>
           {book.description && <p className="mt-6 leading-7 text-slate-400">{book.description}</p>}
+          <MetadataEditor book={book} onUpdated={() => window.location.reload()} />
           <ChapterPlayer key={book.id} book={book} />
         </div>
       </article>

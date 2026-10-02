@@ -188,6 +188,11 @@ export function createScanManager(prisma: PrismaClient) {
       for (const group of groupFiles(audioFiles)) {
         const primary = group[0];
         const coverImagePath = await saveCover(primary, "/app/data/covers");
+        const existingRow = await prisma.mediaItem.findUnique({
+          where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
+          select: { metadataSource: true },
+        });
+        const userOverride = existingRow?.metadataSource === "user";
         const item = await prisma.mediaItem.upsert({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
           create: {
@@ -205,16 +210,10 @@ export function createScanManager(prisma: PrismaClient) {
             metadataSource: "embedded",
           },
           update: {
-            title: audiobookTitle(group),
-            author: primary.author,
-            narrator: primary.narrator,
+            ...(userOverride ? {} : { title: audiobookTitle(group), author: primary.author, narrator: primary.narrator, releaseDate: primary.releaseDate, genre: primary.genre, coverImagePath, metadataSource: "embedded" }),
             fileFormat: primary.format,
             duration: group.reduce((total, file) => total + file.duration, 0),
-            coverImagePath,
-            releaseDate: primary.releaseDate,
-            genre: primary.genre,
             chapters: group.length === 1 && primary.chapters ? JSON.stringify(primary.chapters) : null,
-            metadataSource: "embedded",
           },
         });
 
