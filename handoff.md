@@ -7,8 +7,8 @@
 ## Current state (snapshot)
 
 - Repo: `/mnt/c/Users/benle/Documents/Projects/TechNative/audiobook-manager`
-- Branch: master, at commit `5bb9a1a` plus this session's uncommitted work
-  (profile uniqueness + seeding + resume fixes — see "Current task").
+- Branch: master, at commit `1d582a5` (this session's fixes:
+  profile uniqueness + seeding + resume fixes — see "Current task").
   Owner pushes manually from their terminal.
 - Spec docs exist: `AGENTS.md`, `PRD.md`, `roadmap.md`, `specs/01..13`,
   `decisions/001..006`.
@@ -112,9 +112,8 @@ Remaining follow-ups:
 
 ## Suggestions for next sessions
 
-- **Commit soon:** this session's fix is complete and tested but uncommitted
-  (git status will show ~12 modified/new files). Suggested message:
-  `fix: profile-scoped progress resume + unique profile names`.
+- **Push when ready:** this session's fix is committed as `1d582a5`
+  but not pushed (owner pushes manually from their terminal).
 - Consider a `DELETE /api/profiles/:id` guard so the currently-selected
   profile can't be deleted from under the user (client reloads on delete,
   but the selected profileId in localStorage can point at a deleted row).
