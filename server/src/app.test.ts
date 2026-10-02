@@ -80,4 +80,12 @@ describe("profiles", () => {
     const res = await app.inject({ method: "POST", url: "/api/profiles", payload: { name: "  " }, headers: { cookie: cookieHeader } });
     expect(res.statusCode).toBe(400);
   });
+
+  it("rejects duplicate profile names", async () => {
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    const cookieHeader = login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    await app.inject({ method: "POST", url: "/api/profiles", payload: { name: "Sam" }, headers: { cookie: cookieHeader } });
+    const dup = await app.inject({ method: "POST", url: "/api/profiles", payload: { name: "Sam" }, headers: { cookie: cookieHeader } });
+    expect(dup.statusCode).toBe(409);
+  });
 });

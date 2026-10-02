@@ -11,6 +11,7 @@ export function ProfileSwitcher() {
   const [currentId, setCurrentId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
   const [newName, setNewName] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [error, setError] = useState("");
 
   const load = async () => {
     const res = await fetch("/api/profiles");
@@ -27,11 +28,17 @@ export function ProfileSwitcher() {
 
   const add = async (event: FormEvent) => {
     event.preventDefault();
-    if (!newName.trim()) return;
+    const name = newName.trim();
+    if (!name) return;
+    if (profiles.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+      setError("A profile with that name already exists");
+      return;
+    }
+    setError("");
     const res = await fetch("/api/profiles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() }),
+      body: JSON.stringify({ name }),
     });
     if (res.ok) {
       const profile = await res.json();
@@ -39,6 +46,8 @@ export function ProfileSwitcher() {
       setShowAdd(false);
       await load();
       select(profile.id);
+    } else if (res.status === 409) {
+      setError("A profile with that name already exists");
     }
   };
 
@@ -74,6 +83,7 @@ export function ProfileSwitcher() {
           <button type="submit" className="bg-slate-100 px-2 py-1 text-slate-950">Add</button>
         </form>
       )}
+      {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
     </div>
   );
 }

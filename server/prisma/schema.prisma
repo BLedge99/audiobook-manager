@@ -112,7 +112,7 @@ model ListeningHistory {
 
 model Profile {
   id        Int      @id @default(autoincrement())
-  name      String
+  name      String   @unique
   color     String?
   createdAt DateTime @default(now())
 

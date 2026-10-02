@@ -367,6 +367,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.post<{ Body: { name?: string; color?: string } }>("/api/profiles", async (request, reply) => {
     const name = request.body?.name?.trim();
     if (!name) return reply.code(400).send({ message: "A profile name is required" });
+    const existing = await prisma.profile.findUnique({ where: { name } });
+    if (existing) return reply.code(409).send({ message: "A profile with that name already exists" });
     const profile = await prisma.profile.create({ data: { name, color: request.body?.color?.trim() || null } });
     return reply.code(201).send(profile);
   });

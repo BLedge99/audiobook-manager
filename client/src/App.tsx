@@ -3,6 +3,7 @@ import { BookOpen, FolderPlus, Library, LoaderCircle, RefreshCw, ScanLine, Trash
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid } from "./components/AudiobookGrid";
 import { LoginGate } from "./components/LoginGate";
+import { ProfileGate } from "./components/ProfileGate";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
 import { useLibrary } from "./useLibrary";
 import type { Audiobook } from "./types";
@@ -15,6 +16,7 @@ function App() {
   const [showRootForm, setShowRootForm] = useState(false);
   const [working, setWorking] = useState(false);
   const [authed, setAuthed] = useState<boolean>();
+  const [profileId, setProfileId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
 
   // Probe: if the server requires auth, /api/audiobooks returns 401 until logged in.
   useEffect(() => {
@@ -23,6 +25,12 @@ function App() {
 
   if (authed === false) {
     return <LoginGate onSuccess={() => { setAuthed(true); void refresh(); }} />;
+  }
+
+  // Progress is profile-scoped: no profile selected means nothing can be
+  // saved or restored, so pick (or create) one before browsing.
+  if (authed && !profileId) {
+    return <ProfileGate onSuccess={() => setProfileId(window.localStorage.getItem("profileId"))} />;
   }
 
   const submitRoot = async (event: FormEvent) => {

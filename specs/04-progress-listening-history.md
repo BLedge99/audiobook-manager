@@ -9,8 +9,11 @@ laptop, resumes on a phone. The server is the source of truth.
 
 - While playing, the client reports playback position every N seconds
   (e.g. 10s) and on pause/ended via `PUT /api/audiobooks/:id/progress`.
+  The periodic saver reads the latest position from a ref so its timer
+  is not reset on every position tick.
 - Stored per (profile, mediaItem): last position (seconds), completed flag,
-  updatedAt.
+  updatedAt. Progress is only saved/restored for a selected profile;
+  the player blocks playback (with an inline hint) when none is selected.
 - Full listening history: each continuous listening session appends a row
   (profile, mediaItem, startedAt, endedAt, fromPosition, toPosition, speed).
   "Completed" is a derived flag also stored for quick filtering.

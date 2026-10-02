@@ -52,6 +52,9 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   const [shouldPlay, setShouldPlay] = useState(false);
   const [error, setError] = useState("");
   const [speed, setSpeed] = useState<number>(() => Number(window.localStorage.getItem("playbackRate")) || 1);
+  // Progress is profile-scoped: without a selected profile the server
+  // rejects every save, so playback must not start silently.
+  const [profileId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
   const [sleepMinutes, setSleepMinutes] = useState<number | null>(null);
   const sleepTimerRef = useRef<number | null>(null);
   const stopAtChapterEndRef = useRef(false);
@@ -59,6 +62,10 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   const current = segments[currentIndex];
   const totalDuration = segments.reduce((sum, segment) => sum + segment.duration, 0) || book.duration;
   const overallPosition = (isChapterBook || tracks.length === 0) ? currentTime : segments[currentIndex].offset + currentTime;
+  // Latest position for the periodic saver, which must not restart its
+  // timer on every position tick (that would prevent it ever firing).
+  const overallPositionRef = useRef(overallPosition);
+  overallPositionRef.current = overallPosition;
   const streamUrl = isChapterBook
     ? `/api/audiobooks/${book.id}/stream`
     : tracks.length > 0
@@ -103,22 +110,29 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
           remaining -= segments[index].duration;
           index += 1;
         }
-        pendingSeekRef.current = remaining + (isChapterBook ? segments[index].offset : 0);
+        const seekTarget = remaining + (isChapterBook ? segments[index].offset : 0);
+        pendingSeekRef.current = seekTarget;
         setCurrentIndex(index);
+        // If metadata already loaded, apply the seek immediately
+        const audio = audioRef.current;
+        if (audio && audio.readyState >= 1) {
+          audio.currentTime = seekTarget;
+          pendingSeekRef.current = null;
+        }
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book.id]);
 
-  // Periodic progress save while playing.
+  // Periodic progress save while playing (spec 04: report every ~10s).
   useEffect(() => {
     if (!playing) return;
-    sessionRef.current = sessionRef.current ?? { fromPosition: overallPosition, startedAt: new Date().toISOString() };
-    const timer = window.setInterval(() => saveProgress(overallPosition), 10_000);
+    sessionRef.current = sessionRef.current ?? { fromPosition: overallPositionRef.current, startedAt: new Date().toISOString() };
+    const timer = window.setInterval(() => saveProgress(overallPositionRef.current), 10_000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, overallPosition]);
+  }, [playing]);
 
   // Flush progress + session when pausing or the page unloads.
   useEffect(() => {
@@ -210,9 +224,16 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamUrl]);
 
+  // Save progress on unmount (the pause listener is removed before this runs)
   useEffect(() => () => {
     const audio = audioRef.current;
-    if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); }
+    if (audio) {
+      saveProgress(overallPositionRef.current);
+      flushSession(overallPositionRef.current);
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
   }, []);
 
   function selectSegment(index: number) {
@@ -237,7 +258,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
 
   function togglePlayback() {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !profileId) return;
     if (audio.paused) {
       setShouldPlay(true);
       void audio.play().catch(() => setError("Playback could not start. Try again."));
@@ -312,7 +333,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     <section className="mt-8 rounded-lg border border-slate-700 bg-slate-950/50 p-4" aria-label="Audiobook player">
       <audio ref={audioRef} preload="metadata" />
       <div className="flex items-center gap-3">
-        <button type="button" onClick={togglePlayback} aria-label={playing ? "Pause" : "Play"} className="rounded-full bg-cyan-400 p-3 text-slate-950 hover:bg-cyan-300">
+        <button type="button" onClick={togglePlayback} disabled={!profileId} aria-label={playing ? "Pause" : "Play"} title={profileId ? undefined : "Select a profile first"} className="rounded-full bg-cyan-400 p-3 text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40">
           {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
         </button>
         <button type="button" onClick={() => skip(-1)} aria-label="Previous chapter" disabled={currentIndex === 0} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipBack size={18} /></button>
@@ -334,6 +355,11 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
           <p className="text-xs text-slate-400">Chapter {currentIndex + 1} of {segments.length}</p>
         </div>
       </div>
+      {!profileId && (
+        <p role="alert" className="mt-3 text-sm text-amber-300">
+          Select a profile to start listening — your position is saved per profile.
+        </p>
+      )}
       <div className="mt-4">
         <input aria-label="Audiobook progress" type="range" min={0} max={totalDuration || 1} step={1} value={Math.min(overallPosition, totalDuration)} onChange={(event) => {
           const target = Number(event.target.value);
