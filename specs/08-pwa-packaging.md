@@ -18,11 +18,11 @@ decent media behaviour, so "the app" exists without a Play Store build.
 
 ## Acceptance criteria
 
-- [ ] Lighthouse PWA audit passes installability checks.
-- [ ] "Add to Home Screen" on Android yields a standalone app.
-- [ ] Offline: shell loads with cached UI; API errors show a clean banner.
-- [ ] Streams are never served from the service worker cache.
-- [ ] Playwright PWA checks (manifest presence, SW registration) where feasible.
+- [x] Lighthouse PWA audit passes installability checks.
+- [x] "Add to Home Screen" on Android yields a standalone app.
+- [x] Offline: shell loads with cached UI; API errors show a clean banner.
+- [x] Streams are never served from the service worker cache.
+- [x] Playwright PWA checks (manifest presence, SW registration) where feasible.
 
 ## Testing
 
