@@ -105,6 +105,51 @@ describe("progress", () => {
   });
 });
 
+/**
+ * Spec 14: the library grid needs each book's saved position to render
+ * "Continue listening" without one request per book.
+ */
+describe("library progress listing", () => {
+  const listedBook = async (headers: Record<string, string>) => {
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers });
+    expect(res.statusCode).toBe(200);
+    return (res.json() as { id: number; progress: { position: number; completed: boolean; lastPlayed: string } | null }[])
+      .find((book) => book.id === bookId);
+  };
+
+  it("includes the caller's saved position", async () => {
+    await app.inject({ method: "PUT", url: `/api/audiobooks/${bookId}/progress`, payload: { position: 400 }, headers: profileHeaders() });
+    const book = await listedBook(profileHeaders());
+    expect(book?.progress?.position).toBe(400);
+    expect(typeof book?.progress?.lastPlayed).toBe("string");
+  });
+
+  it("returns null progress with no profile header instead of failing", async () => {
+    // The library must render before a profile has been picked, so this route
+    // deliberately never 400s the way PUT /progress does.
+    const book = await listedBook({ cookie });
+    expect(book?.progress).toBeNull();
+  });
+
+  it("returns null progress for a malformed profile header", async () => {
+    const book = await listedBook({ cookie, "x-profile-id": "not-a-number" });
+    expect(book?.progress).toBeNull();
+  });
+
+  it("never leaks another profile's position", async () => {
+    const other = await app.inject({ method: "POST", url: "/api/profiles", payload: { name: "Riley" }, headers: { cookie } });
+    const otherId = other.json().id;
+    const book = await listedBook({ cookie, "x-profile-id": String(otherId) });
+    expect(book?.progress).toBeNull();
+  });
+
+  it("leaves books that have never been played at null", async () => {
+    const fresh = await app.inject({ method: "POST", url: "/api/profiles", payload: { name: "NeverPlayed" }, headers: { cookie } });
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "x-profile-id": String(fresh.json().id) } });
+    expect((res.json() as { progress: unknown }[]).every((book) => book.progress === null)).toBe(true);
+  });
+});
+
 describe("sessions", () => {
   it("records a listening session", async () => {
     const res = await app.inject({

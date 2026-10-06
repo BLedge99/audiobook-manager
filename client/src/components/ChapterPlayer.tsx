@@ -1,30 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook, Track } from "../types";
+import { ProgressTimeline } from "./ProgressTimeline";
+import {
+  describePosition,
+  parseChapters,
+  parseSegments,
+  remainingLabel,
+  timeLabel,
+  totalDuration as computeTotalDuration,
+} from "../lib/position";
 
-function timeLabel(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = Math.floor(seconds % 60);
-  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${minutes}:${String(remainder).padStart(2, "0")}`;
-}
-
-type Segment = { key: string; title?: string; duration: number; offset: number; trackId?: number };
-
-function parseChapters(book: Audiobook): { start: number; end: number; title: string }[] {
-  if (!book.chapters) return [];
-  try {
-    const parsed = JSON.parse(book.chapters);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-export function ChapterPlayer({ book }: { book: Audiobook }) {
+export function ChapterPlayer({ book, onProgressSaved }: { book: Audiobook; onProgressSaved?: () => void }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingSeekRef = useRef<number | null>(null);
+  // Held in a ref so the unmount effect can keep its `[]` dependency list while
+  // still calling the latest callback.
+  const onProgressSavedRef = useRef(onProgressSaved);
+  onProgressSavedRef.current = onProgressSaved;
   // Set once the listener does something of their own (play, seek, chapter
   // pick) so a late-arriving restore cannot override it.
   const userInteractedRef = useRef(false);
@@ -42,26 +35,14 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   // which otherwise overwrites the target with a near-zero value.
   const desiredTimeLockedRef = useRef(false);
   const speedRef = useRef(1);
+  // Segment maths lives in lib/position so the GUI redesign (spec 15) can
+  // restyle this player without reimplementing any of it.
+  const { segments, kind: segmentKind } = useMemo(() => parseSegments(book), [book]);
   const tracks = useMemo<Track[]>(() => book.tracks.length
     ? [...book.tracks].sort((a, b) => a.trackNumber - b.trackNumber)
     : [], [book]);
   const chapters = useMemo(() => parseChapters(book), [book]);
   const isChapterBook = tracks.length === 0 && chapters.length > 0;
-
-  const segments = useMemo<Segment[]>(() => {
-    if (tracks.length > 0) {
-      let offset = 0;
-      return tracks.map((track) => {
-        const segment = { key: String(track.id), title: track.title, duration: track.duration, offset, trackId: track.id };
-        offset += track.duration;
-        return segment;
-      });
-    }
-    if (chapters.length > 0) {
-      return chapters.map((chapter, index) => ({ key: String(index), title: chapter.title, duration: chapter.end - chapter.start, offset: chapter.start }));
-    }
-    return [{ key: "full", title: book.title, duration: book.duration, offset: 0 }];
-  }, [tracks, chapters, book]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentIndexRef = useRef(currentIndex);
@@ -82,8 +63,14 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   const stopAtChapterEndRef = useRef(false);
 
   const current = segments[currentIndex];
-  const totalDuration = segments.reduce((sum, segment) => sum + segment.duration, 0) || book.duration;
+  const totalDuration = computeTotalDuration(book, segments);
   const overallPosition = (isChapterBook || tracks.length === 0) ? currentTime : segments[currentIndex].offset + currentTime;
+  // Everything the position readout needs, derived from the same segments that
+  // drive the timeline so the labels and the ticks cannot disagree.
+  const described = useMemo(
+    () => describePosition(segments, overallPosition, segmentKind, totalDuration),
+    [segments, overallPosition, segmentKind, totalDuration],
+  );
   // Latest position for the periodic saver, which must not restart its
   // timer on every position tick (that would prevent it ever firing).
   const overallPositionRef = useRef(overallPosition);
@@ -100,9 +87,18 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   };
 
   const sessionRef = useRef<{ fromPosition: number; startedAt: string } | null>(null);
+  // Mirror of sessionRef's start position in state, so the timeline can draw
+  // the "you started here" marker. A ref alone would not re-render.
+  const [sessionStart, setSessionStart] = useState<number | null>(null);
+  const openSession = (fromPosition: number) => {
+    if (sessionRef.current) return;
+    sessionRef.current = { fromPosition, startedAt: new Date().toISOString() };
+    setSessionStart(fromPosition);
+  };
   const flushSession = (toPosition: number) => {
     const session = sessionRef.current;
     sessionRef.current = null;
+    setSessionStart(null);
     if (!session) return;
     // keepalive: the browser cancels in-flight requests on navigation, and this
     // flush is exactly the case where the user closes the tab or the app is
@@ -115,13 +111,16 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     }).catch(() => undefined);
   };
 
-  const saveProgress = (position: number) => {
+  const saveProgress = (position: number, onSettled?: () => void) => {
+    // `onSettled` lets the shell refetch the library once the *final* save has
+    // actually landed. Without it the library would be refetched on a guessed
+    // delay and race this fire-and-forget keepalive request.
     void fetch(`/api/audiobooks/${book.id}/progress`, {
       method: "PUT",
       keepalive: true,
       headers: { "Content-Type": "application/json", ...profileHeaders() },
       body: JSON.stringify({ position }),
-    }).catch(() => undefined);
+    }).catch(() => undefined).then(() => onSettled?.());
   };
 
   // Restore saved resume position once per book.
@@ -178,7 +177,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   // Periodic progress save while playing (spec 04: report every ~10s).
   useEffect(() => {
     if (!playing) return;
-    sessionRef.current = sessionRef.current ?? { fromPosition: overallPositionRef.current, startedAt: new Date().toISOString() };
+    openSession(overallPositionRef.current);
     const timer = window.setInterval(() => saveProgress(overallPositionRef.current), 10_000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -234,7 +233,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       }
     };
     const onPlay = () => {
-      sessionRef.current = sessionRef.current ?? { fromPosition: overallPositionRef.current, startedAt: new Date().toISOString() };
+      openSession(overallPositionRef.current);
       setPlaying(true);
       setError("");
     };
@@ -365,7 +364,9 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       // counts, because then `position` is a real listening position.
       const restoreInFlight = pendingSeekRef.current !== null && !sessionRef.current;
       if (!restoreInFlight && (sessionRef.current || position > 0)) {
-        saveProgress(position);
+        // Tell the shell when the last save has landed, so the library's
+        // progress bars are not left showing a stale position.
+        saveProgress(position, () => onProgressSavedRef.current?.());
         flushSession(position);
       }
       audio.pause();
@@ -505,7 +506,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
         </select>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-white">{current.title || `Track ${currentIndex + 1}`}</p>
-          <p className="text-xs text-slate-400">Chapter {currentIndex + 1} of {segments.length}</p>
+          <p className="text-xs text-slate-400">{segments.length > 1 ? `${described.heading} of ${segments.length}` : described.heading}</p>
         </div>
       </div>
       {!profileId && (
@@ -513,10 +514,33 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
           Select a profile to start listening — your position is saved per profile.
         </p>
       )}
-      <div className="mt-4">
-        <input aria-label="Audiobook progress" type="range" min={0} max={totalDuration || 1} step={1} value={Math.min(overallPosition, totalDuration)} onChange={(event) => {
+      {/* Spec 14. Not an aria-live region on purpose: this text changes several
+          times a second and announcing each change would make the player
+          unusable with a screen reader (decisions/007). */}
+      <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1" data-testid="position-readout">
+        <p className="min-w-0 text-sm font-semibold text-white">
+          {described.heading}
+          {described.title && <span className="font-normal text-slate-300"> — {described.title}</span>}
+        </p>
+        <p className="text-xs text-slate-400" data-testid="chapter-readout">
+          {timeLabel(described.segmentElapsed)} into this {segmentKind === "tracks" ? "track" : "chapter"} · {Math.round(described.segmentPercent)}%
+        </p>
+        <p className="text-xs text-slate-400" data-testid="book-readout">
+          {Math.round(described.bookPercent)}% of the book · {remainingLabel(described.bookRemaining)}
+        </p>
+      </div>
+      <div className="mt-2">
+        <ProgressTimeline
+          segments={segments}
+          kind={segmentKind}
+          total={totalDuration}
+          value={described.bookPosition}
+          sessionStart={sessionStart}
+          segmentElapsed={described.segmentElapsed}
+          segmentDuration={described.segmentDuration}
+          segmentHeading={described.heading}
+          onSeek={(target) => {
           userInteractedRef.current = true;
-          const target = Number(event.target.value);
           const index = segments.findIndex((segment) => target < segment.offset + segment.duration);
           const targetIndex = index === -1 ? segments.length - 1 : index;
           const offset = target - segments[targetIndex].offset;
@@ -547,8 +571,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
             desiredTimeRef.current = target2;
             audioRef.current.currentTime = target2;
           }
-        }} className="w-full accent-cyan-400" />
-        <div className="flex justify-between text-xs text-slate-400"><span>{timeLabel(overallPosition)}</span><span>{timeLabel(totalDuration)}</span></div>
+        }} />
       </div>
       {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}
       {segments.length > 1 && <ol className="mt-4 max-h-48 divide-y divide-slate-800 overflow-auto">

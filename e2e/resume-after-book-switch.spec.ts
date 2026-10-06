@@ -51,7 +51,10 @@ async function serverPosition(page: Page, bookId: number, headers: Record<string
 }
 
 async function openBook(page: Page, title: string) {
-  await page.getByRole("heading", { name: title }).click();
+  // `.first()` because a part-finished book is rendered twice: once in the
+  // "Continue listening" row and once in "All audiobooks" (spec 14). Both are
+  // legitimately headings, so an unscoped locator is a strict-mode violation.
+  await page.getByRole("heading", { name: title, exact: true }).first().click();
   await expect(page.getByLabel("Audiobook player")).toBeVisible();
 }
 

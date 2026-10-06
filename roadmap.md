@@ -18,11 +18,15 @@ has a matching spec in `specs/`.
 | 11 | Security hardening & testing | Filesystem access confined to library roots; security test suite (traversal, bad input, range abuse) in CI-style run |
 | 12 | AI features (LM Studio, optional) | At least one guarded AI feature ships (metadata matching assistant or description summaries); app fully works with it off |
 | 13 | Media tools (stretch) | Manual, explicit metadata/cover embedding into files with confirmation; no silent writes |
+| 14 | Listening position display | Player shows chapter + position in chapter + book % and time left, with chapter ticks and a session-start marker; grid shows a Continue listening section. Position maths lives in a tested pure module |
+| 15 | GUI redesign | Player, grid and library shell restyled as one system; reuses spec 14's `position.ts` and `ProgressTimeline` rather than rebuilding them |
 
 ## Notes
 
 - Items 01–06 form the playable, syncable core.
 - Items 07–09 complete the household product.
 - Items 10–11 make it trustworthy to leave running.
-- Items 12–13 are enhancements; do not start until 01–05 are solid.
+- Items 12–14 are enhancements; do not start until 01–05 are solid.
+- Item 15 follows 14 deliberately: 14 builds the data and layout layer that the
+  redesign then restyles, so the redesign is not a rewrite of the maths.
 - Remote/internet access is intentionally absent; see `decisions/006-remote-access.md`.

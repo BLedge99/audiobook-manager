@@ -6,6 +6,13 @@ export interface Track {
   trackNumber: number;
 }
 
+/** Profile-scoped saved position, added by spec 14 for the library grid. */
+export interface BookProgress {
+  position: number;
+  completed: boolean;
+  lastPlayed: string;
+}
+
 export interface Audiobook {
   id: number;
   title: string;
@@ -19,6 +26,8 @@ export interface Audiobook {
   chapters?: string | null;
   tracks: Track[];
   createdAt: string;
+  /** Null when the book has never been played, or no profile is selected. */
+  progress?: BookProgress | null;
 }
 
 export interface LibraryRoot {

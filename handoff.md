@@ -42,10 +42,138 @@
 | 11 | security-hardening | **done** | safePath confinement (symlink-safe) on stream/cover, ID validation, password type check, security playwright project green, COVER_DIR env |
 | 12 | ai-features | **done (MVP)** | LLMAdapter + LMStudioAdapter, /api/audiobooks/:id/ai-suggest offline-safe candidate pick |
 | 13 | media-tools | **deferred (stretch)** | requires explicit user confirm + backups; not implemented yet |
+| 14 | listening-position-display | **done** | `client/src/lib/position.ts` (all position maths, pure + 34 unit tests), `ProgressTimeline` (native range input + aria-hidden tick/marker overlay + chapter sub-bar, 9 tests), player readout "Track 7 — 07 - THE PREMATURE BURIAL / 13:33 into this track · 34% / 50% of the book · 2h 34m left", `/api/audiobooks` gains profile-scoped `progress`, grid "Continue listening" section. See "Current task" |
 
 ## Current task
 
-**Session 2026-10-03: resume bug fully fixed and covered by tests — done.**
+**Session 2026-10-06 (later): fixed the stale library grid.**
+
+User-reported: listened to a book, went back to the library, and the progress
+bar had not moved. Two compounding causes, both mine from spec 14:
+
+1. **The library was never refetched.** `useLibrary` only fetched on mount and
+   while a scan was running. Closing the detail modal only did
+   `setSelectedBook(undefined)`, so the grid kept the `progress` values from
+   page load. The server had the new position the whole time — the grid just
+   never asked again.
+2. **A naive refetch would have raced the save.** The player's unmount cleanup
+   fires its final progress `PUT` as a fire-and-forget `keepalive` request, so
+   refetching immediately after closing reads the *old* position. Fixed by
+   making `ChapterPlayer` accept `onProgressSaved` and invoke it from the save's
+   `.then()`, so the refetch is triggered by the write actually landing rather
+   than by a guessed delay.
+
+Fix:
+
+- `useLibrary.refresh({ silent })` — a refetch that does not flip `loading`.
+  Without this, every background refetch replaced the whole shelf with
+  "Loading library..." to update one bar. The E2E asserts the placeholder never
+  appears after closing.
+- `ChapterPlayer` → `AudiobookDetail` → `App` thread an `onProgressSaved`
+  callback, held in a ref so the unmount effect keeps its `[]` deps.
+- `App` also refetches on window `focus` and on `visibilitychange` → visible,
+  which covers listening that happened on another device.
+
+Tests:
+
+- New E2E `closing the player updates the library without a manual refresh`,
+  which plays a book, closes the modal and asserts "Continue listening" appears,
+  the grid never shows the loading placeholder, and the server agrees.
+  **Verified it fails without the fix** (reverted the wiring, watched it fail
+  with "Continue listening not found", restored) — a regression test that passes
+  either way is worthless.
+- Fixing this broke `resume-after-book-switch.spec.ts`: "Continue listening"
+  renders a part-finished title as a heading a second time, so the spec's
+  unscoped `getByRole("heading", { name: title }).click()` became a strict-mode
+  violation ("resolved to 2 elements"). Fixed the helper with `.first()` and an
+  `exact: true`, matching what the other two progress specs already did. The
+  duplication is intended, so this is recorded in spec 14's acceptance criteria.
+
+All green: server 38, client 53, Playwright 16 (was 15).
+
+- `resume-after-book-switch.spec.ts` flaked once, on the full-suite run
+  immediately following a `docker compose restart client` (cold Vite transform,
+  so slow first paint). Three subsequent full-suite runs were clean and the spec
+  passed 3/3 in isolation, so the likely cause is timing pressure from the cold
+  client rather than a logic break — but it was only observed once, so treat it
+  as unexplained if it recurs. `playwright.config.ts` has `retries: 1`, so a
+  flake reports as "flaky" rather than failing the run.
+
+**Earlier session 2026-10-06: spec 14 — listening position display — done.**
+
+The server already remembered where each profile stopped (spec 04), but the UI
+barely showed it: one progress bar spanning the whole book and an `m:ss` counter,
+so "Chapter 4, 45 minutes in" and "38% through the book" had to be inferred by
+arithmetic. The library grid showed nothing at all.
+
+Research (Libby, Sora/OverDrive, Audible, Apple Books, Audiobookshelf) converged on
+four things, all implemented:
+
+1. **Book-level and chapter-level progress shown together, not instead of each
+   other.** Audible and Audiobookshelf's Android app do this; Audiobookshelf's
+   *web* player only offers one at a time and has an open request for both
+   (advplyr/audiobookshelf#5440), which is why it is the differentiator here.
+2. **Chapter boundaries drawn on the timeline** (Libby: "the timeline shows your
+   progress, chapter breaks, ...").
+3. **A marker at where this session began** (Apple Books draws "the point where
+   you started listening ... marked with a gray circle"). Free here, since spec 04
+   already tracks the session start.
+4. **Do not rebuild the slider.** Keep the native `<input type="range">` and
+   layer the decoration as `aria-hidden` + `pointer-events: none`. Recorded in
+   `decisions/007-native-range-input-for-seek-control.md` so the redesign cannot
+   quietly undo it.
+
+What shipped:
+
+- **`client/src/lib/position.ts`** — every position calculation, pure and
+  DOM-free: `parseSegments`, `locateSegment`, `describePosition`, `chapterTicks`,
+  `sessionMarkerFraction`, `timeLabel`, `remainingLabel`, `percentComplete`,
+  `totalDuration`, `hasProgress`. 34 unit tests covering position 0, exactly on a
+  chapter start, the last second of a chapter, past the final chapter, NaN,
+  negative and `+Infinity`.
+- **`client/src/components/ProgressTimeline.tsx`** — the native input plus the
+  `aria-hidden` tick/marker overlay and the thinner chapter sub-bar. 9 render
+  tests. Owns no position logic.
+- **`ChapterPlayer`** — a readout line (`Track 7 — 07 - THE PREMATURE BURIAL`,
+  `13:33 into this track · 34%`, `50% of the book · 2h 34m left`) and the
+  session-start marker. Its duplicated local `timeLabel`/`parseSegments` were
+  deleted in favour of the shared module.
+- **`GET /api/audiobooks`** gains `progress: { position, completed, lastPlayed }`
+  scoped to `x-profile-id`, resolved in **one** query for the whole library
+  rather than one per book. Deliberately never 400s on a missing/malformed
+  header, unlike `PUT /progress`: the library has to render before a profile is
+  picked. 5 server tests cover that, plus profile isolation.
+- **Grid** — a `Continue listening` section (most recently played first) and a
+  progress line on part-finished cards in the main grid.
+
+Deliberately **not** done, all logged in the spec's "Not in this spec":
+bookmarks/highlights on the timeline (new data model), tick hover tooltips,
+drag-to-scrub with a floating time bubble, and any visual polish. Spec 15 is the
+GUI redesign and restyles this structure rather than rebuilding it.
+
+Two bugs found and fixed while writing the tests:
+
+- `locateSegment` mapped `+Infinity` to the *start* of the book while
+  `describePosition` clamped the same value to the *end*. Now `+Infinity`
+  clamps to the last segment; NaN and negatives still mean the start.
+- `parseSegments` computed chapter duration as `end - start` with no guard, so a
+  chapter whose `end` the scanner could not determine produced `NaN` and poisoned
+  every later offset. Now falls back to the next chapter's start.
+
+Validation:
+- `server`: 38/38 (was 33).
+- `client`: 53/53 (was 10) — 34 in `position.test.ts`, 9 in `ProgressTimeline.test.tsx`.
+- Playwright: 15/15 (was 11) — new `e2e/position-display.spec.ts`.
+- `tsc --noEmit` clean in both tiers.
+- Live docker API confirmed: `progress` present with a profile header, `null`
+  without one.
+
+Gotcha hit during this session: the Vite dev server in docker missed the
+`ChapterPlayer.tsx` edit over the bind mount and the E2E ran against stale code
+(same watcher problem the older session notes describe). `docker compose restart
+client` fixed it. Same applies after any client edit before running Playwright.
+
+**Earlier session 2026-10-03: resume bug fully fixed and covered by tests.**
 
 Continued from the previous session, which had the client-side fixes in
 `6b4e861` but left the E2E failing. Everything is now green.
@@ -268,11 +396,11 @@ Remaining follow-ups:
 - **WSL gotcha:** the vite dev server's file watcher misses edits made
   over /mnt/c — if client changes seem not to take effect, restart
   `npm run dev` in client/ before debugging the code.
-- Test commands: `cd server && npm test` (33 tests), `cd client &&
-  npm test` (10 tests) + `npx tsc --noEmit`, `npx playwright test`
+- Test commands: `cd server && npm test` (38 tests), `cd client &&
+  npm test` (53 tests) + `npx tsc --noEmit`, `npx playwright test`
   (or `--project=security`) from repo root. Playwright now has a
   `globalSetup` that aborts with an actionable message if the servers, the
-  `test/` fixtures or `APP_PASSWORD` are missing.
+  `test/` fixtures or `APP_PASSWORD` are missing. 16 tests as of spec 14.
 - Playwright chromium system deps installed by the user via sudo.
 - `e2e/` flows need the dev servers up; server DB is throwaway at
   /tmp/audiobook-e2e.db with collected sample media from `test/`.
@@ -295,6 +423,12 @@ Remaining follow-ups:
 - `npm audit` in `server/` still flags `@fastify/static` (route-guard bypass /
   non-canonical path), `vitest` and `esbuild`. The upgrades are breaking major
   bumps, so they need their own change with a re-run of the security suite.
+- **Spec 15 (GUI redesign) is next.** It should restyle
+  `ProgressTimeline` and `position.ts` rather than rebuild them, and
+  `decisions/007` (keep the native range input) should be honoured unless a new
+  ADR supersedes it. Remaining position-display ideas, in rough priority order:
+  tick hover tooltips naming the chapter, a drag-to-scrub time bubble, and
+  bookmarks/highlights on the timeline (the last one needs a new data model).
 - `server/src/scripts/scan.ts` (package.json "scan") doesn't exist — either
   add it or drop the script (known quirk, harmless).
 - If the household grows, the seeded profile list in `server/src/seed.ts`
@@ -335,6 +469,22 @@ Remaining follow-ups:
   subtracting track durations, overshooting by the chapter offset.
 - **Fixed (resume session):** a backgrounded mobile tab lost its last seconds
   of progress — flushes are `keepalive` and also fire on `visibilitychange`.
+- **Fixed (spec 14 session):** `locateSegment` mapped `+Infinity` to the start of
+  the book while `describePosition` clamped it to the end — now both clamp to
+  the last segment.
+- **Fixed (spec 14 session):** chapter duration was `end - start` with no guard,
+  so a chapter the scanner could not bound produced `NaN` and poisoned every
+  later offset — now falls back to the next chapter's start.
+- **Fixed (spec 14 follow-up):** the library grid never refetched after
+  playback, so saved progress never appeared — the shell now refetches when the
+  player's final save resolves, and on window focus / tab visible.
+- **Note (spec 14 session):** the Vite dev server in docker silently misses edits
+  made over the `/mnt/c` bind mount. Restart the client container before
+  concluding a client change "does nothing".
+- **Note (spec 14 follow-up):** a part-finished book's title is now a heading in
+  two places (Continue listening + All audiobooks). Any E2E locator by heading
+  name must be scoped (`.first()`, or scoped to a section) or it hits a
+  strict-mode violation.
 
 ## How to resume after a dropped session
 

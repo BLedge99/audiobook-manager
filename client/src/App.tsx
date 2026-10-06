@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { BookOpen, FolderPlus, Library, LoaderCircle, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
-import { AudiobookGrid } from "./components/AudiobookGrid";
+import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { LoginGate } from "./components/LoginGate";
 import { ProfileGate } from "./components/ProfileGate";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
@@ -22,6 +22,33 @@ function App() {
   useEffect(() => {
     void fetch("/api/audiobooks").then((res) => setAuthed(res.status !== 401)).catch(() => setAuthed(false));
   }, []);
+
+  /**
+   * Progress saved while a book was open has to reach the library grid, which
+   * otherwise keeps whatever `progress` it fetched at page load. This fires
+   * from the player's final save, so the refetch happens *after* the write
+   * rather than racing it.
+   *
+   * Also refetch when the tab is focused or becomes visible again: the same
+   * staleness appears when listening happened on another device.
+   */
+  const [libraryTick, setLibraryTick] = useState(0);
+  useEffect(() => {
+    if (!libraryTick || !profileId) return;
+    void refresh({ silent: true });
+  }, [libraryTick, profileId, refresh]);
+
+  useEffect(() => {
+    if (!profileId) return;
+    const refetch = () => { void refresh({ silent: true }); };
+    window.addEventListener("focus", refetch);
+    const onVisible = () => { if (document.visibilityState === "visible") refetch(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", refetch);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [profileId, refresh]);
 
   if (authed === false) {
     return <LoginGate onSuccess={() => { setAuthed(true); void refresh(); }} />;
@@ -79,6 +106,7 @@ function App() {
         </section>
 
         {error && <div className="mb-6 border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">{error}</div>}
+        <ContinueListening books={inProgressBooks(audiobooks)} onSelect={setSelectedBook} />
         <section>
           <div className="mb-5 flex items-center justify-between"><div><h2 className="text-2xl font-bold">All audiobooks</h2><p className="mt-1 text-sm text-slate-500">{audiobooks.length} {audiobooks.length === 1 ? "title" : "titles"} in your library</p></div>{working && <LoaderCircle className="animate-spin text-cyan-400" size={20} />}</div>
           {loading ? <div className="py-20 text-center text-slate-500">Loading library...</div> : <AudiobookGrid books={audiobooks} onSelect={setSelectedBook} />}
@@ -86,7 +114,11 @@ function App() {
       </main>
 
       <footer className="border-t border-slate-800 px-5 py-6 text-center text-xs text-slate-600">Audiobook Manager · local-first listening</footer>
-      {selectedBook && <AudiobookDetail book={selectedBook} onClose={() => setSelectedBook(undefined)} />}
+      {selectedBook && <AudiobookDetail
+        book={selectedBook}
+        onClose={() => setSelectedBook(undefined)}
+        onProgressSaved={() => setLibraryTick((tick) => tick + 1)}
+      />}
     </div>
   );
 }

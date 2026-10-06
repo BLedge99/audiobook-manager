@@ -97,8 +97,37 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   }
 
-  app.get("/api/audiobooks", async () => {
-    return prisma.mediaItem.findMany({ include: { tracks: true, contributors: true } });
+  // Optional profile header: unlike the progress routes this never 400s, because
+  // the library has to render before a profile has been picked. A missing or
+  // malformed header simply yields no progress rather than an error.
+  function optionalProfileId(request: { headers: Record<string, unknown> }): number | null {
+    const profileId = Number(request.headers["x-profile-id"]);
+    return Number.isInteger(profileId) && profileId >= 1 ? profileId : null;
+  }
+
+  app.get("/api/audiobooks", async (request) => {
+    const items = await prisma.mediaItem.findMany({ include: { tracks: true, contributors: true } });
+    const profileId = optionalProfileId(request);
+    // One query for the whole library's progress rather than one per book.
+    const history = profileId === null
+      ? []
+      : await prisma.listeningHistory.findMany({
+        where: { profileId },
+        select: { mediaItemId: true, position: true, completed: true, lastPlayed: true },
+      });
+    const byItem = new Map(history.map((row) => [row.mediaItemId, row]));
+    // Spec 14: the grid needs each book's saved position to render
+    // "continue listening" without N+1 requests. Scoped to the caller's profile,
+    // so one household member never sees another's position.
+    return items.map((item) => {
+      const row = byItem.get(item.id);
+      return {
+        ...item,
+        progress: row
+          ? { position: row.position, completed: row.completed, lastPlayed: row.lastPlayed }
+          : null,
+      };
+    });
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id", async (request, reply) => {

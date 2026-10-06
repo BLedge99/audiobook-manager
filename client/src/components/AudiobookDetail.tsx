@@ -70,7 +70,7 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   );
 }
 
-export function AudiobookDetail({ book, onClose }: { book: Audiobook; onClose: () => void }) {
+export function AudiobookDetail({ book, onClose, onProgressSaved }: { book: Audiobook; onClose: () => void; onProgressSaved?: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
       <article className="relative grid max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl md:grid-cols-[220px_1fr]" onClick={(event) => event.stopPropagation()}>
@@ -87,7 +87,7 @@ export function AudiobookDetail({ book, onClose }: { book: Audiobook; onClose: (
           </div>
           {book.description && <p className="mt-6 leading-7 text-slate-400">{book.description}</p>}
           <MetadataEditor book={book} onUpdated={() => window.location.reload()} />
-          <ChapterPlayer key={book.id} book={book} />
+          <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} />
         </div>
       </article>
     </div>

@@ -22,8 +22,14 @@ export function useLibrary() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  /**
+   * `silent` refetches without flipping `loading`, so the grid is never
+   * replaced by the "Loading library..." placeholder. Needed for the background
+   * refetches that pick up newly-saved progress — blanking the whole shelf to
+   * update one progress bar is a bad trade.
+   */
+  const refresh = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [books, libraryRoots] = await Promise.all([
         request<Audiobook[]>("/api/audiobooks"),
@@ -35,7 +41,7 @@ export function useLibrary() {
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load library");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
