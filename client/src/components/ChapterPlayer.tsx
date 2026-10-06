@@ -25,6 +25,23 @@ function parseChapters(book: Audiobook): { start: number; end: number; title: st
 export function ChapterPlayer({ book }: { book: Audiobook }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingSeekRef = useRef<number | null>(null);
+  // Set once the listener does something of their own (play, seek, chapter
+  // pick) so a late-arriving restore cannot override it.
+  const userInteractedRef = useRef(false);
+  // True while we are swapping `src` ourselves. Setting a source emits a
+  // synthetic `pause`, which must not be mistaken for the user pausing.
+  const switchingSourceRef = useRef(false);
+  // The stream URL currently set on the element, used to ignore late
+  // `loadedmetadata` events belonging to a source we already replaced.
+  const activeSrcRef = useRef<string>("");
+  // The within-track position the user last asked for. Re-applied if a
+  // redundant load() resets currentTime to 0.
+  const desiredTimeRef = useRef<number | null>(null);
+  // While set, only a `seeked` event may clear desiredTimeRef. A pending
+  // cross-track seek must survive the outgoing track's stray timeupdate,
+  // which otherwise overwrites the target with a near-zero value.
+  const desiredTimeLockedRef = useRef(false);
+  const speedRef = useRef(1);
   const tracks = useMemo<Track[]>(() => book.tracks.length
     ? [...book.tracks].sort((a, b) => a.trackNumber - b.trackNumber)
     : [], [book]);
@@ -54,6 +71,9 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   const [shouldPlay, setShouldPlay] = useState(false);
   const [error, setError] = useState("");
   const [speed, setSpeed] = useState<number>(() => Number(window.localStorage.getItem("playbackRate")) || 1);
+  // flushSession is registered once per track and must record the rate the
+  // listener actually chose, not whichever value was current when it registered.
+  speedRef.current = speed;
   // Progress is profile-scoped: without a selected profile the server
   // rejects every save, so playback must not start silently.
   const [profileId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
@@ -84,16 +104,21 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     const session = sessionRef.current;
     sessionRef.current = null;
     if (!session) return;
+    // keepalive: the browser cancels in-flight requests on navigation, and this
+    // flush is exactly the case where the user closes the tab or the app is
+    // backgrounded.
     void fetch(`/api/audiobooks/${book.id}/sessions`, {
       method: "POST",
+      keepalive: true,
       headers: { "Content-Type": "application/json", ...profileHeaders() },
-      body: JSON.stringify({ fromPosition: session.fromPosition, toPosition, speed, startedAt: session.startedAt, endedAt: new Date().toISOString() }),
+      body: JSON.stringify({ fromPosition: session.fromPosition, toPosition, speed: speedRef.current, startedAt: session.startedAt, endedAt: new Date().toISOString() }),
     }).catch(() => undefined);
   };
 
   const saveProgress = (position: number) => {
     void fetch(`/api/audiobooks/${book.id}/progress`, {
       method: "PUT",
+      keepalive: true,
       headers: { "Content-Type": "application/json", ...profileHeaders() },
       body: JSON.stringify({ position }),
     }).catch(() => undefined);
@@ -106,14 +131,31 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       .then((res) => (res.ok ? res.json() : { position: 0 }))
       .then(({ position }: { position: number }) => {
         if (cancelled || !position || position <= 0) return;
+        // The user may have already started playing or picked a chapter
+        // while this request was in flight. Their choice wins.
+        if (userInteractedRef.current) return;
         let remaining = position;
         let index = 0;
-        while (index < segments.length - 1 && remaining >= segments[index].duration) {
-          remaining -= segments[index].duration;
-          index += 1;
+        if (isChapterBook) {
+          // Chapter offsets are absolute file times from ffprobe, not a
+          // cumulative sum, so a position must be located by range. Subtracting
+          // durations and re-adding the offset would overshoot by the offset
+          // itself and could seek past the end of the file.
+          const found = segments.findIndex((segment) => position >= segment.offset && position < segment.offset + segment.duration);
+          index = found === -1 ? segments.length - 1 : found;
+          remaining = position;
+        } else {
+          while (index < segments.length - 1 && remaining >= segments[index].duration) {
+            remaining -= segments[index].duration;
+            index += 1;
+          }
         }
-        const seekTarget = remaining + (isChapterBook ? segments[index].offset : 0);
+        const seekTarget = isChapterBook ? position : remaining;
         pendingSeekRef.current = seekTarget;
+        desiredTimeRef.current = seekTarget;
+        // Lock until the seek lands, so a stray timeupdate from the outgoing
+        // track cannot overwrite the target with a near-zero value.
+        desiredTimeLockedRef.current = true;
         const trackChanged = index !== currentIndexRef.current;
         setCurrentIndex(index);
         // Apply immediately only when the current source is already the
@@ -126,6 +168,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
           setCurrentTime(seekTarget);
           pendingSeekRef.current = null;
         }
+        // else: `loadedmetadata` (or the post-load resume) applies it.
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
@@ -144,19 +187,30 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   // Flush progress + session when pausing or the page unloads.
   useEffect(() => {
     const onPauseAndSave = () => {
-      // Setting/changing a source can emit `pause` even when the user never
-      // started playback. Do not let that synthetic pause overwrite a saved
-      // resume position with the initial zero.
-      if (!sessionRef.current) return;
+      // Two cases where a `pause` must NOT be treated as the user stopping:
+      // 1. Setting/changing a source emits a synthetic `pause` even when the
+      //    user never started playback.
+      // 2. While swapping tracks the render closure's position still refers
+      //    to the *old* track, so saving here would record a position in the
+      //    new track that was never played.
+      if (!sessionRef.current || switchingSourceRef.current) return;
       saveProgress(overallPosition);
       flushSession(overallPosition);
     };
     const audio = audioRef.current;
     audio?.addEventListener("pause", onPauseAndSave);
     window.addEventListener("pagehide", onPauseAndSave);
+    // Mobile browsers do not reliably fire pagehide when an app is
+    // backgrounded, and the page may then be frozen or discarded, so also
+    // flush when the tab becomes hidden.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") onPauseAndSave();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       audio?.removeEventListener("pause", onPauseAndSave);
       window.removeEventListener("pagehide", onPauseAndSave);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overallPosition]);
@@ -208,12 +262,42 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       }
     };
     const onError = () => { setPlaying(false); setShouldPlay(false); setError("This audio file could not be loaded."); };
+    const applyPendingSeek = () => {
+      if (pendingSeekRef.current === null) return;
+      const target = pendingSeekRef.current;
+      audio.currentTime = target;
+      setCurrentTime(target);
+      desiredTimeRef.current = target;
+      desiredTimeLockedRef.current = true;
+      pendingSeekRef.current = null;
+    };
     const onLoadedMetadata = () => {
-      if (pendingSeekRef.current !== null) {
-        audio.currentTime = pendingSeekRef.current;
-        setCurrentTime(pendingSeekRef.current);
+      // A `loadedmetadata` can still arrive for the source we just replaced.
+      // Seeking there would target the outgoing track. Only act on the
+      // source currently set.
+      if (audio.currentSrc && activeSrcRef.current && !audio.currentSrc.endsWith(activeSrcRef.current)) return;
+      // Re-assert a seek that a redundant load() may have discarded. Only
+      // while a seek is genuinely outstanding, so playback near the target is
+      // not dragged backwards by a stale value.
+      if (desiredTimeRef.current !== null && desiredTimeLockedRef.current && Math.abs(audio.currentTime - desiredTimeRef.current) > 1) {
+        audio.currentTime = desiredTimeRef.current;
+        setCurrentTime(desiredTimeRef.current);
+        // The seek is applied here, so the pending request is satisfied. If
+        // it is left set, the unmount cleanup treats the player as
+        // "still restoring" and refuses to save a perfectly good position.
         pendingSeekRef.current = null;
+        return;
       }
+      applyPendingSeek();
+    };
+    const onSeeked = () => {
+      // Only a seek on the source currently loaded may clear the target. A
+      // `seeked` fired by the track we are leaving would otherwise discard the
+      // incoming track's pending seek, leaving playback at the track start.
+      if (audio.currentSrc && activeSrcRef.current && !audio.currentSrc.endsWith(activeSrcRef.current)) return;
+      if (!desiredTimeLockedRef.current) return;
+      desiredTimeRef.current = null;
+      desiredTimeLockedRef.current = false;
     };
     audio.addEventListener("timeupdate", updateTime);
     audio.addEventListener("play", onPlay);
@@ -221,6 +305,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     audio.addEventListener("ended", onEnded);
     audio.addEventListener("error", onError);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("seeked", onSeeked);
     return () => {
       audio.removeEventListener("timeupdate", updateTime);
       audio.removeEventListener("play", onPlay);
@@ -228,6 +313,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       audio.removeEventListener("ended", onEnded);
       audio.removeEventListener("error", onError);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("seeked", onSeeked);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, segments.length]);
@@ -237,8 +323,21 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     if (!audio) return;
     if (!isChapterBook) setCurrentTime(0);
     setError("");
+    switchingSourceRef.current = true;
+    activeSrcRef.current = streamUrl;
     audio.src = streamUrl;
+    // Re-seek after load(): StrictMode runs this effect twice, and the second
+    // load() resets currentTime to 0. The pending seek is reapplied on
+    // `loadedmetadata`; this covers the case where that event has already
+    // fired for this source.
+    const resume = desiredTimeLockedRef.current ? desiredTimeRef.current : null;
     audio.load();
+    if (resume !== null && audio.readyState >= 1) {
+      audio.currentTime = resume;
+      setCurrentTime(resume);
+    }
+    // Clear on the next tick: the synthetic pause fires as part of load().
+    window.setTimeout(() => { switchingSourceRef.current = false; }, 0);
     if (shouldPlay) void audio.play().catch(() => { setShouldPlay(false); setError("Playback could not start. Try again."); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamUrl]);
@@ -253,8 +352,22 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       const position = tracks.length > 0
         ? (activeSegment?.offset ?? 0) + audio.currentTime
         : audio.currentTime;
-      saveProgress(position);
-      flushSession(position);
+      // Never let a player that has not played anything overwrite a saved
+      // resume position with the initial zero. Merely opening a book mounts
+      // this component at currentTime 0, and React StrictMode unmounts and
+      // remounts it once in development — which used to wipe the stored
+      // position before the restore could read it, so resume never happened.
+      // A real session, or a genuine seek away from zero, is still saved.
+      //
+      // A restore that is still in flight means the seek has not been applied yet.
+      // Saving then would persist the *start* of the resume track instead of
+      // the resume point itself. A session that is genuinely open always
+      // counts, because then `position` is a real listening position.
+      const restoreInFlight = pendingSeekRef.current !== null && !sessionRef.current;
+      if (!restoreInFlight && (sessionRef.current || position > 0)) {
+        saveProgress(position);
+        flushSession(position);
+      }
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
@@ -262,6 +375,10 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   }, []);
 
   function selectSegment(index: number) {
+    userInteractedRef.current = true;
+    pendingSeekRef.current = null;
+    desiredTimeRef.current = isChapterBook ? segments[index].offset : 0;
+    desiredTimeLockedRef.current = true;
     setShouldPlay(true);
     if (index === currentIndex && audioRef.current) {
       if (isChapterBook) {
@@ -284,6 +401,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   function togglePlayback() {
     const audio = audioRef.current;
     if (!audio || !profileId) return;
+    userInteractedRef.current = true;
     if (audio.paused) {
       setShouldPlay(true);
       void audio.play().catch(() => setError("Playback could not start. Try again."));
@@ -301,7 +419,11 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
   function skipSeconds(delta: number) {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.currentTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + delta));
+    userInteractedRef.current = true;
+    const next = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + delta));
+    audio.currentTime = next;
+    desiredTimeRef.current = next;
+    desiredTimeLockedRef.current = true;
   }
 
   function changeSpeed(next: number) {
@@ -340,7 +462,13 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
     if (!("mediaSession" in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({ title: current.title || book.title, artist: book.author, album: book.title });
     navigator.mediaSession.setActionHandler("play", () => void audioRef.current?.play());
-    navigator.mediaSession.setActionHandler("pause", () => audioRef.current?.pause());
+    navigator.mediaSession.setActionHandler("pause", () => {
+      // Clear shouldPlay too: leaving it true means a track that ends while
+      // paused would auto-advance and start playing on its own.
+      setShouldPlay(false);
+      userInteractedRef.current = true;
+      audioRef.current?.pause();
+    });
     navigator.mediaSession.setActionHandler("seekbackward", () => skipSeconds(-15));
     navigator.mediaSession.setActionHandler("seekforward", () => skipSeconds(15));
     return () => {
@@ -387,6 +515,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
       )}
       <div className="mt-4">
         <input aria-label="Audiobook progress" type="range" min={0} max={totalDuration || 1} step={1} value={Math.min(overallPosition, totalDuration)} onChange={(event) => {
+          userInteractedRef.current = true;
           const target = Number(event.target.value);
           const index = segments.findIndex((segment) => target < segment.offset + segment.duration);
           const targetIndex = index === -1 ? segments.length - 1 : index;
@@ -396,12 +525,27 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
               setCurrentIndex(targetIndex);
               audioRef.current.currentTime = target;
             } else {
-              pendingSeekRef.current = Math.max(0, offset);
+              // Desired within-track offset for the *incoming* track. Set both
+              // refs from the raw value: React re-renders before this effect
+              // runs, and any timeupdate in between can overwrite the desired
+              // value with the outgoing track's near-zero time.
+              const desired = Math.max(0, offset);
+              pendingSeekRef.current = desired;
+              desiredTimeRef.current = desired;
+              // Lock until `seeked`: the outgoing track's stray timeupdate
+              // would otherwise overwrite the target with a near-zero value.
+              desiredTimeLockedRef.current = true;
               setCurrentIndex(targetIndex);
               setShouldPlay(playing);
             }
           } else if (audioRef.current) {
-            audioRef.current.currentTime = isChapterBook ? target : Math.max(0, offset);
+            // Keep the pending and desired values in step with the direct
+            // seek: while the new source is still loading, `loadedmetadata`
+            // would otherwise apply a *stale* pending seek over this one.
+            const target2 = isChapterBook ? target : Math.max(0, offset);
+            if (!isChapterBook) pendingSeekRef.current = target2;
+            desiredTimeRef.current = target2;
+            audioRef.current.currentTime = target2;
           }
         }} className="w-full accent-cyan-400" />
         <div className="flex justify-between text-xs text-slate-400"><span>{timeLabel(overallPosition)}</span><span>{timeLabel(totalDuration)}</span></div>
@@ -411,7 +555,7 @@ export function ChapterPlayer({ book }: { book: Audiobook }) {
         {segments.map((segment, index) => <li key={segment.key}>
           <button type="button" onClick={() => selectSegment(index)} className={`flex w-full items-center justify-between gap-4 py-2 text-left text-sm hover:text-white ${index === currentIndex ? "text-cyan-300" : "text-slate-300"}`} aria-current={index === currentIndex ? "true" : undefined}>
             <span className="min-w-0 truncate"><span className="mr-2 text-slate-500">{index + 1}.</span>{segment.title || `Track ${index + 1}`}</span>
-            <span className="shrink-0 text-xs text-slate-500">{index === currentIndex ? `${timeLabel(currentTime - (isChapterBook ? 0 : 0))} / ` : ""}{timeLabel(segment.duration)}</span>
+            <span className="shrink-0 text-xs text-slate-500">{index === currentIndex ? `${timeLabel(isChapterBook ? currentTime - current.offset : currentTime)} / ` : ""}{timeLabel(segment.duration)}</span>
           </button>
         </li>)}
       </ol>}

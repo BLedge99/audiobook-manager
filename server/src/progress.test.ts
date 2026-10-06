@@ -73,6 +73,36 @@ describe("progress", () => {
     const res = await app.inject({ method: "GET", url: `/api/audiobooks/${bookId}/progress`, headers: { cookie, "x-profile-id": String(otherId) } });
     expect(res.json()).toMatchObject({ position: 0, completed: false });
   });
+
+  /**
+   * Regression: the read-then-write save raced with itself when the periodic,
+   * pause and unmount savers all fired at once, leaving duplicate rows for one
+   * (book, profile). Resume then read an arbitrary row and flip-flopped.
+   */
+  it("keeps exactly one resume row per book and profile under concurrent saves", async () => {
+    const { PrismaClient } = await import("@prisma/client");
+    const prisma = new PrismaClient();
+    try {
+      const before = await prisma.listeningHistory.count({ where: { mediaItemId: bookId, profileId } });
+      const saves = Array.from({ length: 8 }, (_, index) =>
+        app.inject({ method: "PUT", url: `/api/audiobooks/${bookId}/progress`, payload: { position: 300 + index }, headers: profileHeaders() }));
+      await Promise.all(saves);
+      const after = await prisma.listeningHistory.count({ where: { mediaItemId: bookId, profileId } });
+      expect(after).toBe(before);
+
+      // The read-back must equal one of the values that was written, never a
+      // mixture of two rows.
+      const res = await app.inject({ method: "GET", url: `/api/audiobooks/${bookId}/progress`, headers: profileHeaders() });
+      expect([300, 301, 302, 303, 304, 305, 306, 307]).toContain(res.json().position);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  it("rejects a non-numeric audiobook id instead of failing with a 500", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks/abc", headers: { cookie } });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe("sessions", () => {
@@ -92,5 +122,28 @@ describe("sessions", () => {
   it("rejects sessions missing positions", async () => {
     const res = await app.inject({ method: "POST", url: `/api/audiobooks/${bookId}/sessions`, payload: {}, headers: profileHeaders() });
     expect(res.statusCode).toBe(400);
+  });
+
+  it("keeps stored session positions and speed within sane bounds", async () => {
+    // A synthetic save during a track switch could report a position past the
+    // end of the book, and a nonsense rate must not be stored verbatim.
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/audiobooks/${bookId}/sessions`,
+      payload: { fromPosition: -20, toPosition: 99999, speed: 1e9 },
+      headers: profileHeaders(),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ fromPosition: 0, toPosition: 1000, speed: 10 });
+  });
+
+  it("falls back to a sane speed when none is given", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/audiobooks/${bookId}/sessions`,
+      payload: { fromPosition: 0, toPosition: 10 },
+      headers: profileHeaders(),
+    });
+    expect(res.json().speed).toBe(1);
   });
 });

@@ -56,6 +56,11 @@ export function ProfileSwitcher() {
     if (String(id) === currentId) {
       window.localStorage.removeItem("profileId");
       setCurrentId(null);
+      // Reload like `select` does. Without it the app keeps the deleted id
+      // in state, so the profile gate never reappears and every progress save
+      // is rejected by the server with no visible error.
+      window.location.reload();
+      return;
     }
     await load();
   };

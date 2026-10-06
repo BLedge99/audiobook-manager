@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, pickProfile } from "./helpers";
+import { deleteProfiles, ensureAuthed, login, pickAnyProfile } from "./helpers";
 
 test("login gate blocks, then allows, profile creation", async ({ page }) => {
   await page.goto("/");
@@ -11,56 +11,57 @@ test("login gate blocks, then allows, profile creation", async ({ page }) => {
 
   await login(page);
 
-  // Remove any "E2E User" left by previous runs so the create below
-  // is actually exercised (profile names are unique).
-  const list = await page.request.get("/api/profiles");
-  for (const profile of await list.json()) {
-    if (profile.name === "E2E User") {
-      await page.request.delete(`/api/profiles/${profile.id}`);
-    }
-  }
+  // Purge profiles this test created on earlier runs so the library does not
+  // accumulate one per run. A *unique* name is used below, so a leftover can
+  // never turn the create into a false duplicate.
+  await deleteProfiles(page, (profile) => profile.name.startsWith("E2E User "));
+  const name = `E2E User ${Date.now().toString(36)}`;
 
   // No profile selected yet: the profile gate appears. Creating a
   // profile through it also selects it and enters the app.
   await expect(page.getByRole("heading", { name: "Who's listening?" })).toBeVisible();
   await page.getByRole("button", { name: "+ Add profile" }).click();
-  await page.getByPlaceholder("Name").fill("E2E User");
+  await page.getByPlaceholder("Name").fill(name);
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Audiobook Manager" })).toBeVisible();
-  await expect(page.getByLabel("Active profile")).toContainText("E2E User");
+  // "Audiobook Manager" is also the login gate's heading, so assert something
+  // only the signed-in library renders.
+  await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+  await expect(page.getByLabel("Active profile").locator("option:checked")).toHaveText(name);
+
+  // The profile really exists server-side, exactly once.
+  await ensureAuthed(page);
+  const created = await (await page.request.get("/api/profiles")).json();
+  expect(created.filter((profile: { name: string }) => profile.name === name)).toHaveLength(1);
+
+  await deleteProfiles(page, (profile) => profile.name === name);
 });
 
 test("duplicate profile names are rejected", async ({ page }) => {
   await page.goto("/");
   await login(page);
-  await pickProfile(page, "Dad");
+  await pickAnyProfile(page);
 
-  // Clean up from previous runs first so the first add below
-  // actually creates (and isn't a 409 from stale state).
-  const before = await page.request.get("/api/profiles");
-  for (const profile of await before.json()) {
-    if (profile.name === "E2E Dup") {
-      await page.request.delete(`/api/profiles/${profile.id}`);
-    }
-  }
+  await deleteProfiles(page, (profile) => profile.name.startsWith("E2E Dup "));
+  const name = `E2E Dup ${Date.now().toString(36)}`;
 
   await page.getByRole("button", { name: "+ Profile" }).click();
-  await page.getByPlaceholder("Name").fill("E2E Dup");
+  await page.getByPlaceholder("Name").fill(name);
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByLabel("Active profile")).toContainText("E2E Dup");
+  // Assert the *selected* option. toContainText on the <select> would match
+  // any <option> and pass even if a different profile were active.
+  await expect(page.getByLabel("Active profile").locator("option:checked")).toHaveText(name);
 
   // Adding the same name again must be rejected, not duplicated.
   await page.getByRole("button", { name: "+ Profile" }).click();
-  await page.getByPlaceholder("Name").fill("E2E Dup");
+  await page.getByPlaceholder("Name").fill(name);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("A profile with that name already exists")).toBeVisible();
 
+  await ensureAuthed(page);
   const res = await page.request.get("/api/profiles");
-  const matches = (await res.json()).filter((p: { name: string }) => p.name === "E2E Dup");
+  const matches = (await res.json()).filter((p: { name: string }) => p.name === name);
   expect(matches).toHaveLength(1);
 
   // Clean up so the next run starts from a known state.
-  for (const profile of matches) {
-    await page.request.delete(`/api/profiles/${profile.id}`);
-  }
+  await deleteProfiles(page, (profile) => profile.name === name);
 });

@@ -108,6 +108,10 @@ model ListeningHistory {
 
   mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
   profile   Profile?  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // One resume point per (book, profile). Without this, concurrent saves
+  // could each create a row and resume would read an arbitrary one.
+  @@unique([mediaItemId, profileId])
 }
 
 model Profile {

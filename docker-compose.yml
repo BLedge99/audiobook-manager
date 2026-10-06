@@ -34,6 +34,9 @@ services:
       - PORT=3000
       - DATABASE_URL=file:/app/data/library.db
       - LIBRARY_ROOT=/data/audiobooks
+      # The E2E security suite asserts that unauthenticated API calls are
+      # rejected, which only holds when auth is actually enabled.
+      - APP_PASSWORD=${APP_PASSWORD:-household}
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:3000/api/health"]
       interval: 5s

@@ -101,8 +101,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return prisma.mediaItem.findMany({ include: { tracks: true, contributors: true } });
   });
 
-  app.get("/api/audiobooks/:id", async (request, reply) => {
-    const id = Number((request.params as { id: string }).id);
+  app.get<{ Params: { id: string } }>("/api/audiobooks/:id", async (request, reply) => {
+    // Number("abc") is NaN, which Prisma turns into a 500. Validate like the
+    // other id routes so a bad id is a 400/404, not a server error.
+    const id = parseIdParam((request.params as { id: string }).id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
     const item = await prisma.mediaItem.findUnique({
       where: { id },
       include: { tracks: true, contributors: { include: { contributor: true } } },
@@ -308,7 +311,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
-    const row = await prisma.listeningHistory.findFirst({ where: { mediaItemId: item.id, profileId } });
+    const row = await prisma.listeningHistory.findFirst({
+      where: { mediaItemId: item.id, profileId },
+      orderBy: { lastPlayed: "desc" },
+    });
     return { position: row?.position ?? 0, completed: row?.completed ?? false };
   });
 
@@ -319,16 +325,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
 
     const rawPosition = typeof request.body?.position === "number" && Number.isFinite(request.body.position) ? request.body.position : 0;
-    const position = Math.min(Math.max(rawPosition, 0), item.duration || rawPosition);
-    const completed = request.body?.completed ?? position >= 0.95 * (item.duration || Infinity);
+    // Clamp into the book's real bounds when the duration is known. A
+    // non-finite or negative value resets to the start rather than persisting
+    // garbage that would resume a book at an impossible offset.
+    const duration = item.duration > 0 ? item.duration : 0;
+    const position = duration > 0
+      ? Math.min(Math.max(rawPosition, 0), duration)
+      : Math.max(0, Number.isFinite(rawPosition) ? rawPosition : 0);
+    const completed = request.body?.completed ?? (duration > 0 && position >= 0.95 * duration);
 
-    const existing = await prisma.listeningHistory.findFirst({ where: { mediaItemId: item.id, profileId } });
-    if (existing) {
-      await prisma.listeningHistory.update({ where: { id: existing.id }, data: { position, completed } });
-    } else {
-      await prisma.listeningHistory.create({ data: { mediaItemId: item.id, profileId, position, completed } });
-    }
-    return { position, completed };
+    // Upsert on the (mediaItem, profile) unique key: concurrent saves from the
+    // periodic saver, the pause saver and an unmount can no longer both
+    // decide "no row yet" and each create one.
+    const saved = await prisma.listeningHistory.upsert({
+      where: { mediaItemId_profileId: { mediaItemId: item.id, profileId } },
+      create: { mediaItemId: item.id, profileId, position, completed },
+      update: { position, completed },
+    });
+    return { position: saved.position, completed: saved.completed };
   });
 
   app.post<{ Params: { id: string }; Body: { fromPosition?: number; toPosition?: number; speed?: number; startedAt?: string; endedAt?: string } }>("/api/audiobooks/:id/sessions", async (request, reply) => {
@@ -341,13 +355,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!Number.isFinite(toPosition) || !Number.isFinite(fromPosition)) {
       return reply.code(400).send({ message: "fromPosition and toPosition are required" });
     }
+    // Keep history rows physically meaningful: no negative offsets, and no
+    // position past the end of the book.
+    const safeTo = Math.min(Math.max(toPosition, 0), item.duration || toPosition);
+    const safeFrom = Math.min(Math.max(fromPosition, 0), safeTo);
+    const speed = Number(request.body?.speed);
+    const safeSpeed = Number.isFinite(speed) && speed > 0 ? Math.min(speed, 10) : 1;
     const session = await prisma.playSession.create({
       data: {
         profileId,
         mediaItemId: item.id,
-        fromPosition: Math.max(0, fromPosition),
-        toPosition: Math.max(0, toPosition),
-        speed: Number.isFinite(Number(request.body?.speed)) ? Number(request.body?.speed) : 1,
+        fromPosition: safeFrom,
+        toPosition: safeTo,
+        speed: safeSpeed,
         startedAt: request.body?.startedAt ? new Date(request.body.startedAt) : new Date(),
         endedAt: request.body?.endedAt ? new Date(request.body.endedAt) : new Date(),
       },
