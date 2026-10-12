@@ -43,11 +43,49 @@
 | 12 | ai-features | **done (MVP)** | LLMAdapter + LMStudioAdapter, /api/audiobooks/:id/ai-suggest offline-safe candidate pick |
 | 13 | media-tools | **deferred (stretch)** | requires explicit user confirm + backups; not implemented yet |
 | 14 | listening-position-display | **done** | `client/src/lib/position.ts` (all position maths, pure + 34 unit tests), `ProgressTimeline` (native range input + aria-hidden tick/marker overlay + chapter sub-bar, 9 tests), player readout "Track 7 — 07 - THE PREMATURE BURIAL / 13:33 into this track · 34% / 50% of the book · 2h 34m left", `/api/audiobooks` gains profile-scoped `progress`, grid "Continue listening" section. See "Current task" |
-| 16 | provider-expansion | **planned** | Audnexus + LibriVox clients, adaptive sequential chain (ADR 008), resumable post-scan enrichment run, auto-apply >=0.9 else review queue. Supersedes spec 07's provider list |
-| 17 | tag-taxonomy | **planned** | curated 2-level genre tree + GenreMapping, multi-narrator via reconciled Contributor, series + fractional position, publication facts, per-field FieldOverride precedence (ADR 009), reset actions |
-| 18 | favourites-custom-tags | **planned** | per-profile Favourite, household-managed Tag vocabulary with merge, reserved-name rejection, counts matching listed books |
-| 19 | recommendations-wishlist | **planned** | external-only Discover seeded by one book or profile favourites, pure tag-similarity ranking + dedupe (ADR 010), per-profile WishlistItem with owned marker |
-| 20 | browse-discover-ui | **planned** | genre shelves, filter bar with URL state, category pages, series shelves, Discover tab, full tag-suite detail, tag manager, review queue. Builds **before** 15 |
+| 16 | provider-expansion | **done** | Audnexus + LibriVox clients, adaptive sequential chain (ADR 008) with METADATA_PROVIDER_ORDER override, resumable EnrichmentRun, auto-apply >=0.9 else review queue. **Live-verified** via `npm run verify:enrichment`, which found 4 bugs mocked tests could not (see below) |
+| 17 | tag-taxonomy | **done** | curated 2-level genre tree (14 top-level, ~40 children) seeded at boot, GenreMapping with Misc catch-all, reconciled multi-narrator Contributor, Series with stored case-folded key + fractional position, publication facts, per-field FieldOverride precedence (ADR 009), reset + reset-all |
+| 18 | favourites-custom-tags | **done** | per-profile Favourite (unique index = idempotent), household-managed Tag vocabulary with merge + reserved/genre-collision rejection. `PUT /api/audiobooks/:id/tags` is now ONE route for the whole suite (specs 17+18 originally collided on it) |
+| 19 | recommendations-wishlist | **done** | external-only Discover seeded by one book or profile favourites, pure weighted tag-similarity ranking + hard dedupe on normalised title+author (ADR 010), per-profile WishlistItem with owned marker, structurally non-playable (no filePath/Track/audio route) |
+| 20 | browse-discover-ui | **done** | 4 tabs (Library/Browse/Discover/Favourites), genre + series shelves, filter bar with URL state, full tag-suite editor with provenance labels, tag manager, review queue with confidence. Pure logic in `lib/browse.ts` (47 tests). **Next: roadmap 15 (GUI redesign)** |
+
+## Bugs found by the live enrichment run (`npm run verify:enrichment`)
+
+Unit tests with mocked HTTP could not have caught any of these; every one
+silently degraded enrichment to zero results. Worth re-running against any
+real library, and worth keeping the script.
+
+1. **Scanner ignored the album tag** - multi-file books were titled after the
+   folder, which for this library is an archive.org identifier
+   (`12_creepytales_1206_librivox`). LibriVox and most rippers put the *book*
+   title in the album tag. This was the single biggest user-visible bug.
+2. **Enrichment queued nothing** - `NOT: { enrichmentStatus: 'applied' }`
+   compiles to `NOT (col = 'applied')`, which is NULL (not true) for a NULL
+   column, so every never-enriched book was excluded.
+3. **LibriVox returns HTTP 500 when `title` and `author` are combined.** The
+   client always sent both. Author is now used locally in `scoreMatch`.
+   LibriVox also exact-matches titles and drops leading articles, so
+   `titleVariants()` tries stripped/decoded/article-free forms.
+4. **Section readers use `display_name`**, not first/last name, so narrators
+   came back empty for every LibriVox title. Life spans
+   ("Kara Shallenberg (1969-2023)") are stripped.
+
+Verified result: 6 books scanned, folder names replaced by real titles
+("Creepy Tales", "The Awakening", "Charles Dickens 200th Anniversary
+Collection Vol. 1"), 3 enriched at confidence 1.00 with narrators and mapped
+genres, 3 correctly held in the review queue.
+
+## Environment notes (Windows dev host)
+
+- `@rollup/rollup-linux-x64-gnu` was pinned as a direct devDependency in
+  `server/package.json`, which broke `npm install` on every non-Linux host.
+  Removed; rollup resolves its own platform binary.
+- Prisma needs a forward-slashed `file:C:/...` URL on Windows; `file:///` and
+  raw backslash paths both fail. A test's `prisma` cwd was also one level
+  short of the server root.
+- Temp-dir cleanup and the `symlinkSync` privilege probe no longer fail
+  otherwise-green suites. One test skips without Windows Developer Mode.
+- Spec 02's Docker/E2E tier still needs Docker, which is unavailable here.
 
 ## Build order after 14
 
