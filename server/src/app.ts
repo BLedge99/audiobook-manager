@@ -115,7 +115,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }
 
   app.get("/api/audiobooks", async (request) => {
-    const items = await prisma.mediaItem.findMany({ include: { tracks: true, contributors: true } });
+    // Spec 20: the browse UI needs genres, series and custom tags on the list
+    // payload -- fetching them per-book would be an N+1 request per shelf.
+    const items = await prisma.mediaItem.findMany({
+      include: {
+        tracks: true,
+        series: true,
+        genres: { include: { genre: true } },
+        customTags: { include: { tag: true } },
+        contributors: { include: { contributor: true } },
+      },
+    });
     const profileId = optionalProfileId(request);
     // One query for the whole library's progress rather than one per book.
     const history = profileId === null
@@ -132,7 +142,27 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const row = byItem.get(item.id);
       return {
         // Spec 11: never expose server filesystem paths to a client.
-        ...publicMediaItem(item),
+        ...publicMediaItem({
+          ...item,
+          tracks: item.tracks.map(({ filePath: _trackPath, ...track }) => track),
+        }),
+        // Flatten the join rows so the client can filter without walking them.
+        genres: item.genres.map((link) => ({
+          id: link.genre.id,
+          slug: link.genre.slug,
+          name: link.genre.name,
+          parentId: link.genre.parentId,
+          source: link.source,
+        })),
+        customTags: item.customTags.map((link) => ({
+          id: link.tag.id,
+          name: link.tag.name,
+        })),
+        contributors: item.contributors.map((link) => ({
+          id: link.contributor.id,
+          name: link.contributor.name,
+          role: link.contributor.role,
+        })),
         progress: row
           ? { position: row.position, completed: row.completed, lastPlayed: row.lastPlayed }
           : null,

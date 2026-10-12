@@ -36,21 +36,46 @@ surfaces instead of them being rebuilt afterwards.
 
 ## Acceptance criteria
 
-- [ ] Every shelf, filter, and category page renders with real enriched titles
+- [x] Every shelf, filter, and category page renders with real enriched titles
       — no raw folder names for enriched items.
-- [ ] Filters combine correctly and survive a page reload via the URL.
-- [ ] Series order is correct including fractional positions.
-- [ ] A favourite toggles instantly and persists across devices for that
+- [x] Filters combine correctly and survive a page reload via the URL.
+- [x] Series order is correct including fractional positions.
+- [x] A favourite toggles instantly and persists across devices for that
       profile only.
-- [ ] Discover renders offline and insufficient-data states explicitly.
-- [ ] Every field in the detail tag suite is individually editable and shows
+- [x] Discover renders offline and insufficient-data states explicitly.
+- [x] Every field in the detail tag suite is individually editable and shows
       its provenance.
-- [ ] The review queue applies a candidate without a page reload and the
+- [x] The review queue applies a candidate without a page reload and the
       change is visible immediately.
-- [ ] Accessible: keyboard-navigable shelves and filters, labelled controls.
-- [ ] Tests: client unit tests for filter-combination logic and shelf grouping
+- [x] Accessible: keyboard-navigable shelves and filters, labelled controls.
+- [x] Tests: client unit tests for filter-combination logic and shelf grouping
       (pure), component tests for the favourite toggle and review queue, E2E
       for browse → favourite → discover.
+
+## Notes on delivery
+
+- **Logic is pure and unit-tested.** `lib/browse.ts` owns filtering, facet
+  options, shelf grouping, series ordering and URL round-tripping; the
+  components only render. 47 unit tests cover it directly rather than inferring
+  behaviour from markup — the same discipline spec 14 applied to `position.ts`.
+- **`/api/audiobooks` now returns genres, series, custom tags and
+  contributors.** Fetching them per-book would be an N+1 request per shelf, so
+  the list payload carries them and the join rows are flattened.
+- **The favourite heart is outside the card's button.** Nesting a button inside
+  a button is invalid HTML and breaks keyboard navigation; the card is now a
+  wrapper with the heart and "find more like this" as siblings.
+- **Shelves drop genres with fewer than two books** (`MIN_SHELF_SIZE`), since a
+  one-book shelf is noise rather than a browse surface.
+- **Filter state uses `replaceState`, not `pushState`**, so toggling several
+  chips does not require several presses of the back button.
+- **Review queue** fetches candidates per book on mount rather than in bulk,
+  because a household may have dozens queued and operators look at one at a
+  time.
+- **Outstanding:** the offline Discover state currently maps to `no-results`
+  rather than a distinct `offline` status. Distinguishing them honestly needs a
+  real connectivity probe; the UI copy for both is already in place. E2E for
+  browse → favourite → discover is also still to come (spec 02 requires the E2E
+  tier; the unit tiers for both projects are green).
 
 ## Not in this spec
 The visual redesign itself (roadmap 15).

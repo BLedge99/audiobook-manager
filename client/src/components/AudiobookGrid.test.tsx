@@ -9,7 +9,6 @@ const book: Audiobook = {
   author: "Edgar Allan Poe",
   duration: 3660,
   fileFormat: "mp3",
-  filePath: "/lib/book/01.mp3",
   tracks: [{ id: 1, duration: 3660, trackNumber: 1 }],
   createdAt: new Date().toISOString(),
 };

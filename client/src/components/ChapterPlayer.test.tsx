@@ -9,7 +9,6 @@ const book: Audiobook = {
   author: "Author",
   duration: 1000,
   fileFormat: "mp3",
-  filePath: "/lib/book.mp3",
   tracks: [],
   createdAt: new Date().toISOString(),
 };

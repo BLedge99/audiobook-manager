@@ -1,7 +1,9 @@
-import { X, Clock3, FileAudio, Sparkles } from "lucide-react";
+import { X, Clock3, Compass, FileAudio, Heart, Sparkles } from "lucide-react";
 import { useState } from "react";
-import type { Audiobook } from "../types";
+import type { Audiobook, GenreNode, TagSummary } from "../types";
+import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
+import { TagSuiteEditor } from "./TagSuiteEditor";
 
 function durationLabel(seconds: number) {
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
@@ -70,7 +72,30 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   );
 }
 
-export function AudiobookDetail({ book, onClose, onProgressSaved }: { book: Audiobook; onClose: () => void; onProgressSaved?: () => void }) {
+export function AudiobookDetail({
+  book,
+  onClose,
+  onProgressSaved,
+  genres,
+  tags,
+  favourited,
+  onToggleFavourite,
+  onFindSimilar,
+  onBookUpdated,
+}: {
+  book: Audiobook;
+  onClose: () => void;
+  onProgressSaved?: () => void;
+  genres?: GenreNode[];
+  tags?: TagSummary[];
+  favourited?: boolean;
+  onToggleFavourite?: (bookId: number) => void;
+  onFindSimilar?: (bookId: number) => void;
+  onBookUpdated?: () => void;
+}) {
+  const suite = useTagSuite(book.id);
+  const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
       <article className="relative grid max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl md:grid-cols-[220px_1fr]" onClick={(event) => event.stopPropagation()}>
@@ -78,15 +103,56 @@ export function AudiobookDetail({ book, onClose, onProgressSaved }: { book: Audi
         <img src={`/api/audiobooks/${book.id}/cover`} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="aspect-[2/3] w-full object-cover md:h-full" />
         <div className="p-6 md:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Audiobook</p>
-          <h2 className="mt-3 text-3xl font-bold text-white">{book.title}</h2>
+          <h2 className="mt-3 pr-10 text-3xl font-bold text-white">{book.title}</h2>
+          {book.subtitle && <p className="mt-1 text-lg italic text-slate-400">{book.subtitle}</p>}
           <p className="mt-2 text-lg text-slate-300">{book.author}</p>
-          {book.narrator && <p className="mt-1 text-sm text-slate-400">Narrated by {book.narrator}</p>}
+          {narrators.length > 0 && (
+            <p className="mt-1 text-sm text-slate-400">Narrated by {narrators.map((entry) => entry.name).join(", ")}</p>
+          )}
+          {book.series && (
+            <p className="mt-1 text-sm text-slate-400">
+              {book.series.name}{book.seriesPosition != null && ` · Book ${book.seriesPosition}`}
+            </p>
+          )}
+
+          {/* Spec 18/19/20: favourite and find-more-like actions on the book. */}
+          {(onToggleFavourite || onFindSimilar) && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {onToggleFavourite && (
+                <button
+                  type="button"
+                  onClick={() => onToggleFavourite(book.id)}
+                  aria-pressed={favourited}
+                  className="flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-rose-400 hover:text-rose-300"
+                >
+                  <Heart size={15} fill={favourited ? "currentColor" : "none"} aria-hidden="true" />
+                  {favourited ? "In your favourites" : "Add to favourites"}
+                </button>
+              )}
+              {onFindSimilar && (
+                <button
+                  type="button"
+                  onClick={() => onFindSimilar(book.id)}
+                  className="flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-cyan-400 hover:text-cyan-300"
+                >
+                  <Compass size={15} aria-hidden="true" /> Find more like this
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-300">
             <span className="flex items-center gap-2"><Clock3 size={16} /> {durationLabel(book.duration)}</span>
             <span className="flex items-center gap-2"><FileAudio size={16} /> {book.fileFormat.toUpperCase()}</span>
+            {book.publishedYear && <span>{book.publishedYear}</span>}
+            {book.publisher && <span className="truncate">{book.publisher}</span>}
           </div>
           {book.description && <p className="mt-6 leading-7 text-slate-400">{book.description}</p>}
-          <MetadataEditor book={book} onUpdated={() => window.location.reload()} />
+
+          {/* Spec 20: the full, individually editable tag suite with provenance. */}
+          <TagSuiteEditor book={book} genres={genres ?? []} tags={tags ?? []} suite={suite} onSaved={() => onBookUpdated?.()} />
+
+          <MetadataEditor book={book} onUpdated={() => onBookUpdated?.()} />
           <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} />
         </div>
       </article>

@@ -20,7 +20,6 @@ function book(overrides: Partial<Audiobook> = {}): Audiobook {
     author: "An Author",
     duration: 3600,
     fileFormat: "mp3",
-    filePath: "/library/a.mp3",
     tracks: [],
     createdAt: "2026-01-01T00:00:00Z",
     ...overrides,

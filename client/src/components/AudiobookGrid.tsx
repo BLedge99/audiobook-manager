@@ -1,5 +1,6 @@
-import { Clock3, Headphones } from "lucide-react";
+import { Clock3, Compass, Headphones } from "lucide-react";
 import type { Audiobook } from "../types";
+import { FavouriteButton } from "./FavouriteButton";
 import {
   describePosition,
   hasProgress,
@@ -99,27 +100,84 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
   );
 }
 
-function LibraryCard({ book, onSelect, showProgress }: { book: Audiobook; onSelect: (book: Audiobook) => void; showProgress: boolean }) {
+/**
+ * One card. The favourite heart and "find more like this" sit *outside* the
+ * card's own button element rather than inside it -- nested buttons are
+ * invalid HTML and break keyboard navigation.
+ */
+function LibraryCard({
+  book,
+  onSelect,
+  showProgress,
+  favourited,
+  onToggleFavourite,
+  onFindSimilar,
+}: {
+  book: Audiobook;
+  onSelect: (book: Audiobook) => void;
+  showProgress: boolean;
+  favourited: boolean;
+  onToggleFavourite?: (bookId: number) => void;
+  onFindSimilar?: (book: Audiobook) => void;
+}) {
   const { line, percent } = showProgress ? describeBookProgress(book) : { line: "", percent: 0 };
+  const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
+
   return (
-    <button onClick={() => onSelect(book)} className="group overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-left transition hover:-translate-y-1 hover:border-cyan-500/60 hover:bg-slate-800">
-      <Cover book={book} />
-      <div className="p-3">
-        <h3 className="truncate font-semibold text-slate-100">{book.title}</h3>
-        <p className="mt-1 truncate text-sm text-slate-400">{book.author}</p>
-        {book.tracks.length > 1 && <p className="mt-2 flex items-center gap-1 text-xs uppercase tracking-wider text-cyan-400"><Headphones size={12} /> {book.tracks.length} tracks</p>}
-        {showProgress && (
-          <div className="mt-2" data-testid="card-progress">
-            <ProgressBar percent={percent} />
-            <p className="mt-1 truncate text-xs text-slate-400">{line}</p>
-          </div>
-        )}
-      </div>
-    </button>
+    <div className="group relative">
+      <button onClick={() => onSelect(book)} className="w-full overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-left transition hover:-translate-y-1 hover:border-cyan-500/60 hover:bg-slate-800">
+        <Cover book={book} />
+        <div className="p-3">
+          <h3 className="truncate font-semibold text-slate-100">{book.title}</h3>
+          <p className="mt-1 truncate text-sm text-slate-400">{book.author}</p>
+          {narrators.length > 0 && (
+            <p className="mt-1 truncate text-xs text-slate-500">
+              Narrated by {narrators.length === 1 ? narrators[0].name : `${narrators.length} narrators`}
+            </p>
+          )}
+          {book.tracks.length > 1 && <p className="mt-2 flex items-center gap-1 text-xs uppercase tracking-wider text-cyan-400"><Headphones size={12} /> {book.tracks.length} tracks</p>}
+          {showProgress && (
+            <div className="mt-2" data-testid="card-progress">
+              <ProgressBar percent={percent} />
+              <p className="mt-1 truncate text-xs text-slate-400">{line}</p>
+            </div>
+          )}
+        </div>
+      </button>
+
+      {onToggleFavourite && (
+        <div className="absolute right-1.5 top-1.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+          <FavouriteButton favourited={favourited} onToggle={() => onToggleFavourite(book.id)} label={book.title} />
+        </div>
+      )}
+      {onFindSimilar && (
+        <button
+          type="button"
+          onClick={() => onFindSimilar(book)}
+          title="Find more like this"
+          aria-label={`Find more like ${book.title}`}
+          className="absolute bottom-1.5 right-1.5 grid size-9 place-items-center rounded-full border border-slate-700 bg-slate-950/85 text-slate-400 opacity-0 backdrop-blur transition hover:border-cyan-400 hover:text-cyan-300 focus:opacity-100 group-hover:opacity-100"
+        >
+          <Compass size={16} aria-hidden="true" />
+        </button>
+      )}
+    </div>
   );
 }
 
-export function AudiobookGrid({ books, onSelect }: { books: Audiobook[]; onSelect: (book: Audiobook) => void }) {
+export function AudiobookGrid({
+  books,
+  onSelect,
+  favourites,
+  onToggleFavourite,
+  onFindSimilar,
+}: {
+  books: Audiobook[];
+  onSelect: (book: Audiobook) => void;
+  favourites?: Set<number>;
+  onToggleFavourite?: (bookId: number) => void;
+  onFindSimilar?: (book: Audiobook) => void;
+}) {
   if (!books.length) {
     return <div className="border border-dashed border-slate-700 bg-slate-900/60 px-6 py-16 text-center text-slate-400">Your library is empty. Add a folder and run a scan to discover audiobooks.</div>;
   }
@@ -128,7 +186,17 @@ export function AudiobookGrid({ books, onSelect }: { books: Audiobook[]; onSelec
 
   return (
     <div className={cardGrid}>
-      {books.map((book) => <LibraryCard key={book.id} book={book} onSelect={onSelect} showProgress={continuingIds.has(book.id)} />)}
+      {books.map((book) => (
+        <LibraryCard
+          key={book.id}
+          book={book}
+          onSelect={onSelect}
+          showProgress={continuingIds.has(book.id)}
+          favourited={favourites?.has(book.id) ?? false}
+          onToggleFavourite={onToggleFavourite}
+          onFindSimilar={onFindSimilar}
+        />
+      ))}
     </div>
   );
 }
