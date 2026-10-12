@@ -36,7 +36,6 @@ function App() {
   const { audiobooks, roots, loading, error, refresh, addRoot, removeRoot, scan } = useLibrary();
   const browse = useBrowse();
   const discover = useDiscover();
-  const [tab, setTab] = useState<Tab>("library");
   const [selectedBook, setSelectedBook] = useState<Audiobook>();
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
@@ -44,22 +43,37 @@ function App() {
   const [working, setWorking] = useState(false);
   const [authed, setAuthed] = useState<boolean>();
   const [profileId, setProfileId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
-  // Spec 20: filters live in the URL so a filtered view can be shared or
-  // bookmarked.
+  // Spec 20: both the tab and the filters live in the URL, so a shared or
+  // bookmarked link restores the whole view. Persisting filters alone was not
+  // enough -- reloading a filtered link landed on the Library tab and looked
+  // like the filter had been lost.
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
+  const [tab, setTab] = useState<Tab>(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return TABS.some((entry) => entry.id === requested) ? (requested as Tab) : "library";
+  });
 
   // Probe: if the server requires auth, /api/audiobooks returns 401 until logged in.
   useEffect(() => {
     void fetch("/api/audiobooks").then((res) => setAuthed(res.status !== 401)).catch(() => setAuthed(false));
   }, []);
 
-  const onFiltersChange = useCallback((next: Filters) => {
-    setFilters(next);
-    const query = filtersToQuery(next);
+  /** Write the current view (tab + filters) to the URL. */
+  const syncUrl = useCallback((nextTab: Tab, nextFilters: Filters) => {
+    const params = new URLSearchParams();
+    if (nextTab !== "library") params.set("tab", nextTab);
+    const filterQuery = filtersToQuery(nextFilters);
+    if (filterQuery) params.set("f", filterQuery);
+    const query = params.toString();
     // replaceState, not pushState: toggling five chips should not require
     // five presses of the back button.
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
   }, []);
+
+  const onFiltersChange = useCallback((next: Filters) => {
+    setFilters(next);
+    syncUrl(tab, next);
+  }, [syncUrl, tab]);
 
   const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);
   const filteredBooks = useMemo(() => applyFilters(audiobooks, filters), [audiobooks, filters]);
@@ -88,6 +102,21 @@ function App() {
     setTab("discover");
     void discover.loadSimilar(bookId);
   }, [discover]);
+
+  /**
+   * Opening a tab refreshes the data that tab depends on. Discover already
+   * recomputes on open (spec 19); Favourites and Browse need the same, because
+   * a favourite toggled in another tab -- or on another device -- leaves the
+   * list fetched at mount stale, and the tab then silently shows nothing.
+   */
+  const openTab = useCallback(
+    (next: Tab) => {
+      setTab(next);
+      syncUrl(next, filters);
+      if (next === "favourites" || next === "browse") void browse.refresh();
+    },
+    [browse, syncUrl, filters],
+  );
 
   const toggleFavourite = useCallback((bookId: number) => {
     void browse.toggleFavourite(bookId);
@@ -176,7 +205,7 @@ function App() {
               <li key={id}>
                 <button
                   type="button"
-                  onClick={() => setTab(id)}
+                  onClick={() => openTab(id)}
                   aria-current={tab === id ? "page" : undefined}
                   className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm transition ${
                     tab === id ? "border-cyan-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"

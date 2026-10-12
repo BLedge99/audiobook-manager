@@ -1,0 +1,263 @@
+import { test, expect, type Page } from "@playwright/test";
+import { login, pickAnyProfile } from "./helpers";
+
+/**
+ * Specs 18-20 — favourites, custom tags, browse and the tag suite.
+ *
+ * These exercise the surfaces end-to-end against the real stack: the UI, the
+ * profile-scoped API and the database. Deliberately absent is an assertion on
+ * Discover *content*, because that depends on a live third-party API; what is
+ * asserted is that Discover renders an honest state rather than pretending it
+ * has results.
+ */
+
+async function books(page: Page) {
+  const response = await page.request.get("/api/audiobooks");
+  return (await response.json()) as { id: number; title: string; author: string }[];
+}
+
+/** Sign in and land on the library. */
+async function enterApp(page: Page) {
+  await page.goto("/");
+  await login(page);
+  await pickAnyProfile(page);
+}
+
+/**
+ * The section tabs.
+ *
+ * Scoped to the nav landmark because the detail modal also contains buttons
+ * whose name mentions "favourites", and an unscoped `getByRole` matches both.
+ */
+function tab(page: Page, name: RegExp) {
+  return page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name });
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+test.describe("favourites", () => {
+  test("favouriting a book moves it into the Favourites tab and survives a reload", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+    const book = all[0];
+
+    await page.getByRole("heading", { name: book.title, exact: true }).first().click();
+    await page.getByRole("button", { name: "Add to favourites", exact: true }).click();
+    await page.getByLabel("Close details").click();
+
+    await tab(page, /^Favourites/).click();
+    await expect(page.getByRole("heading", { name: "Favourites", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: book.title, exact: true }).first()).toBeVisible();
+
+    // A reload must not lose it: it is persisted, not client-side state.
+    await page.reload();
+    await login(page);
+    await tab(page, /^Favourites/).click();
+    await expect(page.getByRole("heading", { name: book.title, exact: true }).first()).toBeVisible();
+  });
+
+  test("un-favouriting removes the book", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+    const book = all[0];
+
+    const profileId = await page.evaluate(() => window.localStorage.getItem("profileId"));
+    const headers = { "x-profile-id": profileId as string };
+    await page.request.put(`/api/audiobooks/${book.id}/favourite`, { headers });
+
+    await tab(page, /^Favourites/).click();
+    await expect(page.getByRole("heading", { name: book.title, exact: true }).first()).toBeVisible();
+
+    await page.getByRole("heading", { name: book.title, exact: true }).first().click();
+    await page.getByRole("button", { name: "In your favourites", exact: true }).click();
+    await page.getByLabel("Close details").click();
+
+    await expect(page.getByRole("heading", { name: book.title, exact: true })).toHaveCount(0);
+  });
+
+  test("favouriting twice is idempotent, not an error", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+    const profileId = await page.evaluate(() => window.localStorage.getItem("profileId"));
+    const headers = { "x-profile-id": profileId as string };
+
+    const first = await page.request.put(`/api/audiobooks/${all[0].id}/favourite`, { headers });
+    const second = await page.request.put(`/api/audiobooks/${all[0].id}/favourite`, { headers });
+
+    expect(first.ok()).toBeTruthy();
+    expect(second.ok()).toBeTruthy();
+    expect(await second.json()).toMatchObject({ favourited: true, alreadyExisted: true });
+  });
+});
+
+test.describe("custom tags", () => {
+  test("a tag can be created, appears in the list, and is merged away", async ({ page }) => {
+    await enterApp(page);
+    await tab(page, /^Browse/).click();
+    await expect(page.getByRole("heading", { name: "Browse", exact: true })).toBeVisible();
+
+    const unique = `e2e${Date.now().toString(36)}`;
+    const create = page.getByLabel("New tag name");
+    await create.fill(unique);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    // The list refetches from the server, so this asserts persistence.
+    await expect(page.getByRole("listitem").filter({ hasText: new RegExp(`^${unique}\\b`) })).toHaveCount(1);
+
+    // A second tag, so there is something to merge into.
+    const survivor = `${unique}keep`;
+    await create.fill(survivor);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: new RegExp(`^${survivor}\\b`) })).toHaveCount(1);
+
+    // Scope to the labelled merge controls. `page.locator("select")` would also
+    // match the profile combobox, which appears earlier in the DOM.
+    const mergeFrom = page.getByLabel("Tag to merge", { exact: true });
+    const mergeInto = page.getByLabel("Merge into tag", { exact: true });
+    await expect(mergeFrom).toBeVisible();
+    await mergeFrom.selectOption({ label: unique });
+    await mergeInto.selectOption({ label: survivor });
+    await page.getByRole("button", { name: "Merge", exact: true }).click();
+
+    await expect(page.getByText(/books? moved/)).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: new RegExp(`^${unique}\\b`) })).toHaveCount(0);
+
+    // Clean up, or the tag list grows by one on every run of this spec.
+    await page.getByRole("button", { name: `Delete ${survivor}` }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: new RegExp(`^${survivor}\\b`) })).toHaveCount(0);
+  });
+
+  test("a reserved tag name is rejected with a message, not a silent failure", async ({ page }) => {
+    await enterApp(page);
+    await tab(page, /^Browse/).click();
+
+    await page.getByLabel("New tag name").fill("discover");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+
+    await expect(page.getByText(/Tag name rejected/)).toBeVisible();
+  });
+});
+
+test.describe("browse", () => {
+  test("filters are reflected in the URL and restored from it", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+
+    await tab(page, /^Browse/).click();
+    await expect(page.getByRole("heading", { name: "Browse", exact: true })).toBeVisible();
+
+    const authorGroup = page.getByRole("group", { name: "Filter by author" });
+    await expect(authorGroup).toBeVisible();
+    const chip = authorGroup.getByRole("button", { name: new RegExp(`^${escapeRegExp(all[0].author)}`) }).first();
+    await expect(chip).toBeVisible();
+    await chip.click();
+
+    // Check the URL first: it proves the click registered before asserting on
+    // anything rendered, which makes a failure diagnosable.
+    await expect
+      .poll(() => {
+        const raw = new URL(page.url()).searchParams.get("f");
+        // URLSearchParams encodes spaces as "+", which decodeURIComponent
+        // leaves alone.
+        return raw ? decodeURIComponent(raw.replace(/\+/g, " ")) : null;
+      })
+      .toContain(all[0].author);
+    await expect(page.getByRole("heading", { name: "Filtered results" })).toBeVisible();
+
+    // A reload must restore the whole view from the URL alone: both the tab
+    // and the filter. Restoring only the filter lands on Library and looks
+    // like the filter was lost.
+    const shared = page.url();
+    await page.goto(shared);
+    await login(page);
+    await expect(page.getByRole("heading", { name: "Filtered results" })).toBeVisible();
+  });
+
+  test("clearing filters returns to the shelves", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+
+    await tab(page, /^Browse/).click();
+    const authorGroup = page.getByRole("group", { name: "Filter by author" });
+    await authorGroup.getByRole("button", { name: new RegExp(`^${escapeRegExp(all[0].author)}`) }).first().click();
+    await expect(page.getByRole("heading", { name: "Filtered results" })).toBeVisible();
+
+    await page.getByRole("button", { name: /^Clear \d/ }).click();
+    await expect(page.getByRole("heading", { name: "Filtered results" })).toHaveCount(0);
+  });
+});
+
+test.describe("discover", () => {
+  test("Discover renders and states its own limits instead of faking results", async ({ page }) => {
+    await enterApp(page);
+    await tab(page, /^Discover/).click();
+    await expect(page.getByRole("heading", { name: "Discover", exact: true })).toBeVisible();
+    // Wishlist is always present, even when empty.
+    await expect(page.getByRole("heading", { name: "Wishlist", exact: true })).toBeVisible();
+    await expect(page.getByText(/Titles you do not own yet/)).toBeVisible();
+  });
+
+  test("wishlist items are never presented as playable", async ({ page }) => {
+    await enterApp(page);
+    await tab(page, /^Discover/).click();
+
+    const profileId = await page.evaluate(() => window.localStorage.getItem("profileId"));
+    const headers = { "x-profile-id": profileId as string };
+    const created = await page.request.post("/api/wishlist", {
+      headers,
+      data: {
+        title: "A Book You Do Not Own",
+        author: "Nobody",
+        provider: "audnexus",
+        providerKey: `e2e${Date.now().toString(36)}`,
+      },
+    });
+    expect(created.ok()).toBeTruthy();
+    // Structural guarantee from spec 19, asserted at the API boundary.
+    expect((await created.json()).playable).toBe(false);
+
+    await page.reload();
+    await login(page);
+    await tab(page, /^Discover/).click();
+    // Earlier runs of this spec leave rows with the same title behind, so
+    // assert on the specific row rather than the first text match.
+    const row = page.getByRole("article").filter({ hasText: "A Book You Do Not Own" }).last();
+    await expect(row).toBeVisible();
+    await expect(row.getByText("Not in your library yet")).toBeVisible();
+  });
+});
+
+test.describe("tag suite", () => {
+  test("editing the tag suite persists and the field is marked as yours", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+    const book = all[0];
+
+    await page.getByRole("heading", { name: book.title, exact: true }).first().click();
+    const details = page.getByRole("region", { name: "Details" });
+    await expect(details).toBeVisible();
+
+    await details.getByRole("button", { name: "Edit" }).click();
+    const corrected = `Corrected ${Date.now().toString(36)}`;
+    await details.getByLabel("Title", { exact: true }).fill(corrected);
+    await details.getByRole("button", { name: "Save" }).click();
+
+    await expect(details.getByText(/now win over anything the providers suggest/)).toBeVisible();
+    // Provenance: the Reset control only appears once a field is overridden.
+    await expect(details.getByRole("button", { name: "Reset" })).toBeVisible();
+
+    await page.getByLabel("Close details").click();
+
+    // Survives a reload because it is an override row, not client state.
+    await page.reload();
+    await login(page);
+    await expect(page.getByRole("heading", { name: corrected, exact: true }).first()).toBeVisible();
+  });
+});

@@ -346,6 +346,20 @@ describe("URL round-trip", () => {
     expect(filtersFromQuery(filtersToQuery(filters))).toEqual(filters);
   });
 
+  it("round-trips through the nested f= form the app actually writes", () => {
+    const filters: Filters = { genre: ["horror", "romance"], tag: ["cosy"] };
+    const nested = `tab=browse&f=${encodeURIComponent(filtersToQuery(filters))}`;
+    expect(filtersFromQuery(nested)).toEqual(filters);
+  });
+
+  it("still reads bare top-level facet keys for older shared links", () => {
+    expect(filtersFromQuery("genre=horror&tag=cosy")).toEqual({ genre: ["horror"], tag: ["cosy"] });
+  });
+
+  it("prefers the nested form when both are present", () => {
+    expect(filtersFromQuery(`genre=ignored&f=${encodeURIComponent("genre=kept")}`)).toEqual({ genre: ["kept"] });
+  });
+
   it("produces an empty string for no filters", () => {
     expect(filtersToQuery({})).toBe("");
   });

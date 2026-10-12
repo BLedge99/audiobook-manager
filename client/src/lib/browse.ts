@@ -202,11 +202,14 @@ export function seriesLabel(book: Audiobook, total: number): string | null {
 // --- URL state ------------------------------------------------------------
 
 /**
- * Serialise filters into a query string, e.g.
- * `?genre=sci-fi-fantasy&narrator=Simon+Vance`.
+ * Serialise filters into a nested query string, e.g.
+ * `f=genre%3Dscience-fiction%26narrator%3DSimon+Vance`.
  *
  * Facets are emitted in a fixed order so an equivalent filter set always
  * produces an identical URL and is shareable/bookmarkable.
+ *
+ * The nested `f=` form is used so the URL can carry the active tab alongside
+ * the filters without the two namespaces colliding.
  */
 export function filtersToQuery(filters: Filters): string {
   const params = new URLSearchParams();
@@ -217,9 +220,17 @@ export function filtersToQuery(filters: Filters): string {
   return params.toString();
 }
 
-/** Parse a query string back into filters, ignoring unknown/blank facets. */
+/**
+ * Parse a query string back into filters.
+ *
+ * Reads the nested `f=` value written by `filtersToQuery`, and still accepts
+ * bare top-level facet keys so an older shared link keeps working.
+ */
 export function filtersFromQuery(query: string): Filters {
-  const params = new URLSearchParams(query);
+  const outer = new URLSearchParams(query);
+  const nested = outer.get("f");
+  const params = new URLSearchParams(nested ?? query);
+
   const filters: Filters = {};
   for (const facet of ["genre", "author", "narrator", "series", "tag"] as FacetKey[]) {
     const raw = params.get(facet);

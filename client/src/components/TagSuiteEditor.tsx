@@ -74,10 +74,16 @@ export function TagSuiteEditor({
     <label className="block">
       <span className="mb-1 flex items-baseline justify-between gap-2 text-xs uppercase tracking-widest text-slate-500">
         {label}
-        <span className={overridden.has(field) ? "text-cyan-400" : "text-slate-600"}>{provenance(field)}</span>
+        {/* The provenance badge is decorative next to the field name. Without
+            aria-hidden it is read as part of the label, so every input's
+            accessible name became "Title embedded" instead of "Title". */}
+        <span aria-hidden="true" className={overridden.has(field) ? "text-cyan-400" : "text-slate-600"}>
+          {provenance(field)}
+        </span>
       </span>
       {editing ? (
         <input
+          aria-label={label}
           value={String(draft[field] ?? "")}
           onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))}
           placeholder={placeholder}

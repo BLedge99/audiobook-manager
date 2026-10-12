@@ -150,6 +150,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
             <label className="text-xs text-slate-400">
               <span className="mb-1 block">Merge</span>
               <select
+                aria-label="Tag to merge"
                 value={mergingId ?? ""}
                 onChange={(event) => setMergingId(event.target.value ? Number(event.target.value) : undefined)}
                 className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm"
@@ -161,6 +162,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
             <label className="text-xs text-slate-400">
               <span className="mb-1 block">Into</span>
               <select
+                aria-label="Merge into tag"
                 value={mergeTarget}
                 onChange={(event) => setMergeTarget(event.target.value ? Number(event.target.value) : "")}
                 className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm"

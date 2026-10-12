@@ -132,3 +132,124 @@ test("invalid payloads are rejected with 4xx, not 500", async ({ request }) => {
   });
   expect(badJson.status()).toBe(400);
 });
+
+/**
+ * Specs 16-20 added a large surface of new routes. Each one takes ids and
+ * JSON bodies, so the spec 11 rules apply: validated schemas, 4xx on bad input,
+ * and no absolute server paths in the response.
+ */
+test.describe("metadata and discovery routes", () => {
+  test("new routes reject malformed ids with 4xx, not 500", async ({ request }) => {
+    const cookie = await cookieFor(request);
+    const auth = { cookie };
+
+    for (const path of [
+      "audiobooks/not-a-number/tags",
+      "audiobooks/99999999/candidates",
+      "tags/not-a-number",
+      "genres/not-a-number",
+      "discover/similar/not-a-number",
+      "wishlist/not-a-number",
+    ]) {
+      const res = await request.get(`${API}/api/${path}`, { headers: auth });
+      expect([400, 404], `${path} returned ${res.status()}`).toContain(res.status());
+    }
+  });
+
+  test("wishlist and favourite routes require a profile", async ({ request }) => {
+    const cookie = await cookieFor(request);
+    const books = await (await request.get(`${API}/api/audiobooks`, { headers: { cookie } })).json();
+    const bookId = (books[0] as { id: number } | undefined)?.id;
+    test.skip(!bookId, "no scanned audiobook available");
+
+    // Without x-profile-id these are profile-scoped and must refuse rather
+    // than silently acting on a null profile.
+    for (const [method, path] of [
+      ["put", `audiobooks/${bookId}/favourite`],
+      ["delete", `audiobooks/${bookId}/favourite`],
+    ] as const) {
+      const res = await request[method](`${API}/api/${path}`, { headers: { cookie } });
+      expect(res.status(), `${method} ${path} returned ${res.status()}`).toBe(400);
+    }
+
+    const favourites = await request.get(`${API}/api/favourites`, { headers: { cookie } });
+    expect(favourites.status()).toBe(400);
+  });
+
+  test("tag creation rejects invalid and reserved names with 4xx", async ({ request }) => {
+    const cookie = await cookieFor(request);
+    const profiles = await (await request.get(`${API}/api/profiles`, { headers: { cookie } })).json();
+    const profileId = (profiles[0] as { id: number } | undefined)?.id;
+    test.skip(!profileId, "the security suite needs at least one profile");
+    const auth = { cookie, "x-profile-id": String(profileId) };
+
+    // Reserved route names collide with client-side navigation.
+    const reserved = await request.post(`${API}/api/tags`, { headers: auth, data: { name: "discover" } });
+    expect(reserved.status()).toBe(409);
+
+    // A name colliding with a genre must not create a duplicate facet.
+    const genreClash = await request.post(`${API}/api/tags`, { headers: auth, data: { name: "Mystery & Thriller" } });
+    expect(genreClash.status()).toBe(409);
+
+    const empty = await request.post(`${API}/api/tags`, { headers: auth, data: { name: "" } });
+    expect(empty.status()).toBe(400);
+  });
+
+  test("wishlist rejects a save with no provider key", async ({ request }) => {
+    const cookie = await cookieFor(request);
+    const profiles = await (await request.get(`${API}/api/profiles`, { headers: { cookie } })).json();
+    const profileId = (profiles[0] as { id: number } | undefined)?.id;
+    test.skip(!profileId, "the security suite needs at least one profile");
+
+    // providerKey is what dedupes wishlist rows; without it the row could
+    // never be identified again.
+    const res = await request.post(`${API}/api/wishlist`, {
+      headers: { cookie, "x-profile-id": String(profileId) },
+      data: { title: "No Key", provider: "audnexus" },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("no route leaks an absolute server filesystem path", async ({ request }) => {
+    const cookie = await cookieFor(request);
+    const auth = { cookie };
+
+    const books = await (await request.get(`${API}/api/audiobooks`, { headers: auth })).json();
+    const bookId = (books[0] as { id: number } | undefined)?.id;
+    test.skip(!bookId, "no scanned audiobook available");
+
+    // Spec 11: API errors and responses must not expose absolute host paths.
+    const payloads: unknown[] = [books];
+    payloads.push(await (await request.get(`${API}/api/audiobooks/${bookId}`, { headers: auth })).json());
+    payloads.push(await (await request.get(`${API}/api/audiobooks/${bookId}/candidates`, { headers: auth })).json());
+    payloads.push(await (await request.get(`${API}/api/enrichment/review-queue`, { headers: auth })).json());
+    payloads.push(await (await request.get(`${API}/api/audiobooks/${bookId}/tags`, { headers: auth })).json());
+
+    const serialised = JSON.stringify(payloads);
+    expect(serialised).not.toMatch(/\/app\/data/);
+    expect(serialised).not.toMatch(/\/test\//);
+    expect(serialised).not.toContain("filePath");
+    expect(serialised).not.toContain("coverImagePath");
+  });
+
+  test("a cover URL pointing at the host itself is refused", async ({ request }) => {
+    const cookie = await cookieFor(request);
+    const profiles = await (await request.get(`${API}/api/profiles`, { headers: { cookie } })).json();
+    const profileId = (profiles[0] as { id: number } | undefined)?.id;
+    test.skip(!profileId, "the security suite needs at least one profile");
+    const books = await (await request.get(`${API}/api/audiobooks`, { headers: { cookie } })).json();
+    const bookId = (books[0] as { id: number } | undefined)?.id;
+    test.skip(!bookId, "no scanned audiobook available");
+
+    // SSRF: the server fetches a client-supplied URL. Pointing it at the
+    // host's own metadata service must not succeed.
+    const res = await request.post(`${API}/api/audiobooks/${bookId}/metadata`, {
+      headers: { cookie, "x-profile-id": String(profileId) },
+      data: { coverUrl: "http://169.254.169.254/latest/meta-data/" },
+    });
+    expect([200, 400]).toContain(res.status());
+    // The request is accepted but the cover is never stored.
+    const item = await (await request.get(`${API}/api/audiobooks/${bookId}`, { headers: { cookie } })).json();
+    expect(JSON.stringify(item)).not.toContain("169.254.169.254");
+  });
+});

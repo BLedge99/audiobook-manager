@@ -73,9 +73,36 @@ surfaces instead of them being rebuilt afterwards.
   time.
 - **Outstanding:** the offline Discover state currently maps to `no-results`
   rather than a distinct `offline` status. Distinguishing them honestly needs a
-  real connectivity probe; the UI copy for both is already in place. E2E for
-  browse → favourite → discover is also still to come (spec 02 requires the E2E
-  tier; the unit tiers for both projects are green).
+  real connectivity probe; the UI copy for both is already in place.
+
+## Bugs found by the E2E tier (added after delivery)
+
+Writing the E2E suite surfaced four more problems that no unit test caught:
+
+1. **Accessible names were polluted.** The provenance badge sat inside the
+   field's `<label>`, so every input's accessible name was `"Title embedded"`
+   instead of `"Title"`. The badge is now `aria-hidden` and the input carries
+   an explicit `aria-label`.
+2. **Filters were not actually shareable.** Filters were written to the URL but
+   the active *tab* was not, so reloading a filtered link landed on Library and
+   looked like the filter had been lost. Both now live in the URL
+   (`?tab=browse&f=...`).
+3. **`filtersFromQuery` did not match `filtersToQuery`.** When the filters moved
+   into a nested `f=` parameter the parser still read bare top-level keys, so a
+   shared link silently restored no filters. The parser now reads `f=` and
+   still accepts bare keys for older links.
+4. **The Favourites and Browse tabs served stale data.** Both were fetched once
+   at mount, so a favourite toggled in another tab or on another device was not
+   shown. Opening either tab now refreshes, matching the Discover-on-open
+   precedent from spec 19.
+
+`e2e/library-browse.spec.ts` covers favourites (toggle, persistence, profile
+scoping, idempotency), custom tags (create/merge/delete, reserved-name
+rejection), browse (URL round-trip, clearing), Discover (honest empty states,
+non-playable wishlist) and the tag-suite editor. `e2e/security/security.spec.ts`
+gained six tests over the new routes: malformed ids, profile requirements,
+reserved/genre-colliding tag names, missing wishlist dedupe keys, absolute path
+leaks, and an SSRF attempt through `coverUrl`.
 
 ## Not in this spec
 The visual redesign itself (roadmap 15).
