@@ -304,6 +304,26 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Spec 16 — metadata enrichment
   // ---------------------------------------------------------------------
 
+  /**
+   * Maps an `applyCandidate` field name to the MediaItem column it wrote.
+   * Only columns a user-confirmed candidate can legitimately own are listed;
+   * `genres`/`contributors` are relational and managed separately.
+   */
+  const CANDIDATE_OVERRIDE_COLUMNS: Record<string, string | undefined> = {
+    title: "title",
+    author: "author",
+    narrator: "narrator",
+    description: "description",
+    publishedYear: "publishedYear",
+    isbn: "isbn",
+    publisher: "publisher",
+    language: "language",
+    coverImagePath: "coverImagePath",
+    series: undefined,
+    genres: undefined,
+    contributors: undefined,
+  };
+
   /** Strip server-side filesystem paths before a payload leaves the server. */
   function publicMediaItem<T extends Record<string, unknown>>(item: T): Omit<T, "filePath" | "coverImagePath"> {
     const { filePath: _filePath, coverImagePath: _cover, ...rest } = item;
@@ -480,6 +500,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       data.enrichedAt = new Date();
       // A confirmed candidate is user-chosen, so it is authoritative.
       data.metadataSource = "manual";
+
+      // Record real per-field overrides for exactly what was applied. This is
+      // what lets `manual` drop out of the scanner's blanket legacy lock: a
+      // confirmed candidate protects the fields it set, and nothing else.
+      const refreshed = await prisma.mediaItem.findUnique({ where: { id } });
+      for (const field of applied.fields) {
+        const column = CANDIDATE_OVERRIDE_COLUMNS[field] ?? field;
+        if (!column) continue;
+        const value = refreshed ? (refreshed as Record<string, unknown>)[column] : undefined;
+        if (value === null || value === undefined || value === "") continue;
+        await prisma.fieldOverride.upsert({
+          where: { mediaItemId_field: { mediaItemId: id, field } },
+          create: { mediaItemId: id, field, value: String(value) },
+          update: { value: String(value) },
+        });
+      }
     } else {
       if (body.title !== undefined) data.title = body.title.trim();
       if (body.author !== undefined) data.author = body.author.trim();
@@ -745,12 +781,37 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     await prisma.mediaItem.update({ where: { id }, data });
 
     // Record the overrides so the scanner and enrichment leave them alone.
+    //
+    // Two rules, both of which exist because a bug once wrote an override for
+    // every field on save:
+    //  - only fields the request actually sent become overrides (the client
+    //    now sends only changed fields, but the server must not rely on it);
+    //  - a field cleared to empty is *removed* as an override rather than
+    //    stored as "". An empty override blocks the scanner from ever filling
+    //    that field in, which is the opposite of what clearing it means, and
+    //    a numeric zero is likewise not a user-chosen value.
+    // Compare against the row as it was *before* this update. Re-reading it after
+    // the write would make every field look unchanged and silently record no
+    // override at all, which is how a confirmed edit stops being protected.
+    const before = item as unknown as Record<string, unknown>;
     for (const field of overrideFields) {
       const value = data[field];
+      const isEmptyValue =
+        value === null || value === undefined || (typeof value === "string" && value.trim() === "") || value === 0;
+      const previous = before[field];
+      const unchanged = value !== null && value !== undefined && String(value) === String(previous ?? "");
+
+      if (isEmptyValue) {
+        // Clearing a field releases the override so the scanner may fill it in.
+        await prisma.fieldOverride.deleteMany({ where: { mediaItemId: id, field } });
+        continue;
+      }
+      if (unchanged) continue;
+
       await prisma.fieldOverride.upsert({
         where: { mediaItemId_field: { mediaItemId: id, field } },
-        create: { mediaItemId: id, field, value: value === null || value === undefined ? "" : String(value) },
-        update: { value: value === null || value === undefined ? "" : String(value) },
+        create: { mediaItemId: id, field, value: String(value) },
+        update: { value: String(value) },
       });
     }
 

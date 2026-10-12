@@ -76,7 +76,10 @@ model Track {
   trackNumber Int
   sizeBytes   BigInt?
 
-  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
+  // Cascade: removing a book must take its tracks with it. The original
+  // migration omitted onDelete, which SQLite applies as RESTRICT, so deleting a
+  // book whose files left the disk failed with a foreign-key error.
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
 }
 
 model Contributor {
@@ -119,7 +122,7 @@ model MetadataCandidate {
   genres         String? // JSON array of raw provider genre strings
   providerKey    String? // ASIN, LibriVox project id, etc.
 
-  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
 
   // A provider re-asked for the same title must update in place, not stack
   // duplicate rows for the same result.
@@ -317,7 +320,7 @@ model ListeningHistory {
   lastPlayed  DateTime @updatedAt
   playedAt    DateTime @default(now())
 
-  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
   profile   Profile?  @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   // One resume point per (book, profile). Without this, concurrent saves

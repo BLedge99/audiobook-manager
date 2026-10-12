@@ -234,30 +234,59 @@ test.describe("discover", () => {
 });
 
 test.describe("tag suite", () => {
+  /**
+   * Editing a field creates a *permanent* override row that blocks the scanner
+   * from ever rewriting that field again. So this test must restore the book
+   * exactly as it found it -- an earlier version of this test left a real
+   * library book renamed to "Corrected mv58pt9t" with nine bogus overrides.
+   */
   test("editing the tag suite persists and the field is marked as yours", async ({ page }) => {
     await enterApp(page);
     const all = await books(page);
     test.skip(all.length === 0, "need a scanned library");
     const book = all[0];
 
-    await page.getByRole("heading", { name: book.title, exact: true }).first().click();
-    const details = page.getByRole("region", { name: "Details" });
-    await expect(details).toBeVisible();
+    const profileId = await page.evaluate(() => window.localStorage.getItem("profileId"));
+    const headers = { "x-profile-id": profileId as string };
+    const restore = async () => {
+      // Put the original title back first, then drop every override.
+      // Reset alone only removes the *lock* -- the value the test wrote would
+      // otherwise stay in the library until the next scan, which is how an
+      // earlier version of this test left a book named "Corrected mv58pt9t".
+      await page.request.put(`/api/audiobooks/${book.id}/tags`, {
+        headers,
+        data: { title: book.title },
+      });
+      await page.request.post(`/api/audiobooks/${book.id}/metadata/reset`, { headers });
+    };
 
-    await details.getByRole("button", { name: "Edit" }).click();
-    const corrected = `Corrected ${Date.now().toString(36)}`;
-    await details.getByLabel("Title", { exact: true }).fill(corrected);
-    await details.getByRole("button", { name: "Save" }).click();
+    try {
+      await page.getByRole("heading", { name: book.title, exact: true }).first().click();
+      const details = page.getByRole("region", { name: "Details" });
+      await expect(details).toBeVisible();
 
-    await expect(details.getByText(/now win over anything the providers suggest/)).toBeVisible();
-    // Provenance: the Reset control only appears once a field is overridden.
-    await expect(details.getByRole("button", { name: "Reset" })).toBeVisible();
+      await details.getByRole("button", { name: "Edit" }).click();
+      const corrected = `E2E title ${Date.now().toString(36)}`;
+      await details.getByLabel("Title", { exact: true }).fill(corrected);
+      await details.getByRole("button", { name: "Save" }).click();
 
-    await page.getByLabel("Close details").click();
+      await expect(details.getByText(/now win over anything the providers suggest/)).toBeVisible();
+      // Provenance: the Reset control only appears once a field is overridden.
+      await expect(details.getByRole("button", { name: "Reset" })).toBeVisible();
 
-    // Survives a reload because it is an override row, not client state.
-    await page.reload();
-    await login(page);
-    await expect(page.getByRole("heading", { name: corrected, exact: true }).first()).toBeVisible();
+      await page.getByLabel("Close details").click();
+
+      // Survives a reload because it is an override row, not client state.
+      await page.reload();
+      await login(page);
+      await expect(page.getByRole("heading", { name: corrected, exact: true }).first()).toBeVisible();
+
+      // Only the edited field may be locked. An earlier version saved the whole
+      // form, which pinned publisher/year/series/description too.
+      const suite = await (await page.request.get(`/api/audiobooks/${book.id}/tags`, { headers })).json();
+      expect((suite as { overriddenFields: string[] }).overriddenFields).toEqual(["title"]);
+    } finally {
+      await restore();
+    }
   });
 });

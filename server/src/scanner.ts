@@ -201,15 +201,20 @@ export function createScanManager(prisma: PrismaClient) {
         });
         // Spec 17 / ADR 009: per-field overrides replace the spec 07 all-or-nothing
         // `metadataSource === "user"` sentinel. Fixing only a narrator must no
-        // longer freeze the title against rescans. The legacy sentinel is still
-        // honoured so an existing library does not lose its overrides on the
-        // first rescan after upgrading.
+        // longer freeze the title against rescans.
+        //
+        // Only the spec 07 `user` sentinel gets the blanket legacy lock, and
+        // only when no per-field overrides exist (those rows predate spec 17).
+        // `manual` is deliberately NOT locked wholesale: it is written by the
+        // spec 16/17 routes, which record real per-field overrides for what
+        // the user actually set. Blanket-freezing on `manual` silently and
+        // permanently blocked the scanner from ever correcting a title.
         const overrideRows = existingRow
           ? await prisma.fieldOverride.findMany({ where: { mediaItemId: existingRow.id }, select: { field: true } })
           : [];
-        const legacyLock = existingRow?.metadataSource === "user" || existingRow?.metadataSource === "manual";
+        const legacyLock = existingRow?.metadataSource === "user" && overrideRows.length === 0;
         const locked = new Set<string>(overrideRows.map((row) => row.field));
-        if (legacyLock && overrideRows.length === 0) {
+        if (legacyLock) {
           locked.add("title").add("author").add("narrator").add("releaseDate").add("genre").add("coverImagePath");
         }
         const writable = (field: string) => !locked.has(field);
@@ -264,12 +269,34 @@ export function createScanManager(prisma: PrismaClient) {
       }
 
       const currentItemPaths = groupFiles(audioFiles).map((group) => group[0].filePath);
-      await prisma.mediaItem.deleteMany({
+      // Books whose files are gone from disk are removed from the library.
+      //
+      // Children are deleted explicitly rather than relying on ON DELETE
+      // CASCADE: Track, MetadataCandidate, ListeningHistory and
+      // ContributorMediaItem were created by the original migration *without*
+      // a cascade, so SQLite has them as RESTRICT and a bare delete of the
+      // parent fails with a foreign-key error -- which is what happened the
+      // first time a book actually disappeared from disk. schema.prisma now
+      // declares Cascade for fresh databases, but an existing SQLite database
+      // keeps RESTRICT and SQLite cannot ALTER a constraint, so the code has to
+      // do this explicitly.
+      const stale = await prisma.mediaItem.findMany({
         where: {
           libraryRootId: rootId,
           ...(currentItemPaths.length ? { filePath: { notIn: currentItemPaths } } : {}),
         },
+        select: { id: true },
       });
+      if (stale.length > 0) {
+        const staleIds = stale.map((entry) => entry.id);
+        // Only tables that actually reference MediaItem need clearing; the rest
+        // cascade on their own.
+        await prisma.track.deleteMany({ where: { mediaItemId: { in: staleIds } } });
+        await prisma.metadataCandidate.deleteMany({ where: { mediaItemId: { in: staleIds } } });
+        await prisma.listeningHistory.deleteMany({ where: { mediaItemId: { in: staleIds } } });
+        await prisma.contributorMediaItem.deleteMany({ where: { mediaItemId: { in: staleIds } } });
+        await prisma.mediaItem.deleteMany({ where: { id: { in: staleIds } } });
+      }
 
       const completedAt = new Date();
       progress.set(rootId, { status: "complete", filesFound: audioFiles.length, lastScanAt: completedAt });

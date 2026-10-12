@@ -27,13 +27,14 @@ export function TagSuiteEditor({
   onSaved: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>({});
+  const [original, setOriginal] = useState<Draft>({});
   const [editing, setEditing] = useState(false);
   const [status, setStatus] = useState<string>();
 
   // Re-seed the draft whenever the fetched suite changes.
   useEffect(() => {
     if (!suite.suite) return;
-    setDraft({
+    const seeded: Draft = {
       title: suite.suite.title,
       subtitle: suite.suite.subtitle ?? "",
       author: suite.suite.author,
@@ -45,7 +46,14 @@ export function TagSuiteEditor({
       seriesPosition: suite.suite.series?.position ?? "",
       genreIds: suite.suite.genres.map((genre) => genre.id),
       tagIds: (book.customTags ?? []).map((tag) => tag.id),
-    });
+    };
+    setDraft(seeded);
+    // Keep the untouched values so `save` can send only what the user actually
+    // changed. Sending the whole draft made every field an override, which is
+    // precisely the damage ADR 009 exists to prevent: editing a title silently
+    // locked the publisher, year, series and description against the scanner
+    // forever.
+    setOriginal(seeded);
   }, [suite.suite, book.customTags]);
 
   if (!suite.suite) return null;
@@ -56,12 +64,34 @@ export function TagSuiteEditor({
 
   const save = async () => {
     setStatus(undefined);
+    const changed: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(draft)) {
+      const before = original[key];
+      const same =
+        Array.isArray(value) && Array.isArray(before)
+          ? value.length === before.length && value.every((entry, index) => entry === before[index])
+          : value === before;
+      if (same) continue;
+      changed[key] = value;
+    }
+
+    if (Object.keys(changed).length === 0) {
+      setEditing(false);
+      setStatus("Nothing changed.");
+      return;
+    }
+
+    // Coerce the numeric fields, and send an explicit null rather than 0 when
+    // cleared: `Number("")` is 0, which would store a year of zero.
+    if ("publishedYear" in changed) {
+      changed.publishedYear = changed.publishedYear === "" ? null : Number(changed.publishedYear);
+    }
+    if ("seriesPosition" in changed) {
+      changed.seriesPosition = changed.seriesPosition === "" ? null : Number(changed.seriesPosition);
+    }
+
     try {
-      await suite.save({
-        ...draft,
-        publishedYear: draft.publishedYear === "" ? null : Number(draft.publishedYear),
-        seriesPosition: draft.seriesPosition === "" ? null : Number(draft.seriesPosition),
-      });
+      await suite.save(changed);
       setEditing(false);
       setStatus("Saved. These values now win over anything the providers suggest.");
       onSaved();
