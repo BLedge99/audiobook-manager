@@ -257,6 +257,13 @@ export class EnrichmentManager {
       const query = buildQuery(item);
       const result = await runChain(query, { threshold, collectAll: true });
 
+      // ADR 009: fields a human has set are never written by enrichment.
+      const overrides = await this.prisma.fieldOverride.findMany({
+        where: { mediaItemId },
+        select: { field: true },
+      });
+      const overriddenFields = new Set(overrides.map((row) => row.field));
+
       // Always store what we found, so the review queue has something to show
       // even when nothing cleared the auto-apply bar.
       await storeCandidates(this.prisma, mediaItemId, result.candidates);
@@ -281,7 +288,7 @@ export class EnrichmentManager {
         return;
       }
 
-      await applyCandidate(this.prisma, item, best);
+      await applyCandidate(this.prisma, item, best, { overriddenFields });
       await this.prisma.mediaItem.update({
         where: { id: mediaItemId },
         data: { enrichmentStatus: "applied", enrichedAt: new Date() },

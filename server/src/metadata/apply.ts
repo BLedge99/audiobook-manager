@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { coverFilename, fetchCover } from "./cover";
+import { applyGenres, reconcileContributors, upsertSeries, type ContributorSpec } from "./taxonomy-service";
 import { normalizeText, type ProviderCandidate } from "./types";
 
 /**
@@ -108,44 +109,75 @@ export interface ApplyResult {
  */
 export async function applyCandidate(
   prisma: PrismaClient,
-  item: { id: number; title: string; author: string; description: string | null; coverImagePath: string | null },
+  item: {
+    id: number;
+    title: string;
+    author: string;
+    description: string | null;
+    coverImagePath: string | null;
+  },
   candidate: ProviderCandidate,
+  options: { /** Field names a human has overridden; never written by enrichment. */
+    overriddenFields?: Set<string> } = {},
 ): Promise<ApplyResult> {
+  const locked = options.overriddenFields ?? new Set<string>();
   const fields: string[] = [];
   const data: Record<string, unknown> = {};
 
-  if (candidate.title?.trim()) {
+  // ADR 009: enrichment never writes a field the user has set.
+  const writable = (field: string) => !locked.has(field);
+
+  if (candidate.title?.trim() && writable("title")) {
     data.title = candidate.title.trim();
     fields.push("title");
   }
-  if (candidate.author?.trim()) {
+  if (candidate.author?.trim() && writable("author")) {
     data.author = candidate.author.trim();
     fields.push("author");
   }
-  if (candidate.narrators?.length) {
-    // Multiple narrators render as a single comma-separated string until the
-    // Contributor reconciliation in spec 17 gives them real rows.
+  if (candidate.narrators?.length && writable("narrator")) {
     data.narrator = candidate.narrators.join(", ");
     fields.push("narrator");
   }
   // Do not blank out an embedded description with a missing provider value.
-  if (candidate.description && !item.description) {
+  if (candidate.description && !item.description && writable("description")) {
     data.description = candidate.description;
     fields.push("description");
   }
-  if (candidate.publishedYear) {
+  if (candidate.publishedYear && writable("publishedYear")) {
+    data.publishedYear = candidate.publishedYear;
     data.releaseDate = new Date(Date.UTC(candidate.publishedYear, 0, 1));
-    fields.push("releaseDate");
+    fields.push("publishedYear");
   }
-  if (candidate.isbn) {
+  if (candidate.isbn && writable("isbn")) {
     data.isbn = candidate.isbn;
     fields.push("isbn");
+  }
+  if (candidate.publisher && writable("publisher")) {
+    data.publisher = candidate.publisher;
+    fields.push("publisher");
+  }
+  if (candidate.language && writable("language")) {
+    data.language = candidate.language;
+    fields.push("language");
+  }
+
+  // Series is normalised through the Series table so spelling variants group.
+  if (candidate.seriesName && writable("seriesName")) {
+    const seriesId = await upsertSeries(prisma, candidate.seriesName);
+    if (seriesId !== null) {
+      data.seriesId = seriesId;
+      if (candidate.seriesPosition !== undefined && writable("seriesPosition")) {
+        data.seriesPosition = candidate.seriesPosition;
+      }
+      fields.push("series");
+    }
   }
 
   let coverImagePath: string | undefined;
   // Replace a cover only if we do not already have a local one; embedded art
   // is usually better than a provider thumbnail.
-  if (candidate.coverUrl && !item.coverImagePath) {
+  if (candidate.coverUrl && !item.coverImagePath && writable("coverImagePath")) {
     const identifier = candidate.providerKey ?? candidate.title.slice(0, 40);
     const result = await fetchCover(candidate.coverUrl, coverFilename(candidate.source, identifier));
     if (result.ok && result.path) {
@@ -153,6 +185,21 @@ export async function applyCandidate(
       data.coverImagePath = result.path;
       fields.push("coverImagePath");
     }
+  }
+
+  // Genres and contributors are relational, not scalar columns.
+  if (candidate.genres?.length) {
+    await applyGenres(prisma, item.id, candidate.source, candidate.genres);
+    fields.push("genres");
+  }
+  if (candidate.narrators?.length || candidate.author) {
+    const contributors: ContributorSpec[] = [];
+    if (candidate.author) contributors.push({ name: candidate.author, role: "author" });
+    for (const narrator of candidate.narrators ?? []) {
+      contributors.push({ name: narrator, role: "narrator" });
+    }
+    await reconcileContributors(prisma, item.id, contributors);
+    fields.push("contributors");
   }
 
   data.metadataSource = candidate.source;

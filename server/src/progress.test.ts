@@ -37,7 +37,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
-  rmSync(dir, { recursive: true, force: true });
+  // Windows can still hold the SQLite handle briefly; a failed temp cleanup
+  // must not fail an otherwise-green suite.
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* best effort */
+  }
 });
 
 const profileHeaders = () => ({ cookie, "x-profile-id": String(profileId) });

@@ -37,6 +37,13 @@ model MediaItem {
   metadataConfidence Float?  // 0-1 confidence score
   enrichmentStatus  String?  // null | pending | applied | review | skipped | failed (spec 16)
   enrichedAt        DateTime?
+  subtitle          String?  // spec 17
+  seriesId          Int?
+  seriesPosition    Float?   // spec 17; fractional (1.5) for interstitials
+  publisher         String?  // spec 17
+  publishedYear     Int?     // spec 17
+  language          String?  // spec 17
+  unabridged        Boolean  @default(false) // spec 17
   libraryRootId     Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -47,6 +54,10 @@ model MediaItem {
   listeningHistory   ListeningHistory[]
   playSessions       PlaySession[]
   enrichmentItems    EnrichmentItem[]
+  genres             MediaItemGenre[]
+  overrides          FieldOverride[]
+
+  series Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
   libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id], onDelete: Cascade)
 
@@ -110,6 +121,75 @@ model MetadataCandidate {
   // A provider re-asked for the same title must update in place, not stack
   // duplicate rows for the same result.
   @@unique([mediaItemId, source, providerKey])
+}
+
+// Spec 17 / ADR 009: per-field user overrides. Replaces the all-or-nothing
+// `metadataSource = "user"` sentinel that froze six fields together.
+model FieldOverride {
+  id          Int      @id @default(autoincrement())
+  mediaItemId Int
+  field       String
+  value       String
+  createdAt   DateTime @default(now())
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  // One override per field per book; re-setting replaces it.
+  @@unique([mediaItemId, field])
+  @@index([mediaItemId])
+}
+
+// Spec 17: curated two-level genre taxonomy. A real table, not JSON, so
+// "every book in this genre" is a join and it ports to PostgreSQL unchanged.
+model Genre {
+  id         Int     @id @default(autoincrement())
+  slug       String  @unique
+  name       String
+  parentId   Int?
+  sortOrder  Int     @default(0)
+  isCatchAll Boolean @default(false)
+
+  parent   Genre?          @relation("GenreTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Genre[]         @relation("GenreTree")
+  items    MediaItemGenre[]
+  mappings GenreMapping[]
+
+  @@index([parentId])
+}
+
+// Correctable without a code change: maps a provider's raw string to a genre.
+model GenreMapping {
+  id       Int    @id @default(autoincrement())
+  provider String
+  rawValue String
+  genreId  Int
+
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, rawValue])
+}
+
+model MediaItemGenre {
+  mediaItemId Int
+  genreId     Int
+  source      String    @default("provider") // provider | user
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  genre     Genre     @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([mediaItemId, genreId])
+  @@index([genreId])
+}
+
+// Spec 17: series with reading order, normalised so spelling variants group.
+model Series {
+  id   Int    @id @default(autoincrement())
+  name String
+  // Lowercased, punctuation-stripped name. Prisma's case-insensitive filter is
+  // PostgreSQL-only, so case folding is a stored column rather than a query.
+  key  String @unique
+
+  books MediaItem[]
 }
 
 // Spec 16: a resumable post-scan enrichment pass. Progress is persisted so a

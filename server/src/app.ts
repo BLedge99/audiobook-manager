@@ -14,6 +14,7 @@ import { applyCandidate, rowToCandidate, storeCandidates } from "./metadata/appl
 import { coverFilename, fetchCover } from "./metadata/cover";
 import { runChain } from "./metadata/chain";
 import { buildQuery, EnrichmentManager } from "./metadata/run";
+import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy-service";
 
 export interface BuildAppOptions {
   prisma?: PrismaClient;
@@ -402,6 +403,264 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
     const updated = await prisma.mediaItem.update({ where: { id }, data });
     return publicMediaItem(updated);
+  });
+
+  // ---------------------------------------------------------------------
+  // Spec 17 — taxonomy, tag suite, per-field overrides
+  // ---------------------------------------------------------------------
+
+  app.get("/api/genres", async () => {
+    const genres = await prisma.genre.findMany({
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { _count: { select: { items: true } } },
+    });
+    const byId = new Map(genres.map((genre) => [genre.id, genre]));
+    // Build the two-level tree in one pass so the client does not have to.
+    const roots = genres.filter((genre) => genre.parentId === null);
+    return roots.map((root) => ({
+      ...root,
+      children: genres
+        .filter((genre) => genre.parentId === root.id)
+        .map((child) => ({ ...child, count: child._count.items, parent: undefined, _count: undefined })),
+      count: root._count.items,
+    }));
+  });
+
+  app.post("/api/genres", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          slug: { type: "string", minLength: 1, maxLength: 80, pattern: "^[a-z0-9-]+$" },
+          name: { type: "string", minLength: 1, maxLength: 120 },
+          parentId: { type: "integer", minimum: 1 },
+          sortOrder: { type: "integer" },
+        },
+        required: ["slug", "name"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const body = request.body as { slug: string; name: string; parentId?: number; sortOrder?: number };
+    const existing = await prisma.genre.findUnique({ where: { slug: body.slug } });
+    if (existing) return reply.code(409).send({ message: "A genre with that slug already exists" });
+    if (body.parentId) {
+      const parent = await prisma.genre.findUnique({ where: { id: body.parentId } });
+      if (!parent) return reply.code(400).send({ message: "Parent genre not found" });
+    }
+    return prisma.genre.create({ data: body });
+  });
+
+  app.patch<{ Params: { id: string } }>("/api/genres/:id", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+      body: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 120 },
+          parentId: { type: "integer", minimum: 1 },
+          sortOrder: { type: "integer" },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const genre = await prisma.genre.findUnique({ where: { id } });
+    if (!genre) return reply.code(404).send({ message: "Genre not found" });
+    return prisma.genre.update({ where: { id }, data: request.body as Record<string, unknown> });
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/genres/:id", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const genre = await prisma.genre.findUnique({ where: { id } });
+    if (!genre) return reply.code(404).send({ message: "Genre not found" });
+    // The catch-all bucket is load-bearing: unmapped provider genres land
+    // there. Removing it would silently discard genres on the next pass.
+    if (genre.isCatchAll) return reply.code(409).send({ message: "The catch-all genre cannot be deleted" });
+    await prisma.genre.delete({ where: { id } });
+    return { deleted: true };
+  });
+
+  /** The full tag suite for one book, with each field's provenance. */
+  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/tags", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({
+      where: { id },
+      include: {
+        series: true,
+        genres: { include: { genre: { include: { parent: true } } } },
+        overrides: true,
+        contributors: { include: { contributor: true } },
+      },
+    });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+
+    const overridden = new Set(item.overrides.map((row) => row.field));
+    return {
+      id: item.id,
+      title: item.title,
+      subtitle: item.subtitle,
+      author: item.author,
+      description: item.description,
+      publisher: item.publisher,
+      publishedYear: item.publishedYear,
+      releaseDate: item.releaseDate,
+      language: item.language,
+      unabridged: item.unabridged,
+      isbn: item.isbn,
+      series: item.series ? { id: item.series.id, name: item.series.name, position: item.seriesPosition } : null,
+      genres: item.genres.map((row) => ({
+        id: row.genre.id,
+        slug: row.genre.slug,
+        name: row.genre.name,
+        parent: row.genre.parent?.name ?? null,
+        source: row.source,
+      })),
+      contributors: item.contributors.map((row) => ({
+        id: row.contributor.id,
+        name: row.contributor.name,
+        role: row.contributor.role,
+      })),
+      metadataSource: item.metadataSource,
+      enrichmentStatus: item.enrichmentStatus,
+      // Which fields a human has set, so the UI can show which values are theirs.
+      overriddenFields: [...overridden],
+    };
+  });
+
+  /** Edit the tag suite. Any field present becomes a user override (ADR 009). */
+  app.put<{ Params: { id: string }; Body: unknown }>("/api/audiobooks/:id/tags", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+      body: {
+        type: "object",
+        properties: {
+          title: { type: "string", minLength: 1, maxLength: 500 },
+          subtitle: { type: "string", maxLength: 500 },
+          author: { type: "string", minLength: 1, maxLength: 500 },
+          narrator: { type: "string", maxLength: 500 },
+          description: { type: "string", maxLength: 4000 },
+          publisher: { type: "string", maxLength: 300 },
+          publishedYear: { type: "integer", minimum: 0, maximum: 3000 },
+          language: { type: "string", maxLength: 50 },
+          unabridged: { type: "boolean" },
+          isbn: { type: "string", maxLength: 20 },
+          seriesName: { type: "string", maxLength: 300 },
+          seriesPosition: { type: "number" },
+          genreIds: { type: "array", items: { type: "integer", minimum: 1 }, maxItems: 20 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+
+    const body = request.body as Record<string, unknown>;
+    const data: Record<string, unknown> = {};
+    const overrideFields: string[] = [];
+
+    for (const [field, column] of [
+      ["title", "title"],
+      ["subtitle", "subtitle"],
+      ["author", "author"],
+      ["narrator", "narrator"],
+      ["description", "description"],
+      ["publisher", "publisher"],
+      ["language", "language"],
+      ["isbn", "isbn"],
+    ] as const) {
+      if (body[field] !== undefined) {
+        data[column] = String(body[field]).trim() || null;
+        overrideFields.push(field);
+      }
+    }
+    if (body.publishedYear !== undefined) {
+      data.publishedYear = body.publishedYear as number;
+      overrideFields.push("publishedYear");
+    }
+    if (body.unabridged !== undefined) {
+      data.unabridged = Boolean(body.unabridged);
+      overrideFields.push("unabridged");
+    }
+
+    if (typeof body.seriesName === "string") {
+      const trimmed = body.seriesName.trim();
+      if (trimmed) {
+        const seriesId = await upsertSeries(prisma, trimmed);
+        if (seriesId !== null) data.seriesId = seriesId;
+      } else {
+        data.seriesId = null;
+      }
+      overrideFields.push("seriesName");
+    }
+    if (body.seriesPosition !== undefined) {
+      data.seriesPosition = body.seriesPosition as number;
+      overrideFields.push("seriesPosition");
+    }
+
+    if (Array.isArray(body.genreIds) && body.genreIds.length > 0) {
+      // A user-chosen genre set replaces the provider's entirely, and is
+      // recorded with source "user" so enrichment cannot revoke it.
+      await prisma.mediaItemGenre.deleteMany({ where: { mediaItemId: id } });
+      await prisma.mediaItemGenre.createMany({
+        data: (body.genreIds as number[]).map((genreId) => ({ mediaItemId: id, genreId, source: "user" })),
+      });
+    }
+
+    data.metadataSource = "manual";
+    data.enrichmentStatus = "applied";
+    await prisma.mediaItem.update({ where: { id }, data });
+
+    // Record the overrides so the scanner and enrichment leave them alone.
+    for (const field of overrideFields) {
+      const value = data[field];
+      await prisma.fieldOverride.upsert({
+        where: { mediaItemId_field: { mediaItemId: id, field } },
+        create: { mediaItemId: id, field, value: value === null || value === undefined ? "" : String(value) },
+        update: { value: value === null || value === undefined ? "" : String(value) },
+      });
+    }
+
+    return { ok: true, overriddenFields: overrideFields };
+  });
+
+  /**
+   * Spec 17 reset. Clears user overrides so the scanner and enrichment can
+   * write those fields again. This is the escape hatch for a bad mass rewrite.
+   */
+  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/metadata/reset", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+
+    const { count } = await prisma.fieldOverride.deleteMany({ where: { mediaItemId: id } });
+    await prisma.mediaItem.update({
+      where: { id },
+      data: { enrichmentStatus: "pending", metadataSource: "embedded" },
+    });
+    return { reset: true, clearedOverrides: count };
+  });
+
+  app.post("/api/metadata/reset-all", async () => {
+    const { count } = await prisma.fieldOverride.deleteMany({});
+    const result = await prisma.mediaItem.updateMany({
+      data: { enrichmentStatus: "pending", metadataSource: "embedded" },
+    });
+    return { reset: true, clearedOverrides: count, booksRequeued: result.count };
   });
 
   // AI: optional metadata match assistant (works only if LM Studio is up)

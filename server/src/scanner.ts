@@ -191,13 +191,31 @@ export function createScanManager(prisma: PrismaClient) {
         const coverImagePath = await saveCover(primary, coverDir);
         const existingRow = await prisma.mediaItem.findUnique({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
-          select: { metadataSource: true },
+          select: { id: true, metadataSource: true },
         });
-        // Spec 07/16: a human-chosen value is authoritative and must survive a
-// rescan. "user" is the spec 07 sentinel; "manual" is what spec 16 writes
-// when a candidate or manual edit is confirmed. Spec 17 replaces this
-// all-or-nothing flag with per-field overrides (ADR 009).
-const userOverride = existingRow?.metadataSource === "user" || existingRow?.metadataSource === "manual";
+        // Spec 17 / ADR 009: per-field overrides replace the spec 07 all-or-nothing
+        // `metadataSource === "user"` sentinel. Fixing only a narrator must no
+        // longer freeze the title against rescans. The legacy sentinel is still
+        // honoured so an existing library does not lose its overrides on the
+        // first rescan after upgrading.
+        const overrideRows = existingRow
+          ? await prisma.fieldOverride.findMany({ where: { mediaItemId: existingRow.id }, select: { field: true } })
+          : [];
+        const legacyLock = existingRow?.metadataSource === "user" || existingRow?.metadataSource === "manual";
+        const locked = new Set<string>(overrideRows.map((row) => row.field));
+        if (legacyLock && overrideRows.length === 0) {
+          locked.add("title").add("author").add("narrator").add("releaseDate").add("genre").add("coverImagePath");
+        }
+        const writable = (field: string) => !locked.has(field);
+
+        // Provenance is bookkeeping, not content, so it is always refreshed.
+        const embedded: Record<string, unknown> = { metadataSource: "embedded" };
+        if (writable("title")) embedded.title = audiobookTitle(group);
+        if (writable("author")) embedded.author = primary.author;
+        if (writable("narrator")) embedded.narrator = primary.narrator;
+        if (writable("releaseDate")) embedded.releaseDate = primary.releaseDate;
+        if (writable("genre")) embedded.genre = primary.genre;
+        if (writable("coverImagePath")) embedded.coverImagePath = coverImagePath;
         const item = await prisma.mediaItem.upsert({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
           create: {
@@ -215,7 +233,7 @@ const userOverride = existingRow?.metadataSource === "user" || existingRow?.meta
             metadataSource: "embedded",
           },
           update: {
-            ...(userOverride ? {} : { title: audiobookTitle(group), author: primary.author, narrator: primary.narrator, releaseDate: primary.releaseDate, genre: primary.genre, coverImagePath, metadataSource: "embedded" }),
+            ...embedded,
             fileFormat: primary.format,
             duration: group.reduce((total, file) => total + file.duration, 0),
             chapters: group.length === 1 && primary.chapters ? JSON.stringify(primary.chapters) : null,

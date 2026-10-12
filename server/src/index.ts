@@ -22,6 +22,23 @@ async function main() {
   await app.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`[server] listening on 0.0.0.0:${PORT}`);
 
+  // Spec 17: seed the genre taxonomy and provider mappings. Idempotent, and
+  // must run before any enrichment pass so provider genres have somewhere to
+  // map to.
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    const { seedGenreMappings, seedGenres } = await import("./metadata/taxonomy-service");
+    const seedClient = new PrismaClient();
+    const genres = await seedGenres(seedClient);
+    const mappings = await seedGenreMappings(seedClient);
+    await seedClient.$disconnect();
+    if (genres > 0 || mappings > 0) {
+      console.log(`[server] seeded taxonomy: ${genres} genres, ${mappings} provider mappings`);
+    }
+  } catch (err) {
+    console.error("[server] taxonomy seed failed:", err);
+  }
+
   // Spec 16: pick up an enrichment run that a previous process left mid-flight
   // rather than leaving the library permanently half-enriched.
   try {
