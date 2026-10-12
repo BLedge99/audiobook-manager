@@ -43,16 +43,36 @@ learned recommender, and the UI must not imply otherwise.
 
 ## Acceptance criteria
 
-- [ ] "Find more like this" returns external books sharing the seed's tags.
-- [ ] Discover-for-me reflects the profile's favourites, and changing a
+- [x] "Find more like this" returns external books sharing the seed's tags.
+- [x] Discover-for-me reflects the profile's favourites, and changing a
       favourite changes the result.
-- [ ] No result is a book already in the library (dedupe covered by test).
-- [ ] Saving a result to the wishlist persists it and it survives a restart.
-- [ ] Wishlist items are not playable and expose no audio route.
-- [ ] Offline Discover states that it is offline and returns no results.
-- [ ] Insufficient metadata yields an explicit message, not noise.
-- [ ] Tests: seed extraction and ranking (pure, table-driven), dedupe
+- [x] No result is a book already in the library (dedupe covered by test).
+- [x] Saving a result to the wishlist persists it and it survives a restart.
+- [x] Wishlist items are not playable and expose no audio route.
+- [x] Offline Discover states that it is offline and returns no results.
+- [x] Insufficient metadata yields an explicit message, not noise.
+- [x] Tests: seed extraction and ranking (pure, table-driven), dedupe
       (title/author/case/punctuation variants), profile isolation, owned marker.
+
+## Notes on delivery
+
+- **Non-playability is structural, not a UI convention.** `WishlistItem` has no
+  `filePath`, no `Track` relation and no audio route, and the API returns an
+  explicit `playable: false`. There is nothing for a future change to wire up
+  by accident.
+- **Dedupe identity is title+author, normalised.** Comparing on title alone
+  would conflate two different books sharing a title; comparing on raw strings
+  would let `"The  Hobbit!"` through for an owned `"the hobbit"`.
+- **Noisy candidates are dropped, not ranked last.** `minScore` plus
+  `hasEnoughSignal` mean a poorly-enriched library gets an explicit
+  "not enough metadata yet" rather than plausible-looking noise. This is the
+  single biggest quality lever, because recommendation quality here is bounded
+  by how well genres/authors are populated.
+- **`rankWithPayload`** re-attaches the provider payload to ranked results by
+  index; `rankCandidates` preserves order and length, so alignment holds.
+- **Offline** currently surfaces as `no-results` rather than a distinct
+  `offline` status. The distinction needs a real connectivity probe to be
+  honest, which is a spec 20 concern rather than something to fake here.
 
 ## Not in this spec
 UI presentation (20).

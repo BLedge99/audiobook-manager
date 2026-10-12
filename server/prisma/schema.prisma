@@ -58,6 +58,7 @@ model MediaItem {
   overrides          FieldOverride[]
   customTags        MediaItemTag[]
   favourites        Favourite[]
+  wishlistSeeds     WishlistItem[]
 
   series Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
@@ -230,6 +231,37 @@ model MediaItemTag {
   @@index([tagId])
 }
 
+// Spec 19: books the household does NOT own. Metadata-only by construction --
+// there is no filePath, no Track and no playback route, because media is a
+// read-only mount and these books have no audio.
+model WishlistItem {
+  id              Int      @id @default(autoincrement())
+  profileId       Int
+  title           String
+  author          String?
+  narrators       String?  // JSON array of strings
+  description     String?
+  coverPath       String?
+  coverUrl        String?
+  genres          String?  // JSON array of taxonomy slugs
+  seriesName      String?
+  publisher       String?
+  publishedYear   Int?
+  provider        String?
+  providerKey     String?
+  seedMediaItemId Int?
+  owned           Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  profile       Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  seedMediaItem MediaItem? @relation(fields: [seedMediaItemId], references: [id], onDelete: SetNull)
+
+  // One row per external book per profile, not one per refresh or per seed.
+  @@unique([profileId, provider, providerKey])
+  @@index([profileId])
+  @@index([seedMediaItemId])
+}
+
 model Series {
   id   Int    @id @default(autoincrement())
   name String
@@ -303,6 +335,7 @@ model Profile {
   playSessions     PlaySession[]
   favourites       Favourite[]
   createdTags      Tag[]
+  wishlist         WishlistItem[]
 }
 
 model PlaySession {

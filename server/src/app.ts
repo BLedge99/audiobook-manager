@@ -16,6 +16,7 @@ import { runChain } from "./metadata/chain";
 import { buildQuery, EnrichmentManager } from "./metadata/run";
 import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy-service";
 import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
+import { RecommendationService } from "./metadata/recommend-service";
 
 export interface BuildAppOptions {
   prisma?: PrismaClient;
@@ -28,6 +29,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const app = Fastify({ logger: options.logger ?? true });
   const scanner = createScanManager(prisma);
   const enrichment = new EnrichmentManager(prisma);
+  const recommendations = new RecommendationService(prisma);
   const appPassword = options.appPassword ?? process.env.APP_PASSWORD;
   const authEnabled = Boolean(appPassword);
   const sessions = new Set<string>();
@@ -276,6 +278,67 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   function publicMediaItem<T extends Record<string, unknown>>(item: T): Omit<T, "filePath" | "coverImagePath"> {
     const { filePath: _filePath, coverImagePath: _cover, ...rest } = item;
     return rest as Omit<T, "filePath" | "coverImagePath">;
+  }
+
+  function decodeJsonList(value: string | null): string[] {
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Wishlist items are metadata-only by construction (spec 19): there is no
+   * filePath, no Track and no audio route for them. Serialising them here
+   * makes that explicit rather than incidental.
+   */
+  function publicWishlistItem(item: {
+    id: number;
+    title: string;
+    author: string | null;
+    narrators: string | null;
+    description: string | null;
+    coverUrl: string | null;
+    coverPath: string | null;
+    genres: string | null;
+    seriesName: string | null;
+    publisher: string | null;
+    publishedYear: number | null;
+    provider: string | null;
+    seedMediaItemId: number | null;
+    owned: boolean;
+    createdAt: Date;
+  }) {
+    return {
+      id: item.id,
+      title: item.title,
+      author: item.author,
+      narrators: decodeJsonList(item.narrators),
+      description: item.description,
+      coverUrl: item.coverUrl,
+      genres: decodeJsonList(item.genres),
+      seriesName: item.seriesName,
+      publisher: item.publisher,
+      publishedYear: item.publishedYear,
+      provider: item.provider,
+      seedMediaItemId: item.seedMediaItemId,
+      owned: item.owned,
+      createdAt: item.createdAt,
+      playable: false,
+    };
+  }
+
+  /**
+ * Recommendations carry no local paths by construction (they come from
+ * external providers), so there is nothing to strip -- but returning the
+ * result unchanged here keeps that guarantee explicit and easy to enforce if a
+ * future change starts caching covers locally.
+ */
+  function publicRecommendations<T>(result: T): T {
+    return result;
   }
 
   app.post<{ Params: { id: string } }>("/api/audiobooks/:id/enrich", {
@@ -849,6 +912,124 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
     // The count is reported so the UI can confirm how many books moved.
     return { moved: result.moved, mergedInto: targetTagId };
+  });
+
+  // ---------------------------------------------------------------------
+  // Spec 19 — Discover & wishlist
+  // ---------------------------------------------------------------------
+
+  app.get<{ Params: { id: string } }>("/api/discover/similar/:id", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+      querystring: {
+        type: "object",
+        properties: { limit: { type: "integer", minimum: 1, maximum: 50 } },
+      },
+    },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const exists = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) return reply.code(404).send({ message: "Audiobook not found" });
+
+    const limit = (request.query as { limit?: number }).limit ?? 20;
+    const result = await recommendations.similarTo(id, limit);
+    return publicRecommendations(result);
+  });
+
+  app.get("/api/discover/for-me", async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const limit = Number((request.query as { limit?: string }).limit ?? 20);
+    const result = await recommendations.forProfile(profileId, Number.isFinite(limit) ? limit : 20);
+    return publicRecommendations(result);
+  });
+
+  app.get("/api/wishlist", async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const items = await prisma.wishlistItem.findMany({
+      where: { profileId },
+      orderBy: { createdAt: "desc" },
+    });
+    return items.map(publicWishlistItem);
+  });
+
+  app.post("/api/wishlist", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          title: { type: "string", minLength: 1, maxLength: 500 },
+          author: { type: "string", maxLength: 500 },
+          narrators: { type: "array", items: { type: "string" }, maxItems: 20 },
+          description: { type: "string", maxLength: 4000 },
+          coverUrl: { type: "string", maxLength: 2000 },
+          genres: { type: "array", items: { type: "string" }, maxItems: 20 },
+          seriesName: { type: "string", maxLength: 300 },
+          publisher: { type: "string", maxLength: 300 },
+          publishedYear: { type: "integer", minimum: 0, maximum: 3000 },
+          provider: { type: "string", minLength: 1, maxLength: 50 },
+          providerKey: { type: "string", minLength: 1, maxLength: 200 },
+          seedMediaItemId: { type: "integer", minimum: 1 },
+        },
+        required: ["title", "provider", "providerKey"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const body = request.body as {
+      title: string;
+      author?: string;
+      narrators?: string[];
+      description?: string;
+      coverUrl?: string;
+      genres?: string[];
+      seriesName?: string;
+      publisher?: string;
+      publishedYear?: number;
+      provider: string;
+      providerKey: string;
+      seedMediaItemId?: number;
+    };
+
+    const item = await recommendations.saveToWishlist(
+      profileId,
+      { ...body, narrators: body.narrators ?? [], genres: body.genres ?? [], score: 0, reason: "" },
+      body.seedMediaItemId,
+    );
+    return reply.code(201).send(publicWishlistItem(item));
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/wishlist/:id", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+
+    // Scoped by profile: one profile cannot delete another's wishlist entry.
+    const { count } = await prisma.wishlistItem.deleteMany({ where: { id, profileId } });
+    if (count === 0) return reply.code(404).send({ message: "Wishlist item not found" });
+    return { deleted: true };
+  });
+
+  app.put<{ Params: { id: string } }>("/api/wishlist/:id/owned", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const owned = (request.body as { owned?: boolean } | undefined)?.owned ?? true;
+
+    const result = await prisma.wishlistItem.updateMany({ where: { id, profileId }, data: { owned } });
+    if (result.count === 0) return reply.code(404).send({ message: "Wishlist item not found" });
+    const item = await prisma.wishlistItem.findUnique({ where: { id } });
+    return publicWishlistItem(item!);
   });
 
   // AI: optional metadata match assistant (works only if LM Studio is up)
