@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "scan": "tsx src/scripts/scan.ts",
+    "verify:enrichment": "tsx src/scripts/verify-enrichment.ts",
     "seed:profiles": "tsx src/scripts/seed-profiles.ts"
   },
   "dependencies": {

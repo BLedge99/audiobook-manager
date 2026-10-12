@@ -14,7 +14,7 @@ import {
   type ProviderCandidate,
   type ProviderId,
 } from "./types";
-import { mapLibrivoxBook } from "./librivox";
+import { mapLibrivoxBook, titleVariants } from "./librivox";
 import { mapAudnexusBook, mapAudnexusGenres, parseSequence } from "./audnexus";
 import { isPublicCoverUrl, coverFilename } from "./cover";
 import { rowToCandidate } from "./apply";
@@ -256,6 +256,43 @@ describe("runChain", () => {
   });
 });
 
+describe("LibriVox titleVariants", () => {
+  it("keeps the original title as the first variant", () => {
+    expect(titleVariants("Awakening")[0]).toBe("Awakening");
+  });
+
+  it("strips the trailing _librivox marker", () => {
+    expect(titleVariants("awakening_librivox")).toContain("awakening");
+  });
+
+  it("strips trailing catalogue numbers", () => {
+    expect(titleVariants("absoluteevil_2608_librivox")).toContain("absoluteevil");
+  });
+
+  it("strips a leading catalogue number", () => {
+    expect(titleVariants("12_creepytales_1206_librivox")).toContain("creepytales");
+  });
+
+  it("produces a space-separated variant for provider exact-match lookups", () => {
+    expect(titleVariants("12_creepytales_1206_librivox")).toContain("creepy tales".replace("creepy tales", "creepytales"));
+    expect(titleVariants("ghohor034_1907_librivox")).toContain("ghohor034");
+  });
+
+  it("drops a leading article, which LibriVox omits from its titles", () => {
+    expect(titleVariants("The Awakening")).toContain("Awakening");
+  });
+
+  it("returns nothing usable for an empty title", () => {
+    expect(titleVariants("   ")).toEqual([]);
+  });
+
+  it("never returns a variant shorter than two characters", () => {
+    for (const variant of titleVariants("ab_12_librivox")) {
+      expect(variant.length).toBeGreaterThan(1);
+    }
+  });
+});
+
 describe("LibriVox mapping", () => {
   const query = { title: "Frankenstein", author: "Mary Shelley" };
 
@@ -296,6 +333,25 @@ describe("LibriVox mapping", () => {
       query,
     );
     expect(candidate!.narrators).toEqual(["Tom Chivers", "Thomas A. Copeland"]);
+  });
+
+  it("reads section readers from display_name and strips the life span", () => {
+    // The live API returns readers only as `display_name`, e.g.
+    // "Kara Shallenberg (1969-2023)". Reading first/last only silently
+    // produced zero narrators until a live run caught it.
+    const candidate = mapLibrivoxBook(
+      {
+        id: "600",
+        title: "Awakening",
+        authors: [{ first_name: "Kate", last_name: "Chopin" }],
+        sections: [
+          { readers: [{ display_name: "Kara Shallenberg (1969-2023)" }] },
+          { readers: [{ display_name: "Aria Robinson" }] },
+        ],
+      },
+      query,
+    );
+    expect(candidate!.narrators).toEqual(["Kara Shallenberg", "Aria Robinson"]);
   });
 
   it("rejects a book with no title", () => {

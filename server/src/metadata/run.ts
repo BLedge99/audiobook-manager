@@ -148,8 +148,22 @@ export class EnrichmentManager {
       const item = await this.prisma.mediaItem.findUnique({ where: { id: options.mediaItemId } });
       return item ? [item] : [];
     }
+
+    // NOTE: this cannot be expressed as `NOT: { enrichmentStatus: "applied" }`.
+    // That compiles to `NOT (enrichmentStatus = 'applied')`, and in SQL a NULL
+    // column makes the comparison NULL rather than true -- so every
+    // never-enriched book (enrichmentStatus IS NULL) would be silently
+    // excluded and the pass would queue nothing. Nullability has to be
+    // enumerated explicitly.
+    const needsEnrichment = {
+      OR: [
+        { enrichmentStatus: null },
+        { enrichmentStatus: { in: ["pending", "review", "skipped", "failed", ""] } },
+      ],
+    };
+
     return this.prisma.mediaItem.findMany({
-      where: options.force ? {} : { NOT: { enrichmentStatus: "applied" } },
+      where: options.force ? {} : needsEnrichment,
       orderBy: { id: "asc" },
     });
   }

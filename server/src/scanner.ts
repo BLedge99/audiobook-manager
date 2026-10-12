@@ -14,6 +14,8 @@ type AudioFile = {
   filePath: string;
   format: string;
   title: string;
+  /** Album tag: for multi-file books this is the book title, not the section. */
+  album?: string;
   author: string;
   narrator?: string;
   duration: number;
@@ -105,6 +107,10 @@ async function readAudioFile(filePath: string): Promise<AudioFile> {
     filePath,
     format: path.extname(filePath).slice(1).toLowerCase(),
     title: common.title?.trim() || titleFromFilename(filePath),
+    // The album tag carries the *book* title for multi-file books. LibriVox
+    // and most audiobook rippers put the section name in `title` and the book
+    // title in `album`; without this the grid shows folder names.
+    album: firstTagValue(common.album),
     author: firstTagValue(common.artist) || firstTagValue(common.albumartist) || "Unknown author",
     narrator: firstTagValue(common.composer),
     duration: (await probeDuration(filePath)) || metadata.format.duration || 0,
