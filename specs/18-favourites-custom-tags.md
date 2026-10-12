@@ -35,15 +35,31 @@ own tagging vocabulary. Favourites are the seed for spec 19's recommendations.
 
 ## Acceptance criteria
 
-- [ ] Favouriting in one profile does not affect another.
-- [ ] Un-favouriting twice is a no-op, not an error.
-- [ ] A tag can be created, assigned, renamed and merged; merging moves every
+- [x] Favouriting in one profile does not affect another.
+- [x] Un-favouriting twice is a no-op, not an error.
+- [x] A tag can be created, assigned, renamed and merged; merging moves every
       assignment and reports the count.
-- [ ] Reserved and genre-colliding tag names are rejected with a 409.
-- [ ] Tag assignments survive a full rescan and a re-enrichment pass.
-- [ ] Category pages show a count that matches the listed books exactly.
-- [ ] Tests: favourite isolation + idempotency, tag CRUD, merge reassignment,
+- [x] Reserved and genre-colliding tag names are rejected with a 409.
+- [x] Tag assignments survive a full rescan and a re-enrichment pass.
+- [x] Category pages show a count that matches the listed books exactly.
+- [x] Tests: favourite isolation + idempotency, tag CRUD, merge reassignment,
       reserved-name rejection, rescan survival, count/list agreement.
+
+## Notes on delivery
+
+- **One route, not two.** `PUT /api/audiobooks/:id/tags` originally existed
+  twice: spec 17 owned the metadata/genre fields and spec 18 wanted the custom
+  tags. Fastify rejects a duplicate method+path, and more importantly two save
+  routes would let the detail screen half-apply an edit. The route now accepts
+  the whole suite (`title` … `genreIds`, `tagIds`) and saves once.
+- **Genre-collision matching normalises both sides.** Comparing a tag key
+  ("mystery thriller") against a genre *slug* ("mystery-thriller") never
+  matches, which would have made the collision check dead code. Both sides are
+  normalised before comparison.
+- **Rescan survival** holds structurally: tag and favourite assignments live in
+  join tables the scanner's reconciliation never touches, and the scanner only
+  upserts `MediaItem` scalars. Covered by `tags.integration.test.ts` plus the
+  cascade tests.
 
 ## Not in this spec
 Recommendations (19), browse UI (20).

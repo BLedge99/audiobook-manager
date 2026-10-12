@@ -15,6 +15,7 @@ import { coverFilename, fetchCover } from "./metadata/cover";
 import { runChain } from "./metadata/chain";
 import { buildQuery, EnrichmentManager } from "./metadata/run";
 import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy-service";
+import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
 
 export interface BuildAppOptions {
   prisma?: PrismaClient;
@@ -537,6 +538,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   /** Edit the tag suite. Any field present becomes a user override (ADR 009). */
+  /**
+   * Edit the tag suite. Any field present becomes a user override (ADR 009).
+   *
+   * One route for the whole suite (spec 17 + spec 18): the detail screen saves
+   * once, and mixing it with separate per-concern routes made it possible to
+   * half-apply an edit.
+   */
   app.put<{ Params: { id: string }; Body: unknown }>("/api/audiobooks/:id/tags", {
     schema: {
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
@@ -556,6 +564,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           seriesName: { type: "string", maxLength: 300 },
           seriesPosition: { type: "number" },
           genreIds: { type: "array", items: { type: "integer", minimum: 1 }, maxItems: 20 },
+          // Spec 18: the book's custom tags, saved with everything else.
+          tagIds: { type: "array", items: { type: "integer", minimum: 1 }, maxItems: 30 },
         },
         additionalProperties: false,
       },
@@ -609,13 +619,32 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       overrideFields.push("seriesPosition");
     }
 
-    if (Array.isArray(body.genreIds) && body.genreIds.length > 0) {
+    if (Array.isArray(body.genreIds)) {
+      if (body.genreIds.length > 0) {
+        const found = await prisma.genre.count({ where: { id: { in: body.genreIds as number[] } } });
+        if (found !== (body.genreIds as number[]).length) {
+          return reply.code(400).send({ message: "Unknown genre id" });
+        }
+      }
       // A user-chosen genre set replaces the provider's entirely, and is
       // recorded with source "user" so enrichment cannot revoke it.
       await prisma.mediaItemGenre.deleteMany({ where: { mediaItemId: id } });
-      await prisma.mediaItemGenre.createMany({
-        data: (body.genreIds as number[]).map((genreId) => ({ mediaItemId: id, genreId, source: "user" })),
-      });
+      if ((body.genreIds as number[]).length > 0) {
+        await prisma.mediaItemGenre.createMany({
+          data: (body.genreIds as number[]).map((genreId) => ({ mediaItemId: id, genreId, source: "user" })),
+        });
+      }
+    }
+
+    // Spec 18: custom tags. User data, so no override row is needed and
+    // enrichment never touches these.
+    if (Array.isArray(body.tagIds)) {
+      const tagIds = [...new Set(body.tagIds as number[])];
+      if (tagIds.length > 0) {
+        const found = await prisma.tag.count({ where: { id: { in: tagIds } } });
+        if (found !== tagIds.length) return reply.code(400).send({ message: "Unknown tag id" });
+      }
+      await setBookTags(prisma, id, tagIds);
     }
 
     data.metadataSource = "manual";
@@ -661,6 +690,165 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       data: { enrichmentStatus: "pending", metadataSource: "embedded" },
     });
     return { reset: true, clearedOverrides: count, booksRequeued: result.count };
+  });
+
+  // ---------------------------------------------------------------------
+  // Spec 18 — favourites & custom tags
+  // ---------------------------------------------------------------------
+
+  /** Every metadata route requires a profile; favourites are per profile. */
+  function requireProfileId(request: { headers: Record<string, unknown> }): number | null {
+    const profileId = Number(request.headers["x-profile-id"]);
+    return Number.isInteger(profileId) && profileId > 0 ? profileId : null;
+  }
+
+  app.put<{ Params: { id: string } }>("/api/audiobooks/:id/favourite", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+
+    // Idempotent: favouriting twice is a no-op, not an error.
+    const existing = await prisma.favourite.findUnique({
+      where: { profileId_mediaItemId: { profileId, mediaItemId: id } },
+    });
+    if (existing) return { favourited: true, alreadyExisted: true };
+
+    await prisma.favourite.create({ data: { profileId, mediaItemId: id } });
+    return { favourited: true, alreadyExisted: false };
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/audiobooks/:id/favourite", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+
+    // Un-favouriting something already un-favourited is a no-op.
+    const { count } = await prisma.favourite.deleteMany({ where: { profileId, mediaItemId: id } });
+    return { favourited: false, removed: count };
+  });
+
+  app.get("/api/favourites", async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+
+    const favourites = await prisma.favourite.findMany({
+      where: { profileId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        mediaItem: {
+          include: {
+            series: true,
+            genres: { include: { genre: true } },
+            customTags: { include: { tag: true } },
+            contributors: { include: { contributor: true } },
+          },
+        },
+      },
+    });
+
+    return favourites.map((row) => ({
+      favouritedAt: row.createdAt,
+      book: publicMediaItem({
+        ...row.mediaItem,
+        tracks: [],
+        contributors: row.mediaItem.contributors.map((link) => link.contributor),
+      }),
+    }));
+  });
+
+  /** The current profile's favourites, as a plain id set for list endpoints. */
+  app.get("/api/favourites/ids", async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const rows = await prisma.favourite.findMany({ where: { profileId }, select: { mediaItemId: true } });
+    return rows.map((row) => row.mediaItemId);
+  });
+
+  app.get("/api/tags", async () => {
+    const tags = await prisma.tag.findMany({
+      orderBy: { name: "asc" },
+      include: { _count: { select: { items: true } } },
+    });
+    // Counts come from the same rows the UI lists, so a count can never
+    // disagree with the number of books behind it.
+    return tags.map((tag) => ({ id: tag.id, name: tag.name, count: tag._count.items }));
+  });
+
+  app.post("/api/tags", {
+    schema: {
+      body: {
+        type: "object",
+        properties: { name: { type: "string", minLength: 1, maxLength: 100 } },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const body = request.body as { name: string };
+    const result = await createTag(prisma, body.name, optionalProfileId(request));
+    if ("reason" in result) return reply.code(409).send({ message: `Tag name rejected: ${result.reason}` });
+    return reply.code(result.created ? 201 : 200).send(result.tag);
+  });
+
+  app.patch<{ Params: { id: string } }>("/api/tags/:id", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+      body: {
+        type: "object",
+        properties: { name: { type: "string", minLength: 1, maxLength: 100 } },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const result = await renameTag(prisma, id, (request.body as { name: string }).name);
+    if ("reason" in result) return reply.code(409).send({ message: `Tag name rejected: ${result.reason}` });
+    return result.tag;
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/tags/:id", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const tag = await prisma.tag.findUnique({ where: { id } });
+    if (!tag) return reply.code(404).send({ message: "Tag not found" });
+    // Cascades to MediaItemTag, so every assignment goes with it.
+    await prisma.tag.delete({ where: { id } });
+    return { deleted: true };
+  });
+
+  app.post<{ Params: { id: string } }>("/api/tags/:id/merge", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+      body: {
+        type: "object",
+        properties: { targetTagId: { type: "integer", minimum: 1 } },
+        required: ["targetTagId"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const { targetTagId } = request.body as { targetTagId: number };
+    const result = await mergeTags(prisma, id, targetTagId);
+    if ("reason" in result) {
+      const status = result.reason === "not-found" ? 404 : 400;
+      return reply.code(status).send({ message: `Merge failed: ${result.reason}` });
+    }
+    // The count is reported so the UI can confirm how many books moved.
+    return { moved: result.moved, mergedInto: targetTagId };
   });
 
   // AI: optional metadata match assistant (works only if LM Studio is up)

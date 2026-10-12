@@ -56,6 +56,8 @@ model MediaItem {
   enrichmentItems    EnrichmentItem[]
   genres             MediaItemGenre[]
   overrides          FieldOverride[]
+  customTags        MediaItemTag[]
+  favourites        Favourite[]
 
   series Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
@@ -182,6 +184,52 @@ model MediaItemGenre {
 }
 
 // Spec 17: series with reading order, normalised so spelling variants group.
+// Spec 18: per-profile favourites. The unique constraint makes favouriting
+// idempotent and stops a double-tap creating two rows.
+model Favourite {
+  id          Int      @id @default(autoincrement())
+  profileId   Int
+  mediaItemId Int
+  createdAt   DateTime @default(now())
+
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, mediaItemId])
+  @@index([profileId])
+  @@index([mediaItemId])
+}
+
+// Spec 18: custom tags are a household-wide managed vocabulary, not free
+// text. Created once, assigned to many books.
+model Tag {
+  id        Int      @id @default(autoincrement())
+  name      String
+  // Lowercased name: case-insensitive uniqueness without PostgreSQL-only
+  // filters, matching Series.key.
+  key       String   @unique
+  createdBy Int?
+  createdAt DateTime @default(now())
+
+  createdByProfile Profile?      @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  items            MediaItemTag[]
+
+  @@index([key])
+}
+
+model MediaItemTag {
+  mediaItemId Int
+  tagId       Int
+  source      String   @default("user")
+  createdAt   DateTime @default(now())
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([mediaItemId, tagId])
+  @@index([tagId])
+}
+
 model Series {
   id   Int    @id @default(autoincrement())
   name String
@@ -253,6 +301,8 @@ model Profile {
 
   listeningHistory ListeningHistory[]
   playSessions     PlaySession[]
+  favourites       Favourite[]
+  createdTags      Tag[]
 }
 
 model PlaySession {
