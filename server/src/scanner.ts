@@ -193,7 +193,11 @@ export function createScanManager(prisma: PrismaClient) {
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
           select: { metadataSource: true },
         });
-        const userOverride = existingRow?.metadataSource === "user";
+        // Spec 07/16: a human-chosen value is authoritative and must survive a
+// rescan. "user" is the spec 07 sentinel; "manual" is what spec 16 writes
+// when a candidate or manual edit is confirmed. Spec 17 replaces this
+// all-or-nothing flag with per-field overrides (ADR 009).
+const userOverride = existingRow?.metadataSource === "user" || existingRow?.metadataSource === "manual";
         const item = await prisma.mediaItem.upsert({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
           create: {

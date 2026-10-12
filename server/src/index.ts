@@ -21,6 +21,19 @@ async function main() {
   }
   await app.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`[server] listening on 0.0.0.0:${PORT}`);
+
+  // Spec 16: pick up an enrichment run that a previous process left mid-flight
+  // rather than leaving the library permanently half-enriched.
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    const { EnrichmentManager } = await import("./metadata/run");
+    const resumeClient = new PrismaClient();
+    await new EnrichmentManager(resumeClient).resumeIncomplete();
+    await resumeClient.$disconnect();
+    console.log("[server] checked for a resumable enrichment run");
+  } catch (err) {
+    console.error("[server] enrichment resume skipped:", err);
+  }
 }
 
 main().catch((err) => {

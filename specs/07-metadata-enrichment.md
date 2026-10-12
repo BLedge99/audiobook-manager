@@ -29,13 +29,37 @@ in control.
 
 ## Acceptance criteria
 
-- [ ] With network available, candidates appear for a well-known LibriVox title.
-- [ ] Confirming a candidate updates title/cover/description everywhere.
-- [ ] User overrides survive subsequent library rescans.
-- [ ] With network disabled, the UI degrades gracefully (error message, embedded data kept).
-- [ ] No writes to media files; covers stored under app data dir only.
+- [x] With network available, candidates appear for a well-known LibriVox title.
+- [x] Confirming a candidate updates title/cover/description everywhere.
+- [x] User overrides survive subsequent library rescans.
+- [x] With network disabled, the UI degrades gracefully (error message, embedded data kept).
+- [x] No writes to media files; covers stored under app data dir only.
 - [ ] Tests: provider client unit tests (mock HTTP), route tests for apply,
-      E2E manual confirm flow.
+      E2E manual confirm flow. *(provider clients only; route + E2E missing)*
+
+## Status (audit 2026-10-12)
+
+Scored as **partially delivered**. The ticked boxes cover behaviour that exists,
+but the spec is not fully met:
+
+- **No manual override form exists in the UI.** `POST /api/audiobooks/:id/metadata`
+  accepts manual `title`/`author`/`description`/`coverUrl`, but `MetadataEditor`
+  renders only a candidate list. The "user picks one **or enters a manual
+  override**" requirement is unmet at the client.
+- **Confidence is never shown**, and candidates have no cover thumbnails or
+  description preview.
+- **No route tests** exist for `POST /enrich`, `GET /candidates` or
+  `POST /metadata` — only the four provider-client tests in `enrichment.test.ts`.
+- **No test** covers "user overrides survive rescans" — the most important
+  scanner/enrichment interaction is untested.
+- **Description trimming** is not implemented.
+- **No metadata route has a Fastify schema**, violating spec 11.
+- **Absolute server paths leak** in `GET /api/audiobooks`, `GET /api/audiobooks/:id`
+  and the `POST /metadata` response (`filePath`, `coverImagePath`).
+
+Remediation is folded into specs 16–20: providers are replaced by 16, the
+override mechanism by 17 (ADR 009), and the review-queue UI by 20. Until those
+land, treat "no manual override" and "no route tests" as open.
 
 ## Not in this spec
 

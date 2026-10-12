@@ -20,6 +20,11 @@ has a matching spec in `specs/`.
 | 13 | Media tools (stretch) | Manual, explicit metadata/cover embedding into files with confirmation; no silent writes |
 | 14 | Listening position display | Player shows chapter + position in chapter + book % and time left, with chapter ticks and a session-start marker; grid shows a Continue listening section. Position maths lives in a tested pure module |
 | 15 | GUI redesign | Player, grid and library shell restyled as one system; reuses spec 14's `position.ts` and `ProgressTimeline` rather than rebuilding them |
+| 16 | Provider expansion & background enrichment | Audnexus + LibriVox clients joined in an adaptive chain; a resumable post-scan pass auto-applies high-confidence matches and queues the rest; no media writes |
+| 17 | Tag & taxonomy model | Curated genre tree, multiple narrators, series + position, publication facts, and per-field user overrides that survive rescans without freezing unrelated fields |
+| 18 | Favourites & custom tags | Per-profile favourites; household-managed tag vocabulary with create/rename/merge/delete; assignments survive rescan |
+| 19 | Recommendations & wishlist | Discover returns only books the household does not own, seeded by one book or the profile's favourites; per-profile wishlist with an "owned" marker |
+| 20 | Browse & Discover UI | Genre shelves, filter bar with URL state, category pages, series shelves, Discover tab, full tag-suite detail, tag manager, enrichment review queue |
 
 ## Notes
 
@@ -30,3 +35,19 @@ has a matching spec in `specs/`.
 - Item 15 follows 14 deliberately: 14 builds the data and layout layer that the
   redesign then restyles, so the redesign is not a rewrite of the maths.
 - Remote/internet access is intentionally absent; see `decisions/006-remote-access.md`.
+
+## Build order after 14
+
+**16 → 17 → 18 → 19 → 20 → 15.** Each of 16–19 is a data-layer feature with no
+new UI, so they are independently shippable and testable. 20 adds the browse
+and Discover surfaces on top.
+
+**Item 15 is built last, after 20** — this reverses the original ordering. Spec
+20 introduces genre shelves, a filter bar, category pages and a Discover tab.
+Restyling the shell (15) before those surfaces exist would mean building and
+then rebuilding the same navigation twice. See `decisions/009` and
+`decisions/008` for the metadata model these depend on.
+
+**Item 13 (media tools) remains out of scope.** Media is a read-only mount by
+design; writing tags into user files is not wanted. The tagging and
+presentation work lives in 16–20 instead.

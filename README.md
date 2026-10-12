@@ -6,9 +6,10 @@ A local-first web application that scans your storage for audiobook files, enric
 
 - Scan local directories for audiobook files (MP3, M4B, FLAC, OGG, WAV)
 - Parse embedded metadata, chapters, and cover art using FFmpeg and music-metadata
-- Enrich library data via online APIs (Audible, Open Library, MusicBrainz)
-- Netflix-style grid UI with search, filtering, and playback controls
-- AI integration through LM Studio's OpenAI-compatible API for metadata assistance and recommendations
+- Enrich library data via online APIs (Audnexus, LibriVox, Google Books, Open Library)
+- Netflix-style browse UI with genre shelves, search, filtering, and playback controls
+- Per-profile favourites, curated tags, and a Discover feed of books you don't own
+- AI integration through LM Studio's OpenAI-compatible API for metadata assistance
 
 ## Tech Stack
 

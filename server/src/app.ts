@@ -8,8 +8,12 @@ import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
 import { LMStudioAdapter } from "./ai/llm";
-import { COVER_DIR, candidateCoverFilename, downloadCover, searchGoogleBooks, searchOpenLibrary } from "./enrichment";
+import { COVER_DIR } from "./enrichment";
 import { resolveInsideRoot } from "./safePath";
+import { applyCandidate, rowToCandidate, storeCandidates } from "./metadata/apply";
+import { coverFilename, fetchCover } from "./metadata/cover";
+import { runChain } from "./metadata/chain";
+import { buildQuery, EnrichmentManager } from "./metadata/run";
 
 export interface BuildAppOptions {
   prisma?: PrismaClient;
@@ -21,6 +25,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const prisma = options.prisma ?? new PrismaClient();
   const app = Fastify({ logger: options.logger ?? true });
   const scanner = createScanManager(prisma);
+  const enrichment = new EnrichmentManager(prisma);
   const appPassword = options.appPassword ?? process.env.APP_PASSWORD;
   const authEnabled = Boolean(appPassword);
   const sessions = new Set<string>();
@@ -122,7 +127,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return items.map((item) => {
       const row = byItem.get(item.id);
       return {
-        ...item,
+        // Spec 11: never expose server filesystem paths to a client.
+        ...publicMediaItem(item),
         progress: row
           ? { position: row.position, completed: row.completed, lastPlayed: row.lastPlayed }
           : null,
@@ -140,7 +146,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       include: { tracks: true, contributors: { include: { contributor: true } } },
     });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
-    return item;
+    // Spec 11: strip filePath / coverImagePath (and track paths) from the payload.
+    return publicMediaItem({
+      ...item,
+      tracks: item.tracks.map(({ filePath: _trackPath, ...track }) => track),
+    });
   });
 
   app.get("/api/library-roots", async () => {
@@ -175,7 +185,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       ? await prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
       : await prisma.libraryRoot.findMany();
     if (roots.length === 0) return reply.code(400).send({ message: "Add a library root before scanning" });
-    for (const root of roots) void scanner.scanRoot(root.id).catch((error) => app.log.error(error));
+    for (const root of roots) {
+      void scanner
+        .scanRoot(root.id)
+        .then(async () => {
+          // Spec 16: completing a scan automatically kicks off a background
+          // enrichment pass. Failures here must never affect the scan result.
+          try {
+            const status = await enrichment.enqueue();
+            app.log.info({ enrichment: status }, "scan finished, enrichment enqueued");
+          } catch (error) {
+            app.log.error({ error }, "failed to enqueue enrichment after scan");
+          }
+        })
+        .catch((error) => app.log.error(error));
+    }
     return reply.code(202).send({ status: "started", rootIds: roots.map((root) => root.id) });
   });
 
@@ -242,77 +266,142 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   });
 
-  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/enrich", async (request, reply) => {
-    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
+  // ---------------------------------------------------------------------
+  // Spec 16 — metadata enrichment
+  // ---------------------------------------------------------------------
+
+  /** Strip server-side filesystem paths before a payload leaves the server. */
+  function publicMediaItem<T extends Record<string, unknown>>(item: T): Omit<T, "filePath" | "coverImagePath"> {
+    const { filePath: _filePath, coverImagePath: _cover, ...rest } = item;
+    return rest as Omit<T, "filePath" | "coverImagePath">;
+  }
+
+  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/enrich", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return reply.code(404).send({ message: "Audiobook not found" });
-    const [openLibrary, googleBooks] = await Promise.allSettled([
-      searchOpenLibrary(item.title, item.author === "Unknown author" ? undefined : item.author),
-      searchGoogleBooks(item.title, item.author === "Unknown author" ? undefined : item.author),
-    ]);
-    const candidates = [
-      ...(openLibrary.status === "fulfilled" ? openLibrary.value : []),
-      ...(googleBooks.status === "fulfilled" ? googleBooks.value : []),
-    ].sort((a, b) => b.confidence - a.confidence);
-    await prisma.metadataCandidate.deleteMany({ where: { mediaItemId: item.id } });
-    for (const candidate of candidates) {
-      await prisma.metadataCandidate.create({
-        data: {
-          mediaItemId: item.id,
-          source: candidate.source,
-          title: candidate.title,
-          author: candidate.author,
-          coverUrl: candidate.coverUrl,
-          description: candidate.description,
-          confidence: candidate.confidence,
-          raw: JSON.stringify(candidate.raw),
+
+    // Manual single-book path: run the chain now rather than enqueueing, so
+    // the spec 07 "candidates appear" behaviour still holds synchronously.
+    const result = await runChain(buildQuery(item), { collectAll: true });
+    await storeCandidates(prisma, id, result.candidates);
+
+    // `raw` is large and belongs in the DB for debugging, not in a response.
+    return result.candidates.map(({ raw: _raw, ...candidate }) => candidate);
+  });
+
+  app.post("/api/enrichment/run", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          mediaItemId: { type: "integer", minimum: 1 },
+          force: { type: "boolean", default: false },
         },
-      });
-    }
-    return candidates;
+        additionalProperties: false,
+      },
+    },
+  }, async (request) => {
+    const body = (request.body ?? {}) as { mediaItemId?: number; force?: boolean };
+    return enrichment.enqueue({ mediaItemId: body.mediaItemId, force: body.force });
   });
 
-  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/candidates", async (request, reply) => {
-    const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
-    const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
-    return prisma.metadataCandidate.findMany({ where: { mediaItemId: id }, orderBy: { confidence: "desc" } });
-  });
+  app.get("/api/enrichment/status", async () => enrichment.status());
 
-  app.post<{ Params: { id: string }; Body: { candidateId?: number; title?: string; author?: string; description?: string; coverUrl?: string } }>("/api/audiobooks/:id/metadata", async (request, reply) => {
-    const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
-    const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
-
-    let data: { title?: string; author?: string; description?: string; coverImagePath?: string | null; coverImageUrl?: string | null } = {};
-    if (request.body?.candidateId) {
-      const candidate = await prisma.metadataCandidate.findUnique({ where: { id: request.body.candidateId } });
-      if (!candidate || candidate.mediaItemId !== id) return reply.code(400).send({ message: "Candidate not found for this book" });
-      data = { title: candidate.title, author: candidate.author ?? item.author, description: candidate.description ?? undefined, coverImageUrl: candidate.coverUrl };
-      if (candidate.coverUrl) {
-        const dest = path.join(COVER_DIR, candidateCoverFilename(candidate.source, candidate.id));
-        if (await downloadCover(candidate.coverUrl, dest)) data.coverImagePath = dest;
-      }
-    } else {
-      data = {
-        title: request.body?.title?.trim() || undefined,
-        author: request.body?.author?.trim() || undefined,
-        description: request.body?.description?.trim() || undefined,
-        coverImageUrl: request.body?.coverUrl?.trim() || undefined,
-      };
-      const cover = request.body?.coverUrl?.trim();
-      if (cover) {
-        const dest = path.join(COVER_DIR, `manual_${id}_${Date.now()}.jpg`);
-        if (await downloadCover(cover, dest)) data.coverImagePath = dest;
-      }
-    }
-
-    const updated = await prisma.mediaItem.update({
-      where: { id },
-      data: { ...data, metadataSource: "user" },
+  /** The spec 16 review queue: everything below the auto-apply threshold. */
+  app.get("/api/enrichment/review-queue", async () => {
+    const items = await prisma.mediaItem.findMany({
+      where: { enrichmentStatus: "review" },
+      orderBy: { updatedAt: "desc" },
     });
-    return updated;
+    return items.map(publicMediaItem);
+  });
+
+  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/candidates", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    const rows = await prisma.metadataCandidate.findMany({
+      where: { mediaItemId: id },
+      orderBy: { confidence: "desc" },
+    });
+    // Spec 11: `raw` is provider payload, not client data. `providerKey` is
+    // internal too. Neither belongs in an API response.
+    return rows.map(({ raw: _raw, providerKey: _key, ...rest }) => rest);
+  });
+
+  app.post<{ Params: { id: string }; Body: unknown }>("/api/audiobooks/:id/metadata", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+      body: {
+        type: "object",
+        properties: {
+          candidateId: { type: "integer", minimum: 1 },
+          title: { type: "string", minLength: 1, maxLength: 500 },
+          author: { type: "string", minLength: 1, maxLength: 500 },
+          narrator: { type: "string", maxLength: 500 },
+          description: { type: "string", maxLength: 4000 },
+          coverUrl: { type: "string", maxLength: 2000 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+
+    const body = (request.body ?? {}) as {
+      candidateId?: number;
+      title?: string;
+      author?: string;
+      narrator?: string;
+      description?: string;
+      coverUrl?: string;
+    };
+
+    const data: Record<string, unknown> = {};
+
+    if (body.candidateId !== undefined) {
+      const candidate = await prisma.metadataCandidate.findUnique({ where: { id: body.candidateId } });
+      if (!candidate || candidate.mediaItemId !== id) {
+        return reply.code(400).send({ message: "Candidate not found for this book" });
+      }
+      const applied = await applyCandidate(prisma, item, rowToCandidate(candidate));
+      if (applied.coverImagePath) data.coverImagePath = applied.coverImagePath;
+      // Confirming a candidate clears the review-queue flag for this book.
+      data.enrichmentStatus = "applied";
+      data.enrichedAt = new Date();
+      // A confirmed candidate is user-chosen, so it is authoritative.
+      data.metadataSource = "manual";
+    } else {
+      if (body.title !== undefined) data.title = body.title.trim();
+      if (body.author !== undefined) data.author = body.author.trim();
+      if (body.narrator !== undefined) data.narrator = body.narrator.trim() || null;
+      if (body.description !== undefined) data.description = body.description.trim() || null;
+      data.metadataSource = "manual";
+
+      // Cover URLs arrive from a client, so they go through the hardened,
+      // SSRF-aware downloader rather than a raw fetch.
+      if (body.coverUrl) {
+        const result = await fetchCover(body.coverUrl.trim(), coverFilename("manual", `${id}-${Date.now()}`));
+        if (result.ok && result.path) data.coverImagePath = result.path;
+      }
+    }
+
+    const updated = await prisma.mediaItem.update({ where: { id }, data });
+    return publicMediaItem(updated);
   });
 
   // AI: optional metadata match assistant (works only if LM Studio is up)

@@ -33,8 +33,10 @@ model MediaItem {
   fileFormat        String   // mp3, m4b, flac, ogg, wav, etc.
   duration          Float    @default(0) // in seconds
   chapters          String?  // JSON-encoded array of { start, end, title }
-  metadataSource    String?  // embedded, openlibrary, googlebooks, audnexus
+  metadataSource    String?  // provenance: embedded, librivox, audnexus, googlebooks, openlibrary, manual
   metadataConfidence Float?  // 0-1 confidence score
+  enrichmentStatus  String?  // null | pending | applied | review | skipped | failed (spec 16)
+  enrichedAt        DateTime?
   libraryRootId     Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -44,6 +46,7 @@ model MediaItem {
   candidates         MetadataCandidate[]
   listeningHistory   ListeningHistory[]
   playSessions       PlaySession[]
+  enrichmentItems    EnrichmentItem[]
 
   libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id], onDelete: Cascade)
 
@@ -84,17 +87,65 @@ model ContributorMediaItem {
 }
 
 model MetadataCandidate {
-  id          Int    @id @default(autoincrement())
-  mediaItemId Int
-  source      String // openlibrary, googlebooks, audnexus
-  title       String
-  author      String?
-  coverUrl    String?
-  description String?
-  confidence  Float?
-  raw         String? // JSON-encoded provider response
+  id             Int    @id @default(autoincrement())
+  mediaItemId    Int
+  source         String // librivox, audnexus, googlebooks, openlibrary
+  title          String
+  author         String?
+  coverUrl       String?
+  description    String?
+  confidence     Float?
+  raw            String? // JSON-encoded provider response
+  narrators      String? // JSON array of strings
+  seriesName     String?
+  seriesPosition Float?
+  publisher      String?
+  publishedYear  Int?
+  language       String?
+  genres         String? // JSON array of raw provider genre strings
+  providerKey    String? // ASIN, LibriVox project id, etc.
 
   mediaItem MediaItem @relation(fields: [mediaItemId], references: [id])
+
+  // A provider re-asked for the same title must update in place, not stack
+  // duplicate rows for the same result.
+  @@unique([mediaItemId, source, providerKey])
+}
+
+// Spec 16: a resumable post-scan enrichment pass. Progress is persisted so a
+// restart mid-run resumes rather than restarts.
+model EnrichmentRun {
+  id         Int       @id @default(autoincrement())
+  status     String    @default("pending") // pending | running | complete | error
+  queued     Int       @default(0)
+  processed  Int       @default(0)
+  applied    Int       @default(0)
+  review     Int       @default(0)
+  failed     Int       @default(0)
+  skipped    Int       @default(0)
+  message    String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  items EnrichmentItem[]
+}
+
+model EnrichmentItem {
+  id          Int      @id @default(autoincrement())
+  runId       Int
+  mediaItemId Int
+  status      String   @default("pending") // pending | applied | review | skipped | failed
+  provider    String?
+  confidence  Float?
+  message     String?
+  createdAt   DateTime @default(now())
+
+  run       EnrichmentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  mediaItem MediaItem     @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([mediaItemId])
 }
 
 model ListeningHistory {

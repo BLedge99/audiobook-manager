@@ -35,7 +35,7 @@
 | 04 | progress + listening history | **done** | PlaySession model + migration, PUT/GET progress (clamped, profile-scoped, upserted on a unique (book, profile) key), POST sessions, GET /api/history, ChapterPlayer resume/save/session flush. **Session 1:** fixed periodic 10s save (timer no longer resets on every position tick), player blocks playback with a hint when no profile is selected (was silently losing progress), resume e2e added. **Session 2 (resume bug + hardening):** client teardown/restore-seek fixes (commit `6b4e861`), then the duplicate-resume-row race eliminated server-side with a unique index + upsert, bound clamping for progress and session rows, non-numeric id validation, and a real cross-book resume E2E. 33 server tests, 10 client tests, 11 Playwright tests green |
 | 05 | playback-experience | **done** | 15s skip, persisted speed, sleep timer incl end-of-chapter, auto-complete, Media Session controls, client tsc errors fixed |
 | 06 | chapter-support | **done** | scanner ffprobe chapter extraction for M4B/M4A/MP4, chapters JSON stored, ChapterPlayer unified segments (tracks OR chapters OR full). NOT yet verified against a real M4B (no ffprobe on dev host; verify via docker later) |
-| 07 | metadata-enrichment | **done** | Open Library + Google Books candidates with confidence, candidates stored, apply candidate/manual, covers downloaded locally, scanner preserves user overrides, 24 server tests |
+| 07 | metadata-enrichment | **partial (audited 2026-10-12)** | Open Library + Google Books candidates, apply candidate, covers downloaded locally, scanner preserves overrides. **But:** no manual override UI exists (only the API accepts one), no confidence shown, no route tests, no Fastify schemas on metadata routes, absolute server paths leak in list/detail/metadata responses, no description trimming. `specs/07` now carries a full audit section. Remediation folded into specs 16-20. |
 | 08 | pwa-packaging | **done** | vite-plugin-pwa autoUpdate SW, manifest standalone, /api NetworkOnly, dev options on, playwright manifest check. TODO: real raster icons, Lighthouse audit |
 | 09 | android-wrapper | **partial** | capacitor.config.ts scaffold points at server URL; APK build blocked on Android SDK on user machine |
 | 10 | lan-deployment | **done** | @fastify/static serves client/dist w/ SPA fallback, Dockerfile.prod, docker-compose.prod.yml, restart-unless-stopped, media read-only mount |
@@ -43,6 +43,19 @@
 | 12 | ai-features | **done (MVP)** | LLMAdapter + LMStudioAdapter, /api/audiobooks/:id/ai-suggest offline-safe candidate pick |
 | 13 | media-tools | **deferred (stretch)** | requires explicit user confirm + backups; not implemented yet |
 | 14 | listening-position-display | **done** | `client/src/lib/position.ts` (all position maths, pure + 34 unit tests), `ProgressTimeline` (native range input + aria-hidden tick/marker overlay + chapter sub-bar, 9 tests), player readout "Track 7 — 07 - THE PREMATURE BURIAL / 13:33 into this track · 34% / 50% of the book · 2h 34m left", `/api/audiobooks` gains profile-scoped `progress`, grid "Continue listening" section. See "Current task" |
+| 16 | provider-expansion | **planned** | Audnexus + LibriVox clients, adaptive sequential chain (ADR 008), resumable post-scan enrichment run, auto-apply >=0.9 else review queue. Supersedes spec 07's provider list |
+| 17 | tag-taxonomy | **planned** | curated 2-level genre tree + GenreMapping, multi-narrator via reconciled Contributor, series + fractional position, publication facts, per-field FieldOverride precedence (ADR 009), reset actions |
+| 18 | favourites-custom-tags | **planned** | per-profile Favourite, household-managed Tag vocabulary with merge, reserved-name rejection, counts matching listed books |
+| 19 | recommendations-wishlist | **planned** | external-only Discover seeded by one book or profile favourites, pure tag-similarity ranking + dedupe (ADR 010), per-profile WishlistItem with owned marker |
+| 20 | browse-discover-ui | **planned** | genre shelves, filter bar with URL state, category pages, series shelves, Discover tab, full tag-suite detail, tag manager, review queue. Builds **before** 15 |
+
+## Build order after 14
+
+**16 -> 17 -> 18 -> 19 -> 20 -> 15.** Specs live in `specs/16-` through
+`specs/20-`; ADRs 008/009/010 cover the provider chain, field-level precedence,
+and the recommendation engine. Item 15 (GUI redesign) moved to last so the
+redesign styles the final browse surfaces instead of rebuilding them.
+Item 13 (media tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
