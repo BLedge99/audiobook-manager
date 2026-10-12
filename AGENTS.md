@@ -50,20 +50,36 @@ same change. Never silently diverge.
 
 ## How to run things
 
+Use the Makefile. `make` works in WSL (where Docker runs) and in Git Bash.
+
 ```bash
-make start   # docker compose up (server :3000, client :5173)
+make start      # docker compose up (server :3000, client :5173)
 make stop
 make logs
-make scan    # trigger a library scan
-make reset   # tear down and rebuild
+make restart    # recreate containers, so changed server code is picked up
+make scan       # trigger a library scan (authenticates, waits for completion)
+make test       # server + client unit suites
+make test-e2e   # Playwright suite against the running stack
+make verify     # live enrichment check against ./test
+make reset      # tear down and rebuild
 ```
 
-Tests (once `specs/02` lands):
+Prefer `make restart` over `make start` after changing server code: `up -d`
+reuses an existing container, and a stale process is a confusing way to lose
+time. `make scan` authenticates and waits for completion -- it does not just
+fire and forget.
+
+If Docker runs inside WSL, `scripts/e2e-wsl.sh` is the E2E entry point: it
+provisions a Linux Node (WSL has none, and the Windows interop `npm` installs
+`.cmd` wrappers that bash cannot execute) and then delegates to
+`make test-e2e`.
+
+Tests per tier:
 
 ```bash
-cd server && npm test        # backend unit/integration (Vitest)
-cd client && npm test        # frontend unit (Vitest + Testing Library)
-npx playwright test          # E2E + security project
+make test-server     # backend unit/integration (Vitest)
+make test-client     # frontend unit (Vitest + Testing Library)
+npx playwright test  # E2E + security project (stack must be up)
 ```
 
 ## Security rules while building
