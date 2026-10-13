@@ -53,7 +53,8 @@
 | 18 | favourites-custom-tags | **done** | per-profile Favourite (unique index = idempotent), household-managed Tag vocabulary with merge + reserved/genre-collision rejection. `PUT /api/audiobooks/:id/tags` is now ONE route for the whole suite (specs 17+18 originally collided on it) |
 | 19 | recommendations-wishlist | **done** | external-only Discover seeded by one book or profile favourites, pure weighted tag-similarity ranking + hard dedupe on normalised title+author (ADR 010), per-profile WishlistItem with owned marker, structurally non-playable (no filePath/Track/audio route) |
 | 20 | browse-discover-ui | **done** | 4 tabs (Library/Browse/Discover/Favourites), genre + series shelves, filter bar with URL state, full tag-suite editor with provenance labels, tag manager, review queue with confidence. Pure logic in `lib/browse.ts` (47 tests) |
-| 21 | official-chapter-titles | **done** | `metadata/chapters.ts`: provider chapters matched to tracks by **filename identity** (LibriVox `listen_url`), positional only on exact count agreement, `isBetterChapterTitle` never steps backwards. Scanner strips redundant number prefixes at scan time. Audnexus chapters via ASIN (ADR 011). Hand-set titles are `FieldOverride` rows keyed `trackTitle:<n>`, surviving rescans. `make enrich` target added. **Next: roadmap 15 (GUI redesign)** |
+| 21 | official-chapter-titles | **done** | `metadata/chapters.ts`: provider chapters matched to tracks by **filename identity** (LibriVox `listen_url`), positional only on exact count agreement, `isBetterChapterTitle` never steps backwards. Scanner strips redundant number prefixes at scan time. Audnexus chapters via ASIN (ADR 011). Hand-set titles are `FieldOverride` rows keyed `trackTitle:<n>`, surviving rescans. `make enrich` target added |
+| 22 | search | **done** | `lib/search.ts` (pure): bare words match title/author/narrator/series/tag/genre/description; `author:`/`genre:`/`narrator:`/`series:`/`tag:` narrow to one facet, case-insensitive on substrings; quoted values keep spaces; terms AND. Separate layer from the chip `Filters` so a typed substring cannot blank the library. `q=` in the URL. `SearchBar` on Library + Browse. **Next: roadmap 15 (GUI redesign)** |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -104,7 +105,111 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
-**Session 2026-10-13: spec 21 — official chapter titles — done.**
+**Session 2026-10-13 (later): audited enrichment + shipped search (spec 22).**
+
+Asked to confirm the tags were enriched (genre / artist / actors) and that a
+user could filter by `author: X` or `genre: Y`. Checked against the running
+stack rather than by reading code.
+
+### What the audit found
+
+Live stack, 6-book fixture library:
+
+- **`GET /api/audiobooks` accepts no query parameters at all.** `?q=`,
+  `?search=`, `?author=` and `?genre=` are *silently ignored* and each returns
+  the entire library — no error, no empty result. `/api/search` does not exist.
+  All filtering was client-side over the already-fetched library.
+- **Enrichment coverage:** title 6/6, author 6/6, but narrator/description/
+  publisher/genres only 2/6, **covers 0/6**, series 0/6, publishedYear 0/6.
+  The 4 unenriched books are the ones sitting in the review queue from the
+  earlier live run, so this is expected mid-state, not a new bug — but covers
+  being zero is worth a look, since spec 07 claims cover download.
+- **Contributors:** only `author` (6 distinct) and `narrator` (18 distinct).
+  `MediaItem.author` and the `contributors` author rows were **consistent for
+  every book** — good.
+- **There is no "actor" concept anywhere.** `ContributorRole` is
+  `author | narrator | translator | editor | illustrator`. Audnexus parses only
+  `authors`/`narrators`; LibriVox only `readers`/`translators`; Open Library and
+  Google Books have no performer field. Audible full-cast productions list
+  everyone as narrator, so for audiobooks "artist" == narrator (covered) and
+  "actors" does not exist as a distinct role. Adding one is a data-model
+  change, not a filter change — deliberately **not** done here.
+- **Two facets read from different sources:** `facetValues(book, "author")`
+  reads `MediaItem.author`, while the narrator facet prefers the reconciled
+  `contributors` rows. Author survives a manual override through the field;
+  narrators do not. Consistent today, but the asymmetry is a trap.
+
+### What shipped (spec 22)
+
+Typed search, since none existed:
+
+- `client/src/lib/search.ts` — pure. `parseSearchQuery`,
+  `matchesSearch`, `applySearch`, `describeSearch`. Bare words search
+  title/author/narrator/series/tags/genres/description; `field:value` narrows
+  to one facet. Substring and case-insensitive, so `author: rowling` matches
+  `J.K. Rowling` — the chips only ever offered exact values.
+- **Deliberately a separate layer from the chip `Filters`.** A typed value is
+  normally a substring, so pushing `rowling` into `Filters.author` would match
+  nothing and silently blank the library. Search narrows the chip-filtered
+  output instead.
+- Facet terms resolve through the same `facetValues` the chips use, so a typed
+  `author:` and a clicked Author chip can never disagree.
+- Unknown `field:` degrades to free text rather than returning nothing.
+- `SearchBar` on both Library and Browse, debounced, clearing on Escape,
+  reporting "N matches for …". Query lives in the URL as `q=`.
+
+Two bugs my own tests caught:
+
+1. **The token regex had no `\s*` around the colon**, so `author: rowling`
+   never became a facet — the optional field group rolled back and it parsed as
+   two free-text words. Every faceted query with a space after the colon was
+   silently broken.
+2. **A bare `author:` with no value** was searched for as literal text and
+   blanked the library with no explanation. Now dropped.
+
+### Tests
+
+- `client/src/lib/search.test.ts` — **27 new** unit tests.
+- `client/src/components/SearchBar.test.tsx` — **10 new** render tests.
+- `e2e/search.spec.ts` — **3 new** specs for the wiring: narrows the grid,
+  survives a reload via the URL, `field:value` reports 0 rather than being
+  ignored, clearing restores everything.
+- Client suite 104 → **141**. `tsc --noEmit` clean.
+
+Two harness mistakes worth remembering, both mine and both caught by the E2E:
+`ensureAuthed` does a **relative** `fetch`, so it fails with "Failed to parse
+URL" unless a `goto` has already run — every spec must `goto` before auth. And
+`pickAnyProfile` waits for the **"All audiobooks"** heading, which only exists
+on the Library tab, so entering on `?tab=browse` times out inside the helper;
+pick the profile first, then click the tab.
+
+**Still open, not fixed here (worth a decision):**
+
+- **Covers are 0/6 — root cause found.** Traced through the provider mappers:
+  - Open Library (`covers.openlibrary.org/b/id/{cover_i}-M.jpg`) and Google
+    Books (`imageLinks.thumbnail`) **do** supply `coverUrl`.
+  - **LibriVox supplies none.** `LibrivoxBook` has `url_librivox` (the project
+    page) and `mapLibrivoxBook` sets no `coverUrl` at all. The LibriVox feed
+    exposes no cover-art field.
+  - Audnexus is the only other cover source, and since spec 21 it is
+    **ASIN-keyed** — it returns nothing for a book whose filename has no ASIN,
+    which is every LibriVox recording.
+  - So a book matched by LibriVox can **never** get a cover. The two books that
+    enriched did so via LibriVox, hence 0/6. Not a download bug: there is no
+    cover URL to download.
+  - **Two possible fixes, deliberately not applied here:** (a) fall back to the
+    highest-confidence candidate that *does* have a `coverUrl` when the winner
+    has none — same "independent axis" pattern spec 21 used for chapters, and
+    needs no new API assumptions; or (b) find a real LibriVox cover source.
+    (b) must be **verified against the live API first** — guessing an endpoint
+    is exactly what kept Audnexus 404ing silently for a whole feature (ADR 011).
+- **No `actor` role.** If full-cast productions matter, that is a schema +
+  provider-mapping change.
+- **Author/narrator facet asymmetry** described above.
+- **`handoff.md` still says "Owner pushes manually from their terminal."**
+  Stale — pushes are automated.
+
+**Earlier session 2026-10-13: spec 21 — official chapter titles — done.**
 
 Chapter names came straight from the files' embedded tags, so the player showed
 `Track 7 - 07 - THE TELL-TALE HEART` (the track number twice) or, worse,

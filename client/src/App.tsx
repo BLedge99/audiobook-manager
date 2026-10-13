@@ -8,6 +8,7 @@ import { LoginGate } from "./components/LoginGate";
 import { ProfileGate } from "./components/ProfileGate";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
 import { ReviewQueue } from "./components/ReviewQueue";
+import { SearchBar } from "./components/SearchBar";
 import { Shelves } from "./components/Shelves";
 import { TagManager } from "./components/TagManager";
 import {
@@ -19,6 +20,7 @@ import {
   isFilterActive,
   type Filters,
 } from "./lib/browse";
+import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
 import type { Audiobook } from "./types";
@@ -48,6 +50,11 @@ function App() {
   // enough -- reloading a filtered link landed on the Library tab and looked
   // like the filter had been lost.
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
+  // Spec 22: the typed search lives in the URL alongside the chip filters, so a
+  // search is as shareable and reload-safe as a filter.
+  const [search, setSearch] = useState<string>(() =>
+    searchFromQueryParam(new URLSearchParams(window.location.search).get("q")),
+  );
   const [tab, setTab] = useState<Tab>(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
     return TABS.some((entry) => entry.id === requested) ? (requested as Tab) : "library";
@@ -58,12 +65,14 @@ function App() {
     void fetch("/api/audiobooks").then((res) => setAuthed(res.status !== 401)).catch(() => setAuthed(false));
   }, []);
 
-  /** Write the current view (tab + filters) to the URL. */
-  const syncUrl = useCallback((nextTab: Tab, nextFilters: Filters) => {
+  /** Write the current view (tab + filters + search) to the URL. */
+  const syncUrl = useCallback((nextTab: Tab, nextFilters: Filters, nextSearch: string) => {
     const params = new URLSearchParams();
     if (nextTab !== "library") params.set("tab", nextTab);
     const filterQuery = filtersToQuery(nextFilters);
     if (filterQuery) params.set("f", filterQuery);
+    const search = searchToQueryParam(nextSearch);
+    if (search) params.set("q", search);
     const query = params.toString();
     // replaceState, not pushState: toggling five chips should not require
     // five presses of the back button.
@@ -72,11 +81,25 @@ function App() {
 
   const onFiltersChange = useCallback((next: Filters) => {
     setFilters(next);
-    syncUrl(tab, next);
-  }, [syncUrl, tab]);
+    syncUrl(tab, next, search);
+  }, [syncUrl, tab, search]);
+
+  const onSearchChange = useCallback((next: string) => {
+    setSearch(next);
+    syncUrl(tab, filters, next);
+  }, [syncUrl, tab, filters]);
 
   const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);
-  const filteredBooks = useMemo(() => applyFilters(audiobooks, filters), [audiobooks, filters]);
+  // Search narrows the chip-filtered result rather than replacing it, so both
+  // layers apply and neither can widen the other.
+  const filteredBooks = useMemo(
+    () => applySearch(applyFilters(audiobooks, filters), search),
+    [audiobooks, filters, search],
+  );
+  // The Library tab applies the typed search but not the chip filters: the
+  // chips only exist on Browse, so applying them here would silently hide
+  // books when the user just switched tabs.
+  const searchedBooks = useMemo(() => applySearch(audiobooks, search), [audiobooks, search]);
   const favouriteBooks = useMemo(
     () => audiobooks.filter((book) => favouriteIds.has(book.id)),
     [audiobooks, favouriteIds],
@@ -112,10 +135,10 @@ function App() {
   const openTab = useCallback(
     (next: Tab) => {
       setTab(next);
-      syncUrl(next, filters);
+      syncUrl(next, filters, search);
       if (next === "favourites" || next === "browse") void browse.refresh();
     },
-    [browse, syncUrl, filters],
+    [browse, syncUrl, filters, search],
   );
 
   const toggleFavourite = useCallback((bookId: number) => {
@@ -248,9 +271,10 @@ function App() {
             <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh({ silent: true }); void browse.refresh(); }} />
 
             <ContinueListening books={inProgressBooks(audiobooks)} onSelect={setSelectedBook} />
+            <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
             <section>
-              <div className="mb-5 flex items-center justify-between"><div><h2 className="text-2xl font-bold">All audiobooks</h2><p className="mt-1 text-sm text-slate-500">{audiobooks.length} {audiobooks.length === 1 ? "title" : "titles"} in your library</p></div>{working && <LoaderCircle className="animate-spin text-cyan-400" size={20} />}</div>
-              {loading ? <div className="py-20 text-center text-slate-500">Loading library...</div> : <AudiobookGrid books={audiobooks} {...gridProps} />}
+              <div className="mb-5 flex items-center justify-between"><div><h2 className="text-2xl font-bold">All audiobooks</h2><p className="mt-1 text-sm text-slate-500">{searchedBooks.length} {searchedBooks.length === 1 ? "title" : "titles"}{search.trim() ? " matching your search" : " in your library"}</p></div>{working && <LoaderCircle className="animate-spin text-cyan-400" size={20} />}</div>
+              {loading ? <div className="py-20 text-center text-slate-500">Loading library...</div> : <AudiobookGrid books={searchedBooks} {...gridProps} />}
             </section>
           </>
         )}
@@ -262,9 +286,10 @@ function App() {
               <p className="mt-1 text-sm text-slate-500">Grouped by genre and series, using the metadata your library was enriched with.</p>
             </section>
 
+            <SearchBar value={search} onChange={onSearchChange} resultCount={filteredBooks.length} />
             <FilterBar books={audiobooks} filters={filters} onChange={onFiltersChange} genres={browse.genres} />
 
-            {isFilterActive(filters) ? (
+            {isFilterActive(filters) || search.trim().length > 0 ? (
               <section>
                 <div className="mb-5">
                   <h3 className="text-xl font-bold">Filtered results</h3>
