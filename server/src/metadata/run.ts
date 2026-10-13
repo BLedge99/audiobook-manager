@@ -3,7 +3,10 @@ import { applyCandidate, storeCandidates } from "./apply";
 import { AudnexusProvider, extractAsin } from "./audnexus";
 import { applyChapterTitles } from "./chapters";
 import { DEFAULT_CONFIDENCE_THRESHOLD, runChain, selectCoverSource, UNKNOWN_AUTHOR } from "./chain";
+import { fetchOpenLibraryDescription } from "../enrichment";
+import { upsertSeries } from "./taxonomy-service";
 import type { EnrichmentQuery, ProviderId } from "./types";
+import { shouldAutoApply } from "./types";
 
 /**
  * Spec 16 — the background enrichment run.
@@ -227,7 +230,7 @@ export class EnrichmentManager {
         while (queue.length > 0) {
           const entry = queue.shift();
           if (!entry) return;
-          await this.processOne(runId, entry.id, entry.mediaItemId, limit);
+          await this.processOne(runId, entry.id, entry.mediaItemId, limit, threshold !== undefined);
           processed += 1;
           await this.prisma.enrichmentRun.update({
             where: { id: runId },
@@ -262,6 +265,8 @@ export class EnrichmentManager {
     itemRowId: number,
     mediaItemId: number,
     threshold: number,
+    /** True when `threshold` was passed explicitly and must be honoured as-is. */
+    explicitThreshold: boolean,
   ): Promise<void> {
     const setItem = (data: {
       status: string;
@@ -314,7 +319,7 @@ export class EnrichmentManager {
       // even when nothing cleared the auto-apply bar.
       await storeCandidates(this.prisma, mediaItemId, result.candidates);
 
-      const best = result.best;
+      let best = result.best;
       if (!best) {
         await setItem({ status: "skipped", message: `no match (walked ${result.walked.join(", ")})` });
         await this.prisma.mediaItem.update({ where: { id: mediaItemId }, data: { enrichmentStatus: "skipped" } });
@@ -344,7 +349,52 @@ export class EnrichmentManager {
         }
       }
 
-      if (best.confidence < threshold) {
+      // Spec 25: series, with the user's rule -- a provider's series wins, and
+      // Open Library is consulted only when no provider supplied one.
+      //
+      // Open Library's series comes from merged editions, so it is trusted only
+      // when complete: a name AND a usable position. A name with no position is
+      // far more often an imprint or a box-set label than a series.
+      const providerSeries = result.candidates
+        .filter((candidate) => candidate.seriesName && candidate.source !== "openlibrary")
+        .sort((a, b) => b.confidence - a.confidence)[0];
+      const openLibrarySeries = result.candidates
+        .filter(
+          (candidate) =>
+            candidate.source === "openlibrary" &&
+            candidate.seriesName &&
+            candidate.seriesPosition !== undefined,
+        )
+        .sort((a, b) => b.confidence - a.confidence)[0];
+
+      const series =
+        providerSeries?.seriesName
+          ? { name: providerSeries.seriesName, position: providerSeries.seriesPosition }
+          : openLibrarySeries?.seriesName
+            ? { name: openLibrarySeries.seriesName, position: openLibrarySeries.seriesPosition }
+            : null;
+
+      if (series?.name) {
+        try {
+          const seriesId = await upsertSeries(this.prisma, series.name);
+          if (seriesId !== null) {
+            await this.prisma.mediaItem.update({
+              where: { id: mediaItemId },
+              data: { seriesId, seriesPosition: series.position },
+            });
+          }
+        } catch {
+          // Series is an improvement, never a requirement.
+        }
+      }
+
+      // An explicitly requested threshold is honoured literally. The banded rule
+      // only replaces the default, so a caller asking for "apply above 0.95"
+      // still gets exactly that.
+      const autoApply = explicitThreshold
+        ? best.confidence >= threshold
+        : shouldAutoApply(best.confidence, query, best.author);
+      if (!autoApply) {
         await setItem({
           status: "review",
           provider: best.source,
@@ -362,6 +412,19 @@ export class EnrichmentManager {
       // ASIN-keyed since ADR 011 -- so the winner and the only candidate holding
       // a cover were never the same book. Fall back to the best-confident
       // candidate that has one rather than shipping a book with no artwork.
+      // Spec 25: a description is only fetched when nothing else has one.
+      // Open Library search results carry no blurb, so this needs a second
+      // request per book -- and issuing it unconditionally would waste a call
+      // on every book that already has a description from another provider.
+      const needsDescription = !best.description && !item.description;
+      if (needsDescription) {
+        const workKey = best.source === "openlibrary"
+          ? (best.raw as { key?: string } | undefined)?.key
+          : undefined;
+        const fetched = await fetchOpenLibraryDescription(workKey).catch(() => undefined);
+        if (fetched) best = { ...best, description: fetched };
+      }
+
       const coverFallback = best.coverUrl ? undefined : selectCoverSource(result.candidates) ?? undefined;
 
       await applyCandidate(this.prisma, item, best, { overriddenFields, coverFallback });

@@ -11,6 +11,9 @@ import {
   scoreMatch,
   similarity,
   trimDescription,
+  shouldAutoApply,
+  AUTO_APPLY_FLOOR,
+  AUTO_APPLY_STRONG,
   type MetadataProvider,
   type ProviderCandidate,
   type ProviderId,
@@ -629,6 +632,53 @@ describe("provider HTTP clients (mocked fetch)", () => {
 describe("auto-apply threshold", () => {
   it("defaults to 0.9", () => {
     expect(DEFAULT_CONFIDENCE_THRESHOLD).toBe(0.9);
+  });
+});
+
+/**
+ * Spec 25 — the banded auto-apply rule.
+ *
+ * The floor was lowered because a 0.9 floor left 7 of 12 fixture books in the
+ * review queue. But `scoreMatch` is ~85% title-weighted, so a merely-similar
+ * title scores nearly as well even with a disagreeing author. These tests pin
+ * the guard that stops the lowered floor auto-applying the wrong book.
+ */
+describe("shouldAutoApply", () => {
+  const query = { author: "J. K. Rowling", authorIsUnknown: false };
+
+  it("keeps the old behaviour at and above the strong bar", () => {
+    expect(shouldAutoApply(1, query, "J. K. Rowling")).toBe(true);
+    expect(shouldAutoApply(0.95, query, "J. K. Rowling")).toBe(true);
+    // Above the strong bar even a disagreeing author passes, as before.
+    expect(shouldAutoApply(0.9, query, "Someone Else")).toBe(true);
+  });
+
+  it("still rejects anything below the floor", () => {
+    expect(shouldAutoApply(AUTO_APPLY_FLOOR - 0.01, query, "J. K. Rowling")).toBe(false);
+    expect(shouldAutoApply(0.4, query, "J. K. Rowling")).toBe(false);
+    expect(shouldAutoApply(0, query, "J. K. Rowling")).toBe(false);
+  });
+
+  it("accepts the band when the author agrees", () => {
+    expect(shouldAutoApply(0.8, query, "J. K. Rowling")).toBe(true);
+    expect(shouldAutoApply(AUTO_APPLY_FLOOR, query, "J. K. Rowling")).toBe(true);
+  });
+
+  it("rejects the band when the author disagrees", () => {
+    // The exact failure a bare floor drop would cause: a similar title by a
+    // different author.
+    expect(shouldAutoApply(0.8, query, "Suzanne Collins")).toBe(false);
+    expect(shouldAutoApply(0.75, query, "Nobody At All")).toBe(false);
+  });
+
+  it("accepts the band when no author can contradict the match", () => {
+    expect(shouldAutoApply(0.8, { author: undefined, authorIsUnknown: false }, "Anyone")).toBe(true);
+    expect(shouldAutoApply(0.8, { author: "X", authorIsUnknown: true }, "Anyone")).toBe(true);
+    expect(shouldAutoApply(0.8, query, undefined)).toBe(true);
+  });
+
+  it("exposes a floor below the strong bar", () => {
+    expect(AUTO_APPLY_FLOOR).toBeLessThan(AUTO_APPLY_STRONG);
   });
 });
 

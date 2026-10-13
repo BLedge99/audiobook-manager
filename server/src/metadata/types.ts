@@ -126,6 +126,42 @@ export function scoreMatch(query: EnrichmentQuery, title: string, author?: strin
 }
 
 /**
+ * Auto-apply thresholds (spec 25).
+ *
+ * The floor is deliberately lower than the strong bar, because a 0.9 floor left
+ * 7 of 12 fixture books sitting in the review queue -- most of them correct
+ * matches whose title simply scored just under the line.
+ *
+ * But `scoreMatch` is ~85% title-weighted, so a merely-similar title scores
+ * nearly as well even when the author disagrees. Blindly lowering the floor
+ * would auto-apply the wrong book. So the band between the two is only
+ * accepted when the author agrees too, or when there is no author to
+ * contradict.
+ */
+export const AUTO_APPLY_FLOOR = 0.7;
+export const AUTO_APPLY_STRONG = 0.9;
+
+/** Minimum author agreement required inside the ambiguous band. */
+export const AUTO_APPLY_AUTHOR_AGREEMENT = 0.7;
+
+/**
+ * Should this candidate be applied without human review?
+ *
+ * Pure, so the rule is testable without a database or a network.
+ */
+export function shouldAutoApply(
+  confidence: number,
+  query: Pick<EnrichmentQuery, "author" | "authorIsUnknown">,
+  candidateAuthor?: string,
+): boolean {
+  if (confidence >= AUTO_APPLY_STRONG) return true;
+  if (confidence < AUTO_APPLY_FLOOR) return false;
+  // No author on either side means nothing can contradict the title match.
+  if (!query.author || query.authorIsUnknown || !candidateAuthor) return true;
+  return similarity(query.author, candidateAuthor) >= AUTO_APPLY_AUTHOR_AGREEMENT;
+}
+
+/**
  * Trim a provider description to a length the UI can render, without cutting
  * mid-word. Spec 07 required this; spec 07 never implemented it.
  */
