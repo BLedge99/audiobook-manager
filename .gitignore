@@ -42,6 +42,8 @@ data/
 
 # Test folder (sample media, not committed)
 test/
+# Sprint 1 spike audio (specs/26) -- local test media, never committed
+client/public/spike/
 
 # Playwright
 playwright-report/

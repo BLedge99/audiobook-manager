@@ -10,6 +10,7 @@ import { ProfileSwitcher } from "./components/ProfileSwitcher";
 import { ReviewQueue } from "./components/ReviewQueue";
 import { SearchBar } from "./components/SearchBar";
 import { Shelves } from "./components/Shelves";
+import { SpikePlayer } from "./components/SpikePlayer";
 import { TagManager } from "./components/TagManager";
 import {
   applyFilters,
@@ -34,7 +35,29 @@ const TABS: { id: Tab; label: string; icon: typeof Library }[] = [
   { id: "favourites", label: "Favourites", icon: Heart },
 ];
 
+/**
+ * True when running inside the Capacitor shell.
+ *
+ * Reads `window.Capacitor` defensively rather than importing `@capacitor/core`:
+ * the native bridge is injected at runtime, so during the first render the
+ * module import can hand back an uninitialised stub and calling into it throws
+ * `Cannot read properties of undefined (reading 'triggerEvent')`, which blanks
+ * the whole screen.
+ */
+function isNativeShell(): boolean {
+  const bridge = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  return typeof bridge?.isNativePlatform === "function" && bridge.isNativePlatform();
+}
+
 function App() {
+  // Sprint 1 spike (specs/26-android-app.md). A native build shows this
+  // because the real app cannot reach a server without one, and a native
+  // WebView has no address bar for ?spike=1. Removed once the native layer is
+  // proven in Sprint 2.
+  if (new URLSearchParams(window.location.search).get("spike") === "1" || isNativeShell()) {
+    return <SpikePlayer />;
+  }
+
   const { audiobooks, roots, loading, error, refresh, addRoot, removeRoot, scan } = useLibrary();
   const browse = useBrowse();
   const discover = useDiscover();
