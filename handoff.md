@@ -8,13 +8,15 @@
 
 - Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
   (also reachable at `/mnt/c/...` from WSL, which is where Docker runs).
-- Branch: master, pushed to `origin/master`. Specs `01..14, 16..23` and
+- Branch: master, pushed to `origin/master`. Specs `01..14, 16..24` and
   decisions `001..011` exist.
   **There is no `specs/15-*.md`** — roadmap 15 (GUI redesign) is unwritten and
   is the only remaining item.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
-- Test counts as of 2026-10-13: **server 296** (1 skipped), **client 141**,
+  `test/` now holds ~3.6 GB: the LibriVox set plus six **commercial**
+  audiobooks, including one M4B, because the product targets commercial books.
+- Test counts as of 2026-10-13: **server 318** (1 skipped), **client 141**,
   **Playwright 35** (all three tiers green; run E2E from WSL via
   `scripts/e2e-wsl.sh`).
 
@@ -57,7 +59,8 @@
 | 20 | browse-discover-ui | **done** | 4 tabs (Library/Browse/Discover/Favourites), genre + series shelves, filter bar with URL state, full tag-suite editor with provenance labels, tag manager, review queue with confidence. Pure logic in `lib/browse.ts` (47 tests) |
 | 21 | official-chapter-titles | **done** | `metadata/chapters.ts`: provider chapters matched to tracks by **filename identity** (LibriVox `listen_url`), positional only on exact count agreement, `isBetterChapterTitle` never steps backwards. Scanner strips redundant number prefixes at scan time. Audnexus chapters via ASIN (ADR 011). Hand-set titles are `FieldOverride` rows keyed `trackTitle:<n>`, surviving rescans. `make enrich` target added |
 | 22 | search | **done** | `lib/search.ts` (pure): bare words match title/author/narrator/series/tag/genre/description; `author:`/`genre:`/`narrator:`/`series:`/`tag:` narrow to one facet, case-insensitive on substrings; quoted values keep spaces; terms AND. Separate layer from the chip `Filters` so a typed substring cannot blank the library. `q=` in the URL. `SearchBar` on Library + Browse |
-| 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint. **Next: roadmap 15 (GUI redesign)** |
+| 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint |
+| 24 | narrator-resolution | **done** | `narrator.ts` (pure, 22 tests): `composer` atom → `comment` (`Read By X`) → bracketed folder name (`{Stephen Fry}`). Full casts become one contributor per person. Person-name guard stops `{Unabridged}` being credited as a narrator. No guess when nothing matches. Makes the narrator work for commercial audiobooks, which no free online source can supply. **Next: roadmap 15 (GUI redesign)** |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -108,7 +111,81 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
-**Session 2026-10-13 (later): audited enrichment + shipped search (spec 22).**
+**Session 2026-10-13 (later still): commercial audiobook support — spec 24.**
+
+The user added six **commercial** audiobooks to `test/` (the LibriVox set is
+test media only; the product is for commercial books). A full scan + forced
+enrich over the resulting 12-book library showed the commercial half was
+badly served:
+
+- **narrator 3/12**, and all five multi-file commercial sets were empty.
+- series 0/12, year 0/12, description 2/12, genres 2/12.
+- 7 of 12 books parked in the review queue.
+
+**Root cause of the narrator gap: it cannot be fetched.** Tested live, not
+assumed — Audnexus has narrators but is ASIN-keyed; Open Library editions
+expose only `isbn_10`/`isbn_13` and contributors like `Illustrator`; Google
+Books and Apple iTunes have no narrator field; LibriVox 404s for commercial
+titles. The reason is structural: **a narrator belongs to a recording, not a
+book.** "Goblet of Fire" has dozens of recordings, so a title search finds the
+*work* and still cannot say who read *this* copy.
+
+**So the narrator is read from the files** (spec 24), most-trusted first:
+`composer` atom → `comment` field (`Read By X`) → bracketed folder name
+(`{Stephen Fry}`). All three were verified present in the fixture library.
+A full cast becomes one contributor per person; a candidate must pass a
+person-name check so `{Unabridged}` can never be credited as a narrator.
+
+### What the fixtures settled
+
+- **The M4B has no ASIN anywhere** — not filename, not tags, not atoms. So
+  Audnexus is unreachable for the entire commercial library, which is the
+  binding constraint on everything above.
+- **spec 06's M4B chapter path is verified for the first time.** music-metadata
+  reported 0 chapters; **ffprobe found 66** properly-titled ones. ADR 011 had
+  recorded this as unverified because no M4B fixture had ever existed.
+- **The scanner already reads `common.composer` as the narrator**
+  (`scanner.ts:145`), the Audible convention. I nearly reported it missing —
+  worth checking rather than asserting.
+- A stray non-audio `.txt` in a book folder did **not** create a phantom book.
+
+### Corrections made in this session
+
+Two of my own earlier claims were wrong and are now fixed in the repo:
+
+1. **"Covers are 0/6"** was a measurement error — `publicMediaItem` strips
+   `coverImagePath` by design (spec 11). Measured via the cover endpoint the
+   library had **4/6**, three on disk before any of this work. Spec 23 is an
+   enhancement, not a bug fix.
+2. **"Adding an actor role needs a schema change"** was wrong. `Contributor.role`
+   is plain `String` (`schema.prisma:88`), so no migration is needed.
+
+**Actors are dropped permanently:** Audnexus's live payload has no
+`actors`/`performers`/`cast` field — only `narrators`. Audible does not
+distinguish them either, so spec 24 captures full casts as narrators.
+
+### ASIN discovery: no free route exists
+
+Tested every candidate. None works:
+Audnexus `/books?title=` 404s (ADR 011); `/authors?name=` returns only
+`asin`+`name`; `/authors/{asin}` returns no book list. Open Library has ISBNs
+but no ASIN. Apple returns a `collectionId`, not an ASIN. The only remaining
+route is Audible's own search, which needs a signed request with a fixed
+private key — fragile and against their terms, which is what Audnexus exists
+to avoid. **So wiring Audnexus in would improve zero of the current books.**
+Keep it ready (region fallback, observability) but do not build a resolver.
+
+### Tests
+
+- `server/src/narrator.test.ts` — **22 new**. Negative cases weighted above
+  positive ones, since the folder heuristic is the weakest source. Includes a
+  table test over the exact six fixtures, asserting the three that must
+  resolve to Stephen Fry *and* the two that must resolve to nothing.
+- One real bug caught: `"Read by - Stephen Fry"` left a leading dash that
+  failed the person-name check.
+- Server 296 → **318**. `tsc --noEmit` clean.
+
+**Earlier session 2026-10-13 (later): audited enrichment + shipped search (spec 22).**
 
 Asked to confirm the tags were enriched (genre / artist / actors) and that a
 user could filter by `author: X` or `genre: Y`. Checked against the running

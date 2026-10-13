@@ -8,6 +8,7 @@ import * as musicMetadata from "music-metadata";
 import { PrismaClient } from "@prisma/client";
 import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./scan-utils";
 import { stripTrackNumberPrefix, parseTrackTitleOverrides, resolveTrackTitle } from "./metadata/chapters";
+import { resolveLocalNarrator } from "./narrator";
 
 export const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".wav", ".aac"]);
 
@@ -19,6 +20,8 @@ type AudioFile = {
   album?: string;
   author: string;
   narrator?: string;
+  /** Spec 24: every narrator found, since a recording may have a full cast. */
+  narrators?: string[];
   duration: number;
   sizeBytes: number;
   releaseDate?: Date;
@@ -126,6 +129,19 @@ async function readAudioFile(filePath: string): Promise<AudioFile> {
     // title in `album`; without this the grid shows folder names.
     album: firstTagValue(common.album),
     author: firstTagValue(common.artist) || firstTagValue(common.albumartist) || "Unknown author",
+    // Spec 24: the narrator is resolved from the most trustworthy local source
+    // available -- the `composer` atom (the Audible convention), then a
+    // "Read By ..." comment tag, then the folder name. Commercial MP3 rips
+    // routinely carry the narrator only in the latter two, and no free online
+    // source can supply it (a narrator belongs to a recording, not a book, so
+    // book catalogues do not model one).
+    narrators: resolveLocalNarrator({
+      composer: firstTagValue(common.composer),
+      comment: firstTagValue(common.comment),
+      folderName: path.basename(path.dirname(filePath)),
+    })?.names,
+    // Legacy single-value field kept for the display string and for callers
+    // that still read `narrator`.
     narrator: firstTagValue(common.composer),
     duration: (await probeDuration(filePath)) || metadata.format.duration || 0,
     sizeBytes: fileStats.size,
@@ -155,10 +171,17 @@ async function syncContributors(
   mediaItemId: number,
   author: string | undefined,
   narrator: string | undefined,
+  /** Spec 24: the full resolved cast, when the file carried more than one. */
+  narrators?: string[],
 ): Promise<void> {
   const entries: { name: string; role: string }[] = [];
   if (author && author !== "Unknown author") entries.push({ name: author, role: "author" });
-  if (narrator) entries.push({ name: narrator, role: "narrator" });
+  // Prefer the resolved list so a full cast becomes one contributor per
+  // person, which is what the narrator filter in spec 20 matches against.
+  // Falls back to the single display string for callers without a list.
+  for (const name of narrators?.length ? narrators : narrator ? [narrator] : []) {
+    entries.push({ name, role: "narrator" });
+  }
 
   for (const entry of entries) {
     const contributor = await prisma.contributor.upsert({
@@ -237,7 +260,12 @@ export function createScanManager(prisma: PrismaClient) {
         const embedded: Record<string, unknown> = { metadataSource: "embedded" };
         if (writable("title")) embedded.title = audiobookTitle(group);
         if (writable("author")) embedded.author = primary.author;
-        if (writable("narrator")) embedded.narrator = primary.narrator;
+        if (writable("narrator")) {
+          // The display string is comma-joined when a recording has a full
+          // cast; the per-person rows in `contributors` are what filters
+          // actually match against.
+          embedded.narrator = primary.narrators?.length ? primary.narrators.join(", ") : primary.narrator;
+        }
         if (writable("releaseDate")) embedded.releaseDate = primary.releaseDate;
         if (writable("genre")) embedded.genre = primary.genre;
         if (writable("coverImagePath")) embedded.coverImagePath = coverImagePath;
@@ -265,7 +293,7 @@ export function createScanManager(prisma: PrismaClient) {
           },
         });
 
-        await syncContributors(prisma, item.id, primary.author, primary.narrator);
+        await syncContributors(prisma, item.id, primary.author, primary.narrator, primary.narrators);
 
         await prisma.track.deleteMany({ where: { mediaItemId: item.id } });
         if (group.length > 1) {
