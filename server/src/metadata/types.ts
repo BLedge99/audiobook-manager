@@ -151,11 +151,17 @@ export const AUTO_APPLY_AUTHOR_AGREEMENT = 0.7;
  */
 export function shouldAutoApply(
   confidence: number,
-  query: Pick<EnrichmentQuery, "author" | "authorIsUnknown">,
+  query: Pick<EnrichmentQuery, "title" | "author" | "authorIsUnknown">,
   candidateAuthor?: string,
+  candidateTitle?: string,
 ): boolean {
   if (confidence >= AUTO_APPLY_STRONG) return true;
   if (confidence < AUTO_APPLY_FLOOR) return false;
+  // An exact title match settles it regardless of author. LibriVox
+  // collections list their narrator or compiler as the file's "author" while
+  // the provider records "Various", so requiring author agreement here
+  // rejected two exact-title LibriVox matches in the fixture library.
+  if (candidateTitle && similarity(query.title, candidateTitle) >= 0.98) return true;
   // No author on either side means nothing can contradict the title match.
   if (!query.author || query.authorIsUnknown || !candidateAuthor) return true;
   return similarity(query.author, candidateAuthor) >= AUTO_APPLY_AUTHOR_AGREEMENT;

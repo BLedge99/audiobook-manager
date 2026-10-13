@@ -202,23 +202,45 @@ function similarity(a: string, b: string): number {
   return Math.min(1, overlap / Math.max(aWords.size, nb.split(" ").length));
 }
 
-export async function searchOpenLibrary(title: string, author?: string): Promise<EnrichmentCandidate[]> {
-  const query = encodeURIComponent([title, author].filter(Boolean).join(" "));
+/**
+ * Titles that are not the book itself.
+ *
+ * Open Library indexes the AI-generated study-guide spam that dominates Amazon
+ * for popular series. Searching "Harry Potter and the Deathly Hallows" returned
+ * "Summary of Harry Potter and the Deathly Hallows" (Bookhabits) and
+ * "Conversations on Harry Potter and the Deathly Hallows" (Daily Books) as the
+ * top two hits, with the actual novel absent from the top five. Those score well
+ * on title similarity because the book title is contained in them, so they must
+ * be refused explicitly or enrichment confidently applies the wrong work.
+ */
+const NON_BOOK_TITLE = /^\s*(summary of|summarised? of|study guide|stud(y|ies) guide|guide to|analysis of|conversations on|companion to|a study of|notes on|key facts|summary and analysis|book summary)\b/i;
+
+export function isNonBookTitle(title: string | null | undefined): boolean {
+  if (!title) return true;
+  return NON_BOOK_TITLE.test(title.trim());
+}
+
+export async function searchOpenLibrary(title: string, _author?: string): Promise<EnrichmentCandidate[]> {
+  const query = encodeURIComponent(title);
   const res = await fetch(
-    `https://openlibrary.org/search.json?q=${query}&limit=5&fields=${encodeURIComponent(OPEN_LIBRARY_FIELDS)}`,
+    `https://openlibrary.org/search.json?q=${query}&limit=10&fields=${encodeURIComponent(OPEN_LIBRARY_FIELDS)}`,
   );
   if (!res.ok) return [];
   const data = (await res.json()) as { docs?: Record<string, unknown>[] };
-  return (data.docs ?? []).slice(0, 5).map((doc) => {
-    const mapped = mapOpenLibraryDoc(doc);
-    return {
-      source: "openlibrary" as const,
-      ...mapped,
-      description: undefined, // fetched lazily, and only if still missing
-      confidence: similarity(title, String(doc.title ?? "")),
-      raw: doc,
-    };
-  });
+  return (data.docs ?? [])
+    .map((doc) => {
+      const mapped = mapOpenLibraryDoc(doc);
+      return {
+        source: "openlibrary" as const,
+        ...mapped,
+        description: undefined, // fetched lazily, and only if still missing
+        confidence: similarity(title, String(doc.title ?? "")),
+        raw: doc,
+      };
+    })
+    // Prefer the work itself over anything published *about* it.
+    .filter((candidate) => !isNonBookTitle(candidate.title))
+    .slice(0, 5);
 }
 
 /**
@@ -253,23 +275,28 @@ export async function fetchOpenLibraryDescription(workKey: string | undefined): 
   }
 }
 
-export async function searchGoogleBooks(title: string, author?: string): Promise<EnrichmentCandidate[]> {
+export async function searchGoogleBooks(title: string, _author?: string): Promise<EnrichmentCandidate[]> {
   const key = process.env.GOOGLE_BOOKS_API_KEY;
-  const query = encodeURIComponent([title, author].filter(Boolean).join(" "));
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=5${key ? `&key=${key}` : ""}`;
+  // Title only. Adding the author to the query measurably degraded results --
+  // see the note on searchOpenLibrary. The author still scores the candidate.
+  const query = encodeURIComponent(title);
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=10${key ? `&key=${key}` : ""}`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = (await res.json()) as { items?: { volumeInfo?: Record<string, unknown> }[] };
-  return (data.items ?? []).slice(0, 5).map((item) => {
-    const info = item.volumeInfo ?? {};
-    const mapped = mapGoogleVolume(info);
-    return {
-      source: "googlebooks" as const,
-      ...mapped,
-      confidence: similarity(title, String(info.title ?? "")),
-      raw: item,
-    };
-  });
+  return (data.items ?? [])
+    .map((item) => {
+      const info = item.volumeInfo ?? {};
+      const mapped = mapGoogleVolume(info);
+      return {
+        source: "googlebooks" as const,
+        ...mapped,
+        confidence: similarity(title, String(info.title ?? "")),
+        raw: item,
+      };
+    })
+    .filter((candidate) => !isNonBookTitle(candidate.title))
+    .slice(0, 5);
 }
 
 export function candidateCoverFilename(source: string, id: number): string {

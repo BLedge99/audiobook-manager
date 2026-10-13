@@ -644,7 +644,7 @@ describe("auto-apply threshold", () => {
  * the guard that stops the lowered floor auto-applying the wrong book.
  */
 describe("shouldAutoApply", () => {
-  const query = { author: "J. K. Rowling", authorIsUnknown: false };
+  const query = { title: "Some Book", author: "J. K. Rowling", authorIsUnknown: false };
 
   it("keeps the old behaviour at and above the strong bar", () => {
     expect(shouldAutoApply(1, query, "J. K. Rowling")).toBe(true);
@@ -671,9 +671,22 @@ describe("shouldAutoApply", () => {
     expect(shouldAutoApply(0.75, query, "Nobody At All")).toBe(false);
   });
 
+  it("accepts the band on an exact title even when the author differs", () => {
+    // LibriVox collections list a narrator or compiler as the file's author
+    // while the provider records "Various". Two exact-title matches in the
+    // fixture library were rejected for exactly this reason.
+    const q = { title: "Short Ghost and Horror Collection 034", author: "Myla Jo Closser" };
+    expect(shouldAutoApply(0.85, q, "Various", "Short Ghost and Horror Collection 034")).toBe(true);
+  });
+
+  it("still applies the author rule when the title differs", () => {
+    const q = { title: "Collected Poems", author: "A Poet" };
+    expect(shouldAutoApply(0.85, q, "Various", "Short Ghost and Horror Collection 034")).toBe(false);
+  });
+
   it("accepts the band when no author can contradict the match", () => {
-    expect(shouldAutoApply(0.8, { author: undefined, authorIsUnknown: false }, "Anyone")).toBe(true);
-    expect(shouldAutoApply(0.8, { author: "X", authorIsUnknown: true }, "Anyone")).toBe(true);
+    expect(shouldAutoApply(0.8, { title: "T", author: undefined, authorIsUnknown: false }, "Anyone")).toBe(true);
+    expect(shouldAutoApply(0.8, { title: "T", author: "X", authorIsUnknown: true }, "Anyone")).toBe(true);
     expect(shouldAutoApply(0.8, query, undefined)).toBe(true);
   });
 

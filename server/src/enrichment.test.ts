@@ -7,6 +7,8 @@ import {
   mapOpenLibraryDoc,
   mapGoogleVolume,
   normalizeSubjects,
+  isJunkSubject,
+  isNonBookTitle,
   pickLanguage,
   parseSeriesPosition,
   OPEN_LIBRARY_FIELDS,
@@ -203,6 +205,67 @@ describe("fetchOpenLibraryDescription", () => {
 });
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe("isNonBookTitle", () => {
+  it("refuses study-guide and companion spam", () => {
+    // Real Open Library results captured 2026-10-13 for Deathly Hallows.
+    expect(isNonBookTitle("Summary of Harry Potter and the Deathly Hallows")).toBe(true);
+    expect(isNonBookTitle("Conversations on Harry Potter and the Deathly Hallows")).toBe(true);
+    expect(isNonBookTitle("Study Guide")).toBe(true);
+    expect(isNonBookTitle("Analysis of Dune")).toBe(true);
+    expect(isNonBookTitle("A Study of Victorian Fiction")).toBe(true);
+  });
+
+  it("keeps real books", () => {
+    expect(isNonBookTitle("Harry Potter and the Deathly Hallows")).toBe(false);
+    expect(isNonBookTitle("The Awakening")).toBe(false);
+    expect(isNonBookTitle("Summary to Die For")).toBe(false);
+    expect(isNonBookTitle("The Study in Scarlet")).toBe(false);
+  });
+
+  it("treats a missing title as non-book", () => {
+    expect(isNonBookTitle("")).toBe(true);
+    expect(isNonBookTitle(null)).toBe(true);
+  });
+});
+
+describe("search filtering", () => {
+  it("drops study-guide spam from Open Library results", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      docs: [
+        { title: "Summary of Harry Potter and the Deathly Hallows", author_name: ["Bookhabits"] },
+        { title: "Harry Potter and the Deathly Hallows", author_name: ["J. K. Rowling"] },
+      ],
+    }), { status: 200 })));
+    const results = await searchOpenLibrary("Harry Potter and the Deathly Hallows");
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toBe("Harry Potter and the Deathly Hallows");
+  });
+
+  it("searches by title alone, not title plus author", async () => {
+    // Including the author measurably degraded results: "Harry Potter and the
+    // Goblet of Fire J.K. Rowling" returned only study guides, while the title
+    // alone returned the real novel with its series and position.
+    let requested = "";
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      requested = String(url);
+      return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+    }));
+    await searchOpenLibrary("Harry Potter and the Goblet of Fire", "J.K. Rowling");
+    expect(requested).not.toContain("J.K.%20Rowling");
+    expect(decodeURIComponent(requested)).toContain("q=Harry Potter and the Goblet of Fire");
+  });
+
+  it("asks for more results so filtering still leaves options", async () => {
+    let requested = "";
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      requested = String(url);
+      return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+    }));
+    await searchOpenLibrary("Anything");
+    expect(requested).toContain("limit=10");
+  });
+});
 
 describe("searchOpenLibrary", () => {
   it("maps results to candidates", async () => {

@@ -393,7 +393,7 @@ export class EnrichmentManager {
       // still gets exactly that.
       const autoApply = explicitThreshold
         ? best.confidence >= threshold
-        : shouldAutoApply(best.confidence, query, best.author);
+        : shouldAutoApply(best.confidence, query, best.author, best.title);
       if (!autoApply) {
         await setItem({
           status: "review",
