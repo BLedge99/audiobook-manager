@@ -25,6 +25,32 @@ export interface EnrichmentCandidate {
 }
 
 /**
+ * Is this subject string obviously not a genre?
+ *
+ * Open Library merges every edition's subject headings from every library that
+ * catalogued the work, so a single Harry Potter volume returned, among ~60 real
+ * headings: `nyt:childrens-middle-grade-hardcover=2020-11-29`,
+ * `series:Harry_Potter`, `Quill Award winner`, and the Spanish, German and
+ * Hungarian translations of "magic". Filtering the obviously non-genre strings
+ * here means the taxonomy mapping stays precision-first, rather than trying to
+ * decide "is `ron` a genre?" later.
+ */
+export function isJunkSubject(value: string): boolean {
+  const text = value.trim().toLowerCase();
+  if (text.length < 4) return true;
+  // Machine tags and slugs: "nyt:...", "series:Harry_Potter", anything with
+  // an "=" or a scheme-like colon.
+  if (/[=]/.test(text)) return true;
+  if (/^[a-z]+:/.test(text)) return true;
+  if (/https?:/.test(text)) return true;
+  // Award and bestseller headings are marketing, not genre.
+  if (/\baward\b|\bbestseller\b|\bbest seller\b|\baward winner\b/.test(text)) return true;
+  // Publisher/catalogue boilerplate.
+  if (/^\s*(new york times reviewed)\s*$/.test(text)) return true;
+  return false;
+}
+
+/**
  * Open Library `subject` strings are messy free text:
  *   "Wizards -- Juvenile fiction", "Harry Potter (Fictitious character) -- Fiction"
  * Keep the most specific head and drop the qualifiers, which describe the
@@ -41,6 +67,7 @@ export function normalizeSubjects(raw: unknown): string[] {
       .replace(/\s+/g, " ")
       .trim();
     if (cleaned.length < 3 || cleaned.length > 60) continue;
+    if (isJunkSubject(cleaned)) continue;
     if (!out.some((value) => value.toLowerCase() === cleaned.toLowerCase())) out.push(cleaned);
   }
   return out;
