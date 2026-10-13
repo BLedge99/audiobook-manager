@@ -60,7 +60,8 @@
 | 21 | official-chapter-titles | **done** | `metadata/chapters.ts`: provider chapters matched to tracks by **filename identity** (LibriVox `listen_url`), positional only on exact count agreement, `isBetterChapterTitle` never steps backwards. Scanner strips redundant number prefixes at scan time. Audnexus chapters via ASIN (ADR 011). Hand-set titles are `FieldOverride` rows keyed `trackTitle:<n>`, surviving rescans. `make enrich` target added |
 | 22 | search | **done** | `lib/search.ts` (pure): bare words match title/author/narrator/series/tag/genre/description; `author:`/`genre:`/`narrator:`/`series:`/`tag:` narrow to one facet, case-insensitive on substrings; quoted values keep spaces; terms AND. Separate layer from the chip `Filters` so a typed substring cannot blank the library. `q=` in the URL. `SearchBar` on Library + Browse |
 | 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint |
-| 24 | narrator-resolution | **done** | `narrator.ts` (pure, 22 tests): `composer` atom → `comment` (`Read By X`) → bracketed folder name (`{Stephen Fry}`). Full casts become one contributor per person. Person-name guard stops `{Unabridged}` being credited as a narrator. No guess when nothing matches. Makes the narrator work for commercial audiobooks, which no free online source can supply. **Next: roadmap 15 (GUI redesign)** |
+| 24 | narrator-resolution | **done** | `narrator.ts` (pure, 22 tests): `composer` atom → `comment` (`Read By X`) → bracketed folder name (`{Stephen Fry}`). Full casts become one contributor per person. Person-name guard stops `{Unabridged}` being credited as a narrator. No guess when nothing matches. Makes the narrator work for commercial audiobooks, which no free online source can supply |
+| 25 | catalogue-enrichment | **done** | Genres/series/publisher/year/ISBN/description populated from both catalogues. Six root causes fixed: unrequested `fields=`, unread default fields, author polluting the query, study-guide spam, non-idempotent candidate storage, and a missing Google Books key. Auto-apply banded 0.7–0.9 with an author guard. **Note: enrichment is not deterministic run to run.** **Next: roadmap 15 (GUI redesign)** |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -111,7 +112,81 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
-**Session 2026-10-13 (later still): commercial audiobook support — spec 24.**
+**Session 2026-10-13 (final): spec 25 — catalogue enrichment, made to populate.**
+
+Asked for "genre and all the other fields getting populated". Starting point on
+the 12-book mixed library: genres 2/12, series 0/12, publisher 2/12, year 0/12,
+description 2/12. Every one of those was a defect, not a provider limit.
+
+Six root causes, all found by probing the live APIs rather than reading code:
+
+1. Open Library returns 21 fields by default; we read 6. `series_name`,
+   `series_position` and `first_publish_year` were **already there** — Harry
+   Potter returned `series ["Harry Potter"]` position `4`, unread. Series was
+   0/12 for that reason alone.
+2. `subject`, `publisher` and `isbn` were **ABSENT**, because the search never
+   passed `fields=`. Neither catalogue could supply genres at all.
+3. Google Books returns `{"error"}` with no API key, so half the chain did
+   nothing.
+4. **The author was being concatenated into the search query.** That degraded
+   results: `"Goblet of Fire J.K. Rowling"` returned only study guides; the
+   title alone returned the real novel.
+5. **Open Library indexes AI study-guide spam.** For Deathly Hallows the top
+   two hits were *"Summary of Harry Potter and the Deathly Hallows"*
+   (Bookhabits) and *"Conversations on..."* (Daily Books). The novel was not in
+   the top five, and those score well precisely because the title is inside
+   them.
+6. **`storeCandidates` was not idempotent.** Title search returns *editions* of
+   a work, so five editions produced five candidates with identical keys and
+   violated a unique constraint — this is what failed The Ickabog, and it was
+   pre-existing, merely masked by #4.
+
+Also learned: Open Library merges every edition's subject headings, so one
+Harry Potter volume returned ~60 strings across English, Spanish, German and
+Hungarian, plus `nyt:childrens-middle-grade-hardcover=2020-11-29` and
+`series:Harry_Potter`. Junk is now filtered before taxonomy mapping, and the
+mapping is seeded from headings observed here rather than from genre theory.
+
+### Result (live, 12 books)
+
+genres 2→**11**, description 2→**11**, publisher 2→**11**, cover 9→**11**,
+year 0→**8**, series 0→**6**, narrator 6→**8**, failures **0**.
+
+### Enrichment is not deterministic
+
+Two consecutive forced runs gave **applied 10 / review 1** and then
+**applied 8 / review 4** on identical media, varying in which providers
+answered. Nothing is cached between runs. Read these as a range, not a state.
+Two books are *consistently* in review and both are correct: `Creepy Tales`
+(best match is a different book, *"Twelve Creepy Tales"*) and the two `Short
+Ghost and Horror Collection` sets, which intermittently lose the provider race.
+
+### Still open
+
+- **`GOOGLE_BOOKS_API_KEY`** — the single biggest remaining lever. The mapping
+  is written and tested; only the key is missing.
+- **Audnexus book metadata** — blocked on ASIN discovery (no free route).
+
+### Two judgement calls to sanity-check
+
+- **The auto-apply band.** The user asked to lower the threshold. It is lowered
+  to 0.7, but with an author-agreement guard, because `scoreMatch` is ~85%
+  title-weighted and a bare drop would auto-apply books by the wrong author.
+  The exception is an exact title match, which is what brought the two `Short
+  Ghost and Horror Collection` books back — LibriVox records "Various" where
+  the file tags a narrator. That exception is a judgement call, not a
+  requirement.
+- **`make enrich` force** remains necessary after any scan, because a scan
+  resets `Track.title` to the embedded tag.
+
+### Tests
+
+Server 318 → **368**. New: 6 mapping tests, 9 genre-mapping integrity tests
+(which caught two invalid slug targets on first run), 7 auto-apply tests, 6
+dedupe tests, plus the junk-filter and non-book-title cases.
+`tsc --noEmit` clean.
+
+**Earlier session 2026-10-13 (later still): commercial audiobook support — spec 24.**
 
 The user added six **commercial** audiobooks to `test/` (the LibriVox set is
 test media only; the product is for commercial books). A full scan + forced
