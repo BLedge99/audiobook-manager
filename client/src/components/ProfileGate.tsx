@@ -18,8 +18,26 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
   const [error, setError] = useState("");
 
   const load = async () => {
-    const res = await fetch("/api/profiles");
-    if (res.ok) setProfiles(await res.json());
+    // Guarded because `fetch` rejects on a network or CORS failure, and an
+    // unhandled rejection here left the screen looking like it had done nothing
+    // at all: the Add button appeared dead, with no message anywhere. On the
+    // Android app that is the *first* thing a new user sees, and the most likely
+    // failure is "cannot reach the server", which they cannot diagnose unaided.
+    try {
+      const res = await fetch("/api/profiles");
+      if (res.ok) {
+        setProfiles(await res.json());
+        setError("");
+      } else if (res.status === 401) {
+        setError("Session expired. Reload the app to sign in again.");
+      } else {
+        setError(`Could not load profiles (HTTP ${res.status}).`);
+      }
+    } catch (loadError) {
+      setError(
+        `Cannot reach the server. ${loadError instanceof Error ? loadError.message : "Check the server address in Settings."}`,
+      );
+    }
   };
 
   useEffect(() => { void load(); }, []);
@@ -38,21 +56,28 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
     setError("");
-    const res = await fetch("/api/profiles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (res.ok) {
-      const profile = await res.json();
-      setNewName("");
-      setShowAdd(false);
-      await load();
-      select(profile.id);
-    } else if (res.status === 409) {
-      setError("A profile with that name already exists");
-    } else {
-      setError("Could not create profile");
+    try {
+      const res = await fetch("/api/profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+        const profile = await res.json();
+        setNewName("");
+        setShowAdd(false);
+        await load();
+        select(profile.id);
+      } else if (res.status === 409) {
+        setError("A profile with that name already exists");
+      } else {
+        setError(`Could not create profile (HTTP ${res.status}).`);
+      }
+    } catch (addError) {
+      // Without this the form simply stopped working on any network failure.
+      setError(
+        `Could not create the profile. ${addError instanceof Error ? addError.message : "Check the server address in Settings."}`,
+      );
     }
   };
 

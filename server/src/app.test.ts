@@ -60,6 +60,62 @@ describe("auth gate", () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it("allows the Capacitor WebView origin, so the Android app can call the API", async () => {
+    // The Android app is served from an `https://localhost` origin, which makes
+    // every LAN request genuinely cross-origin. Without this in the allow-list
+    // the phone gets "No 'Access-Control-Allow-Origin' header is present" and
+    // cannot reach the server at all.
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    const cookieHeader = login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { cookie: cookieHeader, origin: "https://localhost" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBe("https://localhost");
+  });
+
+  it("sends Access-Control-Allow-Credentials, so the session cookie survives", async () => {
+    // Auth is a cookie. A browser only accepts a cross-origin cookie when the
+    // response carries Allow-Credentials alongside a specific origin, so
+    // without this the Android app is allowed by origin but 401s on every call
+    // and its login fails with no obvious cause.
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { password: "household" },
+      headers: { origin: "https://localhost" },
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.headers["access-control-allow-credentials"]).toBe("true");
+    expect(login.headers["access-control-allow-origin"]).toBe("https://localhost");
+  });
+
+  it("never pairs credentials with a wildcard origin", async () => {
+    // `Access-Control-Allow-Origin: *` is illegal alongside credentials. If this
+    // ever regressed to a wildcard the app would break *and* access would widen,
+    // so assert the header is a specific origin rather than "*".
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/health",
+      headers: { origin: "https://localhost" },
+    });
+    expect(res.headers["access-control-allow-origin"]).not.toBe("*");
+  });
+
+  it("still refuses a foreign web origin", async () => {
+    // The other half of the same change: this commit widens CORS, so without
+    // this test it would pass while quietly allowing every site on the
+    // internet to call the household server.
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { origin: "https://evil.example" },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
   it("logout invalidates the session", async () => {
     const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
     const cookieHeader = login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");

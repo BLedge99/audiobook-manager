@@ -18,6 +18,25 @@ const config: CapacitorConfig = {
   appId: "com.technative.audiobookmanager",
   appName: "Audiobooks",
   webDir: "dist",
+  server: {
+    /**
+     * The home server is plain HTTP on the LAN, and the WebView loads the app
+     * from an `https://localhost` origin. Without this, every API request is
+     * blocked as mixed content -- Chromium reported it as
+     *
+     *   "Access to fetch at 'http://.../api/health' from origin
+     *    'https://localhost' has been blocked by CORS policy"
+     *
+     * Note this is a *different* switch from the network security config in
+     * AndroidManifest.xml. That one governs native HTTP (the Filesystem
+     * plugin's downloads); this one governs the WebView. Both are needed, and
+     * turning on only one produces a confusing half-working app.
+     *
+     * See LIMITATIONS.md: this is security debt, acceptable only while the app
+     * is used on a trusted home LAN.
+     */
+    cleartext: true,
+  },
   plugins: {
     MediaSession: {
       // The plugin defaults to starting its foreground service only once

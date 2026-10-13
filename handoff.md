@@ -120,6 +120,102 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
+**Session 2026-10-13 (Sprint 2 in progress): the phone can now reach the server,
+and the app authenticates. Four blockers found and three fixed.**
+
+Confirmed the user's "Add profile just hangs" was a real bug, not a flake:
+`ProfileGate` had **no `try/catch`** around `fetch`, so a rejected request left
+the promise unhandled, the form kept showing as idle, and the user saw a dead
+Add button with no message. `LoginGate` already had one; `ProfileGate` did not.
+Both guarded now, and the error text names the likely cause (cannot reach the
+server / session expired) rather than a bare "Could not create profile".
+
+### The four blockers, in the order they were hit
+
+**1. The phone cannot reach the server at all. (Fixed.)** The stack runs inside
+WSL, and WSL's NAT mode relays the server to Windows on **loopback only** —
+`http://192.168.1.203:3000` was refused from the Windows shell. Found before
+writing any app code, same discipline as the Sprint 1 spike.
+
+`make lan` (`scripts/expose-lan.ps1`) adds a port proxy plus the firewall rule.
+Two non-obvious details: the WSL guest IP **changes on every WSL restart**, so
+a hand-typed rule silently rots and the script re-resolves it each run; and the
+obvious `Private`-scoped firewall rule reports `Enabled=True` and **never
+applies**, because Windows marks this machine's Ethernet `Public` (not on a
+recognised domain). Scoping by `LocalSubnet` + `Any` fixed it. The rule is
+*profile-scoped* because the profile is a fact, not a guess.
+
+Also on the phone: after toggling WiFi it still had **no default route** and
+could not reach its own gateway `192.168.1.1`, so it is in a segment with no
+route — likely AP/client isolation. Unresolved from here; using
+`adb reverse tcp:3000 tcp:3000` as the development path instead, which tunnels
+over USB and needs no network at all.
+
+**2. The service worker served the previous bundle after an APK update.
+(Fixed.)** An APK rebuilt with a component deleted **still ran the deleted
+component** — `SpikePlayer` kept appearing. Nothing in logcat. In the Android
+shell the SW has no offline job (assets are bundled) and only risks stale code,
+so `npm run build:android` (`vite build --mode android`) drops it. The WebView
+survives an APK update, so this would have persisted until app data was cleared.
+The root cause of the duplicate symptom was a *different* trap below.
+
+**3. Gradle did not notice `cap sync` replacing every web asset. (Fixed.)**
+Same symptom as above, two causes. The build script now runs `clean` before
+`assembleDebug`, because Gradle's up-to-date check missed every replaced file
+in `src/main/assets/public` and packaged the previous build's JS.
+
+**4. Module-scope Capacitor imports blank the screen. (Fixed, but bit twice.)**
+`registerPlugin` runs at import time; imported before the bridge is injected it
+leaves a stub behind, and the first bridge call throws `Cannot read properties
+of undefined (reading 'triggerEvent')` — blank screen, no useful stack.
+`device.ts` now imports the plugin lazily via a deferred `import()`, and the
+`import type` / `import { type X }` distinction mattered: esbuild keeps the
+latter as a bare side-effect import, which is enough to re-trigger it.
+
+### CORS: two separate switches, and a third that was missing
+
+- **Network security config** (manifest) permits cleartext. Without it Android
+  blocks plain HTTP from API 28, so both fetch and `Filesystem.downloadFile` fail.
+- **`server.cleartext: true`** (capacitor.config) — the *WebView* switch. Missing,
+  the request was blocked as **mixed content** from `https://localhost`.
+  The two are independent; enabling only one gives a half-working app.
+- **`credentials: true` on the CORS registration — the actual root cause of the
+  hang.** Auth is a **cookie** (`house_session`), and a browser only sends and
+  accepts a cross-origin cookie when the response carries
+  `Access-Control-Allow-Credentials: true` alongside a **specific** origin.
+  Without it the app is allowed by origin but 401s on every call, and login
+  looks like it succeeded. Untested in Sprint 1 because the spike never
+  authenticated.
+
+Why the allow-list must stay an explicit array: `Access-Control-Allow-Origin: *`
+is **illegal** alongside credentials, so a wildcard would both break the app
+and widen access.
+
+### Reaching into the WebView from adb
+
+Chromium's remote debugging works and is far better than reading logcat:
+
+```bash
+adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>
+node cdp-eval.mjs "fetch('/api/health').then(r=>'HTTP '+r.status)"
+```
+
+Caught a blank screen in one call where logcat showed only React warnings.
+
+### Not yet done
+
+- The CORS credentials fix is **written and tested on the server but not yet
+  verified on the phone**, and the client does not yet send
+  `credentials: 'include'` — so cookies still will not cross. That is the next
+  change.
+- **No book has been downloaded on the device yet**, so offline playback with
+  the network off is still unverified end to end.
+- **Progress sync (Phase 3) untouched.** `allowRewind` is still not implemented.
+- **`GOOGLE_BOOKS_API_KEY` still unset** — half the enrichment chain is inert.
+- Settings screen reachable from the header; shows server address, connection
+  test, bytes used, downloaded count, and an offline warning.
+- `npm test` (client 213, server 368) and `tsc` both clean on both tiers.
+
 **Session 2026-10-13 (Sprint 1 done): the native spike is answered — both ways
 we hoped, with one important caveat found.**
 

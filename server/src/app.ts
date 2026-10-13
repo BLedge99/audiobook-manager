@@ -49,7 +49,39 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     reply.code(statusCode).send({ message: statusCode === 500 ? "Internal server error" : error.message });
   });
 
-  await app.register(cors, { origin: ["http://localhost:5173", "http://localhost:3000"] });
+  // CORS allow-list.
+  //
+  // `https://localhost` is the origin Capacitor's WebView serves the app from,
+  // and it is not a typo or a wildcard: it is the scheme Capacitor uses for
+  // local assets on Android. The phone talking to the LAN server is therefore a
+  // genuine cross-origin request, and without this entry every API call is
+  // rejected with "No 'Access-Control-Allow-Origin' header is present".
+  //
+  // It is safe to allow because it identifies the Android app and nothing else.
+  // Note this says nothing about who may call the API -- that is auth, handled
+  // by the routes and the E2E security suite.
+  //
+  // `credentials: true` is required, not optional. Auth is a **cookie**
+  // (`house_session`), and a browser will only send and accept a cross-origin
+  // cookie when the response carries `Access-Control-Allow-Credentials: true`
+  // alongside a specific origin. Without it the Android app gets 401 on every
+  // request and its login silently fails, even though the origin is allowed.
+  //
+  // This is why the allow-list above is an explicit array and must never become
+  // `true`/wildcard: `Access-Control-Allow-Origin: *` is illegal alongside
+  // credentials, so a wildcard here would break the app *and* widen access.
+  await app.register(cors, {
+    credentials: true,
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      // Capacitor's local WebView origin (Android).
+      "https://localhost",
+      // Capacitor's iOS origin. Not a target platform, but the same app code
+      // would hit it, and the cost of allowing it is nil.
+      "capacitor://localhost",
+    ],
+  });
   await app.register(cookie);
 
   // Auth gate: health and the login endpoint stay public; everything else
