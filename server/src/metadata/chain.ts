@@ -85,6 +85,12 @@ class GoogleBooksProvider implements MetadataProvider {
       author: result.author,
       coverUrl: result.coverUrl,
       description: result.description,
+      // Spec 25: these were always in the payload and never read.
+      genres: result.genres,
+      publisher: result.publisher,
+      publishedYear: result.publishedYear,
+      isbn: result.isbn,
+      language: result.language,
       confidence: result.confidence,
       raw: result.raw,
     }));
@@ -102,6 +108,15 @@ class OpenLibraryProvider implements MetadataProvider {
       author: result.author,
       coverUrl: result.coverUrl,
       description: result.description,
+      // Spec 25: series_name and series_position are in the default search
+      // response and were never read, which is why series was 0/12.
+      genres: result.genres,
+      publisher: result.publisher,
+      publishedYear: result.publishedYear,
+      isbn: result.isbn,
+      language: result.language,
+      seriesName: result.seriesName,
+      seriesPosition: result.seriesPosition,
       confidence: result.confidence,
       raw: result.raw,
     }));
