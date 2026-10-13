@@ -136,6 +136,23 @@ book.** "Goblet of Fire" has dozens of recordings, so a title search finds the
 A full cast becomes one contributor per person; a candidate must pass a
 person-name check so `{Unabridged}` can never be credited as a narrator.
 
+### Verified outcome (live, 12-book library)
+
+| field | before | after |
+|---|---|---|
+| narrator | 3/12 | **6/12** |
+| cover (served) | 9/12 | 9/12 |
+| series / year / description / genres | 0 / 0 / 2 / 2 | unchanged |
+
+All three newly-resolved books are commercial Harry Potter sets (Deathly
+Hallows, Goblet of Fire, Order of the Phoenix), and **no false positives**:
+`Harry Pooter Philanthropists Bone` and `Book 06 - ...` were correctly left
+empty, because they carry no narrator in any tag or bracket. Those two are the
+genuine misses, and the spec 17 tag-suite editor is the right answer for them.
+
+This is the expected result rather than a partial one: every commercial book
+that *can* be resolved from its own files now is.
+
 ### What the fixtures settled
 
 - **The M4B has no ASIN anywhere** — not filename, not tags, not atoms. So
