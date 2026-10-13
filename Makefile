@@ -1,4 +1,23 @@
-.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client test-e2e verify
+.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client test-e2e verify lan
+
+## Expose the server on the LAN so a phone can reach it.
+# The whole stack runs inside WSL, and WSL's NAT mode only relays the server to
+# Windows on loopback -- so http://<lan-ip>:3000 is refused and an Android phone
+# can download nothing. This adds a port proxy from the LAN address to the WSL
+# guest address, plus the firewall rule, then probes the result.
+#
+# It is a script rather than a pasted command because the WSL guest IP changes on
+# every WSL restart, so a hand-typed rule silently points at a dead address
+# later. Re-run this after restarting WSL.
+#
+# Needs Administrator; the script re-launches itself elevated, so expect one UAC
+# prompt. `make restart` does not call it -- run `make lan` explicitly.
+lan:
+	@script="./scripts/expose-lan.ps1"; \
+	if command -v wslpath >/dev/null 2>&1 && grep -qi microsoft /proc/version 2>/dev/null; then \
+		script=$$(wslpath -w "$$script"); \
+	fi; \
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$$script"
 
 start:
 	docker compose up -d
