@@ -32,6 +32,28 @@ function decodeList(value: string | null): string[] {
  * the user had already reviewed. Rows are keyed (mediaItemId, source,
  * providerKey) so re-running updates in place rather than stacking duplicates.
  */
+/**
+ * Deduplicate candidates on the (source, providerKey) unique key.
+ *
+ * Searching by title alone returns *editions* of a work, not works, so a book
+ * with five editions comes back as five candidates whose normalised title and
+ * author are identical. Storing them all collided on the unique constraint and
+ * failed the whole item -- "The Ickabog" failed exactly this way. Keep the
+ * highest-confidence entry per key, which is the best match by construction.
+ */
+export function dedupeCandidates(candidates: ProviderCandidate[]): ProviderCandidate[] {
+  const best = new Map<string, ProviderCandidate>();
+  for (const candidate of candidates) {
+    const key = `${candidate.source}:${
+      candidate.providerKey ??
+      `${normalizeText(candidate.title).slice(0, 80)}-${normalizeText(candidate.author ?? "")}`
+    }`;
+    const existing = best.get(key);
+    if (!existing || candidate.confidence > existing.confidence) best.set(key, candidate);
+  }
+  return [...best.values()];
+}
+
 export async function storeCandidates(
   prisma: PrismaClient,
   mediaItemId: number,
@@ -39,7 +61,7 @@ export async function storeCandidates(
 ): Promise<void> {
   await prisma.metadataCandidate.deleteMany({ where: { mediaItemId } });
 
-  for (const candidate of candidates) {
+  for (const candidate of dedupeCandidates(candidates)) {
     const data = {
       mediaItemId,
       source: candidate.source,

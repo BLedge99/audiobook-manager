@@ -21,7 +21,7 @@ import {
 import { mapLibrivoxBook, titleVariants } from "./librivox";
 import { mapAudnexusBook, mapAudnexusGenres, parseSequence } from "./audnexus";
 import { isPublicCoverUrl, coverFilename } from "./cover";
-import { rowToCandidate } from "./apply";
+import { rowToCandidate, dedupeCandidates } from "./apply";
 
 /**
  * Spec 16 — provider chain tests.
@@ -643,6 +643,64 @@ describe("auto-apply threshold", () => {
  * title scores nearly as well even with a disagreeing author. These tests pin
  * the guard that stops the lowered floor auto-applying the wrong book.
  */
+/**
+ * Spec 25 — candidate de-duplication.
+ *
+ * Searching by title returns editions of a work, so several candidates collapse
+ * to the same (source, providerKey). Storing them all violated the unique
+ * constraint and failed the whole item: "The Ickabog" failed exactly that way
+ * and was the only regression in an otherwise large coverage gain.
+ */
+describe("dedupeCandidates", () => {
+  const cand = (
+    source: ProviderId,
+    title: string,
+    author: string | undefined,
+    confidence: number,
+    providerKey?: string,
+  ): ProviderCandidate => ({ source, title, author, confidence, providerKey });
+
+  it("collapses editions of the same work", () => {
+    // Five editions, identical normalised title and author.
+    const editions = [0.9, 0.85, 0.8, 0.7, 0.6].map((c) => cand("openlibrary", "The Ickabog", "J.K. Rowling", c));
+    expect(dedupeCandidates(editions)).toHaveLength(1);
+  });
+
+  it("keeps the highest-confidence edition", () => {
+    const editions = [0.7, 0.95, 0.8].map((c) => cand("openlibrary", "The Ickabog", "J.K. Rowling", c));
+    const [kept] = dedupeCandidates(editions);
+    expect(kept.confidence).toBe(0.95);
+  });
+
+  it("keeps different works apart", () => {
+    const result = dedupeCandidates([
+      cand("openlibrary", "Book A", "Author", 0.9),
+      cand("openlibrary", "Book B", "Author", 0.8),
+    ]);
+    expect(result).toHaveLength(2);
+  });
+
+  it("keeps providers apart", () => {
+    const result = dedupeCandidates([
+      cand("openlibrary", "Same Title", "Same Author", 0.9),
+      cand("librivox", "Same Title", "Same Author", 0.8),
+    ]);
+    expect(result).toHaveLength(2);
+  });
+
+  it("respects an explicit provider key", () => {
+    const result = dedupeCandidates([
+      cand("audnexus", "A", "B", 0.9, "B00X"),
+      cand("audnexus", "C", "D", 0.8, "B00Y"),
+    ]);
+    expect(result).toHaveLength(2);
+  });
+
+  it("handles an empty list", () => {
+    expect(dedupeCandidates([])).toEqual([]);
+  });
+});
+
 describe("shouldAutoApply", () => {
   const query = { title: "Some Book", author: "J. K. Rowling", authorIsUnknown: false };
 
