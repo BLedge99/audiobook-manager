@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Spec 26, Sprint 2.
+
+  The home server is served over plain HTTP on the LAN. Android blocks cleartext
+  by default from API 28, so without this the app cannot reach it at all: every
+  fetch fails, and Filesystem.downloadFile fails too, since it obeys the same
+  policy.
+
+  Why blanket cleartextTrafficPermitted rather than an allow-list: the server
+  address is user-configurable and DHCP-assigned, so a domain-config list would
+  break the moment the router hands out a new IP. That is exactly the problem the
+  in-app settings screen was added to solve. IP ranges cannot be expressed in
+  this file either, only hosts.
+
+  This is real security debt, recorded in LIMITATIONS.md. It is acceptable here
+  because the only cleartext traffic the app generates is to the server the user
+  typed in, over a home LAN, and the alternative (TLS with a self-signed
+  certificate) trades a real risk for a support burden on a household tool. If
+  the app is ever exposed beyond a trusted LAN, this must become an allow-list
+  and the server must serve TLS.
+
+  Note: XML comments cannot contain a double hyphen, which is why the em dashes
+  in this prose are written as "that is".
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

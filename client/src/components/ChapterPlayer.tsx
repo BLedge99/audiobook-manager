@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook, Track } from "../types";
+import { apiUrl } from "../lib/api";
 import { ProgressTimeline } from "./ProgressTimeline";
 import {
   describePosition,
@@ -11,7 +12,21 @@ import {
   totalDuration as computeTotalDuration,
 } from "../lib/position";
 
-export function ChapterPlayer({ book, onProgressSaved }: { book: Audiobook; onProgressSaved?: () => void }) {
+/**
+ * @param localUrlForTrack Resolve a downloaded track to a playable local URL
+ *   (spec 26, Sprint 2). Optional: absent in the PWA and the browser dev app,
+ *   which have no device library, and in a chapter book, which is a single file
+ *   rather than per-track segments.
+ */
+export function ChapterPlayer({
+  book,
+  onProgressSaved,
+  localUrlForTrack,
+}: {
+  book: Audiobook;
+  onProgressSaved?: () => void;
+  localUrlForTrack?: (bookId: number, trackId: number) => Promise<string | undefined>;
+}) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingSeekRef = useRef<number | null>(null);
   // Held in a ref so the unmount effect can keep its `[]` dependency list while
@@ -75,11 +90,43 @@ export function ChapterPlayer({ book, onProgressSaved }: { book: Audiobook; onPr
   // timer on every position tick (that would prevent it ever firing).
   const overallPositionRef = useRef(overallPosition);
   overallPositionRef.current = overallPosition;
-  const streamUrl = isChapterBook
+  const remoteUrl = isChapterBook
     ? `/api/audiobooks/${book.id}/stream`
     : tracks.length > 0
       ? `/api/tracks/${segments[currentIndex].trackId}/stream`
       : `/api/audiobooks/${book.id}/stream`;
+
+  /**
+   * Play the device copy when there is one (spec 26, Sprint 2).
+   *
+   * Resolving it is asynchronous -- the local path has to be turned into a URL
+   * the WebView will load -- so it lives in state and is applied when it
+   * arrives. Deliberately falls back to streaming when the file is missing or
+   * unreadable, so a partially-removed book still plays while online.
+   *
+   * `audio.src` is set outside `fetch`, so the API base has to be applied by
+   * hand here. `apiUrl` is only applied to the remote URL; the local one is
+   * already a `capacitor-file://` URL and prefixing it would break it.
+   */
+  const [localSrc, setLocalSrc] = useState<string | undefined>();
+  useEffect(() => {
+    let cancelled = false;
+    setLocalSrc(undefined);
+
+    if (!localUrlForTrack || isChapterBook || tracks.length === 0) return;
+    const trackId = segments[currentIndex]?.trackId;
+    if (trackId === undefined) return;
+
+    void localUrlForTrack(book.id, trackId).then((url) => {
+      if (!cancelled) setLocalSrc(url);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [localUrlForTrack, book.id, isChapterBook, tracks.length, segments, currentIndex]);
+
+  const streamUrl = localSrc ?? apiUrl(remoteUrl);
 
   const profileHeaders = (): Record<string, string> => {
     const profileId = window.localStorage.getItem("profileId");

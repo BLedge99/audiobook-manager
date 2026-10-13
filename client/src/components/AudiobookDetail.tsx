@@ -1,6 +1,7 @@
 import { X, Clock3, Compass, FileAudio, Heart, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
+import { apiAssetUrl } from "../lib/api";
 import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
@@ -82,6 +83,8 @@ export function AudiobookDetail({
   onToggleFavourite,
   onFindSimilar,
   onBookUpdated,
+  deviceAction,
+  localUrlForTrack,
 }: {
   book: Audiobook;
   onClose: () => void;
@@ -92,6 +95,19 @@ export function AudiobookDetail({
   onToggleFavourite?: (bookId: number) => void;
   onFindSimilar?: (bookId: number) => void;
   onBookUpdated?: () => void;
+  /**
+   * Download / remove control for the device copy (spec 26, Sprint 2).
+   *
+   * Optional rather than required so the PWA and the browser dev app render
+   * exactly as before: there is no device library there to manage, and a
+   * Download button that cannot work is worse than no button.
+   */
+  deviceAction?: ReactNode;
+  /**
+   * Resolve a downloaded track to a playable local URL, so playback works with
+   * the network off (spec 26). Optional for the same reason as `deviceAction`.
+   */
+  localUrlForTrack?: (bookId: number, trackId: number) => Promise<string | undefined>;
 }) {
   const suite = useTagSuite(book.id);
   const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
@@ -100,7 +116,7 @@ export function AudiobookDetail({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
       <article className="relative grid max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl md:grid-cols-[220px_1fr]" onClick={(event) => event.stopPropagation()}>
         <button aria-label="Close details" onClick={onClose} className="absolute right-3 top-3 rounded-full bg-slate-950/80 p-2 text-slate-300 hover:text-white"><X size={20} /></button>
-        <img src={`/api/audiobooks/${book.id}/cover`} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="aspect-[2/3] w-full object-cover md:h-full" />
+        <img src={apiAssetUrl(`/api/audiobooks/${book.id}/cover`)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="aspect-[2/3] w-full object-cover md:h-full" />
         <div className="p-6 md:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Audiobook</p>
           <h2 className="mt-3 pr-10 text-3xl font-bold text-white">{book.title}</h2>
@@ -109,6 +125,7 @@ export function AudiobookDetail({
           {narrators.length > 0 && (
             <p className="mt-1 text-sm text-slate-400">Narrated by {narrators.map((entry) => entry.name).join(", ")}</p>
           )}
+          {deviceAction && <div className="mt-5">{deviceAction}</div>}
           {book.series && (
             <p className="mt-1 text-sm text-slate-400">
               {book.series.name}{book.seriesPosition != null && ` · Book ${book.seriesPosition}`}
@@ -153,7 +170,7 @@ export function AudiobookDetail({
           <TagSuiteEditor book={book} genres={genres ?? []} tags={tags ?? []} suite={suite} onSaved={() => onBookUpdated?.()} />
 
           <MetadataEditor book={book} onUpdated={() => onBookUpdated?.()} />
-          <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} />
+          <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} />
         </div>
       </article>
     </div>

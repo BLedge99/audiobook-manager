@@ -1,34 +1,53 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig({
+//
+// `vite build --mode android` (npm run build:android) drops the service worker
+// for the Capacitor build. Keyed off the mode rather than an env var so it
+// behaves the same on Windows, in WSL and in CI without a cross-env dependency.
+//
+// The PWA service worker is for the *browser* PWA only.
+//
+// In the Android shell it is actively harmful. Assets are bundled into the APK
+// and served locally, so there is nothing for it to cache for offline use --
+// and worse, it caches the app shell itself and keeps serving the *previous*
+// bundle after the app is updated. That was observed directly: an APK rebuilt
+// with a component deleted still ran the deleted component, with no error
+// anywhere in logcat. Silent stale code is worse than a slow first paint, and
+// because the WebView survives an APK update it would persist until the app's
+// data was cleared.
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      devOptions: { enabled: true, type: 'module' },
-      manifest: {
-        name: 'Audiobook Manager',
-        short_name: 'Audiobooks',
-        description: 'Your household audiobook library',
-        theme_color: '#0b1117',
-        background_color: '#0b1117',
-        display: 'standalone',
-        icons: [
-          { src: '/placeholder-cover.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-        ],
-      },
-      workbox: {
-        navigateFallback: '/index.html',
-        runtimeCaching: [
-          { urlPattern: /^\/api\//, handler: 'NetworkOnly' },
-        ],
-      },
-    }),
+    ...(mode === 'android'
+      ? []
+      : [
+          VitePWA({
+            registerType: 'autoUpdate',
+            devOptions: { enabled: true, type: 'module' },
+            manifest: {
+              name: 'Audiobook Manager',
+              short_name: 'Audiobooks',
+              description: 'Your household audiobook library',
+              theme_color: '#0b1117',
+              background_color: '#0b1117',
+              display: 'standalone',
+              icons: [
+                { src: '/placeholder-cover.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+              ],
+            },
+            workbox: {
+              navigateFallback: '/index.html',
+              runtimeCaching: [
+                { urlPattern: /^\/api\//, handler: 'NetworkOnly' },
+              ],
+            },
+          }) as PluginOption,
+        ]),
   ],
   test: {
     environment: 'jsdom',
@@ -46,4 +65,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { BookOpen, Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Settings as SettingsIcon, Trash2, WifiOff } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
@@ -10,7 +10,6 @@ import { ProfileSwitcher } from "./components/ProfileSwitcher";
 import { ReviewQueue } from "./components/ReviewQueue";
 import { SearchBar } from "./components/SearchBar";
 import { Shelves } from "./components/Shelves";
-import { SpikePlayer } from "./components/SpikePlayer";
 import { TagManager } from "./components/TagManager";
 import {
   applyFilters,
@@ -22,6 +21,10 @@ import {
   type Filters,
 } from "./lib/browse";
 import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
+import { isNativeShell } from "./lib/platform";
+import { useDeviceLibrary } from "./local/useDeviceLibrary";
+import { Settings } from "./components/Settings";
+import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
 import type { Audiobook } from "./types";
@@ -35,30 +38,9 @@ const TABS: { id: Tab; label: string; icon: typeof Library }[] = [
   { id: "favourites", label: "Favourites", icon: Heart },
 ];
 
-/**
- * True when running inside the Capacitor shell.
- *
- * Reads `window.Capacitor` defensively rather than importing `@capacitor/core`:
- * the native bridge is injected at runtime, so during the first render the
- * module import can hand back an uninitialised stub and calling into it throws
- * `Cannot read properties of undefined (reading 'triggerEvent')`, which blanks
- * the whole screen.
- */
-function isNativeShell(): boolean {
-  const bridge = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-  return typeof bridge?.isNativePlatform === "function" && bridge.isNativePlatform();
-}
-
 function App() {
-  // Sprint 1 spike (specs/26-android-app.md). A native build shows this
-  // because the real app cannot reach a server without one, and a native
-  // WebView has no address bar for ?spike=1. Removed once the native layer is
-  // proven in Sprint 2.
-  if (new URLSearchParams(window.location.search).get("spike") === "1" || isNativeShell()) {
-    return <SpikePlayer />;
-  }
-
   const { audiobooks, roots, loading, error, refresh, addRoot, removeRoot, scan } = useLibrary();
+  const device = useDeviceLibrary(isNativeShell());
   const browse = useBrowse();
   const discover = useDiscover();
   const [selectedBook, setSelectedBook] = useState<Audiobook>();
@@ -112,20 +94,33 @@ function App() {
     syncUrl(tab, filters, next);
   }, [syncUrl, tab, filters]);
 
+  const [showSettings, setShowSettings] = useState(false);
+
+  /**
+   * Which books to show.
+   *
+   * Normally the live server library. But when the server cannot be reached and
+   * the device has books, fall back to the replica rather than showing an error
+   * over an empty shelf -- being away from home is the case the whole feature
+   * exists for, so it must not look like a failure.
+   */
+  const offline = Boolean(error) && device.books.length > 0;
+  const libraryBooks = offline ? device.books : audiobooks;
+
   const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);
   // Search narrows the chip-filtered result rather than replacing it, so both
   // layers apply and neither can widen the other.
   const filteredBooks = useMemo(
-    () => applySearch(applyFilters(audiobooks, filters), search),
-    [audiobooks, filters, search],
+    () => applySearch(applyFilters(libraryBooks, filters), search),
+    [libraryBooks, filters, search],
   );
   // The Library tab applies the typed search but not the chip filters: the
   // chips only exist on Browse, so applying them here would silently hide
   // books when the user just switched tabs.
-  const searchedBooks = useMemo(() => applySearch(audiobooks, search), [audiobooks, search]);
+  const searchedBooks = useMemo(() => applySearch(libraryBooks, search), [libraryBooks, search]);
   const favouriteBooks = useMemo(
-    () => audiobooks.filter((book) => favouriteIds.has(book.id)),
-    [audiobooks, favouriteIds],
+    () => libraryBooks.filter((book) => favouriteIds.has(book.id)),
+    [libraryBooks, favouriteIds],
   );
 
   const genreLabels = useMemo(() => {
@@ -241,6 +236,7 @@ function App() {
             <div><p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400">Local library</p><h1 className="text-xl font-bold">Audiobook Manager</h1></div>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => setShowSettings(true)} aria-label="Settings" className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><SettingsIcon size={20} /></button>
             <button onClick={() => void refresh()} aria-label="Refresh library" className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><RefreshCw size={20} /></button>
             <ProfileSwitcher />
           </div>
@@ -270,7 +266,14 @@ function App() {
       </header>
 
       <main className="mx-auto max-w-7xl px-5 py-10">
-        {error && <div className="mb-6 border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">{error}</div>}
+        {error && !offline && <div className="mb-6 border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">{error}</div>}
+
+        {offline && (
+          <div className="mb-6 flex items-center gap-2 border border-amber-900/60 bg-amber-950/20 px-4 py-3 text-sm text-amber-200" role="status">
+            <WifiOff size={16} aria-hidden="true" />
+            Offline — showing the {device.books.length} {device.books.length === 1 ? "book" : "books"} downloaded to this device.
+          </div>
+        )}
 
         {tab === "library" && (
           <>
@@ -293,7 +296,7 @@ function App() {
 
             <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh({ silent: true }); void browse.refresh(); }} />
 
-            <ContinueListening books={inProgressBooks(audiobooks)} onSelect={setSelectedBook} />
+            <ContinueListening books={inProgressBooks(libraryBooks)} onSelect={setSelectedBook} />
             <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
             <section>
               <div className="mb-5 flex items-center justify-between"><div><h2 className="text-2xl font-bold">All audiobooks</h2><p className="mt-1 text-sm text-slate-500">{searchedBooks.length} {searchedBooks.length === 1 ? "title" : "titles"}{search.trim() ? " matching your search" : " in your library"}</p></div>{working && <LoaderCircle className="animate-spin text-cyan-400" size={20} />}</div>
@@ -310,7 +313,7 @@ function App() {
             </section>
 
             <SearchBar value={search} onChange={onSearchChange} resultCount={filteredBooks.length} />
-            <FilterBar books={audiobooks} filters={filters} onChange={onFiltersChange} genres={browse.genres} />
+            <FilterBar books={libraryBooks} filters={filters} onChange={onFiltersChange} genres={browse.genres} />
 
             {isFilterActive(filters) || search.trim().length > 0 ? (
               <section>
@@ -364,7 +367,30 @@ function App() {
         onToggleFavourite={toggleFavourite}
         onFindSimilar={findSimilar}
         onBookUpdated={() => { void refresh({ silent: true }); void browse.refresh(); }}
+        deviceAction={
+          isNativeShell() ? (
+            <DownloadButton
+              book={selectedBook}
+              fraction={device.progressOf(selectedBook.id)}
+              isDownloaded={device.isDownloaded(selectedBook.id)}
+              bytes={device.bytesFor(selectedBook.id)}
+              onDownload={device.download}
+              onRemove={device.remove}
+            />
+          ) : undefined
+        }
+        localUrlForTrack={isNativeShell() ? device.localUrlForTrack : undefined}
       />}
+
+      {showSettings && (
+        <Settings
+          usedBytes={device.usedBytes}
+          downloadedCount={device.books.length}
+          offline={offline}
+          onClose={() => setShowSettings(false)}
+          onSaved={() => { void refresh(); void device.refresh(); }}
+        />
+      )}
     </div>
   );
 }
