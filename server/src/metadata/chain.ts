@@ -108,6 +108,33 @@ class OpenLibraryProvider implements MetadataProvider {
   }
 }
 
+/**
+ * Pick the candidate whose cover image should be downloaded.
+ *
+ * Returns the highest-confidence candidate that actually has a `coverUrl`, or
+ * null when none does. Pure, so the "who supplies the artwork" decision is
+ * testable without a database or a network.
+ *
+ * This exists because the provider that wins a title match often cannot supply
+ * a cover at all: LibriVox's feed carries no cover-art field, and Audnexus has
+ * been ASIN-keyed since ADR 011, so a LibriVox recording had no cover source
+ * left in the chain. The cover is therefore chosen independently of which
+ * candidate won -- the same reasoning spec 21 applies to chapter titles.
+ *
+ * Only called when the winner has no cover of its own; passing every candidate
+ * through makes the rule self-contained and order-independent.
+ */
+export function selectCoverSource(
+  candidates: ProviderCandidate[],
+): { url: string; source: ProviderId; identifier?: string } | null {
+  const withCover = candidates
+    .filter((candidate) => Boolean(candidate.coverUrl))
+    .sort((a, b) => b.confidence - a.confidence);
+  const best = withCover[0];
+  if (!best?.coverUrl) return null;
+  return { url: best.coverUrl, source: best.source, identifier: best.providerKey };
+}
+
 export function createProviders(): Record<ProviderId, MetadataProvider> {
   return {
     librivox: new LibrivoxProvider(),

@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { applyCandidate, storeCandidates } from "./apply";
 import { AudnexusProvider, extractAsin } from "./audnexus";
 import { applyChapterTitles } from "./chapters";
-import { DEFAULT_CONFIDENCE_THRESHOLD, runChain, UNKNOWN_AUTHOR } from "./chain";
+import { DEFAULT_CONFIDENCE_THRESHOLD, runChain, selectCoverSource, UNKNOWN_AUTHOR } from "./chain";
 import type { EnrichmentQuery, ProviderId } from "./types";
 
 /**
@@ -356,7 +356,15 @@ export class EnrichmentManager {
         return;
       }
 
-      await applyCandidate(this.prisma, item, best, { overriddenFields });
+      // Spec 23: a cover is an independent axis, for the same reason chapters
+      // are. The provider that wins the title match frequently has no cover at
+      // all -- LibriVox's feed exposes no cover-art field, and Audnexus has been
+      // ASIN-keyed since ADR 011 -- so the winner and the only candidate holding
+      // a cover were never the same book. Fall back to the best-confident
+      // candidate that has one rather than shipping a book with no artwork.
+      const coverFallback = best.coverUrl ? undefined : selectCoverSource(result.candidates) ?? undefined;
+
+      await applyCandidate(this.prisma, item, best, { overriddenFields, coverFallback });
       await this.prisma.mediaItem.update({
         where: { id: mediaItemId },
         data: { enrichmentStatus: "applied", enrichedAt: new Date() },

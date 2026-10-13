@@ -3,6 +3,7 @@ import {
   looksLikeLibriVox,
   resolveProviderOrder,
   runChain,
+  selectCoverSource,
   DEFAULT_CONFIDENCE_THRESHOLD,
 } from "./chain";
 import {
@@ -628,5 +629,62 @@ describe("provider HTTP clients (mocked fetch)", () => {
 describe("auto-apply threshold", () => {
   it("defaults to 0.9", () => {
     expect(DEFAULT_CONFIDENCE_THRESHOLD).toBe(0.9);
+  });
+});
+
+/**
+ * Spec 23 — cover art is chosen independently of which candidate won.
+ *
+ * The live library had 0 covers on 6 books. The cause was not a failed
+ * download: LibriVox's feed exposes no cover-art field and Audnexus has been
+ * ASIN-keyed since ADR 011, so the candidate that matched the title could
+ * never supply a cover and the chain threw the other candidates' artwork away.
+ */
+describe("selectCoverSource", () => {
+  const candidate = (
+    source: ProviderId,
+    confidence: number,
+    coverUrl?: string,
+    providerKey?: string,
+  ): ProviderCandidate => ({ source, title: "T", confidence, coverUrl, providerKey });
+
+  it("returns null when no candidate has a cover", () => {
+    expect(selectCoverSource([candidate("librivox", 1), candidate("openlibrary", 0.8)])).toBeNull();
+  });
+
+  it("returns null for an empty list", () => {
+    expect(selectCoverSource([])).toBeNull();
+  });
+
+  it("picks the highest-confidence candidate that actually has a cover", () => {
+    const result = selectCoverSource([
+      candidate("librivox", 1.0), // winner, but no cover field at all
+      candidate("openlibrary", 0.8, "https://covers.openlibrary.org/b/id/1-M.jpg", "OL1W"),
+      candidate("googlebooks", 0.6, "https://books.google.com/t.jpg", "GB1"),
+    ]);
+    expect(result).toEqual({
+      url: "https://covers.openlibrary.org/b/id/1-M.jpg",
+      source: "openlibrary",
+      identifier: "OL1W",
+    });
+  });
+
+  it("ignores confidence ordering when the winner does have a cover", () => {
+    // Called only when the winner has none, but the function must still be
+    // self-contained and order-independent.
+    const result = selectCoverSource([
+      candidate("googlebooks", 0.6, "https://books.google.com/t.jpg", "GB1"),
+      candidate("librivox", 1.0, "https://librivox/cover.jpg", "LV1"),
+    ]);
+    expect(result?.source).toBe("librivox");
+  });
+
+  it("does not treat an empty cover url as a cover", () => {
+    expect(selectCoverSource([candidate("openlibrary", 1, "")])).toBeNull();
+  });
+
+  it("carries the provider key so the filename records where art came from", () => {
+    const result = selectCoverSource([candidate("googlebooks", 0.5, "https://x/y.jpg", "abc123")]);
+    expect(result?.identifier).toBe("abc123");
   });
 });

@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { coverFilename, fetchCover } from "./cover";
 import { applyGenres, reconcileContributors, upsertSeries, type ContributorSpec } from "./taxonomy-service";
 import { applyChapterTitles } from "./chapters";
-import { normalizeText, type ProviderCandidate } from "./types";
+import { normalizeText, type ProviderCandidate, type ProviderId } from "./types";
 
 /**
  * Spec 16 — persisting and applying candidates.
@@ -118,8 +118,21 @@ export async function applyCandidate(
     coverImagePath: string | null;
   },
   candidate: ProviderCandidate,
-  options: { /** Field names a human has overridden; never written by enrichment. */
-    overriddenFields?: Set<string> } = {},
+  options: {
+    /** Field names a human has overridden; never written by enrichment. */
+    overriddenFields?: Set<string>;
+    /**
+     * Cover to use when `candidate` has none (spec 23).
+     *
+     * Separate from `candidate` because the provider that matched the title is
+     * frequently not the one that holds the artwork: LibriVox supplies no cover
+     * field at all and Audnexus is ASIN-keyed, so the fallback is the only path
+     * to artwork for a LibriVox recording. Only the *cover* is taken from it --
+     * no other field is borrowed, so a lower-confidence match can never
+     * overwrite a better one.
+     */
+    coverFallback?: { url: string; source: ProviderId; identifier?: string };
+  } = {},
 ): Promise<ApplyResult> {
   const locked = options.overriddenFields ?? new Set<string>();
   const fields: string[] = [];
@@ -178,9 +191,20 @@ export async function applyCandidate(
   let coverImagePath: string | undefined;
   // Replace a cover only if we do not already have a local one; embedded art
   // is usually better than a provider thumbnail.
-  if (candidate.coverUrl && !item.coverImagePath && writable("coverImagePath")) {
-    const identifier = candidate.providerKey ?? candidate.title.slice(0, 40);
-    const result = await fetchCover(candidate.coverUrl, coverFilename(candidate.source, identifier));
+  //
+  // Spec 23: prefer this candidate's own cover, else the fallback chosen by
+  // `selectCoverSource`. The fallback contributes *only* the image -- no other
+  // field is borrowed from it.
+  const coverSource = candidate.coverUrl
+    ? {
+        url: candidate.coverUrl,
+        source: candidate.source,
+        identifier: candidate.providerKey ?? candidate.title.slice(0, 40),
+      }
+    : options.coverFallback;
+  if (coverSource && !item.coverImagePath && writable("coverImagePath")) {
+    const identifier = coverSource.identifier ?? candidate.title.slice(0, 40);
+    const result = await fetchCover(coverSource.url, coverFilename(coverSource.source, identifier));
     if (result.ok && result.path) {
       coverImagePath = result.path;
       data.coverImagePath = result.path;

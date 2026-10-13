@@ -27,6 +27,7 @@ has a matching spec in `specs/`.
 | 20 | Browse & Discover UI | Genre shelves, filter bar with URL state, category pages, series shelves, Discover tab, full tag-suite detail, tag manager, enrichment review queue |
 | 21 | Official chapter titles | Embedded chapter names ("Section 01", "01 - TITLE") replaced by real provider chapter names, matched by filename identity; a hand-set title is never overwritten and survives rescans |
 | 22 | Search | Typed search over the library: bare words match title/author/narrator/series/tag/genre/description, `author:`/`genre:`/`narrator:`/`series:`/`tag:` narrow to one field, results are shareable via the URL |
+| 23 | Cover art fallback | A book whose winning provider has no cover (LibriVox carries no cover field) gets artwork from the best candidate that does, borrowing only the image |
 
 ## Notes
 
@@ -40,11 +41,12 @@ has a matching spec in `specs/`.
 
 ## Build order after 14
 
-**16 → 17 → 18 → 19 → 20 → 21 → 22 → 15.** Each of 16–19 is a data-layer
+**16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 15.** Each of 16–19 is a data-layer
 feature with no new UI, so they are independently shippable and testable. 20
 adds the browse and Discover surfaces on top. 21 fills in real chapter names
-underneath the player that 20 put on screen, and 22 adds the typed search over
-the metadata 17/21 populate.
+underneath the player that 20 put on screen, 22 adds the typed search over the
+metadata 17/21 populate, and 23 lets cover art come from a different provider
+than the one that matched the title.
 
 **Item 15 (GUI redesign) is the only remaining item**, and still has no
 `specs/15-*.md` file — writing it is the first task of that work.

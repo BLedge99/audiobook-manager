@@ -8,12 +8,14 @@
 
 - Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
   (also reachable at `/mnt/c/...` from WSL, which is where Docker runs).
-- Branch: master. Specs `01..14, 16..21` and decisions `001..011` exist.
-  **There is no `specs/15-*.md`** — roadmap 15 (GUI redesign) is unwritten.
+- Branch: master, pushed to `origin/master`. Specs `01..14, 16..23` and
+  decisions `001..011` exist.
+  **There is no `specs/15-*.md`** — roadmap 15 (GUI redesign) is unwritten and
+  is the only remaining item.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
-- Test counts as of 2026-10-13: **server 290** (1 skipped), **client 104**,
-  **Playwright 32** (all three tiers green; run E2E from WSL via
+- Test counts as of 2026-10-13: **server 296** (1 skipped), **client 141**,
+  **Playwright 35** (all three tiers green; run E2E from WSL via
   `scripts/e2e-wsl.sh`).
 
 ## Working agreement
@@ -54,7 +56,8 @@
 | 19 | recommendations-wishlist | **done** | external-only Discover seeded by one book or profile favourites, pure weighted tag-similarity ranking + hard dedupe on normalised title+author (ADR 010), per-profile WishlistItem with owned marker, structurally non-playable (no filePath/Track/audio route) |
 | 20 | browse-discover-ui | **done** | 4 tabs (Library/Browse/Discover/Favourites), genre + series shelves, filter bar with URL state, full tag-suite editor with provenance labels, tag manager, review queue with confidence. Pure logic in `lib/browse.ts` (47 tests) |
 | 21 | official-chapter-titles | **done** | `metadata/chapters.ts`: provider chapters matched to tracks by **filename identity** (LibriVox `listen_url`), positional only on exact count agreement, `isBetterChapterTitle` never steps backwards. Scanner strips redundant number prefixes at scan time. Audnexus chapters via ASIN (ADR 011). Hand-set titles are `FieldOverride` rows keyed `trackTitle:<n>`, surviving rescans. `make enrich` target added |
-| 22 | search | **done** | `lib/search.ts` (pure): bare words match title/author/narrator/series/tag/genre/description; `author:`/`genre:`/`narrator:`/`series:`/`tag:` narrow to one facet, case-insensitive on substrings; quoted values keep spaces; terms AND. Separate layer from the chip `Filters` so a typed substring cannot blank the library. `q=` in the URL. `SearchBar` on Library + Browse. **Next: roadmap 15 (GUI redesign)** |
+| 22 | search | **done** | `lib/search.ts` (pure): bare words match title/author/narrator/series/tag/genre/description; `author:`/`genre:`/`narrator:`/`series:`/`tag:` narrow to one facet, case-insensitive on substrings; quoted values keep spaces; terms AND. Separate layer from the chip `Filters` so a typed substring cannot blank the library. `q=` in the URL. `SearchBar` on Library + Browse |
+| 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint. **Next: roadmap 15 (GUI redesign)** |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -185,29 +188,31 @@ pick the profile first, then click the tab.
 
 **Still open, not fixed here (worth a decision):**
 
-- **Covers are 0/6 — root cause found.** Traced through the provider mappers:
-  - Open Library (`covers.openlibrary.org/b/id/{cover_i}-M.jpg`) and Google
-    Books (`imageLinks.thumbnail`) **do** supply `coverUrl`.
-  - **LibriVox supplies none.** `LibrivoxBook` has `url_librivox` (the project
-    page) and `mapLibrivoxBook` sets no `coverUrl` at all. The LibriVox feed
-    exposes no cover-art field.
-  - Audnexus is the only other cover source, and since spec 21 it is
-    **ASIN-keyed** — it returns nothing for a book whose filename has no ASIN,
-    which is every LibriVox recording.
-  - So a book matched by LibriVox can **never** get a cover. The two books that
-    enriched did so via LibriVox, hence 0/6. Not a download bug: there is no
-    cover URL to download.
-  - **Two possible fixes, deliberately not applied here:** (a) fall back to the
-    highest-confidence candidate that *does* have a `coverUrl` when the winner
-    has none — same "independent axis" pattern spec 21 used for chapters, and
-    needs no new API assumptions; or (b) find a real LibriVox cover source.
-    (b) must be **verified against the live API first** — guessing an endpoint
-    is exactly what kept Audnexus 404ing silently for a whole feature (ADR 011).
+- ~~**Covers are 0/6 — root cause found.**~~ **CORRECTION: this was a bad
+  measurement, not a bug.** The audit read `coverImagePath` from
+  `GET /api/audiobooks`, but `publicMediaItem` deliberately **strips that
+  field** — spec 11 forbids leaking server filesystem paths — and covers are
+  served by `GET /api/audiobooks/:id/cover`. Measured the way the app actually
+  serves them, the library had **4/6** covers, three of them on disk before any
+  of this work started. Do not trust a proxy field over the endpoint that
+  serves the thing; that is the same class of mistake as ADR 011.
+- **Cover art now falls back across candidates (spec 23, shipped).** Still a
+  real gap, just a smaller one: LibriVox's feed exposes **no cover-art field**
+  at all, and Audnexus is ASIN-keyed, so the provider best placed to identify a
+  LibriVox recording is the least able to illustrate it. A book whose winner has
+  no `coverUrl` now takes its image from the highest-confidence candidate that
+  does — borrowing **only** the image, the same independent-axis rule spec 21
+  uses for chapters. No new provider and no guessed endpoint. Verified live: the
+  LibriVox-matched Dickens collection gained a cover it could not previously
+  obtain. The two still-uncovered books are both correct — one is below the
+  auto-apply threshold, the other's candidates genuinely carry no cover URL.
 - **No `actor` role.** If full-cast productions matter, that is a schema +
   provider-mapping change.
 - **Author/narrator facet asymmetry** described above.
 - **`handoff.md` still says "Owner pushes manually from their terminal."**
-  Stale — pushes are automated.
+  Stale — pushes are automated. → **Resolved 2026-10-13:** work is now pushed
+  to `origin/master`; the two remaining mentions are inside dated historical
+  session entries and are left as an accurate record of those sessions.
 
 **Earlier session 2026-10-13: spec 21 — official chapter titles — done.**
 
