@@ -3,6 +3,10 @@
 > **Purpose:** if this session is lost, an agent (or you) can read this file to
 > recover exactly where work stands. Update it at the end of every work block.
 > This file is the live progress log; `roadmap.md` + `specs/` remain the plan.
+>
+> **Known limitations and planned work live in
+> [`LIMITATIONS.md`](LIMITATIONS.md)** — broken features, caps with reasons,
+> security debt, and a suggested order of work. Read it first.
 
 ## Current state (snapshot)
 
@@ -163,9 +167,20 @@ Ghost and Horror Collection` sets, which intermittently lose the provider race.
 
 ### Still open
 
-- **`GOOGLE_BOOKS_API_KEY`** — the single biggest remaining lever. The mapping
-  is written and tested; only the key is missing.
-- **Audnexus book metadata** — blocked on ASIN discovery (no free route).
+See [`LIMITATIONS.md`](LIMITATIONS.md) for the full list. The headline items:
+
+- **`GOOGLE_BOOKS_API_KEY`** — the single biggest lever. The mapping is written
+  and tested; only the key is missing. Google Books currently returns `{"error"}`
+  so half the chain is inert.
+- **Audnexus book metadata** — blocked on ASIN discovery, which has no free
+  route (§2.1 there). Every candidate was tested and rejected.
+- **`npm run scan` is broken** — `package.json` points at a file that does not
+  exist. Use `make scan`.
+- **12 npm audit advisories in `server/`** (2 critical, 6 high), mostly dev-only,
+  but `@fastify/static` (auth bypass) and `music-metadata` (infinite loop on
+  malformed media) both matter in production.
+- **No track-title / narrator editor UI** — spec 24 shipped the endpoint, but a
+  human cannot use it yet.
 
 ### Two judgement calls to sanity-check
 

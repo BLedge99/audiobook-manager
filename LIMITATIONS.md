@@ -1,0 +1,259 @@
+# Known limitations and planned work
+
+A single place to record **what does not work yet**, **why**, and **what to do
+about it**. Written 2026-10-13 against `master` @ `ff0e600`.
+
+Every claim here was verified against the running stack or the live provider
+APIs, not inferred from reading code. Where a number is given, it is measured.
+
+Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
+than intended · **DEFERRED** = deliberately not built.
+
+---
+
+## 1. Broken
+
+### 1.1 Google Books is completely non-functional
+**Status: BROKEN — needs a key.**
+
+`GET https://www.googleapis.com/books/v1/volumes` returns `{"error": ...}` from
+this host. `searchGoogleBooks` then returns `[]` silently, so half the provider
+chain has been doing nothing at all.
+
+The mapping code is **written and unit-tested** — `mapGoogleVolume` extracts
+`categories`, `publisher`, `publishedDate`, `industryIdentifiers`, `language`,
+`description` and `imageLinks`. Only the credential is missing.
+
+```bash
+# server/.env
+GOOGLE_BOOKS_API_KEY=<key from console.cloud.google.com>
+```
+
+**Why it matters:** Google Books is the richest source for publisher, ISBN and
+categories, and it covers books Open Library has no edition of. Expect the
+biggest single jump in coverage from this one line.
+
+### 1.2 Audnexus book metadata is never applied
+**Status: BROKEN — architecturally blocked.**
+
+`AudnexusProvider.search()` and `bookByAsin()` exist and are unit-tested, but
+`resolveProviderOrder()` excludes `audnexus`, so `runChain` never calls them.
+The only live Audnexus call is `chaptersByAsin()` for chapter titles.
+
+This was intentional in ADR 011: Audnexus has **no book-search endpoint**. It
+only answers about an ASIN you already hold. See §2.1 for why that is a dead
+end.
+
+### 1.3 `npm run scan` is a broken script
+**Status: BROKEN — trivial.**
+
+`server/package.json` declares `"scan": "tsx src/scripts/scan.ts"`, but
+`server/src/scripts/scan.ts` **does not exist**. Running it fails. Use
+`make scan` instead, which drives the API correctly and waits for completion.
+
+Either add the file or delete the script entry.
+
+---
+
+## 2. Limited
+
+### 2.1 There is no way to obtain an Audible ASIN
+**Status: BLOCKED — verified, no free route.**
+
+Audnexus is ASIN-keyed, and the fixture commercial library carries **no ASIN
+anywhere** — not in filenames, not in tags, not in MP4 atoms, including a
+real `inAudible`-encoded M4B.
+
+Every route tested and rejected:
+
+| Route | Result |
+|---|---|
+| Audnexus `/books?title=` | 404 — endpoint does not exist |
+| Audnexus `/authors?name=` | returns only `asin` + `name`; no book list |
+| Audnexus `/authors/{asin}` | returns `asin, description, genres, image, name, region` — still no books |
+| Open Library editions | `isbn_10` / `isbn_13` only; **no ASIN** |
+| Apple iTunes | returns `collectionId`, not an ASIN; no narrator field |
+| Embedded atoms | absent from the fixture M4B |
+| Audible's own search | requires a signed request with a fixed private key — fragile and against their terms, which is what Audnexus exists to avoid |
+
+**Consequence:** Audnexus can never be reached for a library without ASINs.
+Keep the provider ready (region fallback, failure observability) but do not
+build an ASIN resolver.
+
+### 2.2 Enrichment is not deterministic
+**Status: LIMITED — inherent.**
+
+Two consecutive forced `make enrich` runs over identical media gave
+**applied 10 / review 1** and then **applied 8 / review 4**. Nothing is cached
+between runs; which providers answer varies per run, and LibriVox/Open Library
+race for some books.
+
+Treat published coverage numbers as a **range**, not a state. Two books are
+*consistently* in review, and both are correct:
+
+- **Creepy Tales** — best match is *"Twelve Creepy Tales"*, a different book
+- **Short Ghost and Horror Collection 034 / 052** — exact LibriVox title
+  matches that intermittently lose the provider race
+
+Adding `GOOGLE_BOOKS_API_KEY` should reduce this by giving the chain a third
+independent opinion.
+
+### 2.3 Narrator coverage is 8/12 and capped by what files carry
+**Status: LIMITED.**
+
+Narrators are resolved locally (spec 24) in order: `composer` atom → `comment`
+field (`Read By X`) → bracketed folder name (`{Stephen Fry}`). There is **no
+online fallback**, because none exists:
+
+- Open Library / Google Books / Apple iTunes: no narrator field — they catalogue
+  the *work*, not the *recording*
+- Audnexus: has narrators, but ASIN-gated (§2.1)
+- LibriVox: has real `readers`, but only for public-domain titles
+
+The two unresolved commercial books carry no narrator in any tag or folder
+name. **This is the correct outcome, not a gap to close.** The spec 17
+tag-suite editor is the intended manual answer.
+
+### 2.4 Series coverage is 6/12 and may be at its ceiling
+**Status: LIMITED.**
+
+Series is read from Open Library, gated: only when no provider supplied one,
+and only with both a name and a usable position. Several commercial sets simply
+have no series data upstream. This may not be improvable without Audnexus.
+
+### 2.5 Language is often empty on purpose
+**Status: LIMITED — deliberate.**
+
+Open Library merges every edition of a work, so `language` arrives as the set
+of languages the book was *ever* published in — Harry Potter returned
+`["gre","urd","arm","vie"]`. Taking the first would file an English audiobook
+under Greek, so a **strict winner** is required and a four-way tie yields
+nothing. Empty is the honest answer there.
+
+### 2.6 Descriptions are fetched lazily and only from Open Library
+**Status: LIMITED.**
+
+Search results carry no blurb, so a description needs a second request per book.
+It fires only when neither the candidate nor the book already has one. Only
+Open Library work records are consulted; a Google Books description is used
+directly when present.
+
+### 2.7 Cover art comes from book catalogues, not the audiobook edition
+**Status: LIMITED.**
+
+Covers resolve independently of the title winner (spec 23), which fixed the
+LibriVox case. But the sources are cover *editions* from Open Library or Google
+Books thumbnails — not the artwork of the specific audiobook you own. You may
+get a different edition's jacket.
+
+### 2.8 Auto-apply has a judgement call in it
+**Status: LIMITED — deliberate, and reviewable.**
+
+The floor was lowered from 0.9 to 0.7, but with a guard: in the 0.7–0.9 band
+the **author must agree**, because `scoreMatch` is ~85% title-weighted and a
+bare floor drop auto-applies books by the wrong author.
+
+The exception is an **exact title match**, which is what recovers LibriVox
+collections (provider records "Various" where the file tags a narrator). That
+exception is a judgement call, not a requirement — it is in
+`shouldAutoApply` and easy to revert.
+
+An explicitly requested threshold via the API is still honoured literally.
+
+### 2.9 Contributor sets are replaced wholesale
+**Status: LIMITED — known risk.**
+
+`reconcileContributors` **replaces** a book's contributor set. If one provider
+supplies one narrator and another supplies five, last write wins and one set is
+silently discarded. Not observed to bite in the fixture library, but it is a
+correctness risk if Audnexus is ever wired in alongside a catalogue provider.
+
+### 2.10 `MediaItem.asin` exists but is never written
+**Status: DORMANT.**
+
+The column is in the schema and nothing populates it. ASIN extraction is
+filename-only, and only at enrichment time. Writing it at scan time would make
+Audnexus reachable permanently rather than incidentally.
+
+---
+
+## 3. Deferred
+
+| Item | Why |
+|---|---|
+| **Spec 13 — media tools** | Out of scope by decision. Media is a read-only mount; writing tags into user files is not wanted. |
+| **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. |
+| **Spec 09 — Android APK** | Blocked on the Android SDK on the owner's machine. `capacitor.config.ts` is scaffolded. |
+| **Chapter/track title editor UI** | Spec 24 shipped the `PUT /tracks/:trackNumber/title` endpoint and the `FieldOverride` storage, but **no UI**. A hand-set narrator/track title is only reachable via API. |
+| **Bookmarks & highlights** | Needs a new data model. Deliberately out of spec 14. |
+| **PWA raster icons / Lighthouse** | Placeholder SVG icons only; a Lighthouse PWA audit has never been run. |
+| **Search relevance ranking** | Results keep library order. Fuzzy matching, stemming and scoring are a separate feature. |
+| **Server-side search** | The library is fetched whole and filtered client-side. A `LIKE` query would add a second source of truth. |
+
+---
+
+## 4. Security debt
+
+`npm audit` in `server/` reports **12 advisories (2 critical, 6 high, 4
+moderate)**. Client is clean (0).
+
+| Package | Severity | Issue |
+|---|---|---|
+| `tinypool` | **critical** | Prototype pollution gadget in worker options → RCE |
+| `vitest` | **critical** | via `@vitest/mocker` |
+| `@fastify/static` | high | Authorization bypass via non-canonical URL paths |
+| `fastify` | high | DoS via unbounded memory allocation in `sendWebStream` |
+| `find-my-way` | high | DDoS with HTTP2 |
+| `music-metadata` | high | Infinite loop in ASF parser |
+| `vite` | high | Path traversal in optimized deps `.map` handling |
+| `source-map-js` | high | Event-loop DoS via indexed source-map offsets |
+| `@vitest/mocker` | moderate | Path traversal / arbitrary file read |
+| `esbuild` | moderate | Dev-server cross-origin requests |
+| `vite-node` | moderate | — |
+| `file-type` | moderate | Infinite loop in ASF parser |
+
+**Assessment:** most are dev-time (`vitest`, `vite`, `esbuild`, `tinypool`) and
+do not ship in the production image. The two that matter are
+**`@fastify/static`** (auth bypass — it serves the built client in
+`Dockerfile.prod`) and **`music-metadata`** (infinite loop on a malformed ASF
+file, reachable from the scanner on untrusted media).
+
+All fixes are breaking major bumps, so they need their own change with a
+re-run of the security E2E suite. **Not started.**
+
+---
+
+## 5. Developer-experience friction
+
+- **E2E requires WSL + Docker.** `scripts/e2e-wsl.sh` provisions a Linux Node
+  because WSL ships none and the Windows interop `npm` installs `.cmd` wrappers
+  bash cannot execute. Docker is unavailable from the Windows shell.
+- **WSL idles out and reaps the containers.** Any sequence of
+  "start stack → query → inspect" must run in a **single** WSL session or it
+  fails with connection errors that look like code bugs.
+- **The Vite dev server in Docker misses edits made over the `/mnt/c` bind
+  mount.** `docker compose restart client` before concluding a client change
+  "does nothing".
+- **E2E helper gotchas.** `ensureAuthed` does a *relative* `fetch` and fails
+  with "Failed to parse URL" unless a `goto` has already run. `pickAnyProfile`
+  waits for the "All audiobooks" heading, which only exists on the Library tab,
+  so entering on `?tab=browse` times out inside the helper.
+- **PowerShell mangles nested quotes** in `wsl -e bash -lc "..."`. Write a
+  script file and invoke it instead.
+- **`handoff.md` contains two stale mentions** of "owner pushes manually" inside
+  dated 2026-10-02 session entries. They are an accurate record of those
+  sessions and are intentionally left.
+
+---
+
+## 6. Suggested order of work
+
+1. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest coverage gain (§1.1).
+2. **Write `specs/15-gui-redesign.md`** — the only unwritten spec (§3).
+3. **Fix or delete the `scan` script** — two minutes (§1.3).
+4. **Dependency upgrades with a security E2E re-run** — §4.
+5. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable
+   by a human (§3).
+6. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
+   appear (§2.10).
+7. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).

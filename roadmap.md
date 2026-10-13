@@ -3,6 +3,10 @@
 Ordered. Each item has a finish line — that's the definition of done. Each item
 has a matching spec in `specs/`.
 
+> **What does not work yet, and what is planned:** see
+> [`LIMITATIONS.md`](LIMITATIONS.md). Read it before estimating anything that
+> touches enrichment, narrators, covers or search.
+
 | # | Feature | Finish line |
 |---|---------|-------------|
 | 01 | Scanner consolidation | One canonical scanner module; duplicate `services/scanner.ts` removed; tests green |

@@ -18,6 +18,8 @@ low-power device (Raspberry Pi).
 - `PRD.md` — what the product is, who it serves, scope
 - `roadmap.md` — numbered features in build order, each with a finish line
 - `specs/` — one file per roadmap feature; behaviour + acceptance criteria + checks
+- `LIMITATIONS.md` — what does not work yet, why, and what to do about it. Read
+  it before estimating anything touching enrichment, narrators, covers or search.
 - `decisions/` — short ADRs explaining big choices and rejected alternatives
 
 ## Source of truth order
@@ -26,7 +28,9 @@ low-power device (Raspberry Pi).
 2. `specs/NN-<feature>.md` — how each feature must behave, and when it's done
 3. `decisions/` — why major architectural choices were made; do not contradict
    them without writing a new/superseding ADR
-4. Code — implements the above; it never redefines them
+4. `LIMITATIONS.md` — what is known not to work, and why. A known gap is
+   documented here, not left to be rediscovered; do not "fix" one silently.
+5. Code — implements the above; it never redefines them
 
 If code and spec disagree, fix the code or explicitly update the spec in the
 same change. Never silently diverge.
