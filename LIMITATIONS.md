@@ -53,6 +53,39 @@ end.
 
 Either add the file or delete the script entry.
 
+### 1.4 The Android app cannot work away from home
+**Status: BROKEN — the largest gap in the product.**
+
+Two independent causes, both deliberate when written and now wrong:
+
+- **The PWA caches nothing.** `vite.config.ts` sets
+  `runtimeCaching: /api/ → NetworkOnly`, so with no network the app shows an
+  empty library. There is no IndexedDB layer and no download code at all.
+- **The Capacitor wrapper points at the server.**
+  `client/capacitor.config.ts` sets `server.url` to
+  `http://localhost:3000`, so the app is a thin view of the server and is
+  completely inert without it. The server URL is also **not configurable
+  without rebuilding the web bundle**, which also means a DHCP-assigned home IP
+  change breaks the app.
+
+Planned in `specs/26-android-app.md`. Its Phase 1 is a deliberate spike:
+**background audio with the screen off, and seeking within a local file, are
+the two things that would change the architecture if they do not work.**
+
+### 1.5 Listening progress is last-write-wins and can silently regress
+**Status: BROKEN — data loss.**
+
+`PUT /api/audiobooks/:id/progress` accepts any position, so a stale or buggy
+client can overwrite a bookmark that is hours further ahead — with no warning.
+The concrete failure: a phone dies offline at 1h 30m, another device listens to
+2h 14m, the phone reconnects and pushes its older position.
+
+Fixed in `specs/26-android-app.md`: progress becomes **monotonic** — forward
+pushes apply silently, a backward move beyond 5 minutes is blocked and surfaced
+as a conflict for the user to resolve, and an explicit `allowRewind` flag exists
+for the deliberate case. Because the rule is monotonic, clock skew stops being a
+correctness problem.
+
 ---
 
 ## 2. Limited
@@ -182,13 +215,16 @@ Audnexus reachable permanently rather than incidentally.
 | Item | Why |
 |---|---|
 | **Spec 13 — media tools** | Out of scope by decision. Media is a read-only mount; writing tags into user files is not wanted. |
-| **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. |
-| **Spec 09 — Android APK** | Blocked on the Android SDK on the owner's machine. `capacitor.config.ts` is scaffolded. |
+| **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. Now sequenced **after** spec 26, since restyling a shell that is about to be wrapped in an APK would mean restyling it twice. |
 | **Chapter/track title editor UI** | Spec 24 shipped the `PUT /tracks/:trackNumber/title` endpoint and the `FieldOverride` storage, but **no UI**. A hand-set narrator/track title is only reachable via API. |
 | **Bookmarks & highlights** | Needs a new data model. Deliberately out of spec 14. |
 | **PWA raster icons / Lighthouse** | Placeholder SVG icons only; a Lighthouse PWA audit has never been run. |
 | **Search relevance ranking** | Results keep library order. Fuzzy matching, stemming and scoring are a separate feature. |
 | **Server-side search** | The library is fetched whole and filtered client-side. A `LIKE` query would add a second source of truth. |
+| **iOS** | Explicitly not a requirement; nobody in the household owns an Apple device, so it could not be tested. |
+| **Offline editing / enrichment / scanning** | Deliberately server-only. The device holds a read replica; see ADR 012. |
+| **Download queues / whole-library sync** | Deliberately out of scope for spec 26 — one book at a time over the LAN. |
+| **Play Store publishing** | Sideloaded APK is acceptable for a household. |
 
 ---
 
@@ -248,12 +284,23 @@ re-run of the security E2E suite. **Not started.**
 
 ## 6. Suggested order of work
 
-1. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest coverage gain (§1.1).
-2. **Write `specs/15-gui-redesign.md`** — the only unwritten spec (§3).
-3. **Fix or delete the `scan` script** — two minutes (§1.3).
-4. **Dependency upgrades with a security E2E re-run** — §4.
-5. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable
+Scope changed on 2026-10-13: the household must be able to listen away from
+home, so **the Android app is now the top priority** and displaces the GUI
+redesign (roadmap item 15).
+
+1. **Spec 26 Phase 1 — de-risk spike.** Background audio with the screen off,
+   and seeking inside a local file. Do this before anything else: if either
+   fails, the architecture in ADR 012 changes and it is far cheaper to learn
+   that now (§1.4).
+2. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest enrichment gain (§1.1).
+3. **Spec 26 Phase 0** — the `LibraryStore` read-model seam. Server-only, no
+   user-visible payoff, so it is reviewed on its own.
+4. **Fix or delete the `scan` script** — two minutes (§1.3).
+5. **Spec 26 Phases 2–4** — replica, progress sync, storage management.
+6. **Dependency upgrades with a security E2E re-run** — §4.
+7. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable
    by a human (§3).
-6. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
+8. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
    appear (§2.10).
-7. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).
+9. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).
+10. **`specs/15-gui-redesign.md`** — last.

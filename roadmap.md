@@ -34,6 +34,7 @@ has a matching spec in `specs/`.
 | 23 | Cover art fallback | A book whose winning provider has no cover (LibriVox carries no cover field) gets artwork from the best candidate that does, borrowing only the image |
 | 24 | Narrator resolution | Narrator resolved from `composer`, then a "Read By X" comment tag, then a bracketed folder name; full casts become one contributor per person; no guess when nothing matches |
 | 25 | Catalogue enrichment | Genres, series, publisher, year, ISBN and description populated from Open Library and Google Books; study-guide spam rejected; auto-apply banded so a lowered floor cannot apply the wrong author |
+| 26 | Android app with offline listening | Sideloaded APK plays downloaded books with no network; metadata readable offline; progress syncs without ever silently regressing; "remove from device" frees space; server URL configurable in-app. Narrows item 09 |
 
 ## Notes
 
@@ -47,24 +48,32 @@ has a matching spec in `specs/`.
 
 ## Build order after 14
 
-**16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 15.** Each of 16–19 is a
-data-layer feature with no new UI, so they are independently shippable and
-testable. 20 adds the browse and Discover surfaces on top. 21 fills in real
-chapter names underneath the player that 20 put on screen, 22 adds the typed
-search over the metadata 17/21 populate, 23 lets cover art come from a
-different provider than the one that matched the title, 24 makes the narrator
-resolvable for commercial audiobooks, and 25 makes the catalogue fields
-(genres, series, publisher, year, description) actually populate.
+**16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 15.**
 
-**Item 15 (GUI redesign) is the only remaining item**, and still has no
-`specs/15-*.md` file — writing it is the first task of that work.
+Each of 16–19 is a data-layer feature with no new UI, so they are
+independently shippable and testable. 20 adds the browse and Discover surfaces
+on top. 21 fills in real chapter names underneath the player that 20 put on
+screen, 22 adds the typed search over the metadata 17/21 populate, 23 lets
+cover art come from a different provider than the one that matched the title,
+24 makes the narrator resolvable for commercial audiobooks, and 25 makes the
+catalogue fields (genres, series, publisher, year, description) actually
+populate.
 
-**Item 15 is built last, after 20** — this reverses the original ordering. Spec
-20 introduces genre shelves, a filter bar, category pages and a Discover tab.
-Restyling the shell (15) before those surfaces exist would mean building and
-then rebuilding the same navigation twice. See `decisions/009` and
-`decisions/008` for the metadata model these depend on.
+**26 comes next, and displaces 15.** Scope changed in response to user
+feedback: the household must be able to listen away from home, on Android, and
+the current app cannot work without the server at all. That is a larger gap than
+the GUI looks. See `specs/26-android-app.md` and
+`decisions/012-device-is-a-player-not-a-library-manager.md`.
+
+**Item 15 (GUI redesign) moves to last, after 26** — this reverses the original
+ordering twice over. Restyling a shell that is about to be wrapped in an APK and
+run offline would mean restyling it again. Writing `specs/15-*.md` is the first
+task of that work.
 
 **Item 13 (media tools) remains out of scope.** Media is a read-only mount by
 design; writing tags into user files is not wanted. The tagging and
 presentation work lives in 16–20 instead.
+
+**Item 26 preserves ADR 006** (`decisions/006-remote-access.md`). Books are
+downloaded over the LAN and progress syncs on returning home, so no remote
+access to the home server is required.

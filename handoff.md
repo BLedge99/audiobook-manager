@@ -12,17 +12,20 @@
 
 - Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
   (also reachable at `/mnt/c/...` from WSL, which is where Docker runs).
-- Branch: master, pushed to `origin/master`. Specs `01..14, 16..24` and
-  decisions `001..011` exist.
-  **There is no `specs/15-*.md`** — roadmap 15 (GUI redesign) is unwritten and
-  is the only remaining item.
+- Branch: master, pushed to `origin/master`. Specs `01..14, 16..26` and
+  decisions `001..012` exist.
+  **There is no `specs/15-*.md`** — roadmap 15 (GUI redesign) is unwritten, is
+  now sequenced **last**, and is preceded by roadmap item 26 (Android app).
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
   `test/` now holds ~3.6 GB: the LibriVox set plus six **commercial**
   audiobooks, including one M4B, because the product targets commercial books.
-- Test counts as of 2026-10-13: **server 318** (1 skipped), **client 141**,
+- Test counts as of 2026-10-13: **server 368** (1 skipped), **client 141**,
   **Playwright 35** (all three tiers green; run E2E from WSL via
   `scripts/e2e-wsl.sh`).
+- **Scope changed 2026-10-13:** the household must be able to listen away from
+  home. The app cannot do this at all today — see `specs/26-android-app.md`
+  and `LIMITATIONS.md` §1.4.
 
 ## Working agreement
 
@@ -65,7 +68,8 @@
 | 22 | search | **done** | `lib/search.ts` (pure): bare words match title/author/narrator/series/tag/genre/description; `author:`/`genre:`/`narrator:`/`series:`/`tag:` narrow to one facet, case-insensitive on substrings; quoted values keep spaces; terms AND. Separate layer from the chip `Filters` so a typed substring cannot blank the library. `q=` in the URL. `SearchBar` on Library + Browse |
 | 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint |
 | 24 | narrator-resolution | **done** | `narrator.ts` (pure, 22 tests): `composer` atom → `comment` (`Read By X`) → bracketed folder name (`{Stephen Fry}`). Full casts become one contributor per person. Person-name guard stops `{Unabridged}` being credited as a narrator. No guess when nothing matches. Makes the narrator work for commercial audiobooks, which no free online source can supply |
-| 25 | catalogue-enrichment | **done** | Genres/series/publisher/year/ISBN/description populated from both catalogues. Six root causes fixed: unrequested `fields=`, unread default fields, author polluting the query, study-guide spam, non-idempotent candidate storage, and a missing Google Books key. Auto-apply banded 0.7–0.9 with an author guard. **Note: enrichment is not deterministic run to run.** **Next: roadmap 15 (GUI redesign)** |
+| 25 | catalogue-enrichment | **done** | Genres/series/publisher/year/ISBN/description populated from both catalogues. Six root causes fixed: unrequested `fields=`, unread default fields, author polluting the query, study-guide spam, non-idempotent candidate storage, and a missing Google Books key. Auto-apply banded 0.7–0.9 with an author guard. **Note: enrichment is not deterministic run to run.** |
+| 26 | android-app | **planned** | Offline listening on Android. `specs/26-android-app.md` + ADR 012. Device is a **read replica + progress**, not a second library manager. Capacitor (foreground media service + filesystem), Dexie for metadata, native FS for audio. Progress becomes monotonic so it can never silently regress. **Next: Phase 1 de-risk spike** |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -116,7 +120,69 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
-**Session 2026-10-13 (final): spec 25 — catalogue enrichment, made to populate.**
+**Session 2026-10-13 (scope change): replan the app around offline listening.**
+
+User feedback changed the scope: the household must be able to listen **away
+from home**, on Android, sideloaded. The app cannot do this at all today, for
+two reasons that were both deliberate when written:
+
+- the PWA caches nothing (`runtimeCaching: /api/ → NetworkOnly`), so no network
+  means no library;
+- `client/capacitor.config.ts` hardcodes `server.url`, so the wrapper is a thin
+  view of the server and is inert without it.
+
+### The decision that shaped everything
+
+Asked whether the whole stack could run on the device. The answer that mattered
+was to ask what the device needs **without the server**: play audio, show the
+library, resume. Everything else — scanning, enrichment, tagging, taxonomy,
+Discover — stays server-side. The user confirmed this directly: tags and
+enrichments must be *readable* offline once downloaded, but never *written*
+offline.
+
+So the device is a **read replica + a progress store**, not a second library
+manager. That avoids duplicating ~22 tables and the entire domain model, which
+is what "port the server to the phone" would have cost. See ADR 012.
+
+Storage split: **Dexie/IndexedDB** for metadata (tiny read surface; one code
+path across PWA and WebView; still jsdom-testable), **native filesystem** for
+audio (an `<audio>` element cannot stream or seek a blob in IndexedDB).
+Capacitor chosen not for native feel but for a **foreground media service**
+(Android 13+ kills background PWA audio) and a **non-evictable filesystem**.
+
+### The progress rule, and how the first proposal was wrong
+
+First proposed "latest `lastPlayed` wins". The user correctly rejected it: if a
+phone dies offline, another device gets further ahead, and the phone reconnects,
+it overwrites the newer position.
+
+Final rule: **progress never silently regresses, and timestamps are not used for
+correctness at all.** Forward applies silently; backward ≤ 5 min applies
+silently (genuine re-listening); backward > 5 min is **blocked and surfaced** as
+a conflict dialog naming both positions, with "keep the further one" as default
+and "use this device" as a single tap that *is* the confirmation.
+
+Because the rule is monotonic, **clock skew stops being a correctness problem** —
+a phone whose clock is fast that pushes forward is fine, and one that pushes
+backward gets asked rather than silently applied.
+
+### Files written
+
+- `specs/26-android-app.md`
+- `decisions/012-device-is-a-player-not-a-library-manager.md`
+- `specs/09-android-wrapper.md` marked narrowed
+- `roadmap.md` — item 26 added; **15 moved to last**
+- `LIMITATIONS.md` — §1.4 (app cannot work away from home) and §1.5 (progress
+  can silently regress) added as BROKEN
+
+### Next
+
+**Spec 26 Phase 1 — the de-risk spike.** Capacitor → download one file → play →
+**seek inside the file** → **play with the screen off for 20 minutes**. If either
+of the last two fails, the architecture changes, and it is far cheaper to learn
+that before Phase 2 than after Phase 3.
+
+**Earlier session 2026-10-13 (final): spec 25 — catalogue enrichment.**
 
 Asked for "genre and all the other fields getting populated". Starting point on
 the 12-book mixed library: genres 2/12, series 0/12, publisher 2/12, year 0/12,
