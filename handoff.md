@@ -120,6 +120,61 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
+**Session 2026-10-13 (Sprint 1 done): the native spike is answered — both ways
+we hoped, with one important caveat found.**
+
+Ran the spike APK on the user's Pixel 4a (Android 13 / SDK 33, chosen as the
+strictest useful target). Commit `f414560`.
+
+**The answer.** Audio *does* survive screen-off and seeking *does* work — but
+**only behind a real foreground service**. With the web
+`navigator.mediaSession` API alone there was **no media notification and no
+lock-screen transport controls**, because there was no service behind the
+session. Playback survived anyway, but only by luck; under memory pressure it
+would not have. That is precisely the risk the spike existed to test, and it
+justifies Capacitor rather than a PWA.
+
+**The fix.** `@capgo/capacitor-media-session`, which decorates the existing
+`<audio>` element instead of replacing it, so the web path stays intact. It
+needs one non-obvious setting: `foregroundService: "always"` in
+`capacitor.config.ts`. By default it only starts its service once playback is
+*already* active, which races the first `setPlaybackState("playing")` from the
+web layer; the service then never starts and the failure is a **silent no-op**,
+not an error. Verified via `dumpsys`, not by eye: service running with
+`startForegroundCount=1`, `category=transport` notification present,
+MediaSession `state=3`, and position advancing 9.9s -> 186.5s across 180s of
+`mWakefulness=Dozing`.
+
+**Two false alarms worth remembering.**
+
+- Playback "stopped and wouldn't restart" — **our test asset, not the app.** A
+  *truncated* MP3 reports the full file's duration (30:55) while holding only
+  10.4 minutes of audio, so "Seek 90%" jumped past the end of real data. A
+  truncated MP3 lies about its duration; use complete files from `test/`.
+- I briefly accepted the user's reasonable guess that a concurrent rebuild had
+  killed it. It had not — no `npm run build` or `adb install` ran during their
+  test. The file-length arithmetic settled it.
+
+**Biggest practical win:** `adb` drives almost the whole checklist. `dumpsys
+media_session` proves screen-off playback objectively, and `screencap` shows
+what is on screen without asking the user. Two traps: PowerShell `>` corrupts
+binary (use `cmd /c`), and `screencap` is black while dozing, so the lock
+screen itself still needs a human.
+
+**Also fixed:** the `server.url` bug from the previous session is gone — the
+config no longer points at `localhost:3000` (which on a phone is the phone, and
+loaded nothing). Spec 26's toolchain section now says JDK 21 is required and
+that Android Studio was abandoned for the CLI SDK; `LIMITATIONS.md` §5 records
+the installer stalls.
+
+**Still open:** `GOOGLE_BOOKS_API_KEY` is unset, so Google Books returns
+`{"error"}` and half the enrichment chain is inert. The mapping is written and
+tested — only the credential is missing.
+
+**Next:** Sprint 2 — download to the native filesystem (not IndexedDB:
+`<audio>` cannot seek a blob in IDB), `convertFileSrc` seeking, Dexie for
+metadata.
+
 **Session 2026-10-13 (scope change): replan the app around offline listening.**
 
 User feedback changed the scope: the household must be able to listen **away

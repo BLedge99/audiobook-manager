@@ -54,23 +54,39 @@ end.
 Either add the file or delete the script entry.
 
 ### 1.4 The Android app cannot work away from home
-**Status: BROKEN — the largest gap in the product.**
+**Status: BROKEN — the largest gap in the product.** Sprint 1 done; Sprint 2
+next.
 
 Two independent causes, both deliberate when written and now wrong:
 
 - **The PWA caches nothing.** `vite.config.ts` sets
   `runtimeCaching: /api/ → NetworkOnly`, so with no network the app shows an
   empty library. There is no IndexedDB layer and no download code at all.
-- **The Capacitor wrapper points at the server.**
-  `client/capacitor.config.ts` sets `server.url` to
-  `http://localhost:3000`, so the app is a thin view of the server and is
-  completely inert without it. The server URL is also **not configurable
-  without rebuilding the web bundle**, which also means a DHCP-assigned home IP
-  change breaks the app.
+- **No device-side storage exists yet.** Metadata is planned for Dexie and audio
+  for the native filesystem (`specs/26-android-app.md`, ADR 012). Neither is
+  written. The server URL is also **not configurable without rebuilding the web
+  bundle**, which means a DHCP-assigned home IP change breaks the app.
 
-Planned in `specs/26-android-app.md`. Its Phase 1 is a deliberate spike:
-**background audio with the screen off, and seeking within a local file, are
-the two things that would change the architecture if they do not work.**
+**Sprint 1 is complete** and it de-risked the two things that could have changed
+the architecture. On a Pixel 4a / Android 13:
+
+- Audio **does** keep playing with the screen off, and seeking works — but only
+  behind a real foreground service. The web `navigator.mediaSession` API on its
+  own gave *no* media notification and *no* lock-screen controls, because there
+  was no service behind it. That is why Capacitor is being used at all, and it
+  is now settled: `@capgo/capacitor-media-session` with
+  `foregroundService: "always"`.
+- The `server.url` problem is already fixed — it was removed, so the app serves
+  its own bundled assets instead of trying to load `localhost:3000` (which on a
+  phone is the phone, not the home server, and loaded nothing).
+
+What remains is Sprint 2: download to the device filesystem, `convertFileSrc`
+seeking, Dexie for metadata, and an in-app server-URL setting.
+
+**Known trap:** a truncated MP3 reports the *full* file's duration while holding
+only part of the audio, so seeking past its real end stops playback permanently
+and Play cannot recover. This looked like an app bug during the spike and was
+not. Use complete files from `test/`.
 
 ### 1.5 Listening progress is last-write-wins and can silently regress
 **Status: BROKEN — data loss.**
@@ -279,6 +295,18 @@ re-run of the security E2E suite. **Not started.**
 - **`handoff.md` contains two stale mentions** of "owner pushes manually" inside
   dated 2026-10-02 session entries. They are an accurate record of those
   sessions and are intentionally left.
+- **Android SDK installers stall on Windows.** `winget` sat at 0 bytes and the
+  Android Studio installer froze on a GUI prompt. Plain `curl` of the
+  commandline-tools zip worked at ~10 MB/s. Do not reach for an installer GUI.
+- **Capacitor 7/8 needs JDK 21.** An older JDK fails `assembleDebug` with an
+  unhelpful Gradle error. `JAVA_HOME=C:\Tools\jdk21` in the build script.
+- **PowerShell `>` corrupts binary output**, so `adb exec-out screencap` produces
+  an unreadable file. Use `cmd /c adb ... > file` for raw bytes.
+- **`adb exec-out screencap` returns black while the display is dozing**, so the
+  lock screen itself cannot be verified by screenshot. Ask the user, or assert on
+  `dumpsys` instead.
+- **Never rebuild or reinstall while the user is mid-test.** It looks exactly
+  like playback spontaneously dying. Say what you are about to push.
 
 ---
 
@@ -288,19 +316,22 @@ Scope changed on 2026-10-13: the household must be able to listen away from
 home, so **the Android app is now the top priority** and displaces the GUI
 redesign (roadmap item 15).
 
-1. **Spec 26 Phase 1 — de-risk spike.** Background audio with the screen off,
-   and seeking inside a local file. Do this before anything else: if either
-   fails, the architecture in ADR 012 changes and it is far cheaper to learn
-   that now (§1.4).
-2. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest enrichment gain (§1.1).
-3. **Spec 26 Phase 0** — the `LibraryStore` read-model seam. Server-only, no
+1. ~~**Spec 26 Phase 1 — de-risk spike.**~~ **Done 2026-10-13.** Background
+   audio survives screen-off and seeking works, but only behind a foreground
+   service — see §1.4 and `specs/26-android-app.md`. The architecture in ADR
+   012 stands, so the spike did its job.
+2. **Spec 26 Phase 2 — download to the device.** Audio to the native filesystem
+   (not IndexedDB: `<audio>` cannot seek a blob in IDB), metadata to Dexie.
+   Now the highest-value remaining work, since §1.4 is the largest product gap.
+3. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest enrichment gain (§1.1).
+4. **Spec 26 Phase 0** — the `LibraryStore` read-model seam. Server-only, no
    user-visible payoff, so it is reviewed on its own.
-4. **Fix or delete the `scan` script** — two minutes (§1.3).
-5. **Spec 26 Phases 2–4** — replica, progress sync, storage management.
-6. **Dependency upgrades with a security E2E re-run** — §4.
-7. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable
+5. **Fix or delete the `scan` script** — two minutes (§1.3).
+6. **Spec 26 Phases 3–4** — progress sync, storage management.
+7. **Dependency upgrades with a security E2E re-run** — §4.
+8. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable
    by a human (§3).
-8. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
+9. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
    appear (§2.10).
-9. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).
-10. **`specs/15-gui-redesign.md`** — last.
+10. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).
+11. **`specs/15-gui-redesign.md`** — last.

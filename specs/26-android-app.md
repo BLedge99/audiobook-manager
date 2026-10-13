@@ -90,12 +90,19 @@ there it survives on 14 and 15, so it is the strictest useful target.
 
 ### What to install
 
+Android Studio was **tried and abandoned**. Its installer froze on a GUI prompt
+and it is ~1.2 GB for tooling the build does not actually use. The command-line
+SDK does everything needed and is far quicker to get working.
+
 | | Size | Needed |
 |---|---|---|
-| Android Studio | ~1.2 GB | Recommended — bundles SDK, JDK and adb, and accepts SDK licences |
-| SDK platform + build-tools | ~1–1.5 GB | Yes, installed by Studio |
+| **JDK 21** (Temurin) | ~200 MB | **Yes.** Capacitor 7/8 requires JDK 21; an older JDK fails at `assembleDebug` with an unhelpful Gradle error |
+| Android SDK cmdline-tools | ~150 MB | Yes — then `sdkmanager` for platform-tools, android-35, build-tools 35.0.0 |
 | Gradle + Android Gradle Plugin | ~0.5–1 GB | Downloaded on first build |
 | **Emulator + system image** | +1.5–2 GB | **No.** Also needs Hyper-V, and is a poor proxy for real background-audio behaviour |
+
+All SDK licence prompts must be accepted (`sdkmanager --licenses`), otherwise
+Gradle stalls on the first build.
 
 The build runs on Windows natively, not in WSL. WSL is only used for Docker
 (server + Playwright).
@@ -115,16 +122,38 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
   signing setup. A real keystore is only needed for a release build.
 - The first Gradle run downloads Gradle and the AGP (~0.5–1 GB) and is slow.
   Every build after that is seconds.
-- **`npx cap add android` overwrites `client/capacitor.config.ts`**, dropping the
-  hardcoded `server.url`. That is a change we want anyway (Phase 4 replaces it
-  with an in-app setting), but it will show as a diff.
+- **`npx cap add android` does not touch `client/capacitor.config.ts`.** It
+  generates `android/app/src/main/assets/capacitor.config.json` instead. Earlier
+  notes here claimed otherwise; the config file is safe, but the generated
+  JSON is what the app actually reads at runtime.
 
 `client/android/` is **generated but committed** — it is where the Android
 manifest (permissions, foreground service) and Gradle config are edited by hand,
-so it is source, not a build artifact.
+so it is source, not a build artifact. Capacitor's own `.gitignore` inside it
+keeps `build/`, synced assets and APKs untracked; only ~50 source files are
+tracked.
 
 Build commands are scripted as `npm run android:sync` and `npm run
 android:build`, because the spike rebuilds constantly.
+
+### Driving the phone from the command line
+
+`adb` removes almost all of the manual checklist, and is worth the setup:
+
+```bash
+adb shell input tap X Y          # tap, instead of asking the user
+adb shell input keyevent 26      # lock / unlock the screen
+adb exec-out screencap -p > s.png   # see what is on screen
+adb shell dumpsys media_session | grep -i PlaybackState   # playing? position?
+adb shell dumpsys activity services <pkg>                # foreground service
+adb shell dumpsys notification --noredact               # media notification?
+```
+
+`dumpsys` beats asking someone to eyeball the phone: screen-off playback is
+proven by the media-session position advancing while `mWakefulness=Dozing`,
+which is objective. Two traps: PowerShell's `>` corrupts binary output, so
+`screencap` needs `cmd /c adb ... > file` for raw bytes; and `screencap` returns
+a black image while dozing, so the lock screen itself must be checked by eye.
 
 ### Testing strategy
 
@@ -162,6 +191,48 @@ battery-management edge cases.
 | 5 | "Remove from device" | space freed; server copy untouched | 30s |
 
 **~7 minutes per run.** Anything slower gets automated or cut.
+
+### Sprint 1 result — the foreground service is required, settled
+
+Measured on a Pixel 4a / Android 13 (SDK 33), deliberately the strictest
+useful target: Android 13 is where background media must be a foreground
+service with a notification.
+
+Two findings, and the first one is the useful one.
+
+**The web MediaSession API alone is not enough.** With only
+`navigator.mediaSession` wired up, audio *did* survive screen-off — but no
+media notification appeared and there were no lock-screen transport controls.
+There was no foreground service behind the session, so Android had no reason to
+keep the app alive. Background playback survived only because it got lucky;
+under memory pressure or a longer listen it would not. This is exactly the
+risk the spike was built to test, and it is why Capacitor was chosen.
+
+**`@capgo/capacitor-media-session` fixes it, with one non-obvious setting.**
+The plugin starts its foreground service only once playback is *already*
+active by default, which races the first `setPlaybackState("playing")` call
+coming from the web layer — the service then never starts and the symptom is
+a silent no-op, not an error. Setting `foregroundService: "always"` in
+`capacitor.config.ts` starts it up front and removes the race.
+
+Verified after the fix, via `dumpsys` rather than by eye:
+
+| Evidence | Value |
+|---|---|
+| `MediaSessionService` | running, `startForegroundCount=1` |
+| Notification | `category=transport`, `vis=PUBLIC` |
+| MediaSession | `state=3` (playing), `speed=1.0`, our metadata |
+| Screen-off 180s | position advanced 9.9s -> 186.5s, display `mWakefulness=Dozing` |
+
+Seeking a bundled `<audio>` element also works, so no native player is needed
+for Sprint 2 — the plugin decorates the existing element rather than replacing
+it, which keeps the web path intact.
+
+**Test-asset gotcha, not an app bug.** The first run's audio stopped partway
+and would not restart. That was the spike's own fault: the asset was a
+*truncated* MP3 reporting 30:55 but holding only 10.4 minutes of real audio,
+so "Seek 90%" jumped past the end of the actual data. Real files from `test/`
+are used now. Worth remembering — a truncated MP3 lies about its duration.
 
 ### Distribution
 
