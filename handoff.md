@@ -120,6 +120,49 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
+### Next action — read this first
+
+**The CORS credentials fix is half-applied and that is the state to finish.**
+
+The server side is done and tested: `server/src/app.ts` registers CORS with
+`credentials: true`, and `server/src/app.test.ts` now asserts both that
+`Access-Control-Allow-Credentials: true` is sent and that a foreign origin is
+still refused. Both pass; `tsc` is clean on both tiers.
+
+The client side is **not** done. Nothing sends `credentials: 'include'`, so the
+session cookie (`house_session`) still will not cross origins and the app will
+still 401 on every call. This is the single remaining piece blocking the first
+real download onto the phone, and it is why "Add profile" showed
+"Could not create profile" with no obvious cause.
+
+Concretely:
+
+1. `client/src/lib/api.ts` — `apiFetch()` must send `credentials: 'include'`
+   (the profile-header and `apiAssetUrl` paths do not need it, and the fetch shim
+   in `installApiBaseUrl` is unaffected). Add a test.
+2. Rebuild the APK with `npm run build:android` and reinstall. **The build
+   script runs `gradlew clean assembleDebug` first** — do not skip that;
+   without it Gradle packages the previous build's JS.
+3. Restart the container so the server picks up `credentials: true`:
+   `make restart`.
+4. Verify end to end: set the server URL in Settings, log in, create a profile,
+   then download a book over `adb reverse tcp:3000 tcp:3000` and confirm it
+   plays with the network off.
+
+One edit to `capacitor.config.ts` was **started and then failed to apply** — an
+`androidAllowMixedContent: true` addition under `server:`. It is not in the file,
+and neither it nor `server.cleartext: true` is a substitute for the client-side
+`credentials` fix. Only add it if step 4 still shows mixed-content blocking.
+
+### Where things stand
+
+Everything below is committed and pushed. Working tree is clean; local and
+`origin/master` are both at `8faafd0`.
+
+Client 213 tests pass, server 372 pass (1 skipped), `tsc` clean on both tiers.
+
+---
+
 **Session 2026-10-13 (Sprint 2 in progress): the phone can now reach the server,
 and the app authenticates. Four blockers found and three fixed.**
 
