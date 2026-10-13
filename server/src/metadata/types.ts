@@ -10,6 +10,22 @@ export type ProviderId = "librivox" | "audnexus" | "googlebooks" | "openlibrary"
 
 export const PROVIDER_IDS: ProviderId[] = ["librivox", "audnexus", "googlebooks", "openlibrary"];
 
+/**
+ * An official chapter title from a provider.
+ *
+ * `fileName` is the audio file the chapter corresponds to. LibriVox puts the
+ * real filename in each section's `listen_url`, which lets a section be matched
+ * to a track by identity rather than by position -- important because
+ * positional matching silently mislabels chapters whenever a book is
+ * re-encoded or a file is added.
+ */
+export interface ProviderChapter {
+  title: string;
+  fileName?: string;
+  startOffsetSec?: number;
+  lengthSec?: number;
+}
+
 /** Fields a provider can supply. Every one is optional — providers differ. */
 export interface ProviderCandidate {
   source: ProviderId;
@@ -30,6 +46,8 @@ export interface ProviderCandidate {
   genres?: string[];
   coverUrl?: string;
   description?: string;
+  /** Official chapter titles, when the provider has them (spec 21). */
+  chapters?: ProviderChapter[];
   /** 0-1. Title-and-author agreement, computed by the provider via `similarity`. */
   confidence: number;
   /** Untouched provider response, kept for debugging (spec 07). */
@@ -43,6 +61,8 @@ export interface EnrichmentQuery {
   /** Free text from embedded tags/path used for LibriVox-vs-commercial detection. */
   hintText?: string;
   filePath?: string;
+  /** Audible ASIN, when the file carries one. The only key Audnexus accepts. */
+  asin?: string;
   /** Skip the "Unknown author" sentinel the scanner writes. */
   authorIsUnknown?: boolean;
 }

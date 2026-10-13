@@ -134,8 +134,15 @@ describe("resolveProviderOrder", () => {
     expect(resolveProviderOrder({ title: "12_creepytales_1206_librivox" })[0]).toBe("librivox");
   });
 
-  it("puts Audnexus first for a commercial audiobook", () => {
-    expect(resolveProviderOrder({ title: "Project Hail Mary", filePath: "/a/b.m4b" })[0]).toBe("audnexus");
+  it("puts LibriVox first for a LibriVox recording", () => {
+    expect(resolveProviderOrder({ title: "12_creepytales_1206_librivox" })[0]).toBe("librivox");
+  });
+
+  it("keeps Audnexus out of the search chain (ADR 011)", () => {
+    // Audnexus cannot search by title, so including it would only ever spend a
+    // guaranteed-404 request per book.
+    expect(resolveProviderOrder({ title: "Project Hail Mary", filePath: "/a/b.m4b" })).not.toContain("audnexus");
+    expect(resolveProviderOrder({ title: "creepy tales librivox" })).not.toContain("audnexus");
   });
 
   it("honours a METADATA_PROVIDER_ORDER override", () => {
@@ -145,13 +152,13 @@ describe("resolveProviderOrder", () => {
   });
 
   it("appends omitted providers so none become unreachable", () => {
-    process.env.METADATA_PROVIDER_ORDER = "audnexus";
-    expect(resolveProviderOrder({ title: "x" })).toHaveLength(4);
+    process.env.METADATA_PROVIDER_ORDER = "openlibrary";
+    expect(resolveProviderOrder({ title: "x" }).length).toBeGreaterThan(1);
   });
 
   it("ignores a malformed override rather than losing every provider", () => {
     process.env.METADATA_PROVIDER_ORDER = "nonsense";
-    expect(resolveProviderOrder({ title: "x" })).toHaveLength(4);
+    expect(resolveProviderOrder({ title: "x" }).length).toBeGreaterThan(1);
   });
 });
 
@@ -159,53 +166,53 @@ describe("runChain", () => {
   const query = { title: "Dune", author: "Frank Herbert" };
 
   it("stops at the first provider that clears the threshold", async () => {
-    const good = fakeProvider("audnexus", [{ source: "audnexus", title: "Dune", confidence: 1 }]);
-    const later = fakeProvider("librivox", [{ source: "librivox", title: "Dune", confidence: 1 }]);
+    const good = fakeProvider("librivox", [{ source: "librivox", title: "Dune", confidence: 1 }]);
+    const later = fakeProvider("googlebooks", [{ source: "googlebooks", title: "Dune", confidence: 1 }]);
     const providers = {
-      audnexus: good,
-      librivox: later,
-      googlebooks: fakeProvider("googlebooks", []),
+      audnexus: fakeProvider("audnexus", []),
+      librivox: good,
+      googlebooks: later,
       openlibrary: fakeProvider("openlibrary", []),
     } as Record<ProviderId, MetadataProvider>;
 
-    const result = await runChain(query, { providers, threshold: 0.9 });
+    const result = await runChain({ title: "dune_librivox" }, { providers, threshold: 0.9 });
 
-    expect(result.best?.source).toBe("audnexus");
+    expect(result.best?.source).toBe("librivox");
     expect(later.search).not.toHaveBeenCalled();
   });
 
   it("continues to the next provider when the first is below threshold", async () => {
-    const weak = fakeProvider("audnexus", [{ source: "audnexus", title: "Dune", confidence: 0.4 }]);
-    const better = fakeProvider("librivox", [{ source: "librivox", title: "Dune", confidence: 0.95 }]);
+    const weak = fakeProvider("librivox", [{ source: "librivox", title: "Dune", confidence: 0.4 }]);
+    const better = fakeProvider("googlebooks", [{ source: "googlebooks", title: "Dune", confidence: 0.95 }]);
     const providers = {
-      audnexus: weak,
-      librivox: better,
-      googlebooks: fakeProvider("googlebooks", []),
+      audnexus: fakeProvider("audnexus", []),
+      librivox: weak,
+      googlebooks: better,
       openlibrary: fakeProvider("openlibrary", []),
     } as Record<ProviderId, MetadataProvider>;
 
-    const result = await runChain(query, { providers, threshold: 0.9 });
-    expect(result.best?.source).toBe("librivox");
+    const result = await runChain({ title: "dune_librivox" }, { providers, threshold: 0.9 });
+    expect(result.best?.source).toBe("googlebooks");
   });
 
   it("isolates a throwing provider and still returns results", async () => {
     const boom: MetadataProvider = {
-      id: "audnexus",
+      id: "librivox",
       supportsRichFields: true,
       search: vi.fn(async () => {
         throw new Error("provider unreachable");
       }),
     };
-    const healthy = fakeProvider("librivox", [{ source: "librivox", title: "Dune", confidence: 1 }]);
+    const healthy = fakeProvider("googlebooks", [{ source: "googlebooks", title: "Dune", confidence: 1 }]);
     const providers = {
-      audnexus: boom,
-      librivox: healthy,
-      googlebooks: fakeProvider("googlebooks", []),
+      audnexus: fakeProvider("audnexus", []),
+      librivox: boom,
+      googlebooks: healthy,
       openlibrary: fakeProvider("openlibrary", []),
     } as Record<ProviderId, MetadataProvider>;
 
-    const result = await runChain(query, { providers, threshold: 0.9 });
-    expect(result.best?.source).toBe("librivox");
+    const result = await runChain({ title: "dune_librivox" }, { providers, threshold: 0.9 });
+    expect(result.best?.source).toBe("googlebooks");
   });
 
   it("walks the whole chain when nothing clears the threshold", async () => {
@@ -216,23 +223,25 @@ describe("runChain", () => {
       openlibrary: fakeProvider("openlibrary", []),
     } as Record<ProviderId, MetadataProvider>;
 
-    const result = await runChain(query, { providers, threshold: 0.9 });
+    const result = await runChain({ title: "dune_librivox" }, { providers, threshold: 0.9 });
     expect(result.best).toBeNull();
-    expect(result.walked).toHaveLength(4);
+    // Audnexus is not walked (ADR 011); the other three are.
+    expect(result.walked).not.toContain("audnexus");
+    expect(result.walked).toHaveLength(3);
   });
 
   it("collects every provider's candidates for the review queue", async () => {
     const providers = {
-      audnexus: fakeProvider("audnexus", [{ source: "audnexus", title: "A", confidence: 0.2 }]),
+      audnexus: fakeProvider("audnexus", []),
       librivox: fakeProvider("librivox", [{ source: "librivox", title: "B", confidence: 0.1 }]),
-      googlebooks: fakeProvider("googlebooks", []),
+      googlebooks: fakeProvider("googlebooks", [{ source: "googlebooks", title: "A", confidence: 0.2 }]),
       openlibrary: fakeProvider("openlibrary", []),
     } as Record<ProviderId, MetadataProvider>;
 
-    const result = await runChain(query, { providers, threshold: 0.9, collectAll: true });
+    const result = await runChain({ title: "dune_librivox" }, { providers, threshold: 0.9, collectAll: true });
     expect(result.candidates).toHaveLength(2);
     // Sorted by confidence descending.
-    expect(result.candidates[0].source).toBe("audnexus");
+    expect(result.candidates[0].source).toBe("googlebooks");
   });
 
   it("returns nothing rather than throwing when every provider is down", async () => {
@@ -524,26 +533,71 @@ describe("provider HTTP clients (mocked fetch)", () => {
   });
 
   it("Audnexus maps a well-formed response", async () => {
-    const body = {
-      results: [
-        {
-          asin: "B0024LZ1P6",
-          title: "Dune",
-          authors: [{ name: "Frank Herbert", asin: "B000AP9A6K" }],
-          narrators: [{ name: "Simon Vance" }],
-          genres: [{ name: "Science Fiction", type: "genre" }],
-          publisherName: "Penguin",
-          releaseDate: "2007-02-01",
-        },
-      ],
+    // Audnexus has no title search; /books/{ASIN} is the real entry point, so
+    // the query must carry an ASIN.
+    const book = {
+      asin: "B0024LZ1P6",
+      title: "Dune",
+      authors: [{ name: "Frank Herbert", asin: "B000AP9A6K" }],
+      narrators: [{ name: "Simon Vance" }],
+      genres: [{ name: "Science Fiction", type: "genre" }],
+      publisherName: "Penguin",
+      releaseDate: "2007-02-01",
     };
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(book), { status: 200 })));
     const { AudnexusProvider } = await import("./audnexus");
-    const [candidate] = await new AudnexusProvider().search({ title: "Dune", author: "Frank Herbert" });
+    const [candidate] = await new AudnexusProvider().search({ title: "Dune", author: "Frank Herbert", asin: "B0024LZ1P6" });
     expect(candidate.title).toBe("Dune");
     expect(candidate.narrators).toEqual(["Simon Vance"]);
     expect(candidate.publishedYear).toBe(2007);
     expect(candidate.confidence).toBe(1);
+  });
+
+  it("Audnexus makes no request at all without an ASIN", async () => {
+    // Guards against regressing to a title search that 404s: with no ASIN the
+    // provider must not touch the network.
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { AudnexusProvider } = await import("./audnexus");
+    expect(await new AudnexusProvider().search({ title: "Dune" })).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("Audnexus maps official chapter titles from the free chapters endpoint", async () => {
+    const chapters = {
+      asin: "B08G9PRS1K",
+      isAccurate: true,
+      chapters: [
+        { title: "Opening Credits", startOffsetSec: 0, lengthMs: 13307 },
+        { title: "Chapter 1", startOffsetSec: 19, lengthMs: 2203908 },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(chapters), { status: 200 })));
+    const { AudnexusProvider } = await import("./audnexus");
+    const result = await new AudnexusProvider().chaptersByAsin("B08G9PRS1K");
+    expect(result.isAccurate).toBe(true);
+    expect(result.chapters.map((c) => c.title)).toEqual(["Opening Credits", "Chapter 1"]);
+    expect(result.chapters[1].startOffsetSec).toBe(19);
+  });
+
+  it("Audnexus chapters degrade to empty when unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 404 })));
+    const { AudnexusProvider } = await import("./audnexus");
+    expect(await new AudnexusProvider().chaptersByAsin("B000000000")).toEqual({ chapters: [], isAccurate: false });
+  });
+
+  it("Audnexus uses the corrected api host, not audnex.us", async () => {
+    const seen: string[] = [];
+    const fetchMock = vi.fn(async (url: unknown) => {
+      seen.push(String(url));
+      return new Response("{}", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const { AudnexusProvider } = await import("./audnexus");
+    await new AudnexusProvider().chaptersByAsin("B08G9PRS1K");
+    // The original implementation used audnex.us/books?title=, which 404s on
+    // every path and silently disabled the whole provider.
+    expect(seen[0]).toContain("https://api.audnex.us/");
   });
 
   it("LibriVox returns [] when the network throws", async () => {

@@ -4,21 +4,31 @@ import {
   type EnrichmentQuery,
   type MetadataProvider,
   type ProviderCandidate,
+  type ProviderChapter,
 } from "./types";
 
 /**
- * Spec 16 — Audnexus provider.
+ * Spec 16 / 21 — Audnexus provider.
  *
- * Free, no auth, no hard quota on the public instance. The best audiobook
- * metadata available for free: narrators, series + sequence, publisher, ASIN,
- * parent and sub-genres, and covers up to 3200x3200.
+ * NOTE ON THE API SHAPE (corrected 2026-10-12): the base host is
+ * `api.audnex.us`, not `audnex.us`, and there is **no book-search endpoint**.
+ * The public API exposes only:
+ *   GET /authors?name=...        find authors by name
+ *   GET /authors/{ASIN}
+ *   GET /books/{ASIN}            by id, not by title
+ *   GET /books/{ASIN}/chapters   official chapter titles, no token needed
+ *   GET /health
  *
- * Aggregates Audible's *commercial* catalogue, so it has no entry for a
- * LibriVox recording of a public-domain title (ADR 008). The chain resolves it
- * first only for commercial-audiobook-shaped items.
+ * The earlier implementation searched `audnex.us/books?title=`, which has
+ * returned 404 for every request since it was written -- which is why no book
+ * was ever enriched by Audnexus and the ADR 008 premise went unnoticed.
+ *
+ * Consequence: Audnexus can only enrich a book we already hold an ASIN for. It
+ * is therefore not part of the title-driven search chain; it is an ASIN-keyed
+ * lookup used for chapter titles (spec 21).
  */
 
-const BASE = "https://audnex.us";
+const BASE = "https://api.audnex.us";
 
 /** Cover sizes Audnexus offers. -M is a sane default; -XL is ~3200px. */
 const COVER_SIZE = "-M";
@@ -148,52 +158,96 @@ export class AudnexusProvider implements MetadataProvider {
   ) {}
 
   async search(query: EnrichmentQuery): Promise<ProviderCandidate[]> {
-    // Audnexus title search accepts `author` to disambiguate. Only send it
-    // when we trust it — a wrong embedded author degrades the query.
-    const params = new URLSearchParams({ title: query.title });
-    if (query.author && !query.authorIsUnknown) {
-      params.set("author", query.author);
-    }
-    params.set("num_results", "10");
+    // Audnexus has no title search, so this only ever returns a book we already
+    // hold an ASIN for. Kept in the provider interface so the chain can consume
+    // it uniformly, but it is a local no-op rather than an HTTP call against an
+    // endpoint that does not exist.
+    const asin = query.asin ?? extractAsin(query.filePath) ?? extractAsin(query.title);
+    if (!asin) return [];
+    const book = await this.bookByAsin(asin);
+    if (!book) return [];
+    const mapped = mapAudnexusBook(book, query);
+    return mapped ? [mapped] : [];
+  }
 
-    let books: AudnexusBook[];
+  /** GET /books/{ASIN} — full audiobook metadata for a known ASIN. */
+  async bookByAsin(asin: string): Promise<AudnexusBook | null> {
     try {
-      const res = await fetch(`${BASE}/books?${params.toString()}&region=${this.region}`, {
+      const res = await fetch(`${BASE}/books/${encodeURIComponent(asin)}?region=${this.region}`, {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
-      if (!res.ok) return [];
-      const data = (await res.json()) as { results?: AudnexusBook[] };
-      books = data.results ?? [];
+      if (!res.ok) return null;
+      return (await res.json()) as AudnexusBook;
     } catch {
-      // Unreachable provider must not fail the item (spec 16 AC).
-      return [];
+      return null;
     }
+  }
 
-    return books
-      .map((book) => mapAudnexusBook(book, query))
-      .filter((candidate): candidate is ProviderCandidate => candidate !== null)
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, 5);
+  /**
+   * GET /books/{ASIN}/chapters — official chapter titles with offsets.
+   *
+   * Free and token-free, which is what makes this worth having despite needing
+   * an ASIN up front. `isAccurate` is the provider's own confidence flag; an
+   * inaccurate list is still returned because partial chapter data beats none,
+   * but callers can choose to ignore it.
+   */
+  async chaptersByAsin(asin: string): Promise<{ chapters: ProviderChapter[]; isAccurate: boolean }> {
+    try {
+      const res = await fetch(`${BASE}/books/${encodeURIComponent(asin)}/chapters?region=${this.region}`, {
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      if (!res.ok) return { chapters: [], isAccurate: false };
+      const data = (await res.json()) as {
+        chapters?: { title?: string; startOffsetSec?: number; lengthMs?: number }[];
+        isAccurate?: boolean;
+      };
+      const chapters: ProviderChapter[] = (data.chapters ?? [])
+        .map((chapter) => ({
+          title: chapter.title?.trim() ?? "",
+          startOffsetSec: typeof chapter.startOffsetSec === "number" ? chapter.startOffsetSec : undefined,
+          lengthSec: typeof chapter.lengthMs === "number" ? Math.round(chapter.lengthMs / 1000) : undefined,
+        }))
+        .filter((chapter) => chapter.title.length > 0);
+      return { chapters, isAccurate: data.isAccurate ?? false };
+    } catch {
+      return { chapters: [], isAccurate: false };
+    }
   }
 
   /**
    * Audnexus returns a per-author `similar` array — other authors Audible
    * associates with this one. Author-level, not book-level, which is why the
    * recommendation engine (ADR 010) treats it as one signal among several.
+   * The real endpoint is /authors?name=..., not a book search.
    */
   async similarAuthors(query: EnrichmentQuery): Promise<string[]> {
     if (!query.author) return [];
-    const params = new URLSearchParams({ author: query.author, "num_results": "1" });
+    const params = new URLSearchParams({ name: query.author, region: this.region });
     try {
-      const res = await fetch(`${BASE}/books?${params.toString()}&region=${this.region}`, {
+      const res = await fetch(`${BASE}/authors?${params.toString()}`, {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (!res.ok) return [];
-      const data = (await res.json()) as { results?: AudnexusBook[] };
-      const author = data.results?.[0]?.authors?.[0];
-      return (author?.similar ?? []).map((entry) => entry.name?.trim()).filter((name): name is string => Boolean(name));
+      const authors = (await res.json()) as AudnexusAuthor[];
+      return (authors[0]?.similar ?? [])
+        .map((entry) => entry.name?.trim())
+        .filter((name): name is string => Boolean(name));
     } catch {
       return [];
     }
   }
+}
+
+/**
+ * Pull an Audible ASIN out of free text.
+ *
+ * Audible rips routinely carry the ASIN in the filename, and it is the only key
+ * the free Audnexus API accepts. An ASIN is 10 characters -- 'B' plus 9
+ * alphanumerics -- so a false positive is unlikely; the uppercase-only match
+ * keeps it to the canonical form rips actually use.
+ */
+export function extractAsin(text: string | null | undefined): string | undefined {
+  if (!text) return undefined;
+  const match = text.match(/\b(B[A-Z0-9]{9})\b/);
+  return match ? match[1] : undefined;
 }

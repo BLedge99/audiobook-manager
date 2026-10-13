@@ -25,6 +25,7 @@ has a matching spec in `specs/`.
 | 18 | Favourites & custom tags | Per-profile favourites; household-managed tag vocabulary with create/rename/merge/delete; assignments survive rescan |
 | 19 | Recommendations & wishlist | Discover returns only books the household does not own, seeded by one book or the profile's favourites; per-profile wishlist with an "owned" marker |
 | 20 | Browse & Discover UI | Genre shelves, filter bar with URL state, category pages, series shelves, Discover tab, full tag-suite detail, tag manager, enrichment review queue |
+| 21 | Official chapter titles | Embedded chapter names ("Section 01", "01 - TITLE") replaced by real provider chapter names, matched by filename identity; a hand-set title is never overwritten and survives rescans |
 
 ## Notes
 
@@ -38,9 +39,13 @@ has a matching spec in `specs/`.
 
 ## Build order after 14
 
-**16 → 17 → 18 → 19 → 20 → 15.** Each of 16–19 is a data-layer feature with no
-new UI, so they are independently shippable and testable. 20 adds the browse
-and Discover surfaces on top.
+**16 → 17 → 18 → 19 → 20 → 21 → 15.** Each of 16–19 is a data-layer feature
+with no new UI, so they are independently shippable and testable. 20 adds the
+browse and Discover surfaces on top. 21 fills in real chapter names underneath
+the player that 20 put on screen.
+
+**Item 15 (GUI redesign) is the only remaining item**, and still has no
+`specs/15-*.md` file — writing it is the first task of that work.
 
 **Item 15 is built last, after 20** — this reverses the original ordering. Spec
 20 introduces genre shelves, a filter bar, category pages and a Discover tab.

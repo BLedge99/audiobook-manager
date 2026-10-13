@@ -13,6 +13,7 @@ import { resolveInsideRoot } from "./safePath";
 import { applyCandidate, rowToCandidate, storeCandidates } from "./metadata/apply";
 import { coverFilename, fetchCover } from "./metadata/cover";
 import { runChain } from "./metadata/chain";
+import { trackTitleOverrideField } from "./metadata/chapters";
 import { buildQuery, EnrichmentManager } from "./metadata/run";
 import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy-service";
 import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
@@ -845,6 +846,69 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
     return { reset: true, clearedOverrides: count, booksRequeued: result.count };
   });
+
+  /**
+   * Spec 21 — set or clear one chapter title by hand.
+   *
+   * This is what makes "a user-set track title is never overwritten" a real
+   * guarantee rather than an aspiration: the title is recorded as a
+   * `FieldOverride` (ADR 009), which both the scanner and `applyChapterTitles`
+   * consult, and which the spec 17 reset endpoints already clear.
+   *
+   * Keyed by track *number*, not track id -- the scanner recreates track rows on
+   * every rescan, so an id-keyed override would be orphaned immediately.
+   */
+  app.put<{ Params: { id: string; trackNumber: string }; Body: { title?: unknown } }>(
+    "/api/audiobooks/:id/tracks/:trackNumber/title",
+    {
+      schema: {
+        params: {
+          type: "object",
+          properties: { id: { type: "integer" }, trackNumber: { type: "integer", minimum: 1 } },
+          required: ["id", "trackNumber"],
+        },
+        body: {
+          type: "object",
+          properties: { title: { type: ["string", "null"], maxLength: 500 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const id = parseIdParam(request.params.id);
+      if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+      const trackNumber = Number(request.params.trackNumber);
+      if (!Number.isInteger(trackNumber) || trackNumber < 1) {
+        return reply.code(400).send({ message: "Invalid track number" });
+      }
+
+      const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
+      if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+
+      const track = await prisma.track.findFirst({ where: { mediaItemId: id, trackNumber } });
+      if (!track) return reply.code(404).send({ message: "Track not found" });
+
+      const field = trackTitleOverrideField(trackNumber);
+      const raw = (request.body as { title?: unknown } | undefined)?.title;
+      const title = typeof raw === "string" ? raw.trim() : null;
+
+      // Clearing releases the override and restores whatever the file's own tags
+      // say. Storing "" instead would block the scanner from ever filling the
+      // chapter in again -- the same trap the metadata route documents.
+      if (title === null || title.length === 0) {
+        await prisma.fieldOverride.deleteMany({ where: { mediaItemId: id, field } });
+        return { ok: true, trackNumber, title: null, overridden: false };
+      }
+
+      await prisma.fieldOverride.upsert({
+        where: { mediaItemId_field: { mediaItemId: id, field } },
+        create: { mediaItemId: id, field, value: title },
+        update: { value: title },
+      });
+      await prisma.track.update({ where: { id: track.id }, data: { title } });
+
+      return { ok: true, trackNumber, title, overridden: true };
+    },
+  );
 
   // ---------------------------------------------------------------------
   // Spec 18 — favourites & custom tags

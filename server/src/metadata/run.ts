@@ -1,5 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { applyCandidate, storeCandidates } from "./apply";
+import { AudnexusProvider, extractAsin } from "./audnexus";
+import { applyChapterTitles } from "./chapters";
 import { DEFAULT_CONFIDENCE_THRESHOLD, runChain, UNKNOWN_AUTHOR } from "./chain";
 import type { EnrichmentQuery, ProviderId } from "./types";
 
@@ -98,6 +100,9 @@ export function buildQuery(item: {
     filePath: item.filePath,
     // Free-text the detection heuristic can read without a network call.
     hintText: item.filePath,
+    // Audible rips carry the ASIN in the filename; it is the only key the free
+    // Audnexus API accepts, and without it that provider cannot be reached.
+    asin: extractAsin(item.filePath),
   };
 }
 
@@ -181,22 +186,38 @@ export class EnrichmentManager {
   }
 
   private async process(runId: number, threshold?: number): Promise<void> {
-    if (this.running) return; // one pass at a time; a second caller is a no-op
+    if (this.running) return;
     this.running = true;
+    try {
+      await this.processRun(runId, threshold);
+    } finally {
+      this.running = false;
+      // A run enqueued while this one was in flight was previously stranded:
+      // `process` returned early on the `running` guard and its row sat at
+      // "pending" forever, with no feedback to the caller. Since a scan
+      // auto-enqueues (spec 16) this happened on every manual "force" run
+      // issued while a scan-triggered pass was still going.
+      const stranded = await this.prisma.enrichmentRun
+        .findFirst({ where: { status: "pending" }, orderBy: { id: "asc" } })
+        .catch(() => null);
+      if (stranded) void this.process(stranded.id);
+    }
+  }
+
+  private async processRun(runId: number, threshold?: number): Promise<void> {
+    const limit = threshold ?? AUTO_APPLY_CONFIDENCE;
+    await this.prisma.enrichmentRun.update({
+      where: { id: runId },
+      data: { status: "running", startedAt: new Date(), finishedAt: null },
+    });
 
     try {
-      await this.prisma.enrichmentRun.update({
-        where: { id: runId },
-        data: { status: "running", startedAt: new Date(), finishedAt: null },
-      });
-
       const pending = await this.prisma.enrichmentItem.findMany({
         where: { runId, status: "pending" },
         include: { mediaItem: true },
         orderBy: { id: "asc" },
       });
 
-      const limit = threshold ?? AUTO_APPLY_CONFIDENCE;
       let processed = 0;
 
       // Simple worker pool over the persisted queue. Each item commits its own
@@ -232,8 +253,6 @@ export class EnrichmentManager {
           },
         })
         .catch(() => undefined);
-    } finally {
-      this.running = false;
     }
   }
 
@@ -271,6 +290,19 @@ export class EnrichmentManager {
       const query = buildQuery(item);
       const result = await runChain(query, { threshold, collectAll: true });
 
+      // Spec 21: Audnexus has no title search, but its chapters endpoint is free
+      // and token-free when we already hold an ASIN. This is the only way a
+      // single-file M4B gets official chapter titles, so it runs regardless of
+      // whether the metadata chain matched anything.
+      if (query.asin) {
+        try {
+          const { chapters } = await new AudnexusProvider().chaptersByAsin(query.asin);
+          if (chapters.length > 0) await applyChapterTitles(this.prisma, mediaItemId, chapters);
+        } catch {
+          // Chapter data is an improvement, never a requirement.
+        }
+      }
+
       // ADR 009: fields a human has set are never written by enrichment.
       const overrides = await this.prisma.fieldOverride.findMany({
         where: { mediaItemId },
@@ -288,6 +320,28 @@ export class EnrichmentManager {
         await this.prisma.mediaItem.update({ where: { id: mediaItemId }, data: { enrichmentStatus: "skipped" } });
         await bump("skipped");
         return;
+      }
+
+      // Spec 21: chapter titles are applied regardless of the auto-apply threshold.
+      // A match that is only 80% confident on the *title* is still the right
+      // book often enough to be worth improving its chapter names, and
+      // `isBetterChapterTitle` refuses any step backwards. Gating chapters on
+      // title confidence left books whose LibriVox title differed ("The
+      // Awakening" vs "Awakening") stuck on "Section 01".
+      //
+      // Chapters are also chosen independently of which provider won overall:
+      // Open Library often outscores LibriVox on a title match but has no
+      // chapters at all, so taking chapters from the overall winner silently
+      // threw away the only source that had them.
+      const chapterSource = result.candidates
+        .filter((candidate) => candidate.chapters && candidate.chapters.length > 0)
+        .sort((a, b) => b.confidence - a.confidence)[0];
+      if (chapterSource?.chapters?.length) {
+        try {
+          await applyChapterTitles(this.prisma, mediaItemId, chapterSource.chapters);
+        } catch {
+          // Chapter data is an improvement, never a requirement.
+        }
       }
 
       if (best.confidence < threshold) {

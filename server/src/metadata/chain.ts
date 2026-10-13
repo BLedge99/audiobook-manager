@@ -64,10 +64,12 @@ export function resolveProviderOrder(query: EnrichmentQuery): ProviderId[] {
     }
   }
 
-  const libriVoxFirst = looksLikeLibriVox(query);
-  return libriVoxFirst
-    ? ["librivox", "audnexus", "googlebooks", "openlibrary"]
-    : ["audnexus", "librivox", "googlebooks", "openlibrary"];
+  // Audnexus is deliberately absent: it cannot search by title (ADR 011), so
+  // including it would cost one guaranteed-404 request per book. It is used
+  // separately as an ASIN-keyed lookup for chapter titles.
+  return looksLikeLibriVox(query)
+    ? ["librivox", "googlebooks", "openlibrary"]
+    : ["googlebooks", "openlibrary", "librivox"];
 }
 
 /** Adapters over the two spec 07 clients so the chain treats all four alike. */

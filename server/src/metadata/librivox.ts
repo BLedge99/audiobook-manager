@@ -4,6 +4,7 @@ import {
   type EnrichmentQuery,
   type MetadataProvider,
   type ProviderCandidate,
+  type ProviderChapter,
 } from "./types";
 
 /**
@@ -75,9 +76,12 @@ interface LibrivoxPerson {
 }
 
 interface LibrivoxSection {
+  id?: string;
+  section_number?: string;
   title?: string;
   playtime?: number;
   listen_url?: string;
+  file_name?: string | null;
   readers?: LibrivoxPerson[];
   translators?: LibrivoxPerson[];
 }
@@ -129,6 +133,35 @@ function dedupe(values: string[]): string[] {
   return out;
 }
 
+/**
+ * Map LibriVox sections to chapter titles.
+ *
+ * `listen_url` carries the real audio filename, which lets a section be tied to
+ * a specific track by identity instead of by position. `file_name` is usually
+ * null in the API, so `listen_url` is the reliable signal.
+ */
+export function mapLibrivoxSections(sections: LibrivoxSection[] = []): ProviderChapter[] {
+  const chapters: ProviderChapter[] = [];
+  for (const section of sections) {
+    const title = section.title?.trim();
+    if (!title) continue;
+    const fromListenUrl = section.listen_url ? basename(section.listen_url) : undefined;
+    const fileName = section.file_name?.trim() || fromListenUrl;
+    chapters.push({
+      title,
+      fileName: fileName || undefined,
+      lengthSec: typeof section.playtime === "number" ? section.playtime : undefined,
+    });
+  }
+  return chapters;
+}
+
+function basename(url: string): string {
+  const withoutQuery = url.split(/[?#]/)[0];
+  const parts = withoutQuery.split("/").filter(Boolean);
+  return parts.length > 0 ? parts[parts.length - 1] : "";
+}
+
 export function mapLibrivoxBook(book: LibrivoxBook, query: EnrichmentQuery): ProviderCandidate | null {
   const title = book.title?.trim();
   if (!title) return null;
@@ -158,6 +191,7 @@ export function mapLibrivoxBook(book: LibrivoxBook, query: EnrichmentQuery): Pro
     language: book.language,
     genres: dedupe(personNames(book.genres)),
     description: trimDescription(book.description),
+    chapters: mapLibrivoxSections(book.sections),
     confidence: scoreMatch(query, title, authors[0]),
     raw: book,
   };

@@ -6,20 +6,25 @@
 
 ## Current state (snapshot)
 
-- Repo: `/mnt/c/Users/benle/Documents/Projects/TechNative/audiobook-manager`
-- Branch: master, HEAD `6b4e861` "Fix playback resume when switching books",
-  with the follow-up hardening committed on top (see "Current task").
-  Owner pushes manually from their terminal.
-- Spec docs exist: `AGENTS.md`, `PRD.md`, `roadmap.md`, `specs/01..13`,
-  `decisions/001..006`.
+- Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
+  (also reachable at `/mnt/c/...` from WSL, which is where Docker runs).
+- Branch: master. Specs `01..14, 16..21` and decisions `001..011` exist.
+  **There is no `specs/15-*.md`** — roadmap 15 (GUI redesign) is unwritten.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
+- Test counts as of 2026-10-13: **server 290** (1 skipped), **client 104**,
+  **Playwright 32** (all three tiers green; run E2E from WSL via
+  `scripts/e2e-wsl.sh`).
 
 ## Working agreement
 
-- Implement roadmap features in order: 01 → 13.
+- Implement roadmap features in order. 01–21 are done except **13 (deferred,
+  stretch)**; **15 is unwritten and is next**. See "Build order after 14".
 - Each feature claims a spec; when done, update its checklist in the spec file
   and mark it done in this handoff.
+- **An unchecked acceptance criterion is not evidence.** Spec 21 shipped a
+  criterion marked done that no code enforced; see "Current task". Before
+  ticking a box, confirm the behaviour is reachable from a real call site.
 - Tests are part of done-ness (spec 02 stands up the harness; features may add
   targeted unit tests as they go).
 - Ask the user before deviating from spec order, restructuring infra, or when
@@ -47,7 +52,8 @@
 | 17 | tag-taxonomy | **done** | curated 2-level genre tree (14 top-level, ~40 children) seeded at boot, GenreMapping with Misc catch-all, reconciled multi-narrator Contributor, Series with stored case-folded key + fractional position, publication facts, per-field FieldOverride precedence (ADR 009), reset + reset-all |
 | 18 | favourites-custom-tags | **done** | per-profile Favourite (unique index = idempotent), household-managed Tag vocabulary with merge + reserved/genre-collision rejection. `PUT /api/audiobooks/:id/tags` is now ONE route for the whole suite (specs 17+18 originally collided on it) |
 | 19 | recommendations-wishlist | **done** | external-only Discover seeded by one book or profile favourites, pure weighted tag-similarity ranking + hard dedupe on normalised title+author (ADR 010), per-profile WishlistItem with owned marker, structurally non-playable (no filePath/Track/audio route) |
-| 20 | browse-discover-ui | **done** | 4 tabs (Library/Browse/Discover/Favourites), genre + series shelves, filter bar with URL state, full tag-suite editor with provenance labels, tag manager, review queue with confidence. Pure logic in `lib/browse.ts` (47 tests). **Next: roadmap 15 (GUI redesign)** |
+| 20 | browse-discover-ui | **done** | 4 tabs (Library/Browse/Discover/Favourites), genre + series shelves, filter bar with URL state, full tag-suite editor with provenance labels, tag manager, review queue with confidence. Pure logic in `lib/browse.ts` (47 tests) |
+| 21 | official-chapter-titles | **done** | `metadata/chapters.ts`: provider chapters matched to tracks by **filename identity** (LibriVox `listen_url`), positional only on exact count agreement, `isBetterChapterTitle` never steps backwards. Scanner strips redundant number prefixes at scan time. Audnexus chapters via ASIN (ADR 011). Hand-set titles are `FieldOverride` rows keyed `trackTitle:<n>`, surviving rescans. `make enrich` target added. **Next: roadmap 15 (GUI redesign)** |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -89,15 +95,80 @@ genres, 3 correctly held in the review queue.
 
 ## Build order after 14
 
-**16 -> 17 -> 18 -> 19 -> 20 -> 15.** Specs live in `specs/16-` through
-`specs/20-`; ADRs 008/009/010 cover the provider chain, field-level precedence,
-and the recommendation engine. Item 15 (GUI redesign) moved to last so the
-redesign styles the final browse surfaces instead of rebuilding them.
-Item 13 (media tools) stays out of scope - media is a read-only mount by design.
+**16 → 17 → 18 → 19 → 20 → 21 → 15.** Specs live in `specs/16-` through
+`specs/21-`; ADRs 008/009/010 cover the provider chain, field-level precedence,
+and the recommendation engine, and ADR 011 supersedes part of 008. Item 15
+(GUI redesign) moved to last so the redesign styles the final browse surfaces
+instead of rebuilding them — and it still has no spec file. Item 13 (media
+tools) stays out of scope - media is a read-only mount by design.
 
 ## Current task
 
-**Session 2026-10-06 (later): fixed the stale library grid.**
+**Session 2026-10-13: spec 21 — official chapter titles — done.**
+
+Chapter names came straight from the files' embedded tags, so the player showed
+`Track 7 - 07 - THE TELL-TALE HEART` (the track number twice) or, worse,
+`Section 01`. Providers know the real names. Spec 21 uses them.
+
+What shipped:
+
+- **`server/src/metadata/chapters.ts`** (new) — the matching rules, pure and
+  separable from the DB:
+  - `matchChaptersToTracks` matches a provider chapter to a track by the
+    **audio filename the provider names**, not by position. Positional
+    matching is what silently mislabels every chapter from the first
+    divergence onward when a book is re-encoded or a file is added, so it is
+    used only when the leftover counts line up exactly one-to-one — and even
+    then only on tracks whose own title carries no information.
+  - `isBetterChapterTitle` refuses any step backwards (`"The Tell-Tale Heart"`
+    must never become `"Chapter 3"`) and reports an identical title as *no
+    change*, so repeated enrichment runs don't churn correct rows.
+  - `stripTrackNumberPrefix` removes `01 - TITLE` / `(4) Title` at scan time,
+    independently of any provider, so unmatched books improve too.
+- **LibriVox sections → chapters.** `sections[].title` is the real chapter
+  name; `sections[].listen_url` carries the filename (`file_name` is usually
+  null), which is what makes identity matching possible.
+- **Hand-set titles.** `PUT /api/audiobooks/:id/tracks/:trackNumber/title`.
+  Stored as a `FieldOverride` keyed `trackTitle:<n>` — *not* a column on
+  `Track`, because the scanner deletes and recreates every track row on each
+  rescan and would wipe it. Keyed by number rather than id for the same
+  reason. Clearing deletes the row rather than storing `""`.
+- **`make enrich`** — a forced enrichment pass. Required after any scan,
+  because the scan resets `Track.title` back to the embedded tag.
+
+Two bugs found and fixed while testing:
+
+1. **The spec's own "never overwritten" criterion shipped unenforced.**
+   `applyChapterTitles` accepted a `lockedTrackIds` option that **no caller
+   ever passed**. The lock now lives in `FieldOverride` and is read inside
+   `applyChapterTitles` itself, so no call site can forget it. Caught by
+   reading the call sites, not by the tests — an unchecked acceptance
+   criterion is not evidence.
+2. **A run enqueued during another run was stranded forever.** `process`
+   returned early on the `running` guard and nothing revisited the row, so it
+   sat at `pending` with no feedback. Since a scan auto-enqueues a pass, this
+   hit every manual run issued during a scan-triggered one.
+
+Also fixed: `audnexus.ts` was missing its trailing newline.
+
+Validation:
+
+- `server`: **290 pass**, 1 skipped (Windows Developer Mode symlink probe).
+  Was 270.
+  - `chapters.test.ts` 28 → 35
+  - `chapters.integration.test.ts` **new**, 6 (override enforcement, override
+    survives a scan-style recreate, idempotency)
+  - `app.test.ts` 8 → 15 (7 route tests for the title endpoint)
+- `client`: 104 pass, unchanged.
+- `tsc --noEmit` clean in both tiers.
+- The override tests were verified to **fail** when the enforcement is
+  removed — reverted, watched them fail, restored.
+- Playwright: **32 passed** (21 chromium + 11 security), run via
+  `scripts/e2e-wsl.sh` from WSL, where Docker lives. Spec 21 adds no E2E spec —
+  chapter titles are asserted at the API/DB layer, which is where the logic
+  lives — but the existing suite confirms nothing regressed.
+
+**Earlier session 2026-10-06 (later): fixed the stale library grid.**
 
 User-reported: listened to a book, went back to the library, and the progress
 bar had not moved. Two compounding causes, both mine from spec 14:
@@ -447,11 +518,13 @@ Remaining follow-ups:
 - **WSL gotcha:** the vite dev server's file watcher misses edits made
   over /mnt/c — if client changes seem not to take effect, restart
   `npm run dev` in client/ before debugging the code.
-- Test commands: `cd server && npm test` (38 tests), `cd client &&
-  npm test` (53 tests) + `npx tsc --noEmit`, `npx playwright test`
-  (or `--project=security`) from repo root. Playwright now has a
+- Test commands: `cd server && npm test` (290 tests), `cd client &&
+  npm test` (104 tests) + `npx tsc --noEmit`, `npx playwright test`
+  (or `--project=security`) from repo root. Playwright has a
   `globalSetup` that aborts with an actionable message if the servers, the
-  `test/` fixtures or `APP_PASSWORD` are missing. 16 tests as of spec 14.
+  `test/` fixtures or `APP_PASSWORD` are missing.
+  Counts in the historical session entries below are point-in-time for the
+  session they describe; the live numbers are in "Current state".
 - Playwright chromium system deps installed by the user via sudo.
 - `e2e/` flows need the dev servers up; server DB is throwaway at
   /tmp/audiobook-e2e.db with collected sample media from `test/`.
@@ -474,12 +547,17 @@ Remaining follow-ups:
 - `npm audit` in `server/` still flags `@fastify/static` (route-guard bypass /
   non-canonical path), `vitest` and `esbuild`. The upgrades are breaking major
   bumps, so they need their own change with a re-run of the security suite.
-- **Spec 15 (GUI redesign) is next.** It should restyle
+- **Spec 15 (GUI redesign) is next**, and has no spec file yet — writing
+  `specs/15-gui-redesign.md` is the first task. It should restyle
   `ProgressTimeline` and `position.ts` rather than rebuild them, and
   `decisions/007` (keep the native range input) should be honoured unless a new
   ADR supersedes it. Remaining position-display ideas, in rough priority order:
   tick hover tooltips naming the chapter, a drag-to-scrub time bubble, and
   bookmarks/highlights on the timeline (the last one needs a new data model).
+- **Chapter editing UI.** Spec 21 shipped the
+  `PUT /api/audiobooks/:id/tracks/:trackNumber/title` endpoint but no editor,
+  so a user cannot yet set a track title by hand. Spec 06 deferred the editor;
+  the endpoint and the `FieldOverride` storage are what it should be built on.
 - `server/src/scripts/scan.ts` (package.json "scan") doesn't exist — either
   add it or drop the script (known quirk, harmless).
 - If the household grows, the seeded profile list in `server/src/seed.ts`
@@ -529,6 +607,22 @@ Remaining follow-ups:
 - **Fixed (spec 14 follow-up):** the library grid never refetched after
   playback, so saved progress never appeared — the shell now refetches when the
   player's final save resolves, and on window focus / tab visible.
+- **Fixed (spec 21):** the Audnexus provider had **never worked** — wrong host
+  (`audnex.us` not `api.audnex.us`) and no book-search endpoint exists at all.
+  Every request 404'd since spec 16, and silent degradation hid it. Now an
+  ASIN-keyed lookup only; see ADR 011.
+- **Fixed (spec 21):** an `EnrichmentRun` enqueued while another was in flight
+  sat at `pending` forever — the `running` guard returned early and nothing
+  revisited it.
+- **Fixed (spec 21):** "a user-set track title is never overwritten" was
+  checked off but enforced by nothing; the lock lived in an option no caller
+  passed. It now lives in `FieldOverride` and is read inside
+  `applyChapterTitles`.
+- **Note (spec 21):** the scanner `deleteMany`s and recreates every `Track` row
+  on each rescan, and reassigns track ids. Anything that must survive a rescan
+  has to be keyed on `MediaItem` (e.g. `FieldOverride`), never on `Track`.
+  Chapter titles are also reset to the embedded tag by every scan, so run
+  `make enrich` (force) after `make scan`.
 - **Note (spec 14 session):** the Vite dev server in docker silently misses edits
   made over the `/mnt/c` bind mount. Restart the client container before
   concluding a client change "does nothing".

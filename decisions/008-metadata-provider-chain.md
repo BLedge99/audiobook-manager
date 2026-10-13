@@ -1,7 +1,13 @@
 # ADR 008 — Adaptive metadata provider chain
 
 ## Status
-Accepted
+Accepted, **partly superseded by ADR 011**
+
+> **Superseded in part (see ADR 011).** Audnexus has no book-search endpoint and
+> its host was wrong, so it never worked as the "commercial" entry in this
+> chain. It has been removed from the title-driven search and is now an
+> ASIN-keyed lookup used for chapter titles. Everything below about LibriVox
+> detection, sequential walking and `METADATA_PROVIDER_ORDER` still stands.
 
 ## Context
 Spec 07 enriches from Open Library and Google Books. Both are book-oriented,

@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import * as musicMetadata from "music-metadata";
 import { PrismaClient } from "@prisma/client";
 import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./scan-utils";
+import { stripTrackNumberPrefix, parseTrackTitleOverrides, resolveTrackTitle } from "./metadata/chapters";
 
 export const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".wav", ".aac"]);
 
@@ -93,6 +94,19 @@ function probeChapters(filePath: string): Promise<ChapterInfo[] | undefined> {
       }
     });
   });
+}
+
+/**
+ * Normalise a per-file title for display as a chapter.
+ *
+ * Embedded tags routinely carry the track number as a prefix -- "01 - THE
+ * TELL-TALE HEART" -- but the player already renders "Track 7" beside it, so
+ * the chapter name reads "Track 7 - 07 - THE TELL-TALE HEART". Stripping it is
+ * independent of any provider, so books with no provider match still improve.
+ */
+function cleanTrackTitle(title: string): string {
+  const stripped = stripTrackNumberPrefix(title);
+  return stripped.length > 0 ? stripped : title;
 }
 
 async function readAudioFile(filePath: string): Promise<AudioFile> {
@@ -255,15 +269,29 @@ export function createScanManager(prisma: PrismaClient) {
 
         await prisma.track.deleteMany({ where: { mediaItemId: item.id } });
         if (group.length > 1) {
+          // Spec 21: a hand-set track title outranks the embedded tag. Read
+          // before the delete so the override survives the recreation -- this
+          // is the only place a user's chapter name can be resurrected, since
+          // the rows it lived on were just dropped.
+          const trackTitleOverrides = parseTrackTitleOverrides(
+            await prisma.fieldOverride.findMany({
+              where: { mediaItemId: item.id, field: { startsWith: "trackTitle:" } },
+              select: { field: true, value: true },
+            }),
+          );
+
           await prisma.track.createMany({
-            data: group.map((file, index) => ({
-              mediaItemId: item.id,
-              filePath: file.filePath,
-              title: file.title,
-              duration: file.duration,
-              trackNumber: index + 1,
-              sizeBytes: BigInt(file.sizeBytes),
-            })),
+            data: group.map((file, index) => {
+              const trackNumber = index + 1;
+              return {
+                mediaItemId: item.id,
+                filePath: file.filePath,
+                title: resolveTrackTitle(trackNumber, cleanTrackTitle(file.title), trackTitleOverrides),
+                duration: file.duration,
+                trackNumber,
+                sizeBytes: BigInt(file.sizeBytes),
+              };
+            }),
           });
         }
       }

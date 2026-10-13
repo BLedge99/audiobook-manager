@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { coverFilename, fetchCover } from "./cover";
 import { applyGenres, reconcileContributors, upsertSeries, type ContributorSpec } from "./taxonomy-service";
+import { applyChapterTitles } from "./chapters";
 import { normalizeText, type ProviderCandidate } from "./types";
 
 /**
@@ -191,6 +192,13 @@ export async function applyCandidate(
   if (candidate.genres?.length) {
     await applyGenres(prisma, item.id, candidate.source, candidate.genres);
     fields.push("genres");
+  }
+
+  // Spec 21: official chapter titles, applied to the per-file tracks that the
+  // player renders as chapters.
+  if (candidate.chapters?.length) {
+    const chapterCount = await applyChapterTitles(prisma, item.id, candidate.chapters);
+    if (chapterCount > 0) fields.push("chapters");
   }
   if (candidate.narrators?.length || candidate.author) {
     const contributors: ContributorSpec[] = [];
