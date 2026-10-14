@@ -4,8 +4,11 @@ import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
 import { FilterBar } from "./components/FilterBar";
+import { needsServerUrl } from "./lib/api";
 import { LoginGate } from "./components/LoginGate";
+import { OfflineNotice, Splash } from "./components/OfflineNotice";
 import { ProfileGate } from "./components/ProfileGate";
+import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
 import { ReviewQueue } from "./components/ReviewQueue";
 import { SearchBar } from "./components/SearchBar";
@@ -49,6 +52,15 @@ function App() {
   const [showRootForm, setShowRootForm] = useState(false);
   const [working, setWorking] = useState(false);
   const [authed, setAuthed] = useState<boolean>();
+  /**
+   * Whether the server answered at all, as distinct from whether it said 401.
+   *
+   * These were conflated into one `authed` boolean, which meant an unreachable
+   * server looked identical to being logged out -- so the app demanded a login it
+   * could never complete. Someone who had downloaded a book to listen on a plane
+   * was locked out of it by the very feature that let them download it.
+   */
+  const [serverReachable, setServerReachable] = useState<boolean>();
   const [profileId, setProfileId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
   // Spec 20: both the tab and the filters live in the URL, so a shared or
   // bookmarked link restores the whole view. Persisting filters alone was not
@@ -65,10 +77,26 @@ function App() {
     return TABS.some((entry) => entry.id === requested) ? (requested as Tab) : "library";
   });
 
-  // Probe: if the server requires auth, /api/audiobooks returns 401 until logged in.
-  useEffect(() => {
-    void fetch("/api/audiobooks").then((res) => setAuthed(res.status !== 401)).catch(() => setAuthed(false));
+  /**
+   * Ask the server who we are.
+   *
+   * Records two separate facts: did it answer at all, and did it accept us.
+   * Re-run on focus so returning home recovers without a manual restart.
+   */
+  const probeServer = useCallback(() => {
+    void fetch("/api/audiobooks")
+      .then((res) => {
+        setServerReachable(true);
+        setAuthed(res.status !== 401);
+      })
+      .catch(() => {
+        setServerReachable(false);
+      });
   }, []);
+
+  useEffect(() => {
+    probeServer();
+  }, [probeServer]);
 
   /** Write the current view (tab + filters + search) to the URL. */
   const syncUrl = useCallback((nextTab: Tab, nextFilters: Filters, nextSearch: string) => {
@@ -104,7 +132,7 @@ function App() {
    * over an empty shelf -- being away from home is the case the whole feature
    * exists for, so it must not look like a failure.
    */
-  const offline = Boolean(error) && device.books.length > 0;
+  const offline = serverReachable === false && device.books.length > 0;
   const libraryBooks = offline ? device.books : audiobooks;
 
   const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);
@@ -197,13 +225,64 @@ function App() {
     };
   }, [profileId, refresh]);
 
-  if (authed === false) {
+  // Re-probe when the app comes back to the foreground. Without this, someone
+  // who opened the app at home, left, and came back would stay stuck in the
+  // offline branch until they force-quit and restart it.
+  useEffect(() => {
+    const recheck = () => {
+      if (serverReachable === false) probeServer();
+    };
+    window.addEventListener("focus", recheck);
+    const onVisible = () => { if (document.visibilityState === "visible") recheck(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [serverReachable, probeServer]);
+
+  if (needsServerUrl()) {
+    return <ServerSetup onDone={() => window.location.reload()} />;
+  }
+
+  // Still deciding whether the server is there. Rendering the login form now
+  // would flash a password box at someone who is simply on a slow connection.
+  if (serverReachable === undefined) {
+    return <Splash />;
+  }
+
+  /**
+   * Offline.
+   *
+   * The point of downloading a book is to listen to it with no network, so being
+   * unreachable must not mean being locked out. If this device has books and we
+   * know who the listener was, go straight in and let the replica serve the
+   * library.
+   *
+   * The profile is reused from `localStorage` rather than re-asked for: the
+   * profile list lives on the server, so ProfileGate cannot run here, and the
+   * last choice is the right one anyway.
+   */
+  if (!serverReachable) {
+    if (device.books.length > 0 && profileId) {
+      // Fall through to the app below.
+    } else {
+      return (
+        <OfflineNotice
+          hasBooks={device.books.length > 0}
+          onRetry={probeServer}
+        />
+      );
+    }
+  }
+
+  if (serverReachable && authed === false) {
     return <LoginGate onSuccess={() => { setAuthed(true); void refresh(); }} />;
   }
 
   // Progress is profile-scoped: no profile selected means nothing can be
   // saved or restored, so pick (or create) one before browsing.
-  if (authed && !profileId) {
+  if (serverReachable && authed && !profileId) {
     return <ProfileGate onSuccess={() => setProfileId(window.localStorage.getItem("profileId"))} />;
   }
 
