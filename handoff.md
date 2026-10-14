@@ -122,41 +122,82 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ### Next action — read this first
 
-**Step 1 (client `credentials: 'include'`) is done. The phone verification
-(steps 2–4) is what remains.**
+**The auth blocker is fixed and verified on the phone. Two real bugs were found
+doing it; the second is still open.**
 
-The server side was already done: `server/src/app.ts` registers CORS with
-`credentials: true`, and `server/src/app.test.ts` asserts both that
-`Access-Control-Allow-Credentials: true` is sent and that a foreign origin is
-still refused.
+**Fixed and verified: cross-origin session auth (commit `4f960bb`).**
 
-**Step 1 (this session):** `client/src/lib/api.ts` — `apiFetch()` now sends
-`credentials: 'include'` (the profile-header and `apiAssetUrl` paths do not
-need it, and the fetch shim in `installApiBaseUrl` is unaffected). A test
-asserts it. Client suite 214 pass (+1), `tsc` clean.
+The handoff previously attributed the hang to CORS + a missing
+`credentials: 'include'`. Those were real gaps but **not the cause**.
+The actual cause: the WebView origin is `https://localhost` while the API is
+plain `http://localhost:3000`. A different scheme makes it **cross-site**, so
+Chrome dropped the `SameSite=Lax` `house_session` cookie outright — CDP showed
+**zero cookies stored** — and every call after login 401'd while login itself
+looked like it had succeeded. No CORS setting can fix this; it is the cookie
+policy. `SameSite=None` would require `Secure`, i.e. real HTTPS, which a
+plain-HTTP LAN server does not have.
 
-Remaining steps:
+Fix: login also returns the opaque token in the body, the server accepts it in
+`x-house-session` as well as the cookie, and the client replays it as a header.
+The cookie path is untouched, so the browser/PWA and Playwright are unaffected.
+Verified on device: login 200 → token → a bare `fetch()` with no explicit
+header returns 200 with the real profile list.
 
-2. Rebuild the APK with `npm run build:android` and reinstall. **The build
-   script runs `gradlew clean assembleDebug` first** — do not skip that;
-   without it Gradle packages the previous build's JS.
-3. Restart the container so the server picks up `credentials: true`:
-   `make restart`.
-4. Verify end to end: set the server URL in Settings, log in, create a profile,
-   then download a book over `adb reverse tcp:3000 tcp:3000` and confirm it
-   plays with the network off.
+**Two traps this session, both worth not repeating:**
 
-One edit to `capacitor.config.ts` was **started and then failed to apply** — an
-`androidAllowMixedContent: true` addition under `server:`. It is not in the file,
-and neither it nor `server.cleartext: true` is a substitute for the client-side
-`credentials` fix. Only add it if step 4 still shows mixed-content blocking.
+1. **The first credentials fix shipped a passing test and a broken app.** It was
+   put in `apiFetch`, which is barely called — the app has ~8 duplicated private
+   `request` helpers (`useLibrary`, `useBrowse`, `ReviewQueue`, `TagManager`)
+   plus raw `fetch` in `LoginGate`, `ProfileGate`, `ProfileSwitcher`,
+   `ChapterPlayer`, `AudiobookDetail`. Nothing routes through `apiFetch`, so the
+   cookie never travelled. The fix now lives in the `installApiBaseUrl` shim,
+   the only choke point every call passes through. **This is the third time this
+   project has been bitten by "an unchecked acceptance criterion is not
+   evidence" — grep the shipped bundle, not the source, before believing a
+   client-side fix landed.**
+2. **`unexpected token DOCTYPE` was not a bug.** It is what you get when a
+   relative `/api/...` resolves to the bundled `index.html` because no server
+   URL is configured. It looks exactly like a server fault and is not one.
+
+**OPEN BUG — the app is deadlocked with no server URL.** `needsServerUrl()` in
+`client/src/lib/api.ts` exists and is unit-tested, but **no call site ever uses
+it** (same class of bug as above). On first run in the Android shell,
+`ProfileGate` renders, its `/api/profiles` resolves to `index.html` (HTML where
+JSON was expected), and it shows "Cannot reach the server. Unexpected token
+'<'..." — but Settings is only reachable from the app header, which `ProfileGate`
+blocks. The user has **no way to enter the server address**. Worked around by
+setting `localStorage.serverUrl` over CDP. Needs a server-URL gate rendered
+before `LoginGate`/`ProfileGate`.
+
+**Remaining from Sprint 2:** still no book has been downloaded, so offline
+playback is unverified end to end.
+
+### Environment notes (this session)
+
+- **Windows port 3000 is held by `iphlpsvc`** — that is *our own* `make lan`
+  portproxy (`0.0.0.0:3000 -> 172.23.64.77:3000`), not a conflict. Docker binds
+  3000 only *inside* WSL, so this is the intended design. Do not "free" it.
+- **WSL kills the containers when the distribution exits** (already noted in the
+  Makefile). Every `wsl -e bash` is a fresh instance, so `compose up` and the
+  test must be one invocation, or WSL must be kept alive with
+  `nohup sleep infinity & disown`.
+- `JAVA_HOME` is **not set in a fresh shell**. JDK 21 is installed at
+  `C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot`; `ANDROID_HOME` must be
+  set to `C:\Users\benle\AppData\Local\Android\Sdk` too (`local.properties` does
+  not exist and is machine-specific).
+- **Gradle's `clean` task cannot delete `build/`** — a daemon holds
+  `build/reports`. Use `gradlew --stop`, then `Remove-Item -Recurse -Force build`,
+  then `assembleDebug`. That is equivalent to `clean` and is what the "do not
+  skip clean" rule was protecting against.
+- The screen sleeps and the keyguard blocks automation. CDP hangs whenever the
+  WebView is suspended, so the **user must unlock the phone and leave the app in
+  the foreground** before CDP probes work.
 
 ### Where things stand
 
-Everything below is committed and pushed. Working tree is clean; local and
-`origin/master` are both at `8faafd0`.
+Committed and pushed. Local and `origin/master` are both at `4f960bb`.
 
-Client 213 tests pass, server 372 pass (1 skipped), `tsc` clean on both tiers.
+Client 217 tests pass, server 375 pass (1 skipped), `tsc` clean on both tiers.
 
 ---
 
