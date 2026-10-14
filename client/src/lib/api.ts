@@ -355,6 +355,28 @@ export function withSessionToken(url: string): string {
 }
 
 /**
+ * URL for a book's cover art.
+ *
+ * Two things are easy to get wrong here, and both look identical in the UI --
+ * every cover silently falls back to the placeholder:
+ *
+ * 1. It must go through `apiAssetUrl`. A bare `/api/audiobooks/N/cover` resolves
+ *    against the WebView's `https://localhost` origin and returns the bundled
+ *    `index.html`, which is not an image.
+ * 2. It must carry the session token in the query string. An `<img src>`
+ *    request is issued by the browser, not by script, so it cannot send the
+ *    session header and never passes through the fetch shim -- exactly like
+ *    `<audio src>`.
+ *
+ * Verified against the server: 11 of 12 books have a cover file on disk and the
+ * endpoint returns 200 with image bytes, so a missing cover in the UI is a
+ * client-side URL bug, not missing data.
+ */
+export function coverUrl(bookId: number): string {
+  return withSessionToken(apiAssetUrl(`/api/audiobooks/${bookId}/cover`));
+}
+
+/**
  * Resolve a relative asset URL (cover art, audio) for the current shell.
  *
  * Cover URLs come back from the server as `/api/covers/...`. In a browser they

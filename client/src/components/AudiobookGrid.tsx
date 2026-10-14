@@ -1,5 +1,6 @@
 import { Clock3, Compass, Headphones } from "lucide-react";
 import type { Audiobook } from "../types";
+import { coverUrl } from "../lib/api";
 import { FavouriteButton } from "./FavouriteButton";
 import {
   describePosition,
@@ -50,7 +51,7 @@ const cardGrid = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-c
 function Cover({ book }: { book: Audiobook }) {
   return (
     <div className="relative aspect-[2/3] overflow-hidden bg-slate-800">
-      <img src={`/api/audiobooks/${book.id}/cover`} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+      <img src={coverUrl(book.id)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
       <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-slate-950/80 px-2 py-1 text-xs text-slate-200"><Clock3 size={12} /> {durationLabel(book.duration)}</span>
     </div>
   );

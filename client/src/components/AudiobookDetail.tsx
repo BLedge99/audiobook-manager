@@ -1,7 +1,7 @@
 import { X, Clock3, Compass, FileAudio, Heart, Sparkles } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
-import { apiAssetUrl } from "../lib/api";
+import { coverUrl } from "../lib/api";
 import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
@@ -130,7 +130,7 @@ export function AudiobookDetail({
             only asserted the *document* did not scroll -- the dialog is viewport
             width, so the page was fine while the dialog scrolled inside itself.
             It now asserts the dialog does not scroll internally too. */}
-        <img src={apiAssetUrl(`/api/audiobooks/${book.id}/cover`)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="mx-auto aspect-[2/3] w-full max-w-[180px] min-w-0 object-cover md:max-w-none md:h-full" />
+        <img src={coverUrl(book.id)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="mx-auto aspect-[2/3] w-full max-w-[180px] min-w-0 object-cover md:max-w-none md:h-full" />
         <div className="min-w-0 p-5 md:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Audiobook</p>
           <h2 className="mt-3 pr-10 text-2xl font-bold text-white md:text-3xl">{book.title}</h2>

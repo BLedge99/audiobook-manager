@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
 import { seriesLabel, type Shelf } from "../lib/browse";
+import { coverUrl } from "../lib/api";
 
 /**
  * Spec 20 — horizontally scrollable shelves.
@@ -27,7 +28,7 @@ function ShelfCard({
       <button onClick={() => onSelect(book)} className="w-full text-left">
         <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-slate-800">
           <img
-            src={`/api/audiobooks/${book.id}/cover`}
+            src={coverUrl(book.id)}
             onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }}
             alt=""
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"

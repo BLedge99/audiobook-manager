@@ -73,6 +73,33 @@ function convertFileSrc(fileUri: string): string {
 }
 
 /**
+ * Is a plugin progress event about *this* download?
+ *
+ * Matched on the path and query rather than exact string equality. Two
+ * downloads of different tracks have different paths, so this separates them
+ * correctly while tolerating whatever normalisation the plugin applied to the
+ * URL it reports back.
+ */
+export function isSameDownload(reported: string | undefined, requested: string): boolean {
+  if (!reported) return false;
+  if (reported === requested) return true;
+  return tail(reported) === tail(requested);
+}
+
+function tail(url: string): string {
+  const withoutScheme = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  const slash = withoutScheme.indexOf("/");
+  const rest = slash === -1 ? withoutScheme : withoutScheme.slice(slash);
+  // Compare decoded, so a plugin that percent-encodes the session token still
+  // matches. Guarded: malformed escapes fall back to the raw text.
+  try {
+    return decodeURIComponent(rest);
+  } catch {
+    return rest;
+  }
+}
+
+/**
  * `FileSystemPort` backed by the real plugins.
  *
  * Every method assumes a filesystem call on the Web platform will simply fail,
@@ -83,12 +110,19 @@ export const deviceFiles: FileSystemPort = {
   async download({ url, path, headers, onProgress }) {
     const Filesystem = await fs();
     // The plugin reports progress through a listener on the plugin itself, not
-    // a per-call callback, so filter by URL. Without the filter a concurrent
-    // download's events would be attributed to this one.
+    // a per-call callback, so filter by URL -- otherwise a concurrent download's
+    // events would be attributed to this one.
+    //
+    // The filter compares the *end* of the URL, not the whole string. The plugin
+    // reports the URL it actually requested, which need not be byte-identical to
+    // the one passed in (it may re-encode or normalise it). An exact `!==`
+    // comparison silently matched nothing, so progress never fired and the UI sat
+    // at "Downloading 0%" for the whole download -- the transfer worked and the
+    // progress was invisible, which is the worst version of this bug.
     let listener: { remove: () => Promise<void> } | undefined;
     if (onProgress) {
       const handle = await Filesystem.addListener("progress", (progress) => {
-        if (progress.url !== url) return;
+        if (!isSameDownload(progress.url, url)) return;
         if (!progress.contentLength) return;
         onProgress(progress.bytes / progress.contentLength);
       });
