@@ -131,6 +131,18 @@ function convertFileSrc(fileUri: string): string {
 }
 
 /**
+ * Did `mkdir` fail only because the directory is already there?
+ *
+ * `recursive: true` creates parents but still rejects a pre-existing final
+ * directory, so this is the normal case for every download after the first of a
+ * book, not a failure.
+ */
+export function isDirectoryExists(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  return code === "OS-PLUG-FILE-0010";
+}
+
+/**
  * Is a plugin progress event about *this* download?
  *
  * Matched on the path and query rather than exact string equality. Two
@@ -172,9 +184,19 @@ export const deviceFiles: FileSystemPort = {
     // FileTransfer writes to a **full path**, not a directory-relative path like
     // Filesystem.downloadFile took, so resolve it first. It also will not create
     // the parent directory, which is why this is explicit here.
+    //
+    // OS-PLUG-FILE-0010 ("Directory already exists") is *not* an error to raise:
+    // every download after the first for a given book hits it, because the
+    // directory was created by the track before it. The previous implementation
+    // let `recursive: true` on downloadFile handle this implicitly; calling
+    // mkdir unconditionally broke every download after the first.
     const parent = path.split("/").slice(0, -1).join("/");
     if (parent) {
-      await Filesystem.mkdir({ path: parent, directory: DEVICE_DIRECTORY, recursive: true });
+      try {
+        await Filesystem.mkdir({ path: parent, directory: DEVICE_DIRECTORY, recursive: true });
+      } catch (error) {
+        if (!isDirectoryExists(error)) throw error;
+      }
     }
     const { uri } = await Filesystem.getUri({ path, directory: DEVICE_DIRECTORY });
 

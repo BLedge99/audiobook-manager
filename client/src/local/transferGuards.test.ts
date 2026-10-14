@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeTransferError, isSameDownload, validateDownloadedSize } from "./device";
+import { describeTransferError, isDirectoryExists, isSameDownload, validateDownloadedSize } from "./device";
 
 /**
  * These guard the bug that made downloads look successful while producing
@@ -63,6 +63,20 @@ describe("describeTransferError", () => {
 
   it("survives an error that is not an object", () => {
     expect(describeTransferError("boom")).toBeInstanceOf(Error);
+  });
+});
+
+describe("isDirectoryExists", () => {
+  // Regression: the migration called mkdir unconditionally, so every download
+  // after the first for a book threw OS-PLUG-FILE-0010 and the download never
+  // started. `recursive: true` still rejects a directory that already exists.
+  it("treats an existing directory as success", () => {
+    expect(isDirectoryExists({ code: "OS-PLUG-FILE-0010" })).toBe(true);
+  });
+
+  it("does not swallow a real mkdir failure", () => {
+    expect(isDirectoryExists({ code: "OS-PLUG-FILE-0013" })).toBe(false);
+    expect(isDirectoryExists(new Error("boom"))).toBe(false);
   });
 });
 
