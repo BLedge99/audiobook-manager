@@ -219,6 +219,9 @@ export const deviceFiles: FileSystemPort = {
       listener = { remove: handle.remove };
     }
 
+    // Announce before the call and confirm after. If this is where a download
+    // hangs, the missing second line is the whole diagnosis.
+    console.log(`[download] plugin downloadFile -> ${url.replace(/session=[^&]*/, "session=...")}`);
     try {
       await FileTransfer.downloadFile({
         url,
@@ -230,7 +233,9 @@ export const deviceFiles: FileSystemPort = {
         readTimeout: 120_000,
         connectTimeout: 30_000,
       });
+      console.log("[download] plugin downloadFile returned");
     } catch (error) {
+      console.log("[download] plugin downloadFile threw:", error);
       throw describeTransferError(error);
     } finally {
       // Always detach: a leaked listener keeps firing for the life of the
@@ -239,6 +244,7 @@ export const deviceFiles: FileSystemPort = {
     }
 
     const { size } = await Filesystem.stat({ path, directory: DEVICE_DIRECTORY });
+    console.log(`[download] wrote ${size} bytes to ${path}`);
     return { path, bytes: size, expectedBytes };
   },
 

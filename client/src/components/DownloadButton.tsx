@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Download, LoaderCircle, Trash2 } from "lucide-react";
 import type { Audiobook } from "../types";
 import type { DownloadProgress } from "../local/download";
+import { DownloadStalledError } from "../local/trace";
 
 export interface DownloadButtonProps {
   book: Audiobook;
@@ -31,12 +32,14 @@ export function DownloadButton({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string>();
+  const [trace, setTrace] = useState<string[]>();
 
   const percent = Math.round((busy ? progress : fraction) * 100);
 
   const start = async () => {
     setBusy(true);
     setError(undefined);
+    setTrace([]);
     setProgress(0);
     try {
       // Unwrap here: the callback reports a whole DownloadProgress (which also
@@ -44,13 +47,17 @@ export function DownloadButton({
       // render "Downloading NaN%".
       await onDownload(book, (update) => setProgress(update.fraction));
     } catch (downloadError) {
-      // Kept specific rather than generic: the most likely cause by far is that
-      // the phone left the home WiFi, and "Could not download" hides that.
-      setError(
-        downloadError instanceof Error
-          ? `Download failed: ${downloadError.message}. The phone may have left the home WiFi.`
-          : "Download failed.",
-      );
+      // Show the message *and* the stage trace. A bare message hides the one
+      // thing that matters -- which stage broke -- and this pipeline stalled
+      // silently for a long time precisely because the catch produced nothing
+      // worth reading. The trace is mirrored to the console so logcat carries
+      // the same information.
+      const message =
+        downloadError instanceof Error ? downloadError.message : String(downloadError);
+      setError(message);
+      const steps = downloadError instanceof DownloadStalledError ? downloadError.trace : [];
+      setTrace(steps.map((s) => `${s.stage} — ${s.status} (${s.ms}ms)`));
+      console.error("[download] FAILED:", message, steps);
     } finally {
       setBusy(false);
     }
@@ -92,6 +99,13 @@ export function DownloadButton({
           On this device · {formatBytes(bytes)}
         </p>
         {error && <p className="text-xs text-amber-300" role="status">{error}</p>}
+      {trace && trace.length > 0 && (
+        <ol className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-amber-200/80">
+          {trace.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ol>
+      )}
       </div>
     );
   }
@@ -126,6 +140,13 @@ export function DownloadButton({
       )}
 
       {error && <p className="text-xs text-red-300" role="status">{error}</p>}
+      {trace && trace.length > 0 && (
+        <ol className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-red-200/80">
+          {trace.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }

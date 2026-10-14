@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Audiobook } from "../types";
+import { DownloadStalledError } from "../local/trace";
 import { DownloadButton } from "./DownloadButton";
 
 const book: Audiobook = {
@@ -75,13 +76,41 @@ describe("DownloadButton", () => {
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
   });
 
-  it("surfaces the likely cause when a download fails", async () => {
+  it("surfaces the actual error when a download fails", async () => {
     renderButton({ onDownload: vi.fn(async () => { throw new Error("connection reset"); }) });
 
     fireEvent.click(screen.getByRole("button", { name: /^download$/i }));
 
-    // "Download failed" alone hides the most likely cause by far.
-    await waitFor(() => expect(screen.getByText(/home wifi/i)).toBeInTheDocument());
+    // The real message, not a guessed one. This used to append "the phone may
+    // have left the home WiFi" to *every* failure, which buried the actual cause
+    // behind speculation -- the opposite of helpful when diagnosing.
+    await waitFor(() => expect(screen.getByText(/connection reset/i)).toBeInTheDocument());
+  });
+
+  it("shows which stage stalled, and what had already succeeded", async () => {
+    const stall = new DownloadStalledError("track 2/5: fetch audio", 180_000, [
+      { stage: "write replica metadata", ms: 12, status: "ok" },
+      { stage: "track 1/5: fetch audio", ms: 240, status: "ok" },
+    ]);
+    renderButton({ onDownload: vi.fn(async () => { throw stall; }) });
+
+    fireEvent.click(screen.getByRole("button", { name: /^download$/i }));
+
+    await waitFor(() => expect(screen.getByText(/stalled at "track 2\/5: fetch audio"/i)).toBeInTheDocument());
+    // The completed stages are listed, so the report says how far it got.
+    expect(screen.getByText(/track 1\/5: fetch audio — ok \(240ms\)/)).toBeInTheDocument();
+    expect(screen.getByText(/write replica metadata — ok/)).toBeInTheDocument();
+  });
+
+  it("leaves the button usable after a stall so the download can be retried", async () => {
+    const stall = new DownloadStalledError("track 1/5: fetch audio", 180_000, []);
+    renderButton({ onDownload: vi.fn(async () => { throw stall; }) });
+
+    fireEvent.click(screen.getByRole("button", { name: /^download$/i }));
+
+    // This is the whole point of the change: the button used to stay stuck on
+    // "Downloading 0%" forever, which left no way to retry at all.
+    await waitFor(() => expect(screen.getByRole("button", { name: /resume download|download/i })).toBeInTheDocument());
   });
 
   it("switches to Remove for a downloaded book", () => {

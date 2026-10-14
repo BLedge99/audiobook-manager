@@ -19,6 +19,7 @@
 
 import { apiUrl, withSessionToken } from "../lib/api";
 import { validateDownloadedSize } from "./device";
+import { DownloadTrace } from "./trace";
 import type { Audiobook, Track } from "../types";
 import type { LocalLibraryDatabase } from "./db";
 import {
@@ -69,6 +70,24 @@ export function trackStreamUrl(trackId: number): string {
 }
 
 /**
+ * Per-stage budgets, in milliseconds.
+ *
+ * Every stage here is either a small metadata write or a single file transfer,
+ * so these are generous. Their job is not to be tight -- it is to convert a
+ * promise that never settles into a named, visible failure.
+ */
+export const STEP_BUDGETS = {
+  /** Writing one book's metadata row to Dexie. */
+  replicaWrite: 5_000,
+  /** One track over a LAN or USB tunnel. A long track at a poor rate can take a while. */
+  trackDownload: 180_000,
+  /** stat on a file we just wrote. */
+  stat: 10_000,
+  /** Recording a completed track in Dexie. */
+  trackRecord: 5_000,
+} as const;
+
+/**
  * Download every track of a book, recording metadata first and each track as it
  * lands.
  *
@@ -76,26 +95,35 @@ export function trackStreamUrl(trackId: number): string {
  * and their files stay on disk, so re-running skips nothing but retries the
  * failed one -- which is the right behaviour for a house move over flaky
  * WiFi, and far better than silently leaving a book that looks complete.
+ *
+ * Every await is wrapped in a traced, time-boxed `step`, so a failure names the
+ * stage that broke rather than leaving the button spinning forever. See
+ * `trace.ts` for why catching alone was not enough.
  */
 export async function downloadBook(
   book: Audiobook,
   deps: DownloadDeps,
   onProgress?: (progress: DownloadProgress) => void,
+  trace: DownloadTrace = new DownloadTrace(),
 ): Promise<void> {
   const tracks = book.tracks ?? [];
   if (tracks.length === 0) {
     throw new Error(`"${book.title}" has no tracks to download`);
   }
 
-  const now = deps.now ?? (() => new Date());
-  const extension = extensionFor(book.fileFormat);
-
-  // Metadata first: every track below is recorded against this row.
-  await putReplicaBook(deps.db, book);
+  const { now, extension } = await trace.step(
+    `write replica metadata (${tracks.length} tracks)`,
+    STEP_BUDGETS.replicaWrite,
+    async () => {
+      // Metadata first: every track below is recorded against this row.
+      await putReplicaBook(deps.db, book);
+      return { now: deps.now ?? (() => new Date()), extension: extensionFor(book.fileFormat) };
+    },
+  );
 
   for (let index = 0; index < tracks.length; index += 1) {
     const track = tracks[index];
-    await downloadTrack(book, track, extension, index, tracks.length, deps, onProgress, now);
+    await downloadTrack(book, track, extension, index, tracks.length, deps, onProgress, now, trace);
   }
 }
 
@@ -108,42 +136,50 @@ async function downloadTrack(
   deps: DownloadDeps,
   onProgress: ((progress: DownloadProgress) => void) | undefined,
   now: () => Date,
+  trace: DownloadTrace,
 ): Promise<void> {
   const path = trackPath(book.id, track.id, extension);
+  const label = `track ${index + 1}/${total}`;
 
-  const result = await deps.files.download({
-    url: deps.trackUrl(track.id),
-    path,
-    headers: deps.headers,
-    onProgress: (trackFraction) => {
-      onProgress?.({
-        bookId: book.id,
-        trackId: track.id,
-        completed: index,
-        total,
-        fraction: (index + clamp01(trackFraction)) / total,
-        trackFraction: clamp01(trackFraction),
-      });
-    },
-  });
+  const result = await trace.step(`${label}: fetch audio`, STEP_BUDGETS.trackDownload, () =>
+    deps.files.download({
+      url: deps.trackUrl(track.id),
+      path,
+      headers: deps.headers,
+      onProgress: (trackFraction) => {
+        onProgress?.({
+          bookId: book.id,
+          trackId: track.id,
+          completed: index,
+          total,
+          fraction: (index + clamp01(trackFraction)) / total,
+          trackFraction: clamp01(trackFraction),
+        });
+      },
+    }),
+  );
 
   // Prefer the size the plugin reported; fall back to stat when it does not,
   // because the storage screen would otherwise under-report a book's footprint.
-  const bytes = result?.bytes > 0 ? result.bytes : await sizeOf(deps.files, path);
+  const bytes = result?.bytes > 0 ? result.bytes : await sizeOf(deps.files, path, trace, label);
 
   // Check before recording anything. An HTTP error body is small and perfectly
   // valid to write to disk, so a "successful" download could otherwise leave a
   // book marked as on-device with no playable audio in it. That is worse than a
   // visible failure: the UI would say you have the book and you would only
   // discover otherwise offline.
-  validateDownloadedSize(bytes, result?.expectedBytes ?? 0);
+  trace.step(`${label}: verify size`, STEP_BUDGETS.stat, () =>
+    validateDownloadedSize(bytes, result?.expectedBytes ?? 0),
+  );
 
-  await putDownloadedTrack(deps.db, book.id, {
-    trackId: track.id,
-    path,
-    bytes,
-    downloadedAt: now().toISOString(),
-  });
+  await trace.step(`${label}: record track`, STEP_BUDGETS.trackRecord, () =>
+    putDownloadedTrack(deps.db, book.id, {
+      trackId: track.id,
+      path,
+      bytes,
+      downloadedAt: now().toISOString(),
+    }),
+  );
 
   onProgress?.({
     bookId: book.id,
@@ -155,11 +191,26 @@ async function downloadTrack(
   });
 }
 
-async function sizeOf(files: FileSystemPort, path: string): Promise<number> {
+/**
+ * Size of a file we just wrote.
+ *
+ * This used to `catch { return 0 }`, which silently turned *any* stat failure --
+ * a plugin error, a permissions problem, a native crash -- into "the file is
+ * zero bytes". That reported a broken download as a validation failure much
+ * later, or worse, hid it entirely. It now distinguishes "not there" from "the
+ * stat itself failed" and reports which.
+ */
+async function sizeOf(
+  files: FileSystemPort,
+  path: string,
+  trace: DownloadTrace,
+  label: string,
+): Promise<number> {
   try {
-    return files.stat(path);
-  } catch {
-    return 0;
+    return await trace.step(`${label}: stat file`, STEP_BUDGETS.stat, () => files.stat(path));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not read the size of the downloaded file: ${detail}`);
   }
 }
 
