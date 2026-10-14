@@ -66,12 +66,16 @@ export function ProfileSwitcher() {
   };
 
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+      {/* `max-w-[9rem]` because a long profile name ("Harry Potter and the
+          Goblet of Fire") made this select 130px+ wide, and it is one of three
+          fixed-width items in the header row that used to force the whole page
+          sideways on a phone. */}
       <select
         aria-label="Active profile"
         value={currentId ?? ""}
         onChange={(event) => event.target.value && select(Number(event.target.value))}
-        className="border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
+        className="min-w-0 max-w-[9rem] truncate border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
       >
         <option value="" disabled>Select profile</option>
         {profiles.map((profile) => (

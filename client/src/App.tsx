@@ -230,18 +230,25 @@ function App() {
   return (
     <div className="min-h-screen bg-[#0b1117] text-slate-100">
       <header className="border-b border-slate-800/80 bg-[#0b1117]/95">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center bg-cyan-400 text-slate-950"><BookOpen size={22} /></span>
-            <div><p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400">Local library</p><h1 className="text-xl font-bold">Audiobook Manager</h1></div>
+        {/* `flex-wrap` + `min-w-0` are load-bearing. The right-hand group
+            (settings, refresh, profile switcher) has a fixed intrinsic width of
+            about 324px and the title refuses to shrink, so on a 360px phone the
+            row was forced to 515px and the whole page scrolled sideways. Wrapping
+            drops the controls to their own line instead. `e2e/phone-layout`
+            asserts the document never exceeds the viewport, so this cannot
+            silently come back. */}
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5 sm:py-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-10 shrink-0 place-items-center bg-cyan-400 text-slate-950"><BookOpen size={22} /></span>
+            <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400">Local library</p><h1 className="truncate text-lg font-bold sm:text-xl">Audiobook Manager</h1></div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <button onClick={() => setShowSettings(true)} aria-label="Settings" className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><SettingsIcon size={20} /></button>
             <button onClick={() => void refresh()} aria-label="Refresh library" className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><RefreshCw size={20} /></button>
             <ProfileSwitcher />
           </div>
         </div>
-        <nav className="mx-auto max-w-7xl px-5" aria-label="Sections">
+        <nav className="mx-auto max-w-7xl px-4 sm:px-5" aria-label="Sections">
           <ul className="flex flex-wrap gap-1">
             {TABS.map(({ id, label: tabLabel, icon: Icon }) => (
               <li key={id}>
