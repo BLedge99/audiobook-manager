@@ -91,6 +91,31 @@ describe("auth gate", () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it("authenticates from a session query parameter, for <audio src> requests", async () => {
+    // An <audio src> request is issued by the browser, not by script, so it
+    // cannot carry the session header. Without accepting the token in the URL,
+    // streaming playback cannot authenticate at all -- observed on device as
+    // "playback could not start" while every fetch() call worked.
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    const { token } = login.json<{ token: string }>();
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks?session=${token}` });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("ignores an unrelated query parameter when authenticating", async () => {
+    // Guards against the gate being loosened into "any query parameter is a
+    // token", which would be trivially bypassable.
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    const { token } = login.json<{ token: string }>();
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks?ignored=${token}` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects a bad session query parameter", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks?session=not-a-real-token" });
+    expect(res.statusCode).toBe(401);
+  });
+
   it("allows the Capacitor WebView origin, so the Android app can call the API", async () => {
     // The Android app is served from an `https://localhost` origin, which makes
     // every LAN request genuinely cross-origin. Without this in the allow-list

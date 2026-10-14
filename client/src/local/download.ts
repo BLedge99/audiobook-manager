@@ -17,7 +17,7 @@
  * show real progress rather than a spinner that either completes or fails.
  */
 
-import { apiUrl } from "../lib/api";
+import { apiUrl, withSessionToken } from "../lib/api";
 import type { Audiobook, Track } from "../types";
 import type { LocalLibraryDatabase } from "./db";
 import {
@@ -55,9 +55,16 @@ export interface DownloadDeps {
   now?: () => Date;
 }
 
-/** The stream URL for one track, from the server's per-track endpoint. */
+/**
+ * The stream URL for one track, from the server's per-track endpoint.
+ *
+ * Carries the session token in the query string. `Filesystem.downloadFile` is a
+ * native plugin call, so it bypasses the `fetch` shim that attaches the token
+ * to every JS request -- without this the server answers 401 and the download
+ * sits at "Downloading 0%" forever.
+ */
 export function trackStreamUrl(trackId: number): string {
-  return apiUrl(`/api/tracks/${trackId}/stream`);
+  return withSessionToken(apiUrl(`/api/tracks/${trackId}/stream`));
 }
 
 /**

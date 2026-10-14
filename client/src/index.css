@@ -5,8 +5,30 @@
   --foreground: #f8fafc;
 }
 
+/*
+ * Stop Android's WebView from inflating text.
+ *
+ * "Font boosting" (text autosizing) is on by default in the Android WebView and
+ * scales every text block up until it fills its column. On a 1080x2340 phone it
+ * made the whole app render roughly 1.4x too large: the header wrapped onto two
+ * lines and overflowed off the right edge of the screen, so the app was
+ * genuinely unusable rather than merely ugly.
+ *
+ * `text-size-adjust: 100%` pins layout text at the CSS-specified size. The
+ * `maximum-scale`/`user-scalable` part of the viewport meta is deliberately NOT
+ * set to block pinch-zoom -- that is an accessibility regression, and it is not
+ * what causes this.
+ */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Belt and braces: some OEM WebView builds ignore the property above on body. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }

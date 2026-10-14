@@ -309,6 +309,52 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 }
 
 /**
+ * Headers for a native plugin request (Filesystem.downloadFile).
+ *
+ * These bypass the `fetch` shim, so anything they need must be attached here.
+ */
+export function sessionHeaders(): Record<string, string> {
+  const token = readSessionToken();
+  const profileId = typeof window === "undefined" ? null : window.localStorage.getItem("profileId");
+  return {
+    ...(token ? { [SESSION_HEADER]: token } : {}),
+    ...(profileId ? { "x-profile-id": profileId } : {}),
+  };
+}
+
+/**
+ * Attach the session token to a **URL** rather than a header.
+ *
+ * ## Why this exists
+ *
+ * Two callers cannot use a header, and neither can be routed through the fetch
+ * shim:
+ *
+ *  - `<audio src="...">` (streaming playback). A media element request is made
+ *    by the browser, not by script, so there is nowhere to put a header. This
+ *    is why playback failed with "playback could not start" while every
+ *    `fetch()` in the app worked.
+ *  - `Filesystem.downloadFile` (native download). The Capacitor plugin does
+ *    accept headers, but the download also has to work through the plugin, and
+ *    one mechanism for both is easier to reason about.
+ *
+ * The server accepts `?session=` as well as the header and the cookie; see the
+ * auth gate in `server/src/app.ts`.
+ *
+ * Cost: a token in a URL can land in server access logs. That is a deliberate
+ * trade for a household app on a trusted LAN -- the alternative is playback
+ * that cannot authenticate at all. The token is an opaque random value that is
+ * useless without the household password, and it is already sent in cleartext
+ * over plain HTTP here, so the log is not a new place the secret can leak to.
+ */
+export function withSessionToken(url: string): string {
+  const token = readSessionToken();
+  if (!token) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}session=${encodeURIComponent(token)}`;
+}
+
+/**
  * Resolve a relative asset URL (cover art, audio) for the current shell.
  *
  * Cover URLs come back from the server as `/api/covers/...`. In a browser they

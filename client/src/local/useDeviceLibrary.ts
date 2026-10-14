@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Audiobook } from "../types";
 import { deviceFiles, localDb } from "./device";
+import { sessionHeaders } from "../lib/api";
 import { downloadBook as runDownload, trackStreamUrl, type DownloadProgress } from "./download";
 import {
   bookBytes,
@@ -105,7 +106,11 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
           db: localDb,
           files: deviceFiles,
           trackUrl: trackStreamUrl,
-          headers: undefined,
+          // Sent as well as in the query string. The URL token is what makes
+          // this work at all (a native plugin call cannot rely on the fetch
+          // shim), but the header is free and keeps the request identical in
+          // shape to every other one the app makes.
+          headers: sessionHeaders(),
         },
         onProgress,
       );

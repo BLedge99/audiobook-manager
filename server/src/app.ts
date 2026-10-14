@@ -110,12 +110,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // So the native shell sends the token as a header instead. It is the same
   // opaque random value, compared the same way -- this widens *how* a token is
   // presented, not *who* may present one.
+  //
+  // A `?session=` query parameter is accepted too, and is not redundant: an
+  // `<audio src>` request is issued by the browser rather than by script, so it
+  // has nowhere to carry a header, and streaming playback therefore cannot
+  // authenticate any other way. Verified on device: with no token in the URL,
+  // playback failed with "playback could not start" while `fetch()` worked.
   app.addHook("onRequest", async (request, reply) => {
     if (!authEnabled) return;
     const open = request.url === "/api/health" || request.url.startsWith("/api/auth/login");
     if (open) return;
     const headerToken = request.headers[SESSION_HEADER];
-    const token = (typeof headerToken === "string" ? headerToken : undefined) ?? request.cookies["house_session"];
+    const queryToken = (request.query as Record<string, unknown> | undefined)?.session;
+    const token =
+      (typeof headerToken === "string" ? headerToken : undefined) ??
+      (typeof queryToken === "string" ? queryToken : undefined) ??
+      request.cookies["house_session"];
     if (!token || !sessions.has(token)) {
       return reply.code(401).send({ message: "Authentication required" });
     }

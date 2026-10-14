@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook, Track } from "../types";
-import { apiUrl } from "../lib/api";
+import { apiUrl, withSessionToken } from "../lib/api";
 import { ProgressTimeline } from "./ProgressTimeline";
 import {
   describePosition,
@@ -126,7 +126,11 @@ export function ChapterPlayer({
     };
   }, [localUrlForTrack, book.id, isChapterBook, tracks.length, segments, currentIndex]);
 
-  const streamUrl = localSrc ?? apiUrl(remoteUrl);
+  // `withSessionToken` because this URL is set on `<audio src>`: a media element
+  // request is issued by the browser, so it cannot carry the session header and
+  // bypasses the fetch shim. Without the token the server 401s the stream and
+  // playback fails with "playback could not start".
+  const streamUrl = localSrc ?? withSessionToken(apiUrl(remoteUrl));
 
   const profileHeaders = (): Record<string, string> => {
     const profileId = window.localStorage.getItem("profileId");
