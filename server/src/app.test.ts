@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
-import { buildApp } from "./app";
+import { buildApp, SESSION_HEADER } from "./app";
 
 const dir = mkdtempSync(path.join(tmpdir(), "audiobook-test-"));
 const dbFile = path.join(dir, "test.db");
@@ -58,6 +58,37 @@ describe("auth gate", () => {
     const cookieHeader = login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
     const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie: cookieHeader } });
     expect(res.statusCode).toBe(200);
+  });
+
+  it("allows authenticated access with the session header, for the Android shell", async () => {
+    // The Android WebView is cross-site relative to a plain-HTTP API, so Chrome
+    // drops the SameSite=Lax cookie entirely. The token is therefore also
+    // returned in the login body and replayed as a header. Verified on device:
+    // with the cookie alone, login returned 200 and every later call 401'd.
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    const { token } = login.json<{ token: string }>();
+    expect(typeof token).toBe("string");
+    expect(token.length).toBeGreaterThan(0);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { [SESSION_HEADER]: token, origin: "https://localhost" },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects a bad or missing session header", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { [SESSION_HEADER]: "not-a-real-token" } });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("invalidates the session header on logout", async () => {
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    const { token } = login.json<{ token: string }>();
+    await app.inject({ method: "POST", url: "/api/auth/logout", headers: { [SESSION_HEADER]: token } });
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { [SESSION_HEADER]: token } });
+    expect(res.statusCode).toBe(401);
   });
 
   it("allows the Capacitor WebView origin, so the Android app can call the API", async () => {

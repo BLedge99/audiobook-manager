@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from "react";
+import { setSessionToken } from "../lib/api";
 
 export function LoginGate({ onSuccess }: { onSuccess: () => void }) {
   const [password, setPassword] = useState("");
@@ -18,6 +19,12 @@ export function LoginGate({ onSuccess }: { onSuccess: () => void }) {
       if (!res.ok) {
         setError("Incorrect password");
       } else {
+        // The Android shell cannot rely on the session cookie (cross-scheme,
+        // so SameSite=Lax is dropped), so the token comes back in the body and
+        // is replayed as a header. Harmless in the browser, which uses the
+        // cookie; `setSessionToken` ignores the "disabled" sentinel.
+        const body = (await res.json().catch(() => undefined)) as { token?: string } | undefined;
+        setSessionToken(body?.token === "disabled" ? undefined : body?.token);
         onSuccess();
       }
     } catch {

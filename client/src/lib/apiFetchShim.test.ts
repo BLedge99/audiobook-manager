@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installApiBaseUrl, resolveApiRequest, setServerUrl } from "./api";
+import { installApiBaseUrl, resolveApiRequest, setServerUrl, setSessionToken } from "./api";
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -74,6 +74,75 @@ describe("installApiBaseUrl", () => {
     } finally {
       window.fetch = original;
     }
+  });
+
+  it("sends credentials on every fetch, including ones that bypass apiFetch", async () => {
+    // This is the regression guard that matters. `apiFetch` had its own
+    // credentials and its own passing test, yet most of the app calls fetch
+    // directly via its own per-module `request` helpers -- so the cookie never
+    // travelled and the Android app 401'd on everything. The shim is the only
+    // choke point every call passes through, so the fix has to live here.
+    const inits: (RequestInit | undefined)[] = [];
+    const original = window.fetch;
+    window.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      inits.push(init);
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }) as typeof fetch;
+
+    try {
+      installApiBaseUrl();
+      // A raw call of the shape several modules actually use.
+      await fetch("/api/audiobooks", { headers: { "x-profile-id": "7" } });
+    } finally {
+      window.fetch = original;
+    }
+
+    expect(inits[0]?.credentials).toBe("include");
+  });
+
+  it("sends the session token as a header on every fetch", async () => {
+    // The cookie cannot cross from the https://localhost WebView to an http://
+    // API -- Chrome drops it, so every post-login call 401'd. This is the
+    // mechanism that replaced it.
+    const inits: (RequestInit | undefined)[] = [];
+    const original = window.fetch;
+    window.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      inits.push(init);
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }) as typeof fetch;
+
+    try {
+      setSessionToken("tok-123");
+      installApiBaseUrl();
+      await fetch("/api/audiobooks");
+    } finally {
+      window.fetch = original;
+      setSessionToken(undefined);
+    }
+
+    const headers = inits[0]?.headers as Record<string, string>;
+    expect(headers["x-house-session"]).toBe("tok-123");
+  });
+
+  it("does not overwrite a session header the caller already set", async () => {
+    const inits: (RequestInit | undefined)[] = [];
+    const original = window.fetch;
+    window.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      inits.push(init);
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }) as typeof fetch;
+
+    try {
+      setSessionToken("stored-token");
+      installApiBaseUrl();
+      await fetch("/api/audiobooks", { headers: { "x-house-session": "explicit" } });
+    } finally {
+      window.fetch = original;
+      setSessionToken(undefined);
+    }
+
+    const headers = inits[0]?.headers as Record<string, string>;
+    expect(headers["x-house-session"]).toBe("explicit");
   });
 
   it("installs only once, so fetch is not wrapped twice", () => {

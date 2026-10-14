@@ -13,6 +13,7 @@ services:
       DATABASE_URL: file:/data/library.db
       APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD before deploying}
       COVER_DIR: /data/covers
+      GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
     volumes:
       - app_data:/data
       - ${MEDIA_PATH:-./test}:/media:ro

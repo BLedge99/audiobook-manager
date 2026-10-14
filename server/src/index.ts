@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { buildApp } from "./app";
 import { seedDefaultProfiles } from "./seed";
 

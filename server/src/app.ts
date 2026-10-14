@@ -25,6 +25,13 @@ export interface BuildAppOptions {
   appPassword?: string;
 }
 
+/**
+ * Header carrying the household session token for shells that cannot use a
+ * cookie. The Android WebView is cross-site relative to a plain-HTTP API, so
+ * `SameSite=Lax` cookies are dropped there; see the note on the auth gate.
+ */
+export const SESSION_HEADER = "x-house-session";
+
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const prisma = options.prisma ?? new PrismaClient();
   const app = Fastify({ logger: options.logger ?? true });
@@ -85,12 +92,30 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(cookie);
 
   // Auth gate: health and the login endpoint stay public; everything else
-  // requires a valid household session cookie when APP_PASSWORD is set.
+  // requires a valid household session when APP_PASSWORD is set.
+  //
+  // The token is accepted from a header OR the cookie, because the two shells
+  // have genuinely different constraints and only one of them can use a cookie:
+  //
+  //  - Browser / PWA: same-origin, so the cookie works and is the better choice
+  //    (HttpOnly, so script cannot read it).
+  //  - Android WebView: origin is `https://localhost` but the API is plain
+  //    `http://<address>:3000`. Different scheme means *cross-site*, and a
+  //    `SameSite=Lax` cookie is never stored or sent there -- Chrome rejected it
+  //    outright (CDP confirmed zero cookies present), so every call after login
+  //    returned 401. CORS and `credentials: 'include'` cannot fix that; the
+  //    cookie policy does. `SameSite=None` would need `Secure`, i.e. real HTTPS,
+  //    which a plain-HTTP LAN server does not have.
+  //
+  // So the native shell sends the token as a header instead. It is the same
+  // opaque random value, compared the same way -- this widens *how* a token is
+  // presented, not *who* may present one.
   app.addHook("onRequest", async (request, reply) => {
     if (!authEnabled) return;
     const open = request.url === "/api/health" || request.url.startsWith("/api/auth/login");
     if (open) return;
-    const token = request.cookies["house_session"];
+    const headerToken = request.headers[SESSION_HEADER];
+    const token = (typeof headerToken === "string" ? headerToken : undefined) ?? request.cookies["house_session"];
     if (!token || !sessions.has(token)) {
       return reply.code(401).send({ message: "Authentication required" });
     }
@@ -106,12 +131,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!ok) return reply.code(401).send({ message: "Incorrect password" });
     const token = randomBytes(24).toString("hex");
     sessions.add(token);
+    // Cookie for the browser/PWA, and the token in the body for shells that
+    // cannot use a cookie cross-scheme (see the note on the auth gate above).
     reply.setCookie("house_session", token, { path: "/", httpOnly: true, sameSite: "lax" });
-    return { ok: true };
+    return { ok: true, token };
   });
 
   app.post("/api/auth/logout", async (request, reply) => {
-    const token = request.cookies["house_session"];
+    const headerToken = request.headers[SESSION_HEADER];
+    const token = (typeof headerToken === "string" ? headerToken : undefined) ?? request.cookies["house_session"];
     if (token) sessions.delete(token);
     reply.clearCookie("house_session", { path: "/" });
     return { ok: true };
