@@ -537,7 +537,13 @@ export function ChapterPlayer({
   return (
     <section className="mt-8 rounded-lg border border-slate-700 bg-slate-950/50 p-4" aria-label="Audiobook player">
       <audio ref={audioRef} preload="metadata" />
-      <div className="flex items-center gap-3">
+      {/* `flex-wrap` so the transport controls wrap onto a second row on a phone.
+            A non-wrapping flex cannot shrink below the sum of its items'
+            min-content widths, so four buttons plus two selects forced this row
+            to 529px inside a 318px panel -- which overflowed the dialog and made
+            the whole player look zoomed in. `min-w-0` on the title block below
+            lets the text truncate rather than push the row wider. */}
+      <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={togglePlayback} disabled={!profileId} aria-label={playing ? "Pause" : "Play"} title={profileId ? undefined : "Select a profile first"} className="rounded-full bg-cyan-400 p-3 text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40">
           {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
         </button>

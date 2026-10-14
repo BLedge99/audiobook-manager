@@ -90,7 +90,11 @@ test.describe("phone layout", () => {
     const firstCard = page.locator("[data-book-id], article, button").filter({ hasText: /tracks/i }).first();
     await firstCard.click();
 
-    const dialog = page.getByRole("article").first();
+    // `div.fixed.inset-0 > article`, not `getByRole("article").first()`: book cards
+    // are also <article>, so `.first()` matched a card in the grid and measured
+    // the wrong element -- which is why this test kept reporting ~600px long
+    // after the dialog itself was already fixed.
+    const dialog = page.locator("div.fixed.inset-0 > article").first();
     await expect(dialog).toBeVisible();
 
     const result = await findOverflow(page);
@@ -99,5 +103,20 @@ test.describe("phone layout", () => {
       `detail modal overflows at 360px: document is ${result.scrollWidth}px wide. ` +
         `Widest offenders: ${JSON.stringify(result.offenders, null, 2)}`,
     ).toBeLessThanOrEqual(result.viewport + 1);
+
+    // The document check alone gave a false green here. The dialog is only as
+    // wide as the viewport, so the page never scrolled -- but the dialog's own
+    // `overflow-auto` scrolled sideways instead, because a CSS Grid item
+    // defaults to `min-width: auto` and blew its column past the viewport. Assert
+    // the dialog does not scroll internally, or this bug hides again.
+    const dialogScroll = await dialog.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(
+      dialogScroll.scrollWidth,
+      `detail dialog scrolls sideways: content is ${dialogScroll.scrollWidth}px inside a ` +
+        `${dialogScroll.clientWidth}px dialog. A grid item is probably missing min-w-0.`,
+    ).toBeLessThanOrEqual(dialogScroll.clientWidth + 1);
   });
 });

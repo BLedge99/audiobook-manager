@@ -114,15 +114,24 @@ export function AudiobookDetail({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
-      <article className="relative grid max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl md:grid-cols-[220px_1fr]" onClick={(event) => event.stopPropagation()}>
+      <article className="relative grid max-h-[90vh] w-full max-w-3xl grid-cols-[minmax(0,1fr)] overflow-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl md:grid-cols-[220px_minmax(0,1fr)]" onClick={(event) => event.stopPropagation()}>
         <button aria-label="Close details" onClick={onClose} className="absolute right-3 top-3 rounded-full bg-slate-950/80 p-2 text-slate-300 hover:text-white"><X size={20} /></button>
-        {/* The modal stacks on a phone (the two-column layout is `md:` and up), so
-            an unconstrained `w-full` cover rendered a ~360x540 poster that pushed
-            every control below the fold -- the top of the dialog looked "zoomed
-            in" because the artwork filled it. Cap it on small screens only; the
-            desktop grid gives it its own column and wants it full height. */}
-        <img src={apiAssetUrl(`/api/audiobooks/${book.id}/cover`)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="mx-auto aspect-[2/3] w-full max-w-[180px] object-cover md:max-w-none md:h-full" />
-        <div className="p-5 md:p-8">
+        {/* `minmax(0,1fr)` on both breakpoints is the actual fix, and is the standard
+            remedy for a grid blowout. A bare `grid` / `1fr` track has an `auto`
+            *maximum*, which resolves to the content's max-content width -- for
+            the description that is the whole paragraph on one line. The column
+            was 615px inside a 359px dialog; the dialog's own `overflow-auto`
+            turned that into sideways scrolling that read as "zoomed in".
+
+            `min-w-0` on the children is necessary but not sufficient on its own:
+            it lowers the item minimum, not the track maximum.
+
+            Note `e2e/phone-layout` initially gave a false green here, because it
+            only asserted the *document* did not scroll -- the dialog is viewport
+            width, so the page was fine while the dialog scrolled inside itself.
+            It now asserts the dialog does not scroll internally too. */}
+        <img src={apiAssetUrl(`/api/audiobooks/${book.id}/cover`)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="mx-auto aspect-[2/3] w-full max-w-[180px] min-w-0 object-cover md:max-w-none md:h-full" />
+        <div className="min-w-0 p-5 md:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Audiobook</p>
           <h2 className="mt-3 pr-10 text-2xl font-bold text-white md:text-3xl">{book.title}</h2>
           {book.subtitle && <p className="mt-1 text-base italic text-slate-400 md:text-lg">{book.subtitle}</p>}
