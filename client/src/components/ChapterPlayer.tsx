@@ -3,6 +3,7 @@ import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook, Track } from "../types";
 import { apiUrl, withSessionToken } from "../lib/api";
 import { ProgressTimeline } from "./ProgressTimeline";
+import { publishPlaybackState, publishPosition, registerMediaSessionHandlers, setMediaMetadata } from "./mediaSession";
 import {
   describePosition,
   parseChapters,
@@ -509,30 +510,73 @@ export function ChapterPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speed, streamUrl]);
 
-  // Media Session API: lock-screen / notification controls.
+  /** Seconds moved by the in-app and lock-screen skip buttons, together. */
+  const SKIP_SECONDS = 15;
+
+  // Lock-screen / notification controls.
+  //
+  // Registered through the shared helper rather than inline against
+  // `navigator.mediaSession`, because on Android the web handlers alone left the
+  // platform MediaSession with `actions=0` -- the lock screen drew the scrubber
+  // and no buttons at all. See mediaSession.ts for the full explanation.
   useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.metadata = new MediaMetadata({ title: current.title || book.title, artist: book.author, album: book.title });
-    navigator.mediaSession.setActionHandler("play", () => void audioRef.current?.play());
-    navigator.mediaSession.setActionHandler("pause", () => {
-      // Clear shouldPlay too: leaving it true means a track that ends while
-      // paused would auto-advance and start playing on its own.
-      setShouldPlay(false);
-      userInteractedRef.current = true;
-      audioRef.current?.pause();
+    setMediaMetadata(current.title || book.title, book.author, book.title);
+    const unregister = registerMediaSessionHandlers({
+      play: () => void audioRef.current?.play(),
+      pause: () => {
+        // Clear shouldPlay too: leaving it true means a track that ends while
+        // paused would auto-advance and start playing on its own.
+        setShouldPlay(false);
+        userInteractedRef.current = true;
+        audioRef.current?.pause();
+      },
+      seekBackward: () => skipSeconds(-SKIP_SECONDS),
+      seekForward: () => skipSeconds(SKIP_SECONDS),
+      // Chapter navigation, which is what prev/next mean in an audiobook: the
+      // in-app buttons call the same two functions.
+      previousTrack: () => skip(-1),
+      nextTrack: () => skip(1),
     });
-    navigator.mediaSession.setActionHandler("seekbackward", () => skipSeconds(-15));
-    navigator.mediaSession.setActionHandler("seekforward", () => skipSeconds(15));
-    return () => {
-      try {
-        navigator.mediaSession.setActionHandler("play", null);
-        navigator.mediaSession.setActionHandler("pause", null);
-        navigator.mediaSession.setActionHandler("seekbackward", null);
-        navigator.mediaSession.setActionHandler("seekforward", null);
-      } catch { /* noop */ }
-    };
+    return unregister;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, book.title, book.author]);
+
+  // Keep the platform session's playback state in step with the audio element.
+  //
+  // Driven off the element's own events rather than React state, because the
+  // platform gates the play/pause buttons on this value (see mediaSession.ts) --
+  // a stale value means no buttons, which is the bug being fixed here.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const publish = () => publishPlaybackState(audio.paused ? "paused" : "playing");
+    const ended = () => publishPlaybackState("none");
+    // The element may already be playing by the time this runs.
+    publish();
+    audio.addEventListener("play", publish);
+    audio.addEventListener("pause", publish);
+    audio.addEventListener("ended", ended);
+    return () => {
+      audio.removeEventListener("play", publish);
+      audio.removeEventListener("pause", publish);
+      audio.removeEventListener("ended", ended);
+    };
+  }, [streamUrl]);
+
+  // Feed the position to the platform session so the lock-screen scrubber
+  // tracks playback instead of sitting at zero.
+  useEffect(
+    () =>
+      publishPosition(() => {
+        const audio = audioRef.current;
+        return {
+          position: Math.round(audio?.currentTime ?? 0),
+          duration: Math.round(audio?.duration ?? 0),
+          rate: audio && !audio.paused ? audio.playbackRate : 0,
+        };
+      }),
+    [],
+  );
 
   return (
     <section className="mt-8 rounded-lg border border-slate-700 bg-slate-950/50 p-4" aria-label="Audiobook player">
@@ -549,8 +593,8 @@ export function ChapterPlayer({
         </button>
         <button type="button" onClick={() => skip(-1)} aria-label="Previous chapter" disabled={currentIndex === 0} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipBack size={18} /></button>
         <button type="button" onClick={() => skip(1)} aria-label="Next chapter" disabled={currentIndex === segments.length - 1} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipForward size={18} /></button>
-        <button type="button" onClick={() => skipSeconds(-15)} aria-label="Back 15 seconds" className="rounded p-2 text-slate-300 hover:text-white">−15s</button>
-        <button type="button" onClick={() => skipSeconds(15)} aria-label="Forward 15 seconds" className="rounded p-2 text-slate-300 hover:text-white">+15s</button>
+        <button type="button" onClick={() => skipSeconds(-SKIP_SECONDS)} aria-label={`Back ${SKIP_SECONDS} seconds`} className="rounded p-2 text-slate-300 hover:text-white">−{SKIP_SECONDS}s</button>
+        <button type="button" onClick={() => skipSeconds(SKIP_SECONDS)} aria-label={`Forward ${SKIP_SECONDS} seconds`} className="rounded p-2 text-slate-300 hover:text-white">+{SKIP_SECONDS}s</button>
         <select aria-label="Playback speed" value={speed} onChange={(event) => changeSpeed(Number(event.target.value))} className="border border-slate-700 bg-slate-950 px-2 py-1 text-sm">
           {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((rate) => <option key={rate} value={rate}>{rate}x</option>)}
         </select>
