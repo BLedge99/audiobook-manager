@@ -41,7 +41,7 @@ function fakeFiles(onRemove?: (path: string) => void | Promise<void>) {
   const removed: string[] = [];
   const failOn = new Set<string>();
   const files: FileSystemPort = {
-    download: vi.fn(async () => ({ path: "x", bytes: 1 })),
+    download: vi.fn(async () => ({ path: "x", bytes: 1, expectedBytes: 1 })),
     remove: vi.fn(async (path: string) => {
       if (failOn.has(path)) throw new Error("locked");
       removed.push(path);

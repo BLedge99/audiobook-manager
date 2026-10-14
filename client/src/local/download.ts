@@ -18,6 +18,7 @@
  */
 
 import { apiUrl, withSessionToken } from "../lib/api";
+import { validateDownloadedSize } from "./device";
 import type { Audiobook, Track } from "../types";
 import type { LocalLibraryDatabase } from "./db";
 import {
@@ -129,6 +130,13 @@ async function downloadTrack(
   // Prefer the size the plugin reported; fall back to stat when it does not,
   // because the storage screen would otherwise under-report a book's footprint.
   const bytes = result?.bytes > 0 ? result.bytes : await sizeOf(deps.files, path);
+
+  // Check before recording anything. An HTTP error body is small and perfectly
+  // valid to write to disk, so a "successful" download could otherwise leave a
+  // book marked as on-device with no playable audio in it. That is worse than a
+  // visible failure: the UI would say you have the book and you would only
+  // discover otherwise offline.
+  validateDownloadedSize(bytes, result?.expectedBytes ?? 0);
 
   await putDownloadedTrack(deps.db, book.id, {
     trackId: track.id,

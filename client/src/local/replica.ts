@@ -11,13 +11,19 @@ import type { Audiobook } from "../types";
 import { type DownloadedTrack, type LocalLibraryDatabase, type ReplicaBook } from "./db";
 
 export interface FileSystemPort {
-  /** Stream `url` to `path`, creating parent directories. */
+  /**
+   * Stream `url` to `path`, creating parent directories.
+   *
+   * `expectedBytes` is the Content-Length the server reported (0 when unknown),
+   * so the caller can check the file it got is complete rather than trusting a
+   * resolved promise.
+   */
   download(options: {
     url: string;
     path: string;
     headers?: Record<string, string>;
     onProgress?: (fraction: number) => void;
-  }): Promise<{ path: string; bytes: number }>;
+  }): Promise<{ path: string; bytes: number; expectedBytes: number }>;
   remove(path: string): Promise<void>;
   /** Size of a file in bytes, relative to the replica's directory. */
   stat(path: string): Promise<number>;

@@ -51,6 +51,64 @@ async function fs(): Promise<FilesystemPlugin> {
   return filesystemPlugin;
 }
 
+type FileTransferPlugin = (typeof import("@capacitor/file-transfer"))["FileTransfer"];
+
+let fileTransferPlugin: FileTransferPlugin | undefined;
+/** Lazy for the same reason as `fs()`: importing the plugin at module scope
+ *  evaluates `registerPlugin` before the bridge exists. */
+async function fileTransfer(): Promise<FileTransferPlugin> {
+  if (!fileTransferPlugin) {
+    fileTransferPlugin = (await import("@capacitor/file-transfer")).FileTransfer;
+  }
+  return fileTransferPlugin;
+}
+
+/**
+ * Turn a plugin failure into something worth showing a household user.
+ *
+ * `FileTransfer` reports real error codes, unlike the deprecated
+ * `Filesystem.downloadFile`. The important one is `OS-PLUG-FLTR-0010`: the
+ * server answered with an HTTP error. That is overwhelmingly an auth failure
+ * here, and saying "HTTP 401" is far more use than "the operation failed".
+ */
+export function describeTransferError(error: unknown): Error {
+  const candidate = error as { code?: string; message?: string; data?: { httpStatus?: number; body?: string } };
+  const httpStatus = candidate?.data?.httpStatus;
+  if (httpStatus === 401 || httpStatus === 403) {
+    return new Error(`The server rejected the download (HTTP ${httpStatus}). Sign in again and retry.`);
+  }
+  if (typeof httpStatus === "number") {
+    return new Error(`The server returned HTTP ${httpStatus} for this track.`);
+  }
+  const message = candidate?.message || "The download failed.";
+  return new Error(message);
+}
+
+/**
+ * Did the file we wrote actually match what the server said it would send?
+ *
+ * This is the guard that stops a failure being recorded as success. A 401 or a
+ * 500 body is small and perfectly valid to write to disk, and a download that
+ * "succeeded" then left a book marked as on-device with no playable audio in
+ * it -- which is worse than an outright error, because the UI says you have it.
+ *
+ * `expectedBytes` is the Content-Length from the transfer; 0 means the server
+ * did not report a length, in which case we only check that *something* landed.
+ */
+export function validateDownloadedSize(bytes: number, expectedBytes: number): void {
+  if (bytes <= 0) {
+    throw new Error("The download finished but wrote no data. The server may have refused the request.");
+  }
+  if (expectedBytes <= 0) return;
+  // A small tolerance: some servers pad or the final chunk is reported early.
+  const tolerance = Math.max(1024, Math.floor(expectedBytes * 0.01));
+  if (Math.abs(bytes - expectedBytes) > tolerance) {
+    throw new Error(
+      `The download is incomplete (${bytes} of ${expectedBytes} bytes). Retry to finish it.`,
+    );
+  }
+}
+
 /**
  * `Directory.Data`, not `Directory.Documents`.
  *
@@ -109,20 +167,30 @@ function tail(url: string): string {
 export const deviceFiles: FileSystemPort = {
   async download({ url, path, headers, onProgress }) {
     const Filesystem = await fs();
-    // The plugin reports progress through a listener on the plugin itself, not
-    // a per-call callback, so filter by URL -- otherwise a concurrent download's
-    // events would be attributed to this one.
-    //
-    // The filter compares the *end* of the URL, not the whole string. The plugin
-    // reports the URL it actually requested, which need not be byte-identical to
-    // the one passed in (it may re-encode or normalise it). An exact `!==`
-    // comparison silently matched nothing, so progress never fired and the UI sat
-    // at "Downloading 0%" for the whole download -- the transfer worked and the
-    // progress was invisible, which is the worst version of this bug.
+    const FileTransfer = await fileTransfer();
+
+    // FileTransfer writes to a **full path**, not a directory-relative path like
+    // Filesystem.downloadFile took, so resolve it first. It also will not create
+    // the parent directory, which is why this is explicit here.
+    const parent = path.split("/").slice(0, -1).join("/");
+    if (parent) {
+      await Filesystem.mkdir({ path: parent, directory: DEVICE_DIRECTORY, recursive: true });
+    }
+    const { uri } = await Filesystem.getUri({ path, directory: DEVICE_DIRECTORY });
+
+    // Progress events fire on the plugin, not per call, so they must be
+    // attributed. `type` separates download from upload; the URL check is a
+    // second guard for concurrent tracks. An earlier version compared URLs with
+    // `!==`, matched nothing, and left the bar at 0% for the whole transfer.
     let listener: { remove: () => Promise<void> } | undefined;
+    let expectedBytes = 0;
     if (onProgress) {
-      const handle = await Filesystem.addListener("progress", (progress) => {
+      const handle = await FileTransfer.addListener("progress", (progress) => {
+        if (progress.type !== "download") return;
         if (!isSameDownload(progress.url, url)) return;
+        if (progress.lengthComputable && progress.contentLength > 0) {
+          expectedBytes = progress.contentLength;
+        }
         if (!progress.contentLength) return;
         onProgress(progress.bytes / progress.contentLength);
       });
@@ -130,16 +198,18 @@ export const deviceFiles: FileSystemPort = {
     }
 
     try {
-      await Filesystem.downloadFile({
+      await FileTransfer.downloadFile({
         url,
-        path,
-        directory: DEVICE_DIRECTORY,
-        // Creates books/<id>/ on the way; without it the first download fails
-        // on a directory that does not exist yet.
-        recursive: true,
+        path: uri,
         progress: Boolean(onProgress),
         headers,
+        // The plugin defaults to a 60s read timeout, which a long track over
+        // flaky WiFi can exceed mid-file, aborting a download that was working.
+        readTimeout: 120_000,
+        connectTimeout: 30_000,
       });
+    } catch (error) {
+      throw describeTransferError(error);
     } finally {
       // Always detach: a leaked listener keeps firing for the life of the
       // WebView and mis-reports progress for the next download.
@@ -147,7 +217,7 @@ export const deviceFiles: FileSystemPort = {
     }
 
     const { size } = await Filesystem.stat({ path, directory: DEVICE_DIRECTORY });
-    return { path, bytes: size };
+    return { path, bytes: size, expectedBytes };
   },
 
   async remove(path) {

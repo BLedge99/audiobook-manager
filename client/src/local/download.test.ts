@@ -21,7 +21,7 @@ function book(overrides: Partial<Audiobook> = {}): Audiobook {
 }
 
 /** Filesystem fake whose `download` can be told to fail or report sizes. */
-function fakeFiles(options: { bytes?: number; failOn?: Set<string>; reportBytes?: boolean } = {}) {
+function fakeFiles(options: { bytes?: number; failOn?: Set<string>; reportBytes?: boolean; expectedBytes?: number } = {}) {
   const written = new Map<string, number>();
   const failOn = options.failOn ?? new Set<string>();
   const reportBytes = options.reportBytes ?? true;
@@ -31,7 +31,9 @@ function fakeFiles(options: { bytes?: number; failOn?: Set<string>; reportBytes?
       if (failOn.has(path)) throw new Error("network died");
       const bytes = options.bytes ?? 2048;
       written.set(path, bytes);
-      return { path, bytes: reportBytes ? bytes : 0 };
+      // Default to agreeing with what was written, so the completeness check
+      // only fails when a test explicitly asks it to.
+      return { path, bytes: reportBytes ? bytes : 0, expectedBytes: options.expectedBytes ?? bytes };
     }),
     remove: vi.fn(async (path: string) => {
       written.delete(path);
