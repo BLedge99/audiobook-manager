@@ -116,12 +116,17 @@ export function AudiobookDetail({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={onClose}>
       <article className="relative grid max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl md:grid-cols-[220px_1fr]" onClick={(event) => event.stopPropagation()}>
         <button aria-label="Close details" onClick={onClose} className="absolute right-3 top-3 rounded-full bg-slate-950/80 p-2 text-slate-300 hover:text-white"><X size={20} /></button>
-        <img src={apiAssetUrl(`/api/audiobooks/${book.id}/cover`)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="aspect-[2/3] w-full object-cover md:h-full" />
-        <div className="p-6 md:p-8">
+        {/* The modal stacks on a phone (the two-column layout is `md:` and up), so
+            an unconstrained `w-full` cover rendered a ~360x540 poster that pushed
+            every control below the fold -- the top of the dialog looked "zoomed
+            in" because the artwork filled it. Cap it on small screens only; the
+            desktop grid gives it its own column and wants it full height. */}
+        <img src={apiAssetUrl(`/api/audiobooks/${book.id}/cover`)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="mx-auto aspect-[2/3] w-full max-w-[180px] object-cover md:max-w-none md:h-full" />
+        <div className="p-5 md:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">Audiobook</p>
-          <h2 className="mt-3 pr-10 text-3xl font-bold text-white">{book.title}</h2>
-          {book.subtitle && <p className="mt-1 text-lg italic text-slate-400">{book.subtitle}</p>}
-          <p className="mt-2 text-lg text-slate-300">{book.author}</p>
+          <h2 className="mt-3 pr-10 text-2xl font-bold text-white md:text-3xl">{book.title}</h2>
+          {book.subtitle && <p className="mt-1 text-base italic text-slate-400 md:text-lg">{book.subtitle}</p>}
+          <p className="mt-2 text-base text-slate-300 md:text-lg">{book.author}</p>
           {narrators.length > 0 && (
             <p className="mt-1 text-sm text-slate-400">Narrated by {narrators.map((entry) => entry.name).join(", ")}</p>
           )}
