@@ -43,10 +43,44 @@ type FilesystemPlugin = (typeof import("@capacitor/filesystem"))["Filesystem"];
  * app's module evaluation happens before Capacitor's bridge has been injected --
  * which leaves a stub behind and blanks the screen on the first bridge call.
  */
+/**
+ * Reach a Capacitor plugin **without importing its module**.
+ *
+ * ## Why not `await import("@capacitor/filesystem")`
+ *
+ * Both of these were written as dynamic imports to avoid evaluating
+ * `registerPlugin` at module scope, which blanks the screen (see the note at
+ * the top of this file). On device, though, the bundled dynamic import compiled
+ * to a Vite preload wrapper whose promise **never settled**: the download hung
+ * silently on its first line, `await fs()`.
+ *
+ * That is why the plugin probe looked healthy while the app's download button
+ * did nothing -- the probe used `window.Capacitor.Plugins.FileTransfer`
+ * directly and never touched the import. Two code paths, one of them broken,
+ * and I spent a long time proving the network worked while no request had ever
+ * been made.
+ *
+ * `window.Capacitor.Plugins` is the bridge's own registry, populated by the
+ * native side before the web app loads, so it needs no module graph and no
+ * import at all. `lib/platform.ts` already takes exactly this approach for the
+ * same reason; this finally applies it to the plugins.
+ *
+ * Both functions stay `async` so callers are unchanged.
+ */
+function pluginRegistry(): Record<string, unknown> {
+  const bridge = (globalThis as { Capacitor?: { Plugins?: Record<string, unknown> } }).Capacitor;
+  const plugins = bridge?.Plugins;
+  if (!plugins) {
+    throw new Error("The Capacitor bridge is not ready yet.");
+  }
+  return plugins;
+}
+
 let filesystemPlugin: FilesystemPlugin | undefined;
 async function fs(): Promise<FilesystemPlugin> {
   if (!filesystemPlugin) {
-    filesystemPlugin = (await import("@capacitor/filesystem")).Filesystem;
+    filesystemPlugin = pluginRegistry().Filesystem as FilesystemPlugin;
+    if (!filesystemPlugin) throw new Error("The Filesystem plugin is unavailable.");
   }
   return filesystemPlugin;
 }
@@ -54,11 +88,10 @@ async function fs(): Promise<FilesystemPlugin> {
 type FileTransferPlugin = (typeof import("@capacitor/file-transfer"))["FileTransfer"];
 
 let fileTransferPlugin: FileTransferPlugin | undefined;
-/** Lazy for the same reason as `fs()`: importing the plugin at module scope
- *  evaluates `registerPlugin` before the bridge exists. */
 async function fileTransfer(): Promise<FileTransferPlugin> {
   if (!fileTransferPlugin) {
-    fileTransferPlugin = (await import("@capacitor/file-transfer")).FileTransfer;
+    fileTransferPlugin = pluginRegistry().FileTransfer as FileTransferPlugin;
+    if (!fileTransferPlugin) throw new Error("The FileTransfer plugin is unavailable.");
   }
   return fileTransferPlugin;
 }
