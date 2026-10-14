@@ -34,7 +34,7 @@ has a matching spec in `specs/`.
 | 23 | Cover art fallback | A book whose winning provider has no cover (LibriVox carries no cover field) gets artwork from the best candidate that does, borrowing only the image |
 | 24 | Narrator resolution | Narrator resolved from `composer`, then a "Read By X" comment tag, then a bracketed folder name; full casts become one contributor per person; no guess when nothing matches |
 | 25 | Catalogue enrichment | Genres, series, publisher, year, ISBN and description populated from Open Library and Google Books; study-guide spam rejected; auto-apply banded so a lowered floor cannot apply the wrong author |
-| 26 | Android app with offline listening | Sideloaded APK plays downloaded books with no network; metadata readable offline; progress syncs without ever silently regressing; "remove from device" frees space; server URL configurable in-app. Narrows item 09 |
+| 26 | Android app with offline listening | Sideloaded APK plays downloaded books with no network; metadata readable offline; progress syncs without ever silently regressing; "remove from device" frees space; server URL configurable in-app. Narrows item 09. **In progress:** auth, download and covers verified on device; offline playback, the server-URL gate and visible downloaded files remain |
 
 ## Notes
 

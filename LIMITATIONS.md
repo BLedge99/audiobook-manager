@@ -54,18 +54,33 @@ end.
 Either add the file or delete the script entry.
 
 ### 1.4 The Android app cannot work away from home
-**Status: BROKEN — the largest gap in the product.** Sprint 1 done; Sprint 2
-next.
+**Status: MOSTLY FIXED (2026-10-14). Downloads verified on device; offline
+playback and first-run setup are not.**
 
-Two independent causes, both deliberate when written and now wrong:
+Sprint 2 has landed. What now works, verified on a Pixel 4a:
 
-- **The PWA caches nothing.** `vite.config.ts` sets
-  `runtimeCaching: /api/ → NetworkOnly`, so with no network the app shows an
-  empty library. There is no IndexedDB layer and no download code at all.
-- **No device-side storage exists yet.** Metadata is planned for Dexie and audio
-  for the native filesystem (`specs/26-android-app.md`, ADR 012). Neither is
-  written. The server URL is also **not configurable without rebuilding the web
-  bundle**, which means a DHCP-assigned home IP change breaks the app.
+- **Auth.** The WebView is cross-site relative to a plain-HTTP API, so Chrome
+  drops the `SameSite=Lax` cookie. Login returns the session token in the body
+  and the server also accepts it in `x-house-session`; the cookie path is kept
+  for the browser/PWA. Requests the browser issues itself (`<audio src>`,
+  `<img src>`) carry the token in the query string, because a media or image
+  element cannot send a header.
+- **Download.** `@capacitor/file-transfer` writes each track with real progress.
+  A full 5-track book downloaded and every file matches the server's
+  `Content-Length` **byte for byte**.
+- **Cover art** and **layout** at phone widths (guarded by
+  `e2e/phone-layout.spec.ts`).
+
+Still broken:
+
+- **Offline playback is unverified.** The files are correct on disk; nobody has
+  yet pulled the network and confirmed audio plays from them.
+- **First-run is a dead end.** `needsServerUrl()` has no call site, so
+  `ProfileGate` blocks the only route to Settings and a new user cannot enter a
+  server address. This is the most user-visible remaining bug.
+- **Downloaded audio is invisible.** `Directory.Data` is app-private: no file
+  manager can see, free or delete downloaded books. ADR 012 accepted this; for a
+  household app it is probably the wrong trade.
 
 **Sprint 1 is complete** and it de-risked the two things that could have changed
 the architecture. On a Pixel 4a / Android 13:
@@ -307,6 +322,27 @@ re-run of the security E2E suite. **Not started.**
   `dumpsys` instead.
 - **Never rebuild or reinstall while the user is mid-test.** It looks exactly
   like playback spontaneously dying. Say what you are about to push.
+- **A CDP timeout means the phone dozed, not that the code failed.** The WebView
+  suspends with the screen, `adb forward` to the devtools socket then hangs, and
+  the result looks identical to a hang in the app. Check
+  `dumpsys power | grep mWakefulness` before concluding anything. This caused
+  two false diagnoses.
+- **Verify what is *installed*, not what is on disk.** `npm run build:android`
+  runs `tsc -b && vite build`, so a type error means the bundle is silently
+  **not** rebuilt and `cap sync` copies the previous one. Always confirm the
+  asset hash or `dumpsys package | grep lastUpdateTime` changed.
+- **Vite serves a stale transform on this bind mount.** After editing a module
+  the dev server can keep serving the previous version, so a correct fix looks
+  like a no-op and tests fail at an identical number. Clear it with
+  `docker compose exec client rm -rf node_modules/.vite` and restart.
+- **A probe must exercise the same code path as the failing feature.** Calling
+  `window.Capacitor.Plugins.FileTransfer` directly proved downloads worked while
+  the app's own button did nothing, because the app loaded the plugin through a
+  different, broken path. That mismatch cost more time than any other mistake
+  here.
+- **Gradle cannot delete `build/` or `app/build/` while its daemon holds it.**
+  `gradlew --stop`, then remove the directory, then assemble. This is the
+  equivalent of `clean` and is what the "never skip clean" rule was protecting.
 
 ---
 

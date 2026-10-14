@@ -69,7 +69,7 @@
 | 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint |
 | 24 | narrator-resolution | **done** | `narrator.ts` (pure, 22 tests): `composer` atom → `comment` (`Read By X`) → bracketed folder name (`{Stephen Fry}`). Full casts become one contributor per person. Person-name guard stops `{Unabridged}` being credited as a narrator. No guess when nothing matches. Makes the narrator work for commercial audiobooks, which no free online source can supply |
 | 25 | catalogue-enrichment | **done** | Genres/series/publisher/year/ISBN/description populated from both catalogues. Six root causes fixed: unrequested `fields=`, unread default fields, author polluting the query, study-guide spam, non-idempotent candidate storage, and a missing Google Books key. Auto-apply banded 0.7–0.9 with an author guard. **Note: enrichment is not deterministic run to run.** |
-| 26 | android-app | **planned** | Offline listening on Android. `specs/26-android-app.md` + ADR 012. Device is a **read replica + progress**, not a second library manager. Capacitor (foreground media service + filesystem), Dexie for metadata, native FS for audio. Progress becomes monotonic so it can never silently regress. **Next: Phase 1 de-risk spike** |
+| 26 | android-app | **Sprint 2 done** | Offline listening on Android. `specs/26-android-app.md` + ADR 012. Device is a **read replica + progress**, not a second library manager. **Verified on device: cross-origin auth (header token, cookie is dropped cross-scheme), cover art, download with real progress.** All 5 tracks of a book downloaded byte-for-byte identical to `Content-Length`. Stage tracing (`trace.ts`) makes every pipeline step time-boxed and visible. See "Downloads" in Current task for the four bugs behind this. **Next: server-URL gate, then offline playback with the network off** |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -122,8 +122,70 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ### Next action — read this first
 
-**The auth blocker is fixed and verified on the phone. Two real bugs were found
-doing it; the second is still open.**
+**Downloads work end to end and are verified byte-for-byte (commit `6c2fbf1`).
+The Android offline path is functional. Remaining work is listed below.**
+
+A book downloads, shows real progress, lands on disk, and every file matches the
+server's `Content-Length` exactly. See "Downloads" below for the full history,
+because getting here took four wrong turns and the reasons are the useful part.
+
+### Downloads: the four bugs, in the order they had to be fixed
+
+1. **No authentication.** The WebView is cross-site relative to a plain-HTTP API
+   (`https://localhost` → `http://...:3000`), so Chrome dropped the
+   `SameSite=Lax` cookie outright — CDP showed *zero cookies stored*. Fixed by
+   also returning the session token in the login body and accepting it in
+   `x-house-session`. `4f960bb`
+2. **Progress never fired.** The plugin's progress listener compared URLs with
+   `!==`, which matched nothing. Migrated to `@capacitor/file-transfer` (the
+   deprecated-API replacement) and filter on `type === 'download'`.
+3. **`mkdir` broke every download after the first.** `Filesystem.downloadFile`
+   took `recursive: true` and created parents itself; `FileTransfer` does not,
+   so the migration called `mkdir` unconditionally — and that rejects an existing
+   directory (`OS-PLUG-FILE-0010`). `60c4c62`
+4. **The real one: the plugin loader hung.** `await fs()` never settled, because
+   the lazy `await import("@capacitor/filesystem")` compiled to a Vite preload
+   wrapper whose promise never resolved on device. `6c2fbf1`
+
+### Why it took this long, and what to do differently
+
+**A direct plugin probe was healthy while the app's own button did nothing**,
+because the probe used `window.Capacitor.Plugins.FileTransfer` and the app used
+the dynamic import. Two code paths, one broken, and I spent a long time proving
+the network worked while no request had ever been made. **A probe must exercise
+the same path as the failing feature**, not a convenient equivalent of it.
+
+**Three "verified" claims were wrong**, each for a different reason: a CDP
+timeout read as a failure (the phone was dozing), a fix verified in source but
+never rebuilt into the APK, and a test that passed while asserting the wrong
+element. Check *what is served and installed*, not what is on disk.
+
+**The tracing that ended it was built after the third failure**, per the user's
+instruction to make every stage throw a visible error rather than hang. It is
+the reason this took one log line to diagnose rather than another afternoon.
+`trace.ts` wraps every await in a per-stage budget, logs the stage *before*
+running it, and the button renders the completed stages on failure. **Keep it.**
+A promise that never settles cannot be caught by `try/catch` — only a deadline
+surfaces it.
+
+### Still open
+
+- **`needsServerUrl()` has no call site.** On first run in the Android shell the
+  app dead-ends: `ProfileGate` blocks the header, the header is the only route to
+  Settings, so a new user cannot enter a server address at all. Needs a gate
+  rendered before `ProfileGate`. Small, and higher value than anything else
+  queued.
+- **Downloaded audio is invisible to the user.** `Directory.Data` is app-private,
+  so a file manager cannot see or delete downloaded books and the phone's Files
+  app shows nothing. ADR 012 accepted this trade; for a household app it is
+  probably wrong and is worth revisiting.
+- **Progress conflict dialog** ("Use this / Keep what I have") fires readily on
+  first play, because the phone and server disagree. Working as designed, but it
+  blocks the UI.
+- **Offline playback with the network off is still unverified end to end.** The
+  files are correct on disk; nobody has yet pulled the cable and confirmed audio.
+
+### Previously recorded (superseded above)
 
 **Fixed and verified: cross-origin session auth (commit `4f960bb`).**
 
@@ -197,7 +259,9 @@ playback is unverified end to end.
 
 Committed and pushed. Local and `origin/master` are both at `4f960bb`.
 
-Client 217 tests pass, server 375 pass (1 skipped), `tsc` clean on both tiers.
+Client 246 tests pass, server 375 pass (1 skipped), `tsc` clean on both tiers.
+Playwright: `e2e/phone-layout.spec.ts` (5 specs) guards against the sideways-scroll
+regression; run the full suite via `scripts/e2e-wsl.sh`.
 
 ---
 
