@@ -122,24 +122,21 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ### Next action — read this first
 
-**The CORS credentials fix is half-applied and that is the state to finish.**
+**Step 1 (client `credentials: 'include'`) is done. The phone verification
+(steps 2–4) is what remains.**
 
-The server side is done and tested: `server/src/app.ts` registers CORS with
-`credentials: true`, and `server/src/app.test.ts` now asserts both that
+The server side was already done: `server/src/app.ts` registers CORS with
+`credentials: true`, and `server/src/app.test.ts` asserts both that
 `Access-Control-Allow-Credentials: true` is sent and that a foreign origin is
-still refused. Both pass; `tsc` is clean on both tiers.
+still refused.
 
-The client side is **not** done. Nothing sends `credentials: 'include'`, so the
-session cookie (`house_session`) still will not cross origins and the app will
-still 401 on every call. This is the single remaining piece blocking the first
-real download onto the phone, and it is why "Add profile" showed
-"Could not create profile" with no obvious cause.
+**Step 1 (this session):** `client/src/lib/api.ts` — `apiFetch()` now sends
+`credentials: 'include'` (the profile-header and `apiAssetUrl` paths do not
+need it, and the fetch shim in `installApiBaseUrl` is unaffected). A test
+asserts it. Client suite 214 pass (+1), `tsc` clean.
 
-Concretely:
+Remaining steps:
 
-1. `client/src/lib/api.ts` — `apiFetch()` must send `credentials: 'include'`
-   (the profile-header and `apiAssetUrl` paths do not need it, and the fetch shim
-   in `installApiBaseUrl` is unaffected). Add a test.
 2. Rebuild the APK with `npm run build:android` and reinstall. **The build
    script runs `gradlew clean assembleDebug` first** — do not skip that;
    without it Gradle packages the previous build's JS.
@@ -247,10 +244,12 @@ Caught a blank screen in one call where logcat showed only React warnings.
 
 ### Not yet done
 
-- The CORS credentials fix is **written and tested on the server but not yet
-  verified on the phone**, and the client does not yet send
-  `credentials: 'include'` — so cookies still will not cross. That is the next
-  change.
+- The CORS credentials fix is now **complete on both sides**: the server sends
+  `Access-Control-Allow-Credentials: true`, and `apiFetch()` sends
+  `credentials: 'include'` so the `house_session` cookie crosses origins. The
+  client test suite is 214 pass (+1 for the credentials assertion), `tsc`
+  clean. **Still to verify on the phone** — the cookie path is untested on
+  device until the APK is rebuilt and the app is exercised end to end.
 - **No book has been downloaded on the device yet**, so offline playback with
   the network off is still unverified end to end.
 - **Progress sync (Phase 3) untouched.** `allowRewind` is still not implemented.

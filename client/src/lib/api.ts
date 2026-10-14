@@ -193,6 +193,13 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   const headers: Record<string, string> = { ...profileHeaders() };
   if (options?.body) headers["Content-Type"] = "application/json";
   const response = await fetch(apiUrl(path), {
+    // The session cookie only crosses origins when the client opts in with
+    // `credentials: "include"`. Without it every cross-origin call -- which is
+    // every call from the Android shell's https://localhost WebView -- gets no
+    // cookie and so 401s even though the user "logged in". The server must also
+    // send `Access-Control-Allow-Credentials: true` with a specific origin
+    // (never `*`), which it does since the same fix landed server-side.
+    credentials: "include",
     ...options,
     headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) },
   });

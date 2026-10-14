@@ -154,6 +154,23 @@ describe("apiFetch", () => {
     expect((calls[0].init?.headers as Record<string, string>)["x-profile-id"]).toBe("7");
   });
 
+  it("sends credentials so the session cookie crosses origins", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = ((input: string, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return Promise.resolve(new Response("[]", { status: 200 }));
+    }) as typeof fetch;
+
+    try {
+      await apiFetch("/api/audiobooks");
+    } finally {
+      globalThis.fetch = original;
+    }
+
+    expect(calls[0].init?.credentials).toBe("include");
+  });
+
   it("surfaces the server's message on failure", async () => {
     const original = globalThis.fetch;
     globalThis.fetch = (() =>
