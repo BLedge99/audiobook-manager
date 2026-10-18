@@ -407,9 +407,13 @@ function App() {
         </nav>
       </header>
 
-      /* `pt-7` not `pt-5`: a tab that opens straight into a heading (Favourites,
-        Discover) needs more air above the heading than below it, or the word
-        reads as part of the header above. */
+      {/* `pt-7` not `pt-5`: a tab that opens straight into a heading
+        (Favourites, Discover) needs more air above the heading than below it,
+        or the word reads as part of the header above.
+
+        Note the braces around this comment. A block comment left bare in JSX
+        expression position is parsed as text and renders on the page, which is
+        exactly what shipped to a Pixel 4a once. */}
       <main className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-28 pt-7 sm:px-6 sm:pb-14 sm:pt-9">
         {error && !offline && (
           <Notice tone="error" role="alert" className="mb-6">

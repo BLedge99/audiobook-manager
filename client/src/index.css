@@ -114,10 +114,16 @@
   --t-slow: 420ms;
   --t-dispense: 720ms;
 
-  /* Glass is used in exactly three places -- bar, rail, sheet -- where it
-     genuinely sits over scrolling content. Anywhere else it would be
-     decoration, so there is no generic `.glass` utility. */
-  --glass: color-mix(in srgb, var(--surface) 78%, transparent);
+  /* Glass is used in exactly two places -- the top bar and the tab rail -- and
+     only because both genuinely sit over scrolling content. Anywhere else it
+     would be decoration, so there is no generic `.glass` utility.
+
+     The opacity is high on purpose. At 72% the frosted panel looked correct
+     over the plain light ground in a screenshot, and turned out to be
+     unreadable on the device in dark mode, where cover artwork scrolls
+     underneath it: the wordmark sat directly on a book title. Frosted glass is
+     a treatment, not a licence to make text unreadable. */
+  --glass: color-mix(in srgb, var(--surface) 93%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -138,7 +144,7 @@
     --mint-ink: var(--d-mint-ink);
     --cobalt: var(--d-cobalt);
     --cobalt-ink: var(--d-cobalt-ink);
-    --glass: color-mix(in srgb, var(--surface) 72%, transparent);
+    --glass: color-mix(in srgb, var(--surface) 91%, transparent);
   }
 }
 
@@ -159,7 +165,7 @@
   --mint-ink: var(--d-mint-ink);
   --cobalt: var(--d-cobalt);
   --cobalt-ink: var(--d-cobalt-ink);
-  --glass: color-mix(in srgb, var(--surface) 72%, transparent);
+  --glass: color-mix(in srgb, var(--surface) 91%, transparent);
 }
 
 @theme inline {

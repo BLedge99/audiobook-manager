@@ -73,6 +73,26 @@ async function findOverflow(page) {
   });
 }
 
+/**
+ * Catch a source comment that leaked into the rendered page.
+ *
+ * A block comment left bare in JSX *children* position is not a comment at all
+ * -- it is text, and it renders. One shipped to a Pixel 4a as a paragraph of
+ * CSS commentary at the top of the Library tab, and every unit test, the whole
+ * Playwright suite and two rounds of screenshot review had missed it. Nothing
+ * in the type system or the test suite can see this class of bug, so it is
+ * checked here, where a person would have looked.
+ */
+async function findLeakedComments(page) {
+  return page.evaluate(() => {
+    const text = document.body.innerText || "";
+    const hits = [];
+    if (text.includes("/*") || text.includes("*/")) hits.push("block comment rendered as visible text");
+    if (/\bTODO\b|\bFIXME\b|\bXXX\b/.test(text)) hits.push("TODO/FIXME visible on screen");
+    return hits;
+  });
+}
+
 /** Poll for the login gate rather than trusting a single waitFor: on a cold dev
  *  server the app spends seconds on the splash before the gate mounts. */
 async function waitForGate(page) {
@@ -125,6 +145,10 @@ async function main() {
     );
   }
 
+  for (const leak of await findLeakedComments(page)) {
+    failures.push(`phone library: ${leak}`);
+  }
+
   await page.locator("article[data-book-id]").first().click();
   await page.waitForTimeout(900);
   await page.screenshot({ path: path.join(OUT, "phone-detail-light.png") });
@@ -168,6 +192,9 @@ async function main() {
   const wideOverflow = await findOverflow(page);
   if (wideOverflow.scrollWidth > wideOverflow.viewport + 1) {
     failures.push(`desktop scrolls sideways: ${wideOverflow.scrollWidth} > ${wideOverflow.viewport}`);
+  }
+  for (const leak of await findLeakedComments(page)) {
+    failures.push(`desktop library: ${leak}`);
   }
 
   await browser.close();
