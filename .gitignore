@@ -56,3 +56,14 @@ coverage/
 
 # PWA dev output
 client/dev-dist/
+
+# Agent/editor tooling. These are large binary bundles installed on one machine,
+# not project source: .opencode and .agents together are ~40MB of skill
+# definitions and their own node_modules. .impeccable is local design-tool
+# state -- the direction brief and the review screenshots from the last design
+# pass. The durable parts of a design decision belong in specs/ and
+# decisions/, which are tracked, not here.
+.opencode/
+.agents/
+.codex/
+.impeccable/

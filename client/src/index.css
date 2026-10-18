@@ -1,34 +1,848 @@
 @import "tailwindcss";
 
-:root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
+/*
+ * Bookle design tokens.
+ *
+ * One direction: injection-moulded capsule vending, drawn by hand. See
+ * .impeccable/surfaces/client.md for the direction contract this implements.
+ *
+ * Structure:
+ *   1. Self-hosted faces (the PWA must work with no network, so nothing here
+ *      fetches from a CDN).
+ *   2. Raw palettes. Each theme value is declared once here.
+ *   3. Semantic remap. These swap on theme change; Tailwind and the component
+ *      classes below only ever reference the semantic names, so a colour is
+ *      changed in exactly one place.
+ *   4. Module scale, radius wobble, motion.
+ *   5. Component classes.
+ *
+ * HARD CONSTRAINT, do not delete or weaken:
+ * `text-size-adjust: 100%` below stops Android's WebView inflating layout text.
+ * Without it the app renders roughly 1.4x too large and overflows off-screen.
+ * See the block comment on `html` for the full incident. WCAG 2.2 AA.
+ */
+
+/* ---- 1. faces ---- */
+@font-face {
+  font-family: "Fredoka";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/fredoka-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/fonts/nunito-latin.woff2") format("woff2");
 }
 
-/*
- * Stop Android's WebView from inflating text.
- *
- * "Font boosting" (text autosizing) is on by default in the Android WebView and
- * scales every text block up until it fills its column. On a 1080x2340 phone it
- * made the whole app render roughly 1.4x too large: the header wrapped onto two
- * lines and overflowed off the right edge of the screen, so the app was
- * genuinely unusable rather than merely ugly.
- *
- * `text-size-adjust: 100%` pins layout text at the CSS-specified size. The
- * `maximum-scale`/`user-scalable` part of the viewport meta is deliberately NOT
- * set to block pinch-zoom -- that is an accessibility regression, and it is not
- * what causes this.
- */
+/* ---- 2. raw palettes ---- */
+:root {
+  /* light: plastic chalk under household light */
+  --l-ground: #f4f2f5;
+  --l-surface: #ffffff;
+  --l-sunk: #eae7ef;
+  --l-ink: #1b1720;
+  --l-ink-2: #514b5c;
+  --l-ink-3: #6b6577;
+  --l-line: #dbd7e2;
+  --l-rasp: #ff3d71;
+  --l-rasp-ink: #a80038;
+  --l-tan: #ff7a18;
+  --l-tan-ink: #8a3b00;
+  --l-mint: #0f9e83;
+  --l-mint-ink: #04614f;
+  --l-cobalt: #3345d8;
+  --l-cobalt-ink: #1b27a8;
+
+  /* dark: the same machine, lit from inside, for listening in bed */
+  --d-ground: #14121a;
+  --d-surface: #1e1b26;
+  --d-sunk: #100e16;
+  --d-ink: #f7f4f9;
+  --d-ink-2: #bdb6c7;
+  --d-ink-3: #9a92a9;
+  --d-line: #302b3c;
+  --d-rasp: #ff5c87;
+  --d-rasp-ink: #ffa8c1;
+  --d-tan: #ff9445;
+  --d-tan-ink: #ffc79c;
+  --d-mint: #2fd9b6;
+  --d-mint-ink: #96f0dd;
+  --d-cobalt: #8ba0ff;
+  --d-cobalt-ink: #c3ceff;
+}
+
+/* ---- 3. semantic remap ---- */
+:root {
+  color-scheme: light;
+  --ground: var(--l-ground);
+  --surface: var(--l-surface);
+  --sunk: var(--l-sunk);
+  --ink: var(--l-ink);
+  --ink-2: var(--l-ink-2);
+  --ink-3: var(--l-ink-3);
+  --line: var(--l-line);
+  --rasp: var(--l-rasp);
+  --rasp-ink: var(--l-rasp-ink);
+  --tan: var(--l-tan);
+  --tan-ink: var(--l-tan-ink);
+  --mint: var(--l-mint);
+  --mint-ink: var(--l-mint-ink);
+  --cobalt: var(--l-cobalt);
+  --cobalt-ink: var(--l-cobalt-ink);
+
+  /* ---- 4. module scale, wobble, motion ---- */
+  --u: 4px;
+  --r-shell: 26px 20px 26px 20px / 20px 26px 20px 26px;
+  --r-pod: 20px 15px 20px 15px / 15px 20px 15px 20px;
+  --r-tag: 14px 10px 14px 10px / 10px 14px 10px 14px;
+  --cant: -2.5deg;
+  --cant-alt: 1.8deg;
+  --stroke: 2px;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Quick out, long settle, no overshoot. This was an elastic curve, which the
+     design detector flags and which reads dated: the capsule's cant and its
+     pressed 3px travel already give it weight, and a bouncy curve fights that
+     by wobbling past its own target. */
+  --ease-pop: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast: 140ms;
+  --t-base: 240ms;
+  --t-slow: 420ms;
+  --t-dispense: 720ms;
+
+  /* Glass is used in exactly three places -- bar, rail, sheet -- where it
+     genuinely sits over scrolling content. Anywhere else it would be
+     decoration, so there is no generic `.glass` utility. */
+  --glass: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: var(--d-ground);
+    --surface: var(--d-surface);
+    --sunk: var(--d-sunk);
+    --ink: var(--d-ink);
+    --ink-2: var(--d-ink-2);
+    --ink-3: var(--d-ink-3);
+    --line: var(--d-line);
+    --rasp: var(--d-rasp);
+    --rasp-ink: var(--d-rasp-ink);
+    --tan: var(--d-tan);
+    --tan-ink: var(--d-tan-ink);
+    --mint: var(--d-mint);
+    --mint-ink: var(--d-mint-ink);
+    --cobalt: var(--d-cobalt);
+    --cobalt-ink: var(--d-cobalt-ink);
+    --glass: color-mix(in srgb, var(--surface) 72%, transparent);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: var(--d-ground);
+  --surface: var(--d-surface);
+  --sunk: var(--d-sunk);
+  --ink: var(--d-ink);
+  --ink-2: var(--d-ink-2);
+  --ink-3: var(--d-ink-3);
+  --line: var(--d-line);
+  --rasp: var(--d-rasp);
+  --rasp-ink: var(--d-rasp-ink);
+  --tan: var(--d-tan);
+  --tan-ink: var(--d-tan-ink);
+  --mint: var(--d-mint);
+  --mint-ink: var(--d-mint-ink);
+  --cobalt: var(--d-cobalt);
+  --cobalt-ink: var(--d-cobalt-ink);
+  --glass: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-sunk: var(--sunk);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink-2);
+  --color-ink3: var(--ink-3);
+  --color-line: var(--line);
+  --color-rasp: var(--rasp);
+  --color-tan: var(--tan);
+  --color-mint: var(--mint);
+  --color-cobalt: var(--cobalt);
+  /* The ink-toned variants are the only versions of an accent allowed to carry
+     text: the saturated accents fail 4.5:1 on the light ground. */
+  --color-rasp-ink: var(--rasp-ink);
+  --color-tan-ink: var(--tan-ink);
+  --color-mint-ink: var(--mint-ink);
+  --color-cobalt-ink: var(--cobalt-ink);
+  --font-display: "Fredoka", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Nunito", ui-rounded, system-ui, sans-serif;
+}
+
+/* ---- 5. base ---- */
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  /* Belt and braces: some OEM WebView builds ignore the property above on body. */
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Nunito", ui-rounded, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
 }
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  margin: 0;
+  text-wrap: balance;
+}
+
+/* Numerals that sit in a column must not dance as they change. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Browser surfaces nobody draws, themed from the palette rather than left to
+   the OS defaults that belong to no design system. */
+::selection {
+  background: color-mix(in srgb, var(--rasp) 30%, transparent);
+  color: var(--ink);
+}
+:focus-visible {
+  outline: 3px solid var(--cobalt);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+* {
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 99px;
+  border: 3px solid var(--ground);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+input,
+textarea,
+select,
+button {
+  font: inherit;
+  color: inherit;
+}
+/* Kill the UA's inner focus ring on controls that draw their own. */
+input:focus,
+textarea:focus,
+select:focus,
+button:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- 6. the machine ---- */
+
+/*
+ * Everything from here down is a *component* class, so it is declared inside
+ * `@layer components`. That is not tidiness: an unlayered rule beats every
+ * Tailwind utility, because Tailwind's own output lives in layers. Leaving
+ * these unlayered meant `.btn { display: inline-flex }` silently overrode a
+ * `hidden` utility (the "+ Profile" button would not hide on a phone), and
+ * `.rail { position: sticky }` overrode the app's `fixed bottom-0` so the tab
+ * rail sat under the header instead of at the bottom of the screen. Both were
+ * invisible in review and obvious on screen.
+ */
+@layer components {
+
+/* ---- the machine ---- */
+
+/* Base drawn panel: marker stroke plus a doubled edge, which is what makes a
+   rectangle read as drawn rather than rendered. Radius wobble (see --r-shell)
+   does the hand-drawn half of it. */
+.panel {
+  background: var(--surface);
+  border: var(--stroke) solid var(--ink);
+  border-radius: var(--r-shell);
+  box-shadow:
+    3px 4px 0 -1px color-mix(in srgb, var(--ink) 22%, transparent),
+    0 10px 24px -18px color-mix(in srgb, var(--ink) 70%, transparent);
+}
+.panel--flat {
+  box-shadow: none;
+}
+.panel--sunk {
+  background: var(--sunk);
+}
+
+/* The capsule: a canted acrylic shell. This is the signature move, so it gets
+   a real material -- tinted acrylic over the cover, a crown seam, screw
+   dimples, and an inset specular highlight along the top edge. */
+.capsule {
+  position: relative;
+  border-radius: var(--r-pod);
+  border: var(--stroke) solid var(--ink);
+  background: var(--surface);
+  transform: rotate(var(--cant));
+  transition:
+    transform var(--t-base) var(--ease-pop),
+    box-shadow var(--t-base) var(--ease);
+  box-shadow:
+    0 2px 0 -1px color-mix(in srgb, var(--ink) 26%, transparent),
+    0 12px 20px -16px color-mix(in srgb, var(--ink) 80%, transparent);
+}
+.capsule:hover,
+.capsule:focus-within {
+  transform: rotate(0deg) translateY(-3px);
+  box-shadow:
+    0 4px 0 -1px color-mix(in srgb, var(--ink) 30%, transparent),
+    0 18px 28px -18px color-mix(in srgb, var(--ink) 85%, transparent);
+}
+.capsule--alt {
+  transform: rotate(var(--cant-alt));
+}
+.capsule__gloss {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.12) 26%,
+    transparent 52%
+  );
+}
+/* Plastic only reads as plastic when something is behind it, so the gloss is
+   a light source in dark mode rather than a white haze in both. */
+:root[data-theme="dark"] .capsule__gloss {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.04) 28%,
+    transparent 55%
+  );
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .capsule__gloss {
+    background: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(255, 255, 255, 0.04) 28%,
+      transparent 55%
+    );
+  }
+}
+.capsule__seam {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 7px;
+  height: 1px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+.capsule__screw {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  box-shadow: inset 0 1px 1px color-mix(in srgb, var(--ink) 40%, transparent);
+}
+
+/* Cover seen through tinted acrylic rather than sitting on top of it. */
+.shell-art {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
+}
+.shell-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.shell-art__tint {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--tint-hue, var(--cobalt)) 34%, transparent);
+  mix-blend-mode: multiply;
+}
+:root[data-theme="dark"] .shell-art__tint {
+  mix-blend-mode: screen;
+  opacity: 0.4;
+}
+
+/* Play dome: the one glossy control. Radial shading is the material, and it
+   presses on a real 3D offset, never a zero-blur block. */
+.dome {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 50%;
+  border: var(--stroke) solid var(--ink);
+  background: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--rasp) 55%, white), var(--rasp) 70%);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.55),
+    inset 0 -4px 8px color-mix(in srgb, var(--rasp-ink) 60%, transparent),
+    0 4px 0 color-mix(in srgb, var(--ink) 88%, transparent),
+    0 12px 22px -12px color-mix(in srgb, var(--rasp) 90%, transparent);
+  transition:
+    transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+.dome:active {
+  transform: translateY(4px);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.4),
+    0 0 0 color-mix(in srgb, var(--ink) 88%, transparent),
+    0 4px 10px -6px color-mix(in srgb, var(--rasp) 80%, transparent);
+}
+.dome__play {
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  border-left: 13px solid white;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+}
+
+/* Particle burst on press. Transform and opacity only, so it stays on the
+   compositor; eight nodes is the whole cost. */
+.spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 2px;
+  background: var(--tan);
+  opacity: 0;
+  pointer-events: none;
+}
+.dome:active .spark {
+  animation: scatter var(--t-dispense) var(--ease) forwards;
+  animation-delay: calc(var(--i) * 12ms);
+}
+@keyframes scatter {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0deg) scale(0.4);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--dr)) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spark {
+    display: none;
+  }
+}
+
+/* The dispense: the one authored moment. The dock capsule settles in and its
+   progress tube fills once, rather than every section fading on scroll. */
+@keyframes dispense {
+  0% {
+    transform: rotate(-11deg) translateY(-26px) scale(0.86);
+    opacity: 0;
+  }
+  60% {
+    transform: rotate(2deg) translateY(2px) scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(0) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+.dispense {
+  animation: dispense var(--t-dispense) var(--ease) both;
+}
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+.fill-in {
+  transform-origin: left;
+  animation: fill var(--t-slow) var(--ease) both;
+}
+
+/* Bars, tubes and swatches -- the machine's meters. */
+.tube {
+  height: 8px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--ink) 26%, transparent);
+  overflow: hidden;
+}
+.tube > i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--tan);
+}
+.tube--done > i {
+  background: var(--mint);
+}
+.tube--new > i {
+  background: var(--cobalt);
+}
+
+.swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 45%, transparent);
+  flex: none;
+}
+
+/* The scrubber. A default range input has a ~4px thumb, which no thumb manages
+   while lying in bed, so the whole control is rebuilt at 44px tall with a 30px
+   grip. The input stays a real <input type="range"> -- see decisions/007. */
+.scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
+  accent-color: var(--rasp);
+}
+.scrubber::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 99px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.scrubber::-moz-range-track {
+  height: 10px;
+  border-radius: 99px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  margin-top: -11px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--rasp);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    0 3px 0 -1px color-mix(in srgb, var(--ink) 70%, transparent),
+    0 8px 14px -8px color-mix(in srgb, var(--rasp) 90%, transparent);
+  transition: transform var(--t-fast) var(--ease-pop);
+}
+.scrubber::-moz-range-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--rasp);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    0 3px 0 -1px color-mix(in srgb, var(--ink) 70%, transparent);
+}
+.scrubber:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.scrubber:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.scrubber:focus-visible {
+  outline: 3px solid var(--cobalt);
+  outline-offset: 4px;
+  border-radius: 99px;
+}
+
+/* ---- 7. controls ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 99px;
+  border: var(--stroke) solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  box-shadow: 0 3px 0 -1px color-mix(in srgb, var(--ink) 80%, transparent);
+  transition:
+    transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 -1px color-mix(in srgb, var(--ink) 80%, transparent);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 -1px color-mix(in srgb, var(--ink) 80%, transparent);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.btn--primary {
+  background: var(--rasp);
+  color: #fff;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 3px 0 color-mix(in srgb, var(--ink) 80%, transparent);
+}
+.btn--mint {
+  background: var(--mint);
+  color: #04201a;
+}
+.btn--quiet {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--ink) 32%, transparent);
+  box-shadow: none;
+  min-height: 40px;
+}
+.btn--quiet:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  box-shadow: none;
+  transform: none;
+}
+.btn--sm {
+  min-height: 36px;
+  padding: 0 13px;
+  font-size: 13px;
+  border-width: 1.5px;
+}
+
+.iconbtn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 14px 11px 14px 11px / 11px 14px 11px 14px;
+  border: var(--stroke) solid color-mix(in srgb, var(--ink) 30%, transparent);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    transform var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.iconbtn:hover {
+  color: var(--ink);
+  transform: rotate(-4deg);
+}
+
+.field {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 15px;
+  border-radius: 22px;
+  border: var(--stroke) solid color-mix(in srgb, var(--ink) 34%, transparent);
+  background: var(--surface);
+  font-size: 15px;
+}
+.field::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
+}
+.field:focus {
+  border-color: var(--cobalt);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cobalt) 25%, transparent);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 99px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.chip[aria-pressed="true"],
+.chip[data-on="true"] {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+}
+.chip:hover {
+  transform: translateY(-1px) rotate(-1deg);
+}
+
+/* ---- 8. shell ---- */
+/*
+ * The bar's glass lives on a pseudo-element; the rail's lives on the element.
+ *
+ * The bar needs the pseudo-element because an element with `backdrop-filter`
+ * becomes the *containing block for its position: fixed descendants*. Putting
+ * the blur on `.bar` directly meant the fixed tab rail was positioned against
+ * the 104px header instead of the viewport, so it rendered on top of the
+ * wordmark instead of at the bottom of the screen.
+ *
+ * The rail must NOT use a pseudo-element. It is `static` from `sm` up, so an
+ * absolutely positioned `::before` with `inset: 0` resolves against the nearest
+ * positioned ancestor -- the sticky header -- and the rail's pseudo-element then
+ * spans the whole header. Because hit-testing attributes a pseudo-element to its
+ * originating element, the rail swallowed every click in the header, and the
+ * E2E suite could not reach the "+ Profile" button.
+ */
+.bar {
+  isolation: isolate;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: var(--stroke) solid color-mix(in srgb, var(--ink) 26%, transparent);
+}
+.bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+}
+/* Safe to filter directly: the rail has no fixed-position descendants, so it
+   traps no containing block. */
+.rail {
+  position: relative;
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border-top: var(--stroke) solid color-mix(in srgb, var(--ink) 26%, transparent);
+}
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(in srgb, var(--sunk) 72%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Wordmark: Fredoka, canted against the machine's own angle. */
+.wordmark {
+  font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+/* Sections read as machine parts, so a heading is set large and a rule runs
+   under it. No kicker line above headings -- the heading speaks for itself. */
+.machine-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 30px 0 14px;
+  padding-bottom: 10px;
+  border-bottom: var(--stroke) solid color-mix(in srgb, var(--ink) 24%, transparent);
+}
+.machine-head h2 {
+  font-size: 22px;
+}
+
+/* The ambient field: a handful of slow drifting specks so the machine reads as
+   lit rather than as a flat page. Opacity and transform only. */
+.specks {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.speck {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--rasp);
+  opacity: 0.16;
+  animation: drift 19s ease-in-out infinite alternate;
+}
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(14px, -34px, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .speck {
+    animation: none;
+    opacity: 0.1;
+  }
+}
+/* Machines and Pi-class hosts get the field without the drift. */
+@media (prefers-reduced-motion: reduce), (update: slow) {
+  .speck {
+    animation: none;
+  }
+}
+
+} /* end @layer components */
