@@ -89,11 +89,16 @@ manager that can diverge from the server.
 
 - The name is **Bookle**. It is confirmed and future work must not invent a
   different one.
-- No logo, icon set or wordmark exists. `client/public/` holds only
-  `placeholder-cover.svg`, and `client/index.html` still links `/vite.svg` as
-  its favicon.
-- No voice, personality or visual direction has been confirmed. Visual world is
-  deliberately unset here.
+- The visual world is **decided**: injection-moulded capsule vending, drawn by
+  hand. Chosen by the user from five presented directions, then steered by them
+  toward livelier and whackier, tilt and sketch character, minimal interiors and
+  real transparency. Cute energy runs uniformly across every surface, operator
+  screens included, by explicit decision. The system is recorded in
+  [`DESIGN.md`](DESIGN.md) and the contract in
+  [`specs/15-gui-redesign.md`](specs/15-gui-redesign.md).
+- Interface **voice is still undecided**. The redesign set no copy voice.
+- No logo exists. `client/public/favicon.svg` is now an authored capsule mark,
+  and it matches the in-app mark drawn in `ui/primitives.tsx`.
 
 ### Shipped strings still to rename
 
@@ -103,14 +108,26 @@ deliberately rather than left to be discovered:
 
 | Path | What to change |
 |---|---|
-| `client/index.html` | `<title>` and the Vite favicon link |
+| `client/index.html` | `<title>` and the Vite favicon link. **Favicon done** — now an authored capsule mark; `<title>` still says Audiobook Manager |
 | `client/package.json` | `"name": "audiobook-client"` |
 | `server/package.json` | `"name"`, and the broken `"scan"` script (LIMITATIONS 1.3) |
 | `package.json` (root) | `"name"` |
 | `README.md` | Title, one-liner, acknowledgements section |
 | `PRD.md` | Title and "One-liner" |
-| `AGENTS.md`, `roadmap.md`, `LIMITATIONS.md`, `specs/*`, `decisions/*` | Prose references; not user-facing, rename as prose edits |
+| `AGENTS.md`, `roadmap.md`, `LIMITATIONS.md`, `specs/*`, `decisions/*` | Prose references; not user-facing, rename as prose edits. **roadmap.md and LIMITATIONS.md updated** for the spec 15 redesign |
 | `Makefile`, `docker-compose.yml`, `Dockerfile.prod`, `.devcontainer/` | Service and container names; renaming changes host paths and volumes |
+
+**The blocker, stated plainly:** `e2e/helpers.ts:42` matches the `<h1>` by exact
+accessible name,
+
+```ts
+await expect(page.getByRole("heading", { name: "Audiobook Manager" })).toBeVisible();
+```
+
+so the visible wordmark cannot become Bookle without editing that line in the
+same change. That line is the whole reason the wordmark still reads "Audiobook
+Manager" in the redesigned app. It is a two-line change once the rename is
+scheduled; it was left alone deliberately rather than silently made.
 
 The rename is **not yet scheduled.** Per `AGENTS.md`, it needs a roadmap entry
 and a matching `specs/NN-*.md` file first; doing it as a bare sweep would
@@ -146,6 +163,10 @@ these.
 ## Open Decisions
 
 - Interface voice and tone.
-- Visual world and design system. Unset by design; not part of this file.
 - Whether other households become real operators, and what that forces into
   first-run setup.
+- The **rename itself** is still unscheduled, and it is the one outstanding piece
+  of brand work. See the table above.
+- Whether the Android app can reach a home server by LAN address at all. It
+  currently cannot; see `LIMITATIONS.md` 1.6. This is now the single largest risk
+  to the product's stated deployment.

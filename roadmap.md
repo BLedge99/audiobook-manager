@@ -23,7 +23,7 @@ has a matching spec in `specs/`.
 | 12 | AI features (LM Studio, optional) | At least one guarded AI feature ships (metadata matching assistant or description summaries); app fully works with it off |
 | 13 | Media tools (stretch) | Manual, explicit metadata/cover embedding into files with confirmation; no silent writes |
 | 14 | Listening position display | Player shows chapter + position in chapter + book % and time left, with chapter ticks and a session-start marker; grid shows a Continue listening section. Position maths lives in a tested pure module |
-| 15 | GUI redesign | Player, grid and library shell restyled as one system; reuses spec 14's `position.ts` and `ProgressTimeline` rather than rebuilding them |
+| 15 | GUI redesign | **Done.** All twenty client surfaces restyled as one mobile-first system — capsule world, light/dark toggle, self-hosted faces. Player, grid and library shell done; reuses spec 14's `position.ts` and `ProgressTimeline` rather than rebuilding them. See [`specs/15-gui-redesign.md`](specs/15-gui-redesign.md) and [`DESIGN.md`](DESIGN.md). Renaming the wordmark to Bookle is still to schedule |
 | 16 | Provider expansion & background enrichment | Audnexus + LibriVox clients joined in an adaptive chain; a resumable post-scan pass auto-applies high-confidence matches and queues the rest; no media writes |
 | 17 | Tag & taxonomy model | Curated genre tree, multiple narrators, series + position, publication facts, and per-field user overrides that survive rescans without freezing unrelated fields |
 | 18 | Favourites & custom tags | Per-profile favourites; household-managed tag vocabulary with create/rename/merge/delete; assignments survive rescan |
@@ -43,7 +43,13 @@ has a matching spec in `specs/`.
 - Items 10–11 make it trustworthy to leave running.
 - Items 12–14 are enhancements; do not start until 01–05 are solid.
 - Item 15 follows 14 deliberately: 14 builds the data and layout layer that the
-  redesign then restyles, so the redesign is not a rewrite of the maths.
+  redesign then restyles, so the redesign is not a rewrite of the maths. It
+  landed last, as planned, and went wider than its finish line — all twenty
+  surfaces rather than the player, grid and shell — because a partial restyle
+  would have left the app looking like two products.
+- Item 15's spec was written after the code, which breaks the order in
+  `AGENTS.md`. `specs/15-gui-redesign.md` records that at the top rather than
+  pretending otherwise.
 - Remote/internet access is intentionally absent; see `decisions/006-remote-access.md`.
 
 ## Build order after 14

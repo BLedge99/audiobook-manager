@@ -3,8 +3,11 @@
 A single place to record **what does not work yet**, **why**, and **what to do
 about it**. Written 2026-10-13 against `master` @ `ff0e600`.
 
-Every claim here was verified against the running stack or the live provider
-APIs, not inferred from reading code. Where a number is given, it is measured.
+**Updated 2026-10-18** with 1.6 and 1.7, both found during device testing of the
+spec 15 redesign and both verified against the running stack rather than
+inferred. Every claim below was verified against the running stack or the live
+provider APIs, not inferred from reading code. Where a number is given, it is
+measured.
 
 Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
 than intended · **DEFERRED** = deliberately not built.
@@ -116,6 +119,68 @@ pushes apply silently, a backward move beyond 5 minutes is blocked and surfaced
 as a conflict for the user to resolve, and an explicit `allowRewind` flag exists
 for the deliberate case. Because the rule is monotonic, clock skew stops being a
 correctness problem.
+
+---
+
+## 1.6 The Android WebView will not reach a home server by LAN address
+**Status: BROKEN — blocks the primary deployment. Found 2026-10-18.**
+
+A Pixel 4a with `com.google.android.webview` **154.0.8037.106** refuses every
+`fetch` from the app to a LAN address. Measured, from inside the app's own
+WebView:
+
+| Target | Result |
+|---|---|
+| `http://localhost:3000` (via `adb reverse`) | `200`, ~40ms |
+| `http://192.168.1.203:3311` (same machine, LAN IP) | `TypeError: Failed to fetch`, **1ms** |
+
+Everything below it was verified healthy at the time:
+
+- the phone pings the host, 0% loss;
+- the host serves the request correctly at `127.0.0.1` and answers `200`;
+- the phone's **own OS stack** gets `HTTP/1.1 200 OK` over `nc` to the LAN IP;
+- CORS preflight returns `204` with `access-control-allow-origin: https://localhost`;
+- `network_security_config.xml` sets `cleartextTrafficPermitted="true"`, so
+  mixed content is permitted.
+
+A 1ms failure is a local browser decision, not a network one. The app is loaded
+from `https://localhost`, and current Chrome blocks requests from that origin to
+a private-network address (the Local Network Access / Private Network Access
+family). `cleartext` and CORS are not the problem, so neither of the existing
+fixes touches it.
+
+**Why it matters more than anything else here:** the product's deployment *is* "the
+phone reaches the home server by IP". Every documented setup path — the
+in-app server URL, `capacitor.config.ts`'s own note about `localhost` being the
+phone, spec 26's roadmap line — assumes that works. Today the only arrangement
+that works is `adb reverse`, which needs the phone plugged into the PC by USB.
+Two household members cannot use the app as designed.
+
+**Not yet diagnosed.** Next steps, in order of likelihood: check whether the
+WebView needs the Local Network Access permission granted
+(`android.permission.NEARBY_WIFI_DEVICES` or a WebView settings toggle); check
+whether a server-side `Access-Control-Allow-Private-Network: true` is required
+alongside `cleartext`; and test on a WebView version from before 154 to confirm
+this is a regression rather than long-standing. Until then, **treat the LAN path
+as unsupported and verify device work over `adb reverse`**, which is how every
+device result in this file was obtained.
+
+### 1.7 The library is fetched before a profile exists, so progress is stale on arrival
+**Status: LIMITED — cosmetic but misleading. Found 2026-10-18.**
+
+`useLibrary` fetches `/api/audiobooks` once at mount, before the household
+password or a profile has been chosen, so the response carries no `progress`.
+After `ProfileGate` succeeds nothing refetches; the only refetch triggers are
+window `focus` and `visibilitychange`. A listener who opens the app, picks a
+profile and starts browsing sees no progress bars and no "Continue listening"
+until they leave and come back.
+
+Pre-existing, but the redesign makes it far more visible: the dock is now the
+first thing on the Library tab, so an empty dock reads as "you have nothing in
+progress" rather than as a fetch that has not happened yet.
+
+**Fix:** refetch once after a profile is selected. Small and contained, but it is
+a behaviour change and was not made under this spec, which preserves behaviour.
 
 ---
 
