@@ -244,6 +244,54 @@ export async function searchOpenLibrary(title: string, _author?: string): Promis
 }
 
 /**
+ * Search Open Library by subject rather than by title.
+ *
+ * This exists because Discover cannot work any other way, and the reason is
+ * worth keeping next to the code:
+ *
+ *  - Audnexus has no free title search. `AudnexusProvider.search()` is a
+ *    deliberate no-op that returns `[]` unless the caller already holds an ASIN,
+ *    so it contributes zero candidates to Discover, always.
+ *  - LibriVox does *exact* title matching, and Discover's only input is genre
+ *    names. Asking LibriVox for a book titled "fiction" returns 404. Asking for
+ *    "short stories" returns exactly one book, one literally titled that.
+ *
+ * Open Library's `search.json` is the only free endpoint here that accepts a
+ * concept instead of a title. Measured: `subject:horror` returns ~35,000 docs,
+ * no API key, no auth.
+ *
+ * The trade, stated plainly: these are *print* records, so they carry no
+ * narrator and no runtime. A suggestion from here is a book the household does
+ * not own, not an audiobook they can buy. The UI labels them accordingly rather
+ * than implying they are playable.
+ */
+export async function searchOpenLibraryBySubject(subject: string, limit = 12): Promise<EnrichmentCandidate[]> {
+  const query = encodeURIComponent(`subject:${subject}`);
+  try {
+    const res = await fetch(
+      `https://openlibrary.org/search.json?q=${query}&limit=${limit}&fields=${encodeURIComponent(OPEN_LIBRARY_FIELDS)}`,
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { docs?: Record<string, unknown>[] };
+    return (data.docs ?? [])
+      .map((doc) => ({
+        source: "openlibrary" as const,
+        ...mapOpenLibraryDoc(doc),
+        description: undefined,
+        // Subject search is a topical match, not a title match, so confidence
+        // is a flat middling value rather than a similarity score. Scoring here
+        // would invent precision that was never measured.
+        confidence: 0.5,
+        raw: doc,
+      }))
+      .filter((candidate) => candidate.title && !isNonBookTitle(candidate.title));
+  } catch {
+    // A provider being unreachable must never fail the request (spec 16 AC).
+    return [];
+  }
+}
+
+/**
  * Fetch a work description from Open Library, on demand.
  *
  * Search results carry no description, and the work record is a second request

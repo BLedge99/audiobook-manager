@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   candidateCoverFilename,
   searchOpenLibrary,
+  searchOpenLibraryBySubject,
   searchGoogleBooks,
   fetchOpenLibraryDescription,
   mapOpenLibraryDoc,
@@ -281,6 +282,58 @@ describe("searchOpenLibrary", () => {
   it("returns [] when the API fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
     expect(await searchOpenLibrary("x")).toEqual([]);
+  });
+});
+
+describe("searchOpenLibraryBySubject", () => {
+  it("queries by subject, not by title", async () => {
+    let requested = "";
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      requested = String(url);
+      return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+    }));
+    await searchOpenLibraryBySubject("horror");
+    // The whole point of this function. A title search cannot answer "what else
+    // is like this", and every other free provider here either cannot search at
+    // all (Audnexus) or matches titles exactly (LibriVox).
+    expect(decodeURIComponent(requested)).toContain("q=subject:horror");
+  });
+
+  it("maps docs to candidates with a flat confidence", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      docs: [{ key: "/works/OL1W", title: "The Shining", author_name: ["Stephen King"], cover_i: 9, subject: ["horror"] }],
+    }), { status: 200 })));
+    const results = await searchOpenLibraryBySubject("horror");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ source: "openlibrary", title: "The Shining", author: "Stephen King" });
+    expect(results[0].coverUrl).toContain("covers.openlibrary.org");
+    // A topical match, not a title match. Scoring it like a title similarity
+    // would invent precision that was never measured.
+    expect(results[0].confidence).toBe(0.5);
+  });
+
+  it("drops study-guide spam, which dominates popular subjects", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      docs: [
+        { title: "Summary of The Shining" },
+        { title: "Guide to The Shining" },
+        { title: "The Shining" },
+      ],
+    }), { status: 200 })));
+    const results = await searchOpenLibraryBySubject("horror");
+    expect(results.map((r) => r.title)).toEqual(["The Shining"]);
+  });
+
+  it("returns [] rather than throwing when the API fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network down"); }));
+    // Discover must degrade, not fail: one provider being down should cost
+    // result quality, not the whole tab (spec 16's isolation rule).
+    await expect(searchOpenLibraryBySubject("horror")).resolves.toEqual([]);
+  });
+
+  it("returns [] on a non-OK response", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 503 })));
+    expect(await searchOpenLibraryBySubject("horror")).toEqual([]);
   });
 });
 

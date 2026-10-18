@@ -203,6 +203,50 @@ test.describe("discover", () => {
     await expect(page.getByText(/Titles you do not own yet/)).toBeVisible();
   });
 
+  test("favouriting books actually produces suggestions", async ({ page }) => {
+    // This test exists because of a bug that every other Discover test happily
+    // passed. Discover had *never once* returned a result -- Audnexus has no free
+    // title search and LibriVox matches titles exactly, so feeding it genre
+    // words always yielded an empty pool. The suite asserted "the tab renders and
+    // admits it has nothing", which an eternally broken feature satisfies
+    // perfectly.
+    //
+    // So assert the thing that was actually broken: real suggestions, derived
+    // from real favourites.
+    await enterApp(page);
+    const headers = { "x-profile-id": (await page.evaluate(() => window.localStorage.getItem("profileId"))) as string };
+
+    const library = await (await page.request.get("/api/audiobooks", { headers })).json();
+    expect(library.length).toBeGreaterThan(0);
+
+    // Favourite enough distinct books that the seed has genres to work with.
+    for (const book of library.slice(0, 3)) {
+      await page.request.put(`/api/audiobooks/${book.id}/favourite`, { headers });
+    }
+
+    await page.reload();
+    await login(page);
+    await tab(page, /^Discover/).click();
+
+    const cards = page.getByRole("article").filter({ hasText: /Because (it shares|you like)/ });
+    await expect(cards.first()).toBeVisible({ timeout: 60_000 });
+
+    // Each card must give a reason, and must not pretend to be playable.
+    await expect(cards.first().getByText(/Because /)).toBeVisible();
+    await expect(cards.first().getByText(/not an audiobook yet/i)).toBeVisible();
+
+    // And it must never suggest something already in the library.
+    const owned = new Set(library.map((b: { title: string }) => b.title.toLowerCase()));
+    const titles = await cards.allTextContents();
+    for (const title of titles) {
+      for (const ownedTitle of owned) {
+        if (ownedTitle && title.toLowerCase().includes(ownedTitle)) {
+          throw new Error(`Discover suggested an owned title: ${ownedTitle}`);
+        }
+      }
+    }
+  });
+
   test("wishlist items are never presented as playable", async ({ page }) => {
     await enterApp(page);
     await tab(page, /^Discover/).click();

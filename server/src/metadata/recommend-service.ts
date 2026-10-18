@@ -1,12 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
-import { AudnexusProvider } from "./audnexus";
-import { LibrivoxProvider } from "./librivox";
+import { searchOpenLibraryBySubject } from "../enrichment";
 import {
   buildOwnedIdentities,
   buildSeed,
   hasEnoughSignal,
   rankCandidates,
-  searchTermsFor,
   type Taggable,
 } from "./recommend";
 import { trimDescription, type ProviderCandidate } from "./types";
@@ -106,22 +104,23 @@ export class RecommendationService {
    * Every provider failure is tolerated: one being down degrades result
    * quality rather than failing Discover entirely (spec 16's isolation rule,
    * applied here too).
+   *
+   * Open Library subject search is the only source here that can actually answer
+   * this question. Audnexus's `search()` is a no-op without an ASIN, and LibriVox
+   * matches titles exactly, so feeding it genre words returns nothing. See
+   * `searchOpenLibraryBySubject` for the full reasoning.
    */
   private async expand(seed: ReturnType<typeof buildSeed>): Promise<ProviderCandidate[]> {
-    const terms = searchTermsFor(seed);
-    if (terms.length === 0) return [];
+    // Subjects to browse, most distinctive first. Distinctive matters: a vague
+    // subject like "fiction" returns tens of thousands of books, all of which
+    // the ranking stage would then have to sift, while "horror" returns a few
+    // hundred that are actually related to a household that likes Poe.
+    const subjects = [...seed.genres.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([slug]) => slug);
 
-    const librivox = new LibrivoxProvider();
-    const audnexus = new AudnexusProvider();
-
-    const results = await Promise.allSettled(
-      terms.flatMap((term) => [
-        audnexus.search({ title: term }),
-        // LibriVox does exact title matching, so an author or genre term is
-        // usually a miss for it; still worth one cheap attempt per term.
-        librivox.search({ title: term }),
-      ]),
-    );
+    const results = await Promise.allSettled(subjects.map((subject) => searchOpenLibraryBySubject(subject)));
 
     const pool: ProviderCandidate[] = [];
     for (const result of results) {

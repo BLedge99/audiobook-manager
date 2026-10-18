@@ -51,6 +51,16 @@ function RecommendationCard({
         {recommendation.description && (
           <p className="mt-1.5 line-clamp-2 text-[11.5px] text-ink3">{recommendation.description}</p>
         )}
+        {/*
+          These come from Open Library, which catalogues *print* editions. There
+          is no narrator and no runtime, so the card must not imply this is
+          something you can play. The wishlist is the point: it remembers a
+          title worth hunting down, and "mark as owned" closes the loop when it
+          turns up as an audiobook.
+        */}
+        <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-ink3">
+          Book &mdash; not an audiobook yet
+        </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-ink/25 bg-sunk px-2.5 py-0.5 text-[11px] font-bold text-ink2">
             {recommendation.reason}
@@ -133,7 +143,7 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
               <Compass size={26} className="text-rasp" aria-hidden="true" /> Discover
             </h2>
             <p className="mt-2 text-ink2">
-              Titles you do not own yet, matched on genre, author, narrator and series.
+              Titles you do not own yet, matched on the genres of the books you favourite.
             </p>
           </div>
           <Btn
