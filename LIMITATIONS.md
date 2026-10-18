@@ -122,10 +122,10 @@ correctness problem.
 
 ---
 
-## 1.6 The Android WebView will not reach a home server by LAN address
-**Status: BROKEN — blocks the primary deployment. Found 2026-10-18.**
+### 1.6 The Android WebView would not reach a home server by LAN address
+**Status: FIXED in `capacitor.config.ts` — awaiting on-device confirmation.**
 
-A Pixel 4a with `com.google.android.webview` **154.0.8037.106** refuses every
+A Pixel 4a with `com.google.android.webview` **154.0.8037.106** refused every
 `fetch` from the app to a LAN address. Measured, from inside the app's own
 WebView:
 
@@ -134,36 +134,40 @@ WebView:
 | `http://localhost:3000` (via `adb reverse`) | `200`, ~40ms |
 | `http://192.168.1.203:3311` (same machine, LAN IP) | `TypeError: Failed to fetch`, **1ms** |
 
-Everything below it was verified healthy at the time:
+**How it was diagnosed, because it was not what it looked like.** The instinct
+was a port, a firewall or a CORS problem. All three were ruled out by
+measurement: the phone pings the host at 0% loss, the host serves `200` on the
+same port from `127.0.0.1`, the phone's own OS stack gets `200 OK` from the LAN
+address over `nc`, the CORS preflight returns `204` with the right origin, and
+`cleartextTrafficPermitted` is already `true`. A 1ms failure is a local browser
+decision made before any packet left the device.
 
-- the phone pings the host, 0% loss;
-- the host serves the request correctly at `127.0.0.1` and answers `200`;
-- the phone's **own OS stack** gets `HTTP/1.1 200 OK` over `nc` to the LAN IP;
-- CORS preflight returns `204` with `access-control-allow-origin: https://localhost`;
-- `network_security_config.xml` sets `cleartextTrafficPermitted="true"`, so
-  mixed content is permitted.
+The cause is **mixed content**. Capacitor serves the app from
+`https://localhost`, a secure context, so every plain-HTTP request to the home
+server is blocked by the renderer. `http://localhost` is exempt under the URL
+standard's "potentially trustworthy origin" rule, which is exactly why the
+original `adb reverse` setup worked and a real Wi-Fi client never did. **The app
+worked over USB for a reason unrelated to how anyone actually uses it.**
 
-A 1ms failure is a local browser decision, not a network one. The app is loaded
-from `https://localhost`, and current Chrome blocks requests from that origin to
-a private-network address (the Local Network Access / Private Network Access
-family). `cleartext` and CORS are not the problem, so neither of the existing
-fixes touches it.
+**Fix:** `server.androidScheme = "http"` in `capacitor.config.ts`, so the app is
+served from `http://localhost` and a LAN address is same-scheme rather than
+mixed content. The full reasoning, the alternatives rejected (including
+`Access-Control-Allow-Private-Network`, which is a plausible-sounding
+explanation that is *not* the mechanism here) and the security trade are in
+[`decisions/014-webview-http-scheme.md`](decisions/014-webview-http-scheme.md).
 
-**Why it matters more than anything else here:** the product's deployment *is* "the
-phone reaches the home server by IP". Every documented setup path — the
-in-app server URL, `capacitor.config.ts`'s own note about `localhost` being the
-phone, spec 26's roadmap line — assumes that works. Today the only arrangement
-that works is `adb reverse`, which needs the phone plugged into the PC by USB.
-Two household members cannot use the app as designed.
+**Why it mattered most of anything in this file:** the product's deployment *is*
+"the phone reaches the home server by IP". Every documented setup path assumed
+that worked, and it did not.
 
-**Not yet diagnosed.** Next steps, in order of likelihood: check whether the
-WebView needs the Local Network Access permission granted
-(`android.permission.NEARBY_WIFI_DEVICES` or a WebView settings toggle); check
-whether a server-side `Access-Control-Allow-Private-Network: true` is required
-alongside `cleartext`; and test on a WebView version from before 154 to confirm
-this is a regression rather than long-standing. Until then, **treat the LAN path
-as unsupported and verify device work over `adb reverse`**, which is how every
-device result in this file was obtained.
+**One consequence to expect:** the origin changes from `https://localhost` to
+`http://localhost`, which is a different origin, so an existing install loses its
+stored server URL and profile and shows the server-URL screen once. That is
+expected — not a deleted profile.
+
+**Verified:** not yet on a cable-free device. Every device result in this file
+was obtained over `adb reverse`, which continues to work, so nothing recorded
+here is invalidated by the fix.
 
 ### 1.7 The library is fetched before a profile exists, so progress is stale on arrival
 **Status: LIMITED — cosmetic but misleading. Found 2026-10-18.**

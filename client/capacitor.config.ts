@@ -20,9 +20,43 @@ const config: CapacitorConfig = {
   webDir: "dist",
   server: {
     /**
-     * The home server is plain HTTP on the LAN, and the WebView loads the app
-     * from an `https://localhost` origin. Without this, every API request is
-     * blocked as mixed content -- Chromium reported it as
+     * The app is served from `http://localhost`, not `https://localhost`.
+     *
+     * This is the fix for the LAN-reachability failure in LIMITATIONS 1.6, and
+     * it is a mixed-content fix, not a networking one.
+     *
+     * Capacitor's default scheme is `https`, which makes the app page a secure
+     * context. Every request it then makes to the home server is plain HTTP,
+     * so the renderer treats it as **mixed content** and blocks it before a
+     * single packet leaves the device. Measured on a Pixel 4a with WebView 154:
+     *
+     *   http://localhost:3000     -> 200 in 40ms   (localhost is exempt)
+     *   http://192.168.1.203:3311 -> fails in 1ms  (blocked as mixed content)
+     *
+     * Everything else was already healthy and is deliberately *not* changed:
+     * the phone pings the host at 0% loss, the host serves 200 on the same port,
+     * the phone's own OS stack gets 200 over `nc`, the CORS preflight returns
+     * 204, and `network_security_config.xml` already sets
+     * `cleartextTrafficPermitted="true"`.
+     *
+     * That is why this looked like a firewall, a port or a CORS problem, and
+     * why none of those turned out to be it.
+     *
+     * The trade: the app's own origin is no longer a secure context. It serves
+     * bundled local assets and nothing else, and every request it makes still
+     * goes to the address the user typed, over a home LAN -- which is the same
+     * trust boundary `network_security_config.xml` already documents, with the
+     * same reasoning. See `decisions/014-webview-http-scheme.md`.
+     *
+     * Consequence to expect: the origin changes from `https://localhost` to
+     * `http://localhost`, so localStorage is a different origin. The app looks
+     * like a fresh install and shows the server-URL screen once.
+     */
+    androidScheme: "http",
+
+    /**
+     * The home server is plain HTTP on the LAN. Without this, every API request
+     * is blocked -- Chromium reported it as
      *
      *   "Access to fetch at 'http://.../api/health' from origin
      *    'https://localhost' has been blocked by CORS policy"
