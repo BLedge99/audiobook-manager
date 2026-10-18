@@ -3,46 +3,50 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
 import { seriesLabel, type Shelf } from "../lib/browse";
-import { coverUrl } from "../lib/api";
+import { CapsuleMarks, MachineHead, ShellCover, cn } from "../ui/primitives";
 
 /**
- * Spec 20 — horizontally scrollable shelves.
+ * Spec 20 -- horizontally scrollable shelves.
  *
  * The grouping and ordering rules live in `lib/browse.ts` (pure, tested);
  * this component handles rendering and keyboard-scrolling only.
+ *
+ * A book must look like the same object wherever it appears, so a shelf card
+ * uses the same capsule shell as the library grid rather than a second style
+ * for the same thing.
  */
 
 function ShelfCard({
   book,
+  index,
   onSelect,
   favourited,
   onToggleFavourite,
 }: {
   book: Audiobook;
+  index: number;
   onSelect: (book: Audiobook) => void;
   favourited?: boolean;
   onToggleFavourite?: () => void;
 }) {
   return (
-    <div className="group relative w-40 shrink-0 sm:w-44">
-      <button onClick={() => onSelect(book)} className="w-full text-left">
-        <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-slate-800">
-          <img
-            src={coverUrl(book.id)}
-            onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }}
-            alt=""
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-          />
-        </div>
-        <h3 className="mt-2 truncate text-sm font-semibold text-slate-100">{book.title}</h3>
-        <p className="truncate text-xs text-slate-400">{book.author}</p>
+    <article className={cn("capsule group relative w-[136px] shrink-0 p-2 sm:w-[168px]", index % 2 && "capsule--alt")}>
+      <button onClick={() => onSelect(book)} className="block w-full text-left">
+        <span className="relative block">
+          <ShellCover bookId={book.id} className="w-full" />
+          <CapsuleMarks />
+        </span>
+        <h3 className="mt-2 line-clamp-2 min-h-[2.3em] font-display text-[13.5px] font-semibold leading-tight text-ink">
+          {book.title}
+        </h3>
+        <p className="truncate text-[11.5px] text-ink2">{book.author}</p>
       </button>
       {onToggleFavourite && (
-        <div className="absolute right-1.5 top-1.5">
+        <div className="absolute right-3 top-3 max-sm:opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100">
           <FavouriteButton favourited={Boolean(favourited)} onToggle={onToggleFavourite} label={book.title} />
         </div>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -62,46 +66,51 @@ export function ShelfRow({
   const scroller = useRef<HTMLDivElement>(null);
 
   // Shelves scroll horizontally; these give keyboard users and desktop users
-  // a way to page through without a trackpad.
+  // a way to page through without a trackpad. Hidden from touch, where the rail
+  // is already swipeable and an arrow button just eats a third of the row.
   const scrollBy = (amount: number) => scroller.current?.scrollBy({ left: amount, behavior: "smooth" });
 
   return (
     <section className="mb-9" aria-labelledby={`shelf-${shelf.key}`}>
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 id={`shelf-${shelf.key}`} className="text-lg font-semibold">
-          {shelf.title}
-        </h2>
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-slate-500">{shelf.books.length}</span>
+      <MachineHead
+        id={`shelf-${shelf.key}`}
+        title={shelf.title}
+        count={`${shelf.books.length} ${shelf.books.length === 1 ? "book" : "books"}`}
+      >
+        <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
           <button
             type="button"
             onClick={() => scrollBy(-400)}
             aria-label={`Scroll ${shelf.title} left`}
-            className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="iconbtn size-9"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={16} aria-hidden="true" />
           </button>
           <button
             type="button"
             onClick={() => scrollBy(400)}
             aria-label={`Scroll ${shelf.title} right`}
-            className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="iconbtn size-9"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={16} aria-hidden="true" />
           </button>
         </div>
-      </div>
+      </MachineHead>
+
+      {/* Bleeds to the screen edge on a phone so a shelf reads as continuing
+          rather than as a boxed list that happens to be cut off. */}
       <div
         ref={scroller}
-        className="flex gap-4 overflow-x-auto pb-2"
+        className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0"
         role="group"
         aria-label={shelf.title}
         tabIndex={0}
       >
-        {shelf.books.map((book) => (
+        {shelf.books.map((book, index) => (
           <div key={book.id} className="contents">
             <ShelfCard
               book={book}
+              index={index}
               onSelect={onSelect}
               favourited={favouriteIds.has(book.id)}
               onToggleFavourite={() => onToggleFavourite(book.id)}
@@ -131,7 +140,7 @@ export function Shelves({
 }) {
   if (shelves.length === 0) {
     return (
-      <div className="border border-dashed border-slate-700 bg-slate-900/60 px-6 py-14 text-center text-slate-400">
+      <div className="panel panel--sunk px-6 py-14 text-center text-ink2">
         {emptyMessage ?? "No shelves yet. Run a scan and enrichment to populate genres."}
       </div>
     );

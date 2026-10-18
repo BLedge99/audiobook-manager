@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Compass, Plus, RefreshCw, Trash2, Check } from "lucide-react";
 import type { DiscoverResult, Recommendation, WishlistItem } from "../types";
 import type { useDiscover } from "../useBrowse";
+import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
 
 /**
- * Spec 20 — the Discover tab.
+ * Spec 20 -- the Discover tab.
  *
  * Shows only books the household does NOT own (spec 19), and states plainly
  * when it cannot: offline, not enough metadata yet, or nothing found.
@@ -14,16 +15,23 @@ import type { useDiscover } from "../useBrowse";
 
 function RecommendationCard({
   recommendation,
+  index,
   saved,
   onSave,
 }: {
   recommendation: Recommendation;
+  index: number;
   saved: boolean;
   onSave: () => void;
 }) {
   return (
-    <article className="flex gap-4 overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
-      <div className="relative w-24 shrink-0 bg-slate-800">
+    <article
+      className={cn(
+        "capsule flex gap-3 p-3",
+        index % 2 ? "capsule--alt" : "",
+      )}
+    >
+      <span className="shell-art block h-24 w-16 shrink-0">
         <img
           src={recommendation.coverUrl ?? "/placeholder-cover.svg"}
           onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }}
@@ -31,27 +39,26 @@ function RecommendationCard({
           className="h-full w-full object-cover"
           loading="lazy"
         />
-      </div>
-      <div className="min-w-0 flex-1 p-3">
-        <h3 className="truncate font-semibold text-slate-100">{recommendation.title}</h3>
-        <p className="truncate text-sm text-slate-400">{recommendation.author ?? "Unknown author"}</p>
+      </span>
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate font-display text-[15px] font-semibold text-ink">{recommendation.title}</h3>
+        <p className="truncate text-[12.5px] text-ink2">{recommendation.author ?? "Unknown author"}</p>
         {recommendation.narrators.length > 0 && (
-          <p className="mt-1 truncate text-xs text-slate-500">Narrated by {recommendation.narrators.slice(0, 3).join(", ")}</p>
+          <p className="mt-0.5 truncate text-[11.5px] text-ink3">
+            Narrated by {recommendation.narrators.slice(0, 3).join(", ")}
+          </p>
         )}
         {recommendation.description && (
-          <p className="mt-2 line-clamp-2 text-xs text-slate-400">{recommendation.description}</p>
+          <p className="mt-1.5 line-clamp-2 text-[11.5px] text-ink3">{recommendation.description}</p>
         )}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">{recommendation.reason}</span>
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saved}
-            className="flex items-center gap-1 rounded-full border border-cyan-400/60 px-3 py-1 text-xs text-cyan-300 hover:bg-cyan-400 hover:text-slate-950 disabled:opacity-60"
-          >
-            {saved ? <Check size={12} /> : <Plus size={12} />}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-ink/25 bg-sunk px-2.5 py-0.5 text-[11px] font-bold text-ink2">
+            {recommendation.reason}
+          </span>
+          <Btn size="sm" variant={saved ? "quiet" : "plain"} onClick={onSave} disabled={saved}>
+            {saved ? <Check size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
             {saved ? "On your wishlist" : "Save to wishlist"}
-          </button>
+          </Btn>
         </div>
       </div>
     </article>
@@ -60,26 +67,28 @@ function RecommendationCard({
 
 function WishlistRow({ item, onRemove, onMarkOwned }: { item: WishlistItem; onRemove: () => void; onMarkOwned: (owned: boolean) => void }) {
   return (
-    <article className="flex items-start gap-4 border border-slate-800 bg-slate-900/70 p-3">
+    <article className="panel flex items-start gap-3 p-3">
       <div className="min-w-0 flex-1">
-        <h3 className="truncate font-medium text-slate-100">{item.title}</h3>
-        <p className="truncate text-sm text-slate-400">{item.author ?? "Unknown author"}</p>
+        <h3 className="truncate font-display text-[15px] font-semibold text-ink">{item.title}</h3>
+        <p className="truncate text-[12.5px] text-ink2">{item.author ?? "Unknown author"}</p>
         {/* Wishlist books are metadata-only; there is deliberately no play control. */}
-        <p className="mt-1 text-xs text-slate-500">Not in your library yet</p>
+        <p className="mt-1 text-[11.5px] text-ink3">Not in your library yet</p>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <button
-          type="button"
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Btn
+          size="sm"
+          variant="quiet"
           onClick={() => onMarkOwned(!item.owned)}
           aria-pressed={item.owned}
           title={item.owned ? "Owned" : "Mark as owned"}
-          className={`rounded p-2 ${item.owned ? "text-emerald-400" : "text-slate-500 hover:text-emerald-300"}`}
+          aria-label={`Mark ${item.title} as owned`}
+          className={item.owned ? "bg-mint text-white" : ""}
         >
-          <Check size={16} />
-        </button>
-        <button type="button" onClick={onRemove} aria-label={`Remove ${item.title} from wishlist`} className="rounded p-2 text-slate-500 hover:text-red-400">
-          <Trash2 size={16} />
-        </button>
+          <Check size={15} aria-hidden="true" />
+        </Btn>
+        <Btn size="sm" variant="quiet" onClick={onRemove} aria-label={`Remove ${item.title} from wishlist`} className="text-rasp-ink">
+          <Trash2 size={15} aria-hidden="true" />
+        </Btn>
       </div>
     </article>
   );
@@ -116,50 +125,55 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
   const notice = result ? statusMessage(result) : null;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-9">
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-2xl font-bold">
-              <Compass size={22} className="text-cyan-400" aria-hidden="true" /> Discover
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-[30px] leading-[1.05] sm:text-4xl">
+              <Compass size={26} className="text-rasp" aria-hidden="true" /> Discover
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-2 text-ink2">
               Titles you do not own yet, matched on genre, author, narrator and series.
             </p>
           </div>
-          <button
-            type="button"
+          <Btn
             onClick={() => void discover.loadForMe()}
             disabled={loading || !hasFavourites}
-            className="flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-cyan-400 hover:text-white disabled:opacity-50"
+            className="shrink-0"
           >
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} aria-hidden="true" /> Refresh
-          </button>
+          </Btn>
         </div>
 
+        {/* The empty state here is the common case on a fresh install, so it is
+            a panel with the explanation given real weight rather than a grey
+            line of text. It does not invent a feature: favourites are the only
+            input Discover has. */}
         {!hasFavourites && (
-          <p className="border border-slate-800 bg-slate-900/60 px-4 py-6 text-sm text-slate-400">
-            Favourite a few books and Discover will use them to suggest titles you do not own yet.
-          </p>
+          <div className="panel panel--sunk px-5 py-8 text-center">
+            <span className="mx-auto grid size-14 -rotate-6 place-items-center rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink bg-sunk">
+              <Compass size={24} className="text-ink3" aria-hidden="true" />
+            </span>
+            <p className="mx-auto mt-4 max-w-md text-[14px] leading-relaxed text-ink2">
+              Favourite a few books and Discover will use them to suggest titles you do not own yet.
+            </p>
+          </div>
         )}
-        {error && <p className="border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">{error}</p>}
+        {error && <Notice tone="error" role="alert" className="mb-4">{error}</Notice>}
         {notice && (
-          <p
-            className={`px-4 py-3 text-sm ${
-              notice.tone === "warn" ? "border border-amber-900/60 bg-amber-950/20 text-amber-200" : "border border-slate-800 bg-slate-900/60 text-slate-400"
-            }`}
-          >
+          <Notice tone={notice.tone} className="mb-4">
             {notice.text}
-          </p>
+          </Notice>
         )}
 
         {result?.recommendations.length ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {result.recommendations.map((recommendation) => {
+            {result.recommendations.map((recommendation, index) => {
               const key = `${recommendation.provider}:${recommendation.providerKey ?? recommendation.title}`;
               return (
                 <RecommendationCard
                   key={key}
+                  index={index}
                   recommendation={recommendation}
                   saved={saved.has(key)}
                   onSave={() => {
@@ -178,9 +192,11 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
       </section>
 
       <section aria-labelledby="wishlist">
-        <h2 id="wishlist" className="mb-4 text-xl font-bold">Wishlist</h2>
+        <MachineHead id="wishlist" title="Wishlist" count={`${wishlist.length}`} />
         {wishlist.length === 0 ? (
-          <p className="text-sm text-slate-500">Nothing saved yet. Save a suggestion above to keep track of it.</p>
+          <p className="panel panel--sunk px-4 py-6 text-center text-[13.5px] text-ink2">
+            Nothing saved yet. Save a suggestion above to keep track of it.
+          </p>
         ) : (
           <div className="grid gap-2">
             {wishlist.map((item) => (

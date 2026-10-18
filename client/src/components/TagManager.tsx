@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { GitMerge, Plus, Tag as TagIcon, Trash2 } from "lucide-react";
 import type { TagSummary } from "../types";
+import { Btn, Field, MachineHead, Notice } from "../ui/primitives";
 
 /**
- * Spec 20 — the tag manager.
+ * Spec 20 -- the tag manager.
  *
  * Custom tags are a managed household vocabulary (spec 18), so this is a real
  * CRUD surface rather than free text on a book: create, rename, merge, delete.
+ *
+ * This is dense data, not a browsing surface, so the rows stay tight and
+ * scannable. The toy lives in the panel it sits in, not in every line of it.
  */
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -57,56 +61,66 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
     });
   };
 
+  const selectClass =
+    "min-w-0 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-2 text-[14px] font-bold text-ink";
+
   return (
-    <section aria-labelledby="tag-manager" className="border border-slate-800 bg-slate-900/50 p-5">
-      <h2 id="tag-manager" className="mb-1 flex items-center gap-2 text-lg font-semibold">
-        <TagIcon size={18} className="text-cyan-400" aria-hidden="true" /> Tags
-      </h2>
-      <p className="mb-4 text-sm text-slate-500">
+    <section aria-labelledby="tag-manager" className="panel p-4 sm:p-5">
+      <MachineHead id="tag-manager" title="Tags" count={`${tags.length}`}>
+        <TagIcon size={20} className="shrink-0 text-rasp" aria-hidden="true" />
+      </MachineHead>
+      <p className="text-[13.5px] text-ink2">
         Your own labels, shared across the household. Assign them to any book from its detail page.
       </p>
 
-      <form onSubmit={create} className="mb-5 flex flex-wrap gap-2">
-        <input
+      <form onSubmit={create} className="mt-4 flex flex-wrap gap-2">
+        <Field
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="New tag, e.g. bedtime"
           aria-label="New tag name"
           maxLength={40}
-          className="min-w-0 flex-1 border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-cyan-400"
+          className="min-w-0 flex-1"
         />
-        <button type="submit" className="flex items-center gap-2 bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-300">
-          <Plus size={15} /> Add
-        </button>
+        <Btn type="submit" variant="primary">
+          <Plus size={15} aria-hidden="true" /> Add
+        </Btn>
       </form>
 
-      {error && <p className="mb-3 border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-300">{error}</p>}
-      {message && <p className="mb-3 border border-emerald-900/60 bg-emerald-950/20 px-3 py-2 text-sm text-emerald-200">{message}</p>}
+      {error && <Notice tone="error" role="alert" className="mt-3">{error}</Notice>}
+      {message && <Notice tone="info" role="status" className="mt-3">{message}</Notice>}
 
       {tags.length === 0 ? (
-        <p className="text-sm text-slate-500">No tags yet.</p>
+        <p className="panel panel--sunk mt-4 px-4 py-5 text-center text-[13.5px] text-ink2">No tags yet.</p>
       ) : (
-        <ul className="grid gap-2">
-          {tags.map((tag) => (
-            <li key={tag.id} className="flex flex-wrap items-center gap-2 border border-slate-800 bg-slate-950/40 px-3 py-2">
+        <ul className="mt-4 grid gap-2">
+          {tags.map((tag, index) => (
+            /* The name stays first in the item's text content: the E2E suite
+               locates tags with a listitem filter anchored to `^<name>`. */
+            <li
+              key={tag.id}
+              className={`flex flex-wrap items-center gap-2 rounded-[16px_13px_16px_13px/13px_16px_13px_16px] border-2 border-ink/25 px-3 py-2 ${
+                index % 2 ? "bg-sunk" : "bg-surface"
+              }`}
+            >
               {renamingId === tag.id ? (
-                <input
+                <Field
                   value={renameValue}
                   onChange={(event) => setRenameValue(event.target.value)}
                   aria-label={`Rename ${tag.name}`}
-                  className="min-w-0 flex-1 border border-slate-700 bg-slate-900 px-2 py-1 text-sm outline-none focus:border-cyan-400"
+                  className="min-w-0 flex-1"
                 />
               ) : (
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-200">
-                  {tag.name} <span className="text-xs text-slate-500">({tag.count})</span>
+                <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">
+                  {tag.name} <span className="text-[12px] font-bold text-ink3 tnum">({tag.count})</span>
                 </span>
               )}
 
               {renamingId === tag.id ? (
                 <>
-                  <button
-                    type="button"
-                    className="rounded border border-cyan-400 px-2 py-1 text-xs text-cyan-300"
+                  <Btn
+                    size="sm"
+                    variant="primary"
                     onClick={() =>
                       void run(async () => {
                         await request(`/api/tags/${tag.id}`, { method: "PATCH", body: JSON.stringify({ name: renameValue }) });
@@ -115,24 +129,29 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                     }
                   >
                     Save
-                  </button>
-                  <button type="button" className="rounded px-2 py-1 text-xs text-slate-400" onClick={() => setRenamingId(undefined)}>
+                  </Btn>
+                  <Btn size="sm" variant="quiet" onClick={() => setRenamingId(undefined)}>
                     Cancel
-                  </button>
+                  </Btn>
                 </>
               ) : (
                 <>
-                  <button type="button" className="rounded px-2 py-1 text-xs text-slate-400 hover:text-cyan-300" onClick={() => { setRenamingId(tag.id); setRenameValue(tag.name); }}>
+                  <Btn
+                    size="sm"
+                    variant="quiet"
+                    onClick={() => { setRenamingId(tag.id); setRenameValue(tag.name); }}
+                  >
                     Rename
-                  </button>
-                  <button
-                    type="button"
+                  </Btn>
+                  <Btn
+                    size="sm"
+                    variant="quiet"
                     aria-label={`Delete ${tag.name}`}
-                    className="rounded p-1.5 text-slate-500 hover:text-red-400"
+                    className="text-rasp-ink"
                     onClick={() => void run(async () => { await request(`/api/tags/${tag.id}`, { method: "DELETE" }); })}
                   >
-                    <Trash2 size={15} />
-                  </button>
+                    <Trash2 size={15} aria-hidden="true" />
+                  </Btn>
                 </>
               )}
             </li>
@@ -141,31 +160,31 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
       )}
 
       {tags.length > 1 && (
-        <div className="mt-5 border-t border-slate-800 pt-4">
-          <p className="mb-2 text-sm font-semibold text-slate-300">Merge tags</p>
-          <p className="mb-3 text-xs text-slate-500">
+        <div className="mt-5 border-t-2 border-dashed border-ink/20 pt-4">
+          <p className="font-display text-[16px] font-semibold text-ink">Merge tags</p>
+          <p className="mt-1 text-[12.5px] text-ink3">
             Combine two tags into one. Every book carrying the source tag moves to the target.
           </p>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs text-slate-400">
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="min-w-0 text-[12px] font-bold text-ink3">
               <span className="mb-1 block">Merge</span>
               <select
                 aria-label="Tag to merge"
                 value={mergingId ?? ""}
                 onChange={(event) => setMergingId(event.target.value ? Number(event.target.value) : undefined)}
-                className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm"
+                className={selectClass}
               >
                 <option value="">Choose a tag</option>
                 {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
               </select>
             </label>
-            <label className="text-xs text-slate-400">
+            <label className="min-w-0 text-[12px] font-bold text-ink3">
               <span className="mb-1 block">Into</span>
               <select
                 aria-label="Merge into tag"
                 value={mergeTarget}
                 onChange={(event) => setMergeTarget(event.target.value ? Number(event.target.value) : "")}
-                className="border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm"
+                className={selectClass}
               >
                 <option value="">Choose a tag</option>
                 {tags
@@ -173,10 +192,9 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                   .map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
               </select>
             </label>
-            <button
-              type="button"
+            <Btn
+              variant="mint"
               disabled={!mergingId || !mergeTarget}
-              className="flex items-center gap-2 rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:border-cyan-400 disabled:opacity-50"
               onClick={() =>
                 void run(async () => {
                   const moved = await request<{ moved: number }>(`/api/tags/${mergingId}/merge`, {
@@ -189,8 +207,8 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                 })
               }
             >
-              <GitMerge size={15} /> Merge
-            </button>
+              <GitMerge size={15} aria-hidden="true" /> Merge
+            </Btn>
           </div>
         </div>
       )}

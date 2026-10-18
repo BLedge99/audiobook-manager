@@ -1,10 +1,15 @@
 import { Heart } from "lucide-react";
+import { cn } from "../ui/primitives";
 
 /**
- * Spec 18 — the favourite toggle.
+ * Spec 18 -- the favourite toggle.
  *
  * Rendered as a real button rather than an icon inside the card button, so it
  * is reachable by keyboard and does not nest interactive elements.
+ *
+ * The accessible names here ("Add <title> to favourites" / "Remove ... from
+ * favourites") are relied on by the E2E suite and must not be shortened: on a
+ * grid of forty covers, "Add to favourites" alone does not say which one.
  */
 export function FavouriteButton({
   favourited,
@@ -31,11 +36,19 @@ export function FavouriteButton({
       aria-pressed={favourited}
       aria-label={favourited ? `Remove ${label} from favourites` : `Add ${label} to favourites`}
       title={favourited ? "In your favourites" : "Add to favourites"}
-      className={`grid ${dimensions} shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-950/85 backdrop-blur transition hover:border-rose-400 ${
-        favourited ? "text-rose-400" : "text-slate-400 hover:text-rose-300"
-      }`}
+      className={cn(
+        "grid shrink-0 place-items-center rounded-full border-2 border-ink bg-surface/90 backdrop-blur-sm transition",
+        "hover:-translate-y-0.5 hover:bg-rasp hover:text-white",
+        dimensions,
+        favourited ? "bg-rasp text-white" : "text-ink2",
+      )}
     >
-      <Heart size={iconSize} fill={favourited ? "currentColor" : "none"} aria-hidden="true" />
+      <Heart
+        size={iconSize}
+        fill={favourited ? "currentColor" : "none"}
+        strokeWidth={2.2}
+        aria-hidden="true"
+      />
     </button>
   );
 }

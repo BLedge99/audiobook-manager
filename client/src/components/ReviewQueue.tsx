@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import type { Audiobook } from "../types";
+import { Btn, MachineHead, Swatch, cn } from "../ui/primitives";
 
 /**
- * Spec 20 — the enrichment review queue.
+ * Spec 20 -- the enrichment review queue.
  *
  * Spec 16 only auto-applies a match at or above the confidence threshold.
  * Everything below it waits here rather than silently overwriting a good
  * embedded title, so this is where the operator resolves the ambiguous cases.
+ *
+ * Nothing here is dismissible. The rows stay until a decision is made, because
+ * the whole failure this queue prevents is a metadata error that silently
+ * survives because nobody noticed it in passing.
  */
 
 interface Candidate {
@@ -53,6 +58,16 @@ function decodeList(value: string | null | undefined): string[] {
   }
 }
 
+/**
+ * Confidence is a number the operator judges, so it gets a number, a word and
+ * a colour -- never a colour alone.
+ */
+function confidenceVerdict(confidence: number) {
+  if (confidence >= 75) return { label: "Strong match", color: "var(--mint)" };
+  if (confidence >= 50) return { label: "Possible match", color: "var(--tan)" };
+  return { label: "Weak match", color: "var(--ink-3)" };
+}
+
 function CandidateRow({
   candidate,
   onApply,
@@ -67,6 +82,7 @@ function CandidateRow({
   const confidence = Math.round((candidate.confidence ?? 0) * 100);
   const narrators = decodeList(candidate.narrators);
   const genres = decodeList(candidate.genres);
+  const verdict = confidenceVerdict(confidence);
 
   const act = async (action: () => Promise<unknown>, done?: () => void) => {
     setBusy(true);
@@ -82,39 +98,41 @@ function CandidateRow({
   };
 
   return (
-    <div className="flex gap-3 border-b border-slate-800 py-3 last:border-b-0">
+    <div className="mt-3 flex gap-3 rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink/25 bg-sunk p-3">
       {candidate.coverUrl && (
         <img
           src={candidate.coverUrl}
           alt=""
           onError={(event) => { event.currentTarget.style.display = "none"; }}
-          className="h-20 w-14 shrink-0 rounded object-cover"
+          className="h-20 w-14 shrink-0 rounded-[8px_6px_8px_6px/6px_8px_6px_8px] border border-ink/25 object-cover"
           loading="lazy"
         />
       )}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded bg-slate-800 px-1.5 py-0.5 text-xs uppercase text-slate-400">{candidate.source}</span>
-          {/* Confidence is always shown: the whole point of the queue is to
-              let the operator judge how sure the match is. */}
-          <span
-            title="Match confidence"
-            className={`rounded px-1.5 py-0.5 text-xs ${confidence >= 75 ? "bg-emerald-950 text-emerald-300" : confidence >= 50 ? "bg-amber-950 text-amber-300" : "bg-slate-800 text-slate-400"}`}
-          >
-            {confidence}% match
+          <span className="rounded-full border border-ink/25 bg-surface px-2 py-0.5 text-[11px] font-bold text-ink2">
+            {candidate.source}
+          </span>
+          <span title="Match confidence" className="inline-flex items-center gap-1.5 text-[11px] font-bold">
+            <Swatch color={verdict.color} />
+            <span className="tnum">{confidence}% match</span>
+            <span className="text-ink3">· {verdict.label}</span>
           </span>
         </div>
-        <p className="mt-1 truncate text-sm font-medium text-slate-100">{candidate.title}</p>
-        <p className="truncate text-xs text-slate-400">{candidate.author ?? "Unknown author"}</p>
-        {narrators.length > 0 && <p className="mt-0.5 truncate text-xs text-slate-500">Narrated by {narrators.slice(0, 3).join(", ")}</p>}
-        {genres.length > 0 && <p className="mt-0.5 truncate text-xs text-slate-500">{genres.join(", ")}</p>}
-        {candidate.seriesName && <p className="mt-0.5 text-xs text-slate-500">Series: {candidate.seriesName}</p>}
+        <p className="mt-1.5 truncate font-display text-[15px] font-semibold text-ink">{candidate.title}</p>
+        <p className="truncate text-[12.5px] text-ink2">{candidate.author ?? "Unknown author"}</p>
+        {narrators.length > 0 && <p className="mt-0.5 truncate text-[11.5px] text-ink3">Narrated by {narrators.slice(0, 3).join(", ")}</p>}
+        {genres.length > 0 && <p className="mt-0.5 truncate text-[11.5px] text-ink3">{genres.join(", ")}</p>}
+        {candidate.seriesName && <p className="mt-0.5 text-[11.5px] text-ink3">Series: {candidate.seriesName}</p>}
 
-        {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
+        {error && <p role="alert" className="mt-1.5 text-[12px] font-bold text-rasp-ink">{error}</p>}
 
-        <div className="mt-2 flex gap-2">
-          <button
-            type="button"
+        {/* 44px targets: this is the screen an operator uses with one hand while
+            holding a coffee, and "Use this" is the decision that matters. */}
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          <Btn
+            size="sm"
+            variant="primary"
             disabled={busy}
             onClick={() =>
               void act(
@@ -122,12 +140,12 @@ function CandidateRow({
                 onApply,
               )
             }
-            className="flex items-center gap-1 rounded bg-cyan-400 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50"
           >
-            <Check size={12} /> Use this
-          </button>
-          <button
-            type="button"
+            <Check size={13} aria-hidden="true" /> Use this
+          </Btn>
+          <Btn
+            size="sm"
+            variant="quiet"
             disabled={busy}
             onClick={() =>
               void act(
@@ -135,10 +153,9 @@ function CandidateRow({
                 onSkip,
               )
             }
-            className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-50"
           >
             Keep what I have
-          </button>
+          </Btn>
         </div>
       </div>
     </div>
@@ -149,15 +166,17 @@ export function ReviewQueue({ books, onResolved }: { books: Audiobook[]; onResol
   if (books.length === 0) return null;
 
   return (
-    <section className="mb-8 border border-amber-900/40 bg-amber-950/10 p-4" aria-labelledby="review-queue">
-      <h2 id="review-queue" className="flex items-center gap-2 text-lg font-semibold">
-        <AlertCircle size={18} className="text-amber-400" aria-hidden="true" /> Needs your review
-      </h2>
-      <p className="mb-3 mt-1 text-sm text-slate-400">
+    <section
+      className="panel mb-8 p-4 sm:p-5"
+      aria-labelledby="review-queue"
+      style={{ background: "color-mix(in srgb, var(--tan) 10%, var(--surface))" }}
+    >
+      <MachineHead id="review-queue" title="Needs your review" />
+      <p className="text-[13.5px] text-ink2">
         {books.length} {books.length === 1 ? "book has" : "books have"} a possible match we were not confident enough to apply.
       </p>
 
-      <div className="space-y-3">
+      <div className="mt-4 space-y-3">
         {books.map((book) => (
           <ReviewRow key={book.id} book={book} onResolved={onResolved} />
         ))}
@@ -185,14 +204,14 @@ function ReviewRow({ book, onResolved }: { book: Audiobook; onResolved: () => vo
     load();
   }, []);
 
-  if (loading) return <p className="py-2 text-sm text-slate-500">Checking {book.title}…</p>;
-  if (error) return <p className="py-2 text-sm text-red-300">{error}</p>;
+  if (loading) return <p className={cn("py-2 text-sm text-ink2")}>Checking {book.title}…</p>;
+  if (error) return <p role="alert" className="py-2 text-sm font-bold text-rasp-ink">{error}</p>;
   if (!candidates || candidates.length === 0) return null;
 
   return (
-    <div className="border border-slate-800 bg-slate-900/70 p-3">
-      <h3 className="mb-1 text-sm font-semibold text-slate-100">{book.title}</h3>
-      <p className="mb-2 text-xs text-slate-500">currently shown as “{book.title}” by {book.author}</p>
+    <div className={cn("rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink/25 bg-surface p-3")}>
+      <h3 className="font-display text-[15px] font-semibold text-ink">{book.title}</h3>
+      <p className="mt-0.5 text-[12px] text-ink3">currently shown as “{book.title}” by {book.author}</p>
       {candidates.map((candidate) => (
         <CandidateRow
           key={candidate.id}

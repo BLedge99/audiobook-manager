@@ -1,4 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
+import { Btn, Field, cn } from "../ui/primitives";
 
 interface Profile {
   id: number;
@@ -67,32 +69,65 @@ export function ProfileSwitcher() {
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-      {/* `max-w-[9rem]` because a long profile name ("Harry Potter and the
+      {/* Stays a native <select>: the E2E suite reads the chosen option by
+          `option:checked` to confirm the switch took effect.
+
+          `max-w-[9rem]` because a long profile name ("Harry Potter and the
           Goblet of Fire") made this select 130px+ wide, and it is one of three
           fixed-width items in the header row that used to force the whole page
-          sideways on a phone. */}
+          sideways on a phone. `min-w-0` and the width cap are load-bearing --
+          `e2e/phone-layout` fails without them. */}
       <select
         aria-label="Active profile"
         value={currentId ?? ""}
         onChange={(event) => event.target.value && select(Number(event.target.value))}
-        className="min-w-0 max-w-[9rem] truncate border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
+        className={cn(
+          "min-w-0 max-w-[7.5rem] truncate rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-surface sm:max-w-[9rem]",
+          "px-2.5 py-1.5 text-[13px] font-bold text-ink",
+        )}
       >
         <option value="" disabled>Select profile</option>
         {profiles.map((profile) => (
           <option key={profile.id} value={profile.id}>{profile.name}</option>
         ))}
       </select>
-      <button type="button" onClick={() => setShowAdd((v) => !v)} className="text-cyan-400 hover:text-cyan-300">+ Profile</button>
+
+      {/* Add and Delete live in Settings on a phone. Keeping them here put three rows
+          of chrome above the shelf on a 390px screen; the profile select alone
+          is enough to switch, and both actions remain reachable from the
+          Settings sheet. The E2E suite drives them at desktop width. */}
+      <Btn variant="quiet" size="sm" onClick={() => setShowAdd((v) => !v)} className="hidden sm:inline-flex">
+        + Profile
+      </Btn>
+
       {currentId && (
-        <button type="button" onClick={() => void remove(Number(currentId))} className="text-slate-500 hover:text-red-400">Delete</button>
+        <Btn
+          variant="quiet"
+          size="sm"
+          onClick={() => void remove(Number(currentId))}
+          aria-label="Delete active profile"
+          className="hidden text-rasp-ink sm:inline-flex"
+        >
+          <Trash2 size={15} aria-hidden="true" />
+        </Btn>
       )}
+
       {showAdd && (
-        <form onSubmit={add} className="flex items-center gap-1">
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-28 border border-slate-700 bg-slate-950 px-2 py-1" />
-          <button type="submit" className="bg-slate-100 px-2 py-1 text-slate-950">Add</button>
+        <form onSubmit={add} className="flex items-center gap-1.5">
+          <Field
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Name"
+            aria-label="New profile name"
+            className="w-28"
+          />
+          <Btn type="submit" size="sm">Add</Btn>
         </form>
       )}
-      {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
+
+      {error && (
+        <p role="alert" className="w-full text-xs font-bold text-rasp-ink">{error}</p>
+      )}
     </div>
   );
 }

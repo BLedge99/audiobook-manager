@@ -3,6 +3,7 @@ import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook, Track } from "../types";
 import { apiUrl, withSessionToken } from "../lib/api";
 import { ProgressTimeline } from "./ProgressTimeline";
+import { Btn, Dome } from "../ui/primitives";
 import { publishPlaybackState, publishPosition, registerMediaSessionHandlers, setMediaMetadata } from "./mediaSession";
 import {
   describePosition,
@@ -579,8 +580,15 @@ export function ChapterPlayer({
   );
 
   return (
-    <section className="mt-8 rounded-lg border border-slate-700 bg-slate-950/50 p-4" aria-label="Audiobook player">
+    /* The console. Raspberry-tinted because this is the machine doing one thing
+       at a time, and the one surface where the eye should land first. */
+    <section
+      className="panel mt-8 p-4 sm:p-5"
+      aria-label="Audiobook player"
+      style={{ background: "color-mix(in srgb, var(--rasp) 7%, var(--surface))" }}
+    >
       <audio ref={audioRef} preload="metadata" />
+
       {/* `flex-wrap` so the transport controls wrap onto a second row on a phone.
             A non-wrapping flex cannot shrink below the sum of its items'
             min-content widths, so four buttons plus two selects forced this row
@@ -588,49 +596,112 @@ export function ChapterPlayer({
             the whole player look zoomed in. `min-w-0` on the title block below
             lets the text truncate rather than push the row wider. */}
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={togglePlayback} disabled={!profileId} aria-label={playing ? "Pause" : "Play"} title={profileId ? undefined : "Select a profile first"} className="rounded-full bg-cyan-400 p-3 text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40">
-          {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-        </button>
-        <button type="button" onClick={() => skip(-1)} aria-label="Previous chapter" disabled={currentIndex === 0} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipBack size={18} /></button>
-        <button type="button" onClick={() => skip(1)} aria-label="Next chapter" disabled={currentIndex === segments.length - 1} className="rounded p-2 text-slate-300 hover:text-white disabled:opacity-40"><SkipForward size={18} /></button>
-        <button type="button" onClick={() => skipSeconds(-SKIP_SECONDS)} aria-label={`Back ${SKIP_SECONDS} seconds`} className="rounded p-2 text-slate-300 hover:text-white">−{SKIP_SECONDS}s</button>
-        <button type="button" onClick={() => skipSeconds(SKIP_SECONDS)} aria-label={`Forward ${SKIP_SECONDS} seconds`} className="rounded p-2 text-slate-300 hover:text-white">+{SKIP_SECONDS}s</button>
-        <select aria-label="Playback speed" value={speed} onChange={(event) => changeSpeed(Number(event.target.value))} className="border border-slate-700 bg-slate-950 px-2 py-1 text-sm">
+        <Dome
+          label={playing ? "Pause" : "Play"}
+          onClick={togglePlayback}
+          spin={playing}
+          disabled={!profileId}
+        >
+          {playing ? (
+            <Pause size={22} className="fill-white text-white" aria-hidden="true" />
+          ) : (
+            <Play size={22} className="translate-x-[1px] fill-white text-white" aria-hidden="true" />
+          )}
+        </Dome>
+
+        <div className="flex items-center gap-2">
+          <Btn
+            variant="quiet"
+            onClick={() => skip(-1)}
+            aria-label="Previous chapter"
+            disabled={currentIndex === 0}
+            className="iconbtn"
+          >
+            <SkipBack size={17} aria-hidden="true" />
+          </Btn>
+          <Btn
+            variant="quiet"
+            onClick={() => skip(1)}
+            aria-label="Next chapter"
+            disabled={currentIndex === segments.length - 1}
+            className="iconbtn"
+          >
+            <SkipForward size={17} aria-hidden="true" />
+          </Btn>
+          <Btn
+            variant="quiet"
+            size="sm"
+            onClick={() => skipSeconds(-SKIP_SECONDS)}
+            aria-label={`Back ${SKIP_SECONDS} seconds`}
+            className="tnum"
+          >
+            −{SKIP_SECONDS}s
+          </Btn>
+          <Btn
+            variant="quiet"
+            size="sm"
+            onClick={() => skipSeconds(SKIP_SECONDS)}
+            aria-label={`Forward ${SKIP_SECONDS} seconds`}
+            className="tnum"
+          >
+            +{SKIP_SECONDS}s
+          </Btn>
+        </div>
+
+        <select
+          aria-label="Playback speed"
+          value={speed}
+          onChange={(event) => changeSpeed(Number(event.target.value))}
+          className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[13px] font-bold text-ink"
+        >
           {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((rate) => <option key={rate} value={rate}>{rate}x</option>)}
         </select>
-        <select aria-label="Sleep timer" value={sleepMinutes ?? "off"} onChange={(event) => setSleepTimer(event.target.value === "off" ? null : Number(event.target.value))} className="border border-slate-700 bg-slate-950 px-2 py-1 text-sm">
+        <select
+          aria-label="Sleep timer"
+          value={sleepMinutes ?? "off"}
+          onChange={(event) => setSleepTimer(event.target.value === "off" ? null : Number(event.target.value))}
+          className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[13px] font-bold text-ink"
+        >
           <option value="off">Sleep: off</option>
           <option value="15">15 min</option>
           <option value="30">30 min</option>
           <option value="60">60 min</option>
           <option value="-1">End of chapter</option>
         </select>
+
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">{current.title || `Track ${currentIndex + 1}`}</p>
-          <p className="text-xs text-slate-400">{segments.length > 1 ? `${described.heading} of ${segments.length}` : described.heading}</p>
+          <p className="truncate font-display text-[15px] font-semibold text-ink">
+            {current.title || `Track ${currentIndex + 1}`}
+          </p>
+          <p className="text-[12px] text-ink3 tnum">
+            {segments.length > 1 ? `${described.heading} of ${segments.length}` : described.heading}
+          </p>
         </div>
       </div>
+
       {!profileId && (
-        <p role="alert" className="mt-3 text-sm text-amber-300">
+        <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[13px] font-bold text-tan-ink">
           Select a profile to start listening — your position is saved per profile.
         </p>
       )}
+
       {/* Spec 14. Not an aria-live region on purpose: this text changes several
           times a second and announcing each change would make the player
           unusable with a screen reader (decisions/007). */}
       <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1" data-testid="position-readout">
-        <p className="min-w-0 text-sm font-semibold text-white">
+        <p className="min-w-0 font-display text-[16px] font-semibold text-ink">
           {described.heading}
-          {described.title && <span className="font-normal text-slate-300"> — {described.title}</span>}
+          {described.title && <span className="font-normal text-ink2"> — {described.title}</span>}
         </p>
-        <p className="text-xs text-slate-400" data-testid="chapter-readout">
+        <p className="text-[12.5px] text-ink3 tnum" data-testid="chapter-readout">
           {timeLabel(described.segmentElapsed)} into this {segmentKind === "tracks" ? "track" : "chapter"} · {Math.round(described.segmentPercent)}%
         </p>
-        <p className="text-xs text-slate-400" data-testid="book-readout">
+        <p className="text-[12.5px] text-ink3 tnum" data-testid="book-readout">
           {Math.round(described.bookPercent)}% of the book · {remainingLabel(described.bookRemaining)}
         </p>
       </div>
-      <div className="mt-2">
+
+      <div className="mt-2.5">
         <ProgressTimeline
           segments={segments}
           kind={segmentKind}
@@ -674,15 +745,36 @@ export function ChapterPlayer({
           }
         }} />
       </div>
-      {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}
-      {segments.length > 1 && <ol className="mt-4 max-h-48 divide-y divide-slate-800 overflow-auto">
-        {segments.map((segment, index) => <li key={segment.key}>
-          <button type="button" onClick={() => selectSegment(index)} className={`flex w-full items-center justify-between gap-4 py-2 text-left text-sm hover:text-white ${index === currentIndex ? "text-cyan-300" : "text-slate-300"}`} aria-current={index === currentIndex ? "true" : undefined}>
-            <span className="min-w-0 truncate"><span className="mr-2 text-slate-500">{index + 1}.</span>{segment.title || `Track ${index + 1}`}</span>
-            <span className="shrink-0 text-xs text-slate-500">{index === currentIndex ? `${timeLabel(isChapterBook ? currentTime - current.offset : currentTime)} / ` : ""}{timeLabel(segment.duration)}</span>
-          </button>
-        </li>)}
-      </ol>}
+
+      {error && (
+        <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[13px] font-bold text-rasp-ink">{error}</p>
+      )}
+
+      {segments.length > 1 && (
+        <ol className="panel panel--sunk mt-4 max-h-52 divide-y divide-ink/10 overflow-auto">
+          {segments.map((segment, index) => (
+            <li key={segment.key}>
+              <button
+                type="button"
+                onClick={() => selectSegment(index)}
+                aria-current={index === currentIndex ? "true" : undefined}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-[13.5px] font-semibold transition ${
+                  index === currentIndex ? "bg-rasp text-white" : "text-ink2 hover:bg-ink/5"
+                }`}
+              >
+                <span className="min-w-0 truncate">
+                  <span className={`mr-2 tnum ${index === currentIndex ? "text-white/70" : "text-ink3"}`}>{index + 1}.</span>
+                  {segment.title || `Track ${index + 1}`}
+                </span>
+                <span className="shrink-0 text-[11.5px] tnum opacity-80">
+                  {index === currentIndex ? `${timeLabel(isChapterBook ? currentTime - current.offset : currentTime)} / ` : ""}
+                  {timeLabel(segment.duration)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }

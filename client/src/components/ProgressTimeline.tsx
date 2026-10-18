@@ -11,7 +11,7 @@ import { chapterTicks, sessionMarkerFraction, timeLabel } from "../lib/position"
  * information is available as text in the readout above the control and in the
  * chapter list, so nothing is lost by hiding it from assistive tech.
  *
- * No position logic lives here — it is all supplied by `lib/position`.
+ * No position logic lives here -- it is all supplied by `lib/position`.
  */
 export type ProgressTimelineProps = {
   segments: Segment[];
@@ -52,20 +52,21 @@ export function ProgressTimeline({
     <div>
       <div className="relative">
         {/* Decoration only. Sits above the track, ignores all pointer events, and
-            is hidden from assistive tech — see decisions/007. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-2 -translate-y-1/2">
+            is hidden from assistive tech -- see decisions/007. Aligned to the
+            thumb's travel (15px inset either side), not the raw input width. */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-[15px] top-1/2 z-10 -translate-y-1/2">
           {ticks.slice(1).map((tick) => (
             <span
               key={tick.key}
               data-testid="chapter-tick"
-              className="absolute top-0 h-2 w-px bg-white/50"
+              className="absolute top-0 h-2.5 w-[2px] -translate-x-1/2 rounded-full bg-ink/45"
               style={{ left: `${tick.fraction * 100}%` }}
             />
           ))}
           {marker !== null && (
             <span
               data-testid="session-marker"
-              className="absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 ring-1 ring-slate-900/60"
+              className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-ink bg-tan"
               style={{ left: `${marker * 100}%` }}
             />
           )}
@@ -79,24 +80,24 @@ export function ProgressTimeline({
           disabled={disabled}
           value={Math.min(value, total || 1)}
           onChange={(event) => onSeek(Number(event.target.value))}
-          className="relative w-full accent-cyan-400 disabled:opacity-40"
+          className="scrubber relative"
         />
       </div>
 
-      <div className="mt-1 flex justify-between text-xs text-slate-400">
+      <div className="mt-0.5 flex justify-between text-[12.5px] font-bold text-ink3 tnum">
         <span>{timeLabel(value)}</span>
         <span>-{timeLabel(Math.max(0, total - value))}</span>
         <span>{timeLabel(total)}</span>
       </div>
 
       {showChapterBar && (
-        <div className="mt-2" data-testid="chapter-bar">
-          <div className="flex justify-between text-xs text-slate-400">
-            <span>{segmentHeading}</span>
-            <span>{`${timeLabel(segmentElapsed)} / ${timeLabel(segmentDuration)}`}</span>
+        <div className="mt-2.5" data-testid="chapter-bar">
+          <div className="flex justify-between gap-3 text-[12.5px] font-semibold text-ink2">
+            <span className="min-w-0 truncate">{segmentHeading}</span>
+            <span className="shrink-0 tnum">{`${timeLabel(segmentElapsed)} / ${timeLabel(segmentDuration)}`}</span>
           </div>
-          <div aria-hidden="true" className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-800">
-            <div className="h-full bg-cyan-400/70" style={{ width: `${chapterFill}%` }} />
+          <div aria-hidden="true" className="tube mt-1.5">
+            <i style={{ width: `${chapterFill}%` }} />
           </div>
         </div>
       )}

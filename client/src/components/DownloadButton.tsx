@@ -3,6 +3,7 @@ import { Check, Download, LoaderCircle, Trash2 } from "lucide-react";
 import type { Audiobook } from "../types";
 import type { DownloadProgress } from "../local/download";
 import { DownloadStalledError } from "../local/trace";
+import { Btn, Notice } from "../ui/primitives";
 
 export interface DownloadButtonProps {
   book: Audiobook;
@@ -20,6 +21,11 @@ export interface DownloadButtonProps {
  * Progress is reported from the real per-track byte counts rather than faked,
  * because an audiobook is long enough that "downloading..." with no movement is
  * indistinguishable from broken.
+ *
+ * This is the one screen in the app where an honest progress state outranks
+ * decoration. The bar is always the same height, the percentage is always
+ * visible in tabular figures, and a failure never hides which stage broke --
+ * that trace is the only thing that makes a stalled 40-hour transfer fixable.
  */
 export function DownloadButton({
   book,
@@ -81,50 +87,40 @@ export function DownloadButton({
   if (isDownloaded) {
     return (
       <div className="grid gap-2">
-        <button
-          type="button"
-          onClick={() => void remove()}
-          disabled={busy}
-          className="flex items-center justify-center gap-2 border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-red-700 hover:text-red-300 disabled:opacity-60"
-        >
+        <Btn variant="quiet" onClick={() => void remove()} disabled={busy}>
           {busy ? (
             <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
           ) : (
             <Trash2 size={16} aria-hidden="true" />
           )}
           Remove from device
-        </button>
-        <p className="flex items-center gap-2 text-xs text-emerald-300">
+        </Btn>
+        <p className="flex items-center gap-2 text-[12.5px] font-bold text-mint-ink">
           <Check size={14} aria-hidden="true" />
           On this device · {formatBytes(bytes)}
         </p>
-        {error && <p className="text-xs text-amber-300" role="status">{error}</p>}
-      {trace && trace.length > 0 && (
-        <ol className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-amber-200/80">
-          {trace.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ol>
-      )}
+        {error && <Notice tone="warn" role="status">{error}</Notice>}
+        {trace && trace.length > 0 && (
+          <ol className="panel panel--sunk mt-1 list-inside list-disc px-4 py-2 space-y-0.5 font-mono text-[11px] text-ink2">
+            {trace.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ol>
+        )}
       </div>
     );
   }
 
   return (
     <div className="grid gap-2">
-      <button
-        type="button"
-        onClick={() => void start()}
-        disabled={busy}
-        className="flex items-center justify-center gap-2 bg-cyan-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
-      >
+      <Btn variant="primary" onClick={() => void start()} disabled={busy}>
         {busy ? (
           <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
         ) : (
           <Download size={16} aria-hidden="true" />
         )}
         {busy ? `Downloading ${percent}%` : fraction > 0 ? "Resume download" : "Download"}
-      </button>
+      </Btn>
 
       {(busy || fraction > 0) && (
         <div
@@ -133,15 +129,15 @@ export function DownloadButton({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label={`Download progress for ${book.title}`}
-          className="h-1.5 w-full bg-slate-800"
+          className="tube"
         >
-          <div className="h-full bg-cyan-400 transition-[width]" style={{ width: `${percent}%` }} />
+          <i style={{ width: `${percent}%` }} />
         </div>
       )}
 
-      {error && <p className="text-xs text-red-300" role="status">{error}</p>}
+      {error && <Notice tone="error" role="status">{error}</Notice>}
       {trace && trace.length > 0 && (
-        <ol className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-red-200/80">
+        <ol className="panel panel--sunk mt-1 list-inside list-disc px-4 py-2 space-y-0.5 font-mono text-[11px] text-ink2">
           {trace.map((line) => (
             <li key={line}>{line}</li>
           ))}

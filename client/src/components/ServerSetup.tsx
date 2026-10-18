@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
+import { Plug } from "lucide-react";
 import { setServerUrl } from "../lib/api";
+import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
 
 /**
  * First-run setup: ask for the home server's address.
@@ -59,34 +61,46 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <div className="grid min-h-screen place-items-center bg-[#0b1117] px-5 text-slate-100">
-      <form onSubmit={submit} className="w-full max-w-md border border-slate-800 bg-slate-900 p-8">
-        <h1 className="text-xl font-bold">Connect to your library</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Enter the address of the server at home, for example{" "}
-          <code className="text-cyan-400">http://192.168.1.203:3000</code>. You only do this once.
-        </p>
-        <input
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="192.168.1.203:3000"
-          autoCapitalize="off"
-          autoCorrect="off"
-          inputMode="url"
-          className="mt-5 w-full border border-slate-700 bg-slate-950 px-3 py-2 outline-none focus:border-cyan-400"
-        />
-        {message && (
-          <p role="alert" className="mt-3 text-sm text-red-400">
-            {message}
+    <FullScreen>
+      <div className="flex flex-col items-center">
+        <Wordmark title="Audiobook Manager" subtitle="local-first listening" />
+
+        <form onSubmit={submit} className="panel mt-8 w-full max-w-md px-6 py-7">
+          <span className="grid size-14 -rotate-6 place-items-center rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink bg-cobalt">
+            <Plug size={24} className="text-white" aria-hidden="true" />
+          </span>
+
+          <h1 className="mt-4 font-display text-2xl font-semibold text-ink">Connect to your library</h1>
+          <p className="mt-2 text-sm leading-relaxed text-ink2">
+            Enter the address of the server at home, for example{" "}
+            <code className="rounded bg-sunk px-1.5 py-0.5 font-bold text-cobalt-ink">
+              http://192.168.1.203:3000
+            </code>
+            . You only do this once.
           </p>
-        )}
-        <button
-          disabled={status === "checking"}
-          className="mt-5 w-full bg-cyan-400 py-2 font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-60"
-        >
-          {status === "checking" ? "Checking…" : "Connect"}
-        </button>
-      </form>
-    </div>
+
+          <Field
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="192.168.1.203:3000"
+            autoCapitalize="off"
+            autoCorrect="off"
+            inputMode="url"
+            aria-label="Server address"
+            className="mt-5"
+          />
+
+          {message && (
+            <p role="alert" className="mt-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-rasp/12 px-3 py-2 text-sm font-bold text-rasp-ink">
+              {message}
+            </p>
+          )}
+
+          <Btn type="submit" variant="primary" disabled={status === "checking"} className="mt-4 w-full">
+            {status === "checking" ? "Checking…" : "Connect"}
+          </Btn>
+        </form>
+      </div>
+    </FullScreen>
   );
 }

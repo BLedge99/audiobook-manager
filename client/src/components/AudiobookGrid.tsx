@@ -1,6 +1,5 @@
-import { Clock3, Compass, Headphones } from "lucide-react";
+import { Compass, Headphones, Clock3 } from "lucide-react";
 import type { Audiobook } from "../types";
-import { coverUrl } from "../lib/api";
 import { FavouriteButton } from "./FavouriteButton";
 import {
   describePosition,
@@ -10,12 +9,16 @@ import {
   timeLabel,
   totalDuration,
 } from "../lib/position";
-
-function durationLabel(seconds: number) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
-}
+import {
+  CapsuleMarks,
+  MachineHead,
+  ShellCover,
+  StatusTag,
+  Tube,
+  cn,
+  durationLabel,
+  statusFor,
+} from "../ui/primitives";
 
 /**
  * One line describing where a book is: which chapter, how far in, and how much
@@ -46,123 +49,203 @@ export function inProgressBooks(books: Audiobook[]): Audiobook[] {
     });
 }
 
-const cardGrid = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+const cardGrid = "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5";
 
-function Cover({ book }: { book: Audiobook }) {
+/** The readout stamped into the shell: how long the book is, in tabular figures. */
+function Stamp({ book }: { book: Audiobook }) {
   return (
-    <div className="relative aspect-[2/3] overflow-hidden bg-slate-800">
-      <img src={coverUrl(book.id)} onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-      <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-slate-950/80 px-2 py-1 text-xs text-slate-200"><Clock3 size={12} /> {durationLabel(book.duration)}</span>
-    </div>
-  );
-}
-
-/** Decorative fill. The numbers beside it are the accessible representation. */
-function ProgressBar({ percent }: { percent: number }) {
-  return (
-    <div aria-hidden="true" className="h-1 w-full overflow-hidden rounded-full bg-slate-700/70">
-      <div className="h-full bg-cyan-400" style={{ width: `${percent}%` }} />
-    </div>
+    <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-ink/25 bg-surface/85 px-2 py-0.5 text-[11px] font-bold text-ink2 tnum backdrop-blur-sm">
+      <Clock3 size={11} aria-hidden="true" />
+      {durationLabel(book.duration)}
+    </span>
   );
 }
 
 /**
- * Part-finished books, most recently played first. Rendered above the full
- * library by `App` so the "Continue listening" heading is not buried under the
- * "All audiobooks" one.
- */
-export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onSelect: (book: Audiobook) => void }) {
-  if (!books.length) return null;
-  return (
-    <section className="mb-10" aria-labelledby="continue-listening">
-      <div className="mb-4">
-        <h2 id="continue-listening" className="text-2xl font-bold">Continue listening</h2>
-        <p className="mt-1 text-sm text-slate-500">{books.length} {books.length === 1 ? "book is" : "books are"} part-finished</p>
-      </div>
-      <div className={cardGrid}>
-        {books.map((book) => {
-          const { line, percent } = describeBookProgress(book);
-          return (
-            <button key={book.id} onClick={() => onSelect(book)} className="group overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-left transition hover:-translate-y-1 hover:border-cyan-500/60 hover:bg-slate-800">
-              <Cover book={book} />
-              <div className="p-3">
-                <h3 className="truncate font-semibold text-slate-100">{book.title}</h3>
-                <p className="mt-1 truncate text-sm text-slate-400">{book.author}</p>
-                <div className="mt-2" data-testid="card-progress">
-                  <ProgressBar percent={percent} />
-                  <p className="mt-1 truncate text-xs text-slate-400">{line}</p>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-/**
- * One card. The favourite heart and "find more like this" sit *outside* the
- * card's own button element rather than inside it -- nested buttons are
- * invalid HTML and break keyboard navigation.
+ * One book, as a capsule.
+ *
+ * The favourite heart and "find more like this" sit *outside* the card's own
+ * button element rather than inside it -- nested buttons are invalid HTML and
+ * break keyboard navigation. Both are always in the tab order and revealed on
+ * hover/focus, because a hover-only control is a control a touch user cannot
+ * reach.
  */
 function LibraryCard({
   book,
   onSelect,
   showProgress,
+  percent,
   favourited,
+  needsReview,
+  alt,
   onToggleFavourite,
   onFindSimilar,
 }: {
   book: Audiobook;
   onSelect: (book: Audiobook) => void;
   showProgress: boolean;
+  percent: number;
   favourited: boolean;
+  needsReview: boolean;
+  alt: boolean;
   onToggleFavourite?: (bookId: number) => void;
   onFindSimilar?: (book: Audiobook) => void;
 }) {
-  const { line, percent } = showProgress ? describeBookProgress(book) : { line: "", percent: 0 };
   const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
+  const line = showProgress ? describeBookProgress(book).line : "";
+  const status = statusFor(percent);
 
   return (
-    <div className="group relative">
-      <button onClick={() => onSelect(book)} className="w-full overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-left transition hover:-translate-y-1 hover:border-cyan-500/60 hover:bg-slate-800">
-        <Cover book={book} />
-        <div className="p-3">
-          <h3 className="truncate font-semibold text-slate-100">{book.title}</h3>
-          <p className="mt-1 truncate text-sm text-slate-400">{book.author}</p>
+    <article
+      data-book-id={book.id}
+      className={cn(
+        "capsule group relative flex flex-col p-2",
+        alt && "capsule--alt",
+        // A book waiting on a metadata decision holds its mark until someone
+        // looks at it, rather than quietly blending back into the grid.
+        needsReview && "ring-2 ring-rasp",
+      )}
+    >
+      <button onClick={() => onSelect(book)} className="relative block w-full text-left">
+        {/* In flow, above the cover. As an absolutely positioned tab it was
+            clipped by the neighbouring capsule in a tight 2-across grid, and a
+            ring alone was too quiet to say "this changed" -- which is the whole
+            point of the queue holding its mark. */}
+        {needsReview && (
+          <span className="mb-1.5 inline-flex rounded-full border-2 border-ink bg-rasp px-2 py-0.5 text-[10px] font-bold text-white">
+            Metadata updated
+          </span>
+        )}
+        <span className="relative block">
+          <ShellCover bookId={book.id} className="w-full" />
+          <CapsuleMarks />
+          <Stamp book={book} />
+        </span>
+        <span className="block pt-2.5">
+          {/* `line-clamp-2` with a reserved two-line height rather than
+              `truncate`: in a 2-across grid a truncated title hides the word
+              that distinguishes "Short Ghost and Horror Collection 034" from
+              052, and the varying height left every row of the shelf ragged.
+              The author line is reserved to one line for the same reason. */}
+          <h3 className="line-clamp-2 min-h-[2.3em] font-display text-[15px] font-semibold leading-tight text-ink">
+            {book.title}
+          </h3>
+          <p className="mt-0.5 truncate text-[12.5px] text-ink2">{book.author}</p>
           {narrators.length > 0 && (
-            <p className="mt-1 truncate text-xs text-slate-500">
+            <p className="mt-0.5 truncate text-[11.5px] text-ink3">
               Narrated by {narrators.length === 1 ? narrators[0].name : `${narrators.length} narrators`}
             </p>
           )}
-          {book.tracks.length > 1 && <p className="mt-2 flex items-center gap-1 text-xs uppercase tracking-wider text-cyan-400"><Headphones size={12} /> {book.tracks.length} tracks</p>}
-          {showProgress && (
-            <div className="mt-2" data-testid="card-progress">
-              <ProgressBar percent={percent} />
-              <p className="mt-1 truncate text-xs text-slate-400">{line}</p>
-            </div>
+          {book.tracks.length > 1 && (
+            <p className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-cobalt">
+              <Headphones size={12} aria-hidden="true" /> {book.tracks.length} tracks
+            </p>
           )}
-        </div>
+        </span>
+        {showProgress && (
+          <span className="mt-2 block" data-testid="card-progress">
+            <Tube percent={percent} />
+            <span className="mt-1.5 flex items-center justify-between gap-2">
+              <StatusTag status={status} />
+              <span className="truncate text-[11px] text-ink3 tnum">{line}</span>
+            </span>
+          </span>
+        )}
       </button>
 
-      {onToggleFavourite && (
-        <div className="absolute right-1.5 top-1.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
-          <FavouriteButton favourited={favourited} onToggle={() => onToggleFavourite(book.id)} label={book.title} />
+      {/*
+        Both card actions live in one cluster at the top-right. "Find more like
+        this" used to sit at the bottom-right, where it sat on top of the
+        progress tube and the status row on every part-finished book -- the one
+        card that has the most to say.
+        Hover reveals them on a pointer device; on touch they are always visible,
+        because a hover-only control is one a thumb can never reach.
+      */}
+      {(onToggleFavourite || onFindSimilar) && (
+        <div className="absolute right-2 top-2 flex items-center gap-1.5 transition-opacity focus-within:opacity-100 max-sm:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+          {onToggleFavourite && (
+            <FavouriteButton favourited={favourited} onToggle={() => onToggleFavourite(book.id)} label={book.title} />
+          )}
+          {onFindSimilar && (
+            <button
+              type="button"
+              onClick={() => onFindSimilar(book)}
+              title="Find more like this"
+              aria-label={`Find more like ${book.title}`}
+              className="iconbtn bg-surface/90 backdrop-blur-sm"
+            >
+              <Compass size={16} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
-      {onFindSimilar && (
-        <button
-          type="button"
-          onClick={() => onFindSimilar(book)}
-          title="Find more like this"
-          aria-label={`Find more like ${book.title}`}
-          className="absolute bottom-1.5 right-1.5 grid size-9 place-items-center rounded-full border border-slate-700 bg-slate-950/85 text-slate-400 opacity-0 backdrop-blur transition hover:border-cyan-400 hover:text-cyan-300 focus:opacity-100 group-hover:opacity-100"
-        >
-          <Compass size={16} aria-hidden="true" />
-        </button>
-      )}
-    </div>
+    </article>
+  );
+}
+
+/**
+ * The dock: where a part-finished book waits.
+ *
+ * The first book is featured -- it is the one the listener is most likely to
+ * want, so it gets the play dome and the most room. The rest ride in a
+ * scroll-snapped rail, because a household library has more than one thing
+ * half-heard and a phone has one column.
+ */
+export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onSelect: (book: Audiobook) => void }) {
+  if (!books.length) return null;
+  // `books[0]` is the featured dock book and `rest` is only counted for the
+  // screen-reader hint below, so neither is destructured out of the array.
+  const rest = books.slice(1);
+
+  return (
+    <section aria-labelledby="continue-listening" className="mb-9">
+      <MachineHead
+        id="continue-listening"
+        title="Continue listening"
+        count={`${books.length} ${books.length === 1 ? "book is" : "books are"} part-finished`}
+      />
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+        {books.map((book, index) => {
+          const { line, percent } = describeBookProgress(book);
+          const isFeatured = index === 0;
+          return (
+            <button
+              key={book.id}
+              onClick={() => onSelect(book)}
+              className={cn(
+                "capsule flex shrink-0 snap-start items-center gap-3 p-3 text-left",
+                index % 2 ? "capsule--alt" : "",
+                isFeatured ? "w-[330px] max-w-[86vw]" : "w-[260px] max-w-[74vw]",
+              )}
+            >
+              <ShellCover bookId={book.id} className={isFeatured ? "w-[68px] shrink-0" : "w-[54px] shrink-0"} />
+              <span className="min-w-0 flex-1">
+                <h3 className={cn("truncate font-display font-semibold text-ink", isFeatured ? "text-[17px]" : "text-[15px]")}>
+                  {book.title}
+                </h3>
+                <span className="mt-0.5 block truncate text-[12.5px] text-ink2">{book.author}</span>
+                <span className="mt-2 block">
+                  <Tube percent={percent} />
+                </span>
+                {/* Two rows rather than one: "In progress" and a chapter
+                    reference side by side in a 330px capsule left neither
+                    enough width to stay on one line. */}
+                <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <StatusTag status={statusFor(percent)} />
+                  <span className="truncate text-[11px] text-ink3 tnum">{line}</span>
+                </span>
+              </span>
+              {isFeatured ? (
+                <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full border-2 border-ink bg-rasp shadow-[0_4px_0_color-mix(in_srgb,var(--ink)_88%,transparent)]">
+                  <span className="dome__play" aria-hidden="true" />
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      <span className="sr-only">{rest.length} more part-finished books scroll sideways.</span>
+    </section>
   );
 }
 
@@ -172,32 +255,46 @@ export function AudiobookGrid({
   favourites,
   onToggleFavourite,
   onFindSimilar,
+  changedIds,
 }: {
   books: Audiobook[];
   onSelect: (book: Audiobook) => void;
   favourites?: Set<number>;
   onToggleFavourite?: (bookId: number) => void;
   onFindSimilar?: (book: Audiobook) => void;
+  changedIds?: Set<number>;
 }) {
   if (!books.length) {
-    return <div className="border border-dashed border-slate-700 bg-slate-900/60 px-6 py-16 text-center text-slate-400">Your library is empty. Add a folder and run a scan to discover audiobooks.</div>;
+    return (
+      <div className="panel panel--sunk px-6 py-16 text-center text-ink2">
+        Your library is empty. Add a folder and run a scan to discover audiobooks.
+      </div>
+    );
   }
 
   const continuingIds = new Set(inProgressBooks(books).map((book) => book.id));
+  const reviewIds = new Set((changedIds ?? new Set<number>()));
 
   return (
     <div className={cardGrid}>
-      {books.map((book) => (
-        <LibraryCard
-          key={book.id}
-          book={book}
-          onSelect={onSelect}
-          showProgress={continuingIds.has(book.id)}
-          favourited={favourites?.has(book.id) ?? false}
-          onToggleFavourite={onToggleFavourite}
-          onFindSimilar={onFindSimilar}
-        />
-      ))}
+      {books.map((book, index) => {
+        const showProgress = continuingIds.has(book.id);
+        const percent = showProgress ? describeBookProgress(book).percent : 0;
+        return (
+          <LibraryCard
+            key={book.id}
+            book={book}
+            onSelect={onSelect}
+            showProgress={showProgress}
+            percent={percent}
+            alt={index % 2 === 1}
+            needsReview={reviewIds.has(book.id)}
+            favourited={favourites?.has(book.id) ?? false}
+            onToggleFavourite={onToggleFavourite}
+            onFindSimilar={onFindSimilar}
+          />
+        );
+      })}
     </div>
   );
 }

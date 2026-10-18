@@ -9,13 +9,18 @@ import {
   type Filters,
 } from "../lib/browse";
 import type { Audiobook, GenreNode } from "../types";
+import { cn } from "../ui/primitives";
 
 /**
- * Spec 20 — the filter bar.
+ * Spec 20 -- the filter bar.
  *
  * Chip groups above the grid for Genre, Author, Narrator, Series and the
  * household's custom tags. Filtering rules themselves live in `lib/browse.ts`
  * and are unit-tested there; this component only renders and dispatches.
+ *
+ * Each group scrolls sideways on a phone rather than wrapping: a genre taxonomy
+ * with fifty children turns a wrapped layout into a wall, and the facet a
+ * listener wants is never the one on screen.
  */
 
 const FACETS: { key: FacetKey; label: string }[] = [
@@ -40,11 +45,7 @@ function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
-        active
-          ? "border-cyan-400 bg-cyan-400 text-slate-950"
-          : "border-slate-700 bg-slate-900 text-slate-300 hover:border-cyan-500/70 hover:text-white"
-      }`}
+      className={cn("chip", active && "bg-ink text-surface border-ink")}
     >
       {children}
     </button>
@@ -74,24 +75,35 @@ function FacetGroup({
   const selected = filters[facet] ?? [];
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">{label}</h3>
+        <h3 className="font-display text-[15px] font-semibold text-ink">{label}</h3>
         {selected.length > 0 && (
           <button
             type="button"
             onClick={() => onClear(facet)}
-            className="text-xs text-cyan-400 hover:text-cyan-300"
+            className="text-[12.5px] font-bold text-rasp-ink underline decoration-dotted underline-offset-4 hover:decoration-solid"
           >
             clear
           </button>
         )}
       </div>
-      <div className="flex flex-wrap gap-2" role="group" aria-label={`Filter by ${label.toLowerCase()}`}>
+      {/* `-mx-1 px-1` lets the chips bleed to the screen edge without the
+          scrollbar sitting on top of the first chip. */}
+      <div
+        className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible"
+        role="group"
+        aria-label={`Filter by ${label.toLowerCase()}`}
+      >
         {options.map((option) => (
-          <Chip key={option.value} active={selected.includes(option.value)} onClick={() => onToggle(facet, option.value)}>
-            {option.label} <span className={selected.includes(option.value) ? "opacity-70" : "text-slate-500"}>{option.count}</span>
-          </Chip>
+          <span key={option.value} className="snap-start">
+            <Chip active={selected.includes(option.value)} onClick={() => onToggle(facet, option.value)}>
+              {option.label}{" "}
+              <span className={cn("tnum", selected.includes(option.value) ? "opacity-70" : "text-ink3")}>
+                {option.count}
+              </span>
+            </Chip>
+          </span>
         ))}
       </div>
     </div>
@@ -122,23 +134,24 @@ export function FilterBar({
   const active = activeFilterCount(filters);
 
   return (
-    <section className="mb-8 border border-slate-800 bg-slate-900/50 p-4" aria-labelledby="filter-bar">
+    <section className="panel mb-8 p-4 sm:p-5" aria-labelledby="filter-bar">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id="filter-bar" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-slate-400">
-          <SlidersHorizontal size={15} aria-hidden="true" /> Filter
+        <h2 id="filter-bar" className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
+          <SlidersHorizontal size={17} aria-hidden="true" className="text-rasp" />
+          Filter
         </h2>
         {isFilterActive(filters) && (
           <button
             type="button"
             onClick={() => onChange({})}
-            className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300"
+            className="btn btn--sm"
           >
-            <X size={13} aria-hidden="true" /> Clear {active}
+            <X size={14} aria-hidden="true" /> Clear {active}
           </button>
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-5 sm:grid-cols-2">
         {FACETS.map((facet) => (
           <FacetGroup
             key={facet.key}

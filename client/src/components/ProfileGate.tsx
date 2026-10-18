@@ -1,10 +1,16 @@
 import { type FormEvent, useEffect, useState } from "react";
+import { Plus, UserRound } from "lucide-react";
+import { Btn, Field, FullScreen, Wordmark, cn } from "../ui/primitives";
 
 interface Profile {
   id: number;
   name: string;
   color?: string | null;
 }
+
+/** Shell tints for profile capsules, picked by position so a household always
+ *  sees the same person in the same colour. */
+const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
 
 /**
  * Shown when the household password is accepted but no profile is
@@ -82,38 +88,73 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <div className="grid min-h-screen place-items-center bg-[#0b1117] text-slate-100">
-      <div className="w-full max-w-sm border border-slate-800 bg-slate-900 p-8">
-        <h1 className="mb-1 text-xl font-bold">Who's listening?</h1>
-        <p className="mb-6 text-sm text-slate-400">Pick your profile so your progress is saved separately from the rest of the household.</p>
-        <div className="mb-4 grid gap-2">
-          {profiles.map((profile) => (
-            <button
-              key={profile.id}
-              type="button"
-              onClick={() => select(profile.id)}
-              className="border border-slate-700 bg-slate-950 px-4 py-3 text-left font-semibold text-slate-100 hover:border-cyan-400 hover:text-cyan-300"
-            >
-              {profile.name}
-            </button>
-          ))}
-          {!profiles.length && <p className="text-sm text-slate-500">No profiles yet — create one below.</p>}
+    <FullScreen>
+      <div className="flex flex-col items-center">
+        <Wordmark title="Audiobook Manager" subtitle="local-first listening" />
+
+        <div className="panel mt-8 w-full max-w-sm px-6 py-7">
+          {/* The straight apostrophe is load-bearing: `e2e/helpers.ts` matches
+              this heading by exact accessible name, and a typographic one makes
+              the whole suite fail to pick a profile. */}
+          <h1 className="font-display text-2xl font-semibold text-ink">Who's listening?</h1>
+          <p className="mt-1.5 text-sm text-ink2">
+            Pick your profile so your progress is saved separately from the rest of the household.
+          </p>
+
+          <div className="mt-5 grid gap-3">
+            {profiles.map((profile, index) => (
+              <button
+                key={profile.id}
+                type="button"
+                onClick={() => select(profile.id)}
+                className={cn(
+                  "capsule flex items-center gap-3 px-4 py-3 text-left",
+                  index % 2 ? "capsule--alt" : "",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid size-10 shrink-0 place-items-center rounded-full border-2 border-ink"
+                  style={{ background: profile.color ?? CAPSULE_TINTS[index % CAPSULE_TINTS.length] }}
+                >
+                  <UserRound size={18} className="text-white" />
+                </span>
+                <span className="min-w-0 truncate font-display text-[17px] font-semibold text-ink">
+                  {profile.name}
+                </span>
+              </button>
+            ))}
+            {!profiles.length && (
+              <p className="panel panel--sunk px-4 py-5 text-center text-sm text-ink2">
+                No profiles yet — create one below.
+              </p>
+            )}
+          </div>
+
+          {showAdd ? (
+            <form onSubmit={add} className="mt-4 flex items-center gap-2">
+              <Field
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+                placeholder="Name"
+                aria-label="New profile name"
+                className="min-w-0 flex-1"
+              />
+              <Btn type="submit" className="shrink-0">Add</Btn>
+            </form>
+          ) : (
+            <Btn variant="quiet" size="sm" onClick={() => setShowAdd(true)} className="mt-4">
+              <Plus size={16} aria-hidden="true" /> + Add profile
+            </Btn>
+          )}
+
+          {error && (
+            <p role="alert" className="mt-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-rasp/12 px-3 py-2 text-sm font-bold text-rasp-ink">
+              {error}
+            </p>
+          )}
         </div>
-        {showAdd ? (
-          <form onSubmit={add} className="mb-4 flex items-center gap-1">
-            <input
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              placeholder="Name"
-              className="w-full border border-slate-700 bg-slate-950 px-3 py-2 outline-none focus:border-cyan-400"
-            />
-            <button type="submit" className="shrink-0 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-white">Add</button>
-          </form>
-        ) : (
-          <button type="button" onClick={() => setShowAdd(true)} className="mb-4 text-sm text-cyan-400 hover:text-cyan-300">+ Add profile</button>
-        )}
-        {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
       </div>
-    </div>
+    </FullScreen>
   );
 }

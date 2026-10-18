@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Settings as SettingsIcon, Trash2, WifiOff } from "lucide-react";
+import { Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Trash2, WifiOff, BookOpen } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
@@ -30,6 +30,7 @@ import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
+import { Specks, ThemeToggle, Notice, MachineHead, StatusLegend, Btn, IconBtn, cn } from "./ui/primitives";
 import type { Audiobook } from "./types";
 
 type Tab = "library" | "browse" | "discover" | "favourites";
@@ -40,6 +41,21 @@ const TABS: { id: Tab; label: string; icon: typeof Library }[] = [
   { id: "discover", label: "Discover", icon: Compass },
   { id: "favourites", label: "Favourites", icon: Heart },
 ];
+
+/**
+ * The machine's mark: a canted capsule with a play dome, matching favicon.svg.
+ * Inline so it inherits the theme tokens rather than shipping two copies of the
+ * same drawing.
+ */
+function Mark() {
+  return (
+    <span aria-hidden="true" className="grid size-11 shrink-0 -rotate-6 place-items-center rounded-[15px_12px_15px_12px/12px_15px_12px_15px] border-2 border-ink bg-surface shadow-[0_3px_0_-1px_color-mix(in_srgb,var(--ink)_80%,transparent)]">
+      <span className="grid size-7 place-items-center rounded-full border-2 border-ink bg-rasp">
+        <span className="h-0 w-0 border-y-[5px] border-l-[8px] border-y-transparent border-l-white" />
+      </span>
+    </span>
+  );
+}
 
 function App() {
   const { audiobooks, roots, loading, error, refresh, addRoot, removeRoot, scan } = useLibrary();
@@ -151,6 +167,16 @@ function App() {
     [libraryBooks, favouriteIds],
   );
 
+  /**
+   * Books waiting on a metadata decision. These keep a mark on their capsule in
+   * every grid until someone actually looks at them, rather than blending back
+   * into the shelf the moment the tab is re-rendered.
+   */
+  const reviewIds = useMemo(
+    () => new Set((browse.reviewQueue ?? []).map((book) => book.id)),
+    [browse.reviewQueue],
+  );
+
   const genreLabels = useMemo(() => {
     const map = new Map<string, string>();
     for (const parent of browse.genres) {
@@ -196,6 +222,7 @@ function App() {
     favourites: favouriteIds,
     onToggleFavourite: toggleFavourite,
     onFindSimilar: (book: Audiobook) => findSimilar(book.id),
+    changedIds: reviewIds,
   };
 
   /**
@@ -307,42 +334,71 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b1117] text-slate-100">
-      <header className="border-b border-slate-800/80 bg-[#0b1117]/95">
-        {/* `flex-wrap` + `min-w-0` are load-bearing. The right-hand group
-            (settings, refresh, profile switcher) has a fixed intrinsic width of
-            about 324px and the title refuses to shrink, so on a 360px phone the
-            row was forced to 515px and the whole page scrolled sideways. Wrapping
-            drops the controls to their own line instead. `e2e/phone-layout`
-            asserts the document never exceeds the viewport, so this cannot
-            silently come back. */}
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="relative min-h-dvh bg-ground text-ink">
+      <Specks />
+      <header className="bar">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-10 shrink-0 place-items-center bg-cyan-400 text-slate-950"><BookOpen size={22} /></span>
-            <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400">Local library</p><h1 className="truncate text-lg font-bold sm:text-xl">Audiobook Manager</h1></div>
+            <Mark />
+            {/* `min-w-0` is load-bearing: the title sits beside a fixed-width
+                control group, and without it the wordmark refuses to shrink and
+                the row blows past a 360px phone. `e2e/phone-layout` asserts the
+                document never exceeds the viewport. */}
+            <div className="min-w-0 flex-1">
+              <h1 className="wordmark truncate">Audiobook Manager</h1>
+              <p className="mt-0.5 truncate text-[12px] font-semibold text-ink3 tnum">
+                {libraryBooks.length} {libraryBooks.length === 1 ? "title" : "titles"}
+                {roots.length ? ` · ${roots.length} ${roots.length === 1 ? "folder" : "folders"}` : ""}
+              </p>
+            </div>
           </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <button onClick={() => setShowSettings(true)} aria-label="Settings" className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><SettingsIcon size={20} /></button>
-            <button onClick={() => void refresh()} aria-label="Refresh library" className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><RefreshCw size={20} /></button>
+          {/* On a phone this is its own row rather than competing with the
+              wordmark: a theme toggle, two icon buttons and a profile select
+              leave the title about 30px, which truncated "Audiobook Manager"
+              down to three stacked letters. From `sm` up it joins the title on
+              one line. `IconBtn` rather than `Btn`+`iconbtn`, which fought
+              over border-radius and rendered a mismatched shape. */}
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <ThemeToggle />
+            <IconBtn label="Settings" onClick={() => setShowSettings(true)}>
+              <BookOpen size={19} aria-hidden="true" />
+            </IconBtn>
+            <IconBtn label="Refresh library" onClick={() => void refresh()}>
+              <RefreshCw size={19} aria-hidden="true" />
+            </IconBtn>
             <ProfileSwitcher />
           </div>
         </div>
-        <nav className="mx-auto max-w-7xl px-4 sm:px-5" aria-label="Sections">
-          <ul className="flex flex-wrap gap-1">
+
+        {/* One nav, two placements. On a phone it is fixed to the bottom as a
+            rail; from `sm` up it returns to the flow under the header. A fixed
+            descendant renders where it is told regardless of its DOM parent, so
+            this stays a single element -- two navs would make the E2E
+            `getByRole("navigation", { name: "Sections" })` ambiguous. */}
+        <nav
+          aria-label="Sections"
+          className="rail fixed inset-x-0 bottom-0 z-40 pb-[max(10px,env(safe-area-inset-bottom))] sm:static sm:z-auto sm:border-t-0 sm:bg-transparent sm:backdrop-filter-none sm:pb-0"
+        >
+          <ul className="mx-auto flex w-full max-w-7xl gap-1.5 px-3 sm:justify-center sm:px-6">
             {TABS.map(({ id, label: tabLabel, icon: Icon }) => (
-              <li key={id}>
+              <li key={id} className="min-w-0 flex-1 sm:flex-none">
                 <button
                   type="button"
                   onClick={() => openTab(id)}
                   aria-current={tab === id ? "page" : undefined}
-                  className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm transition ${
-                    tab === id ? "border-cyan-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"
-                  }`}
+                  className={cn(
+                    "flex w-full flex-col items-center justify-center gap-1 rounded-[16px_13px_16px_13px/13px_16px_13px_16px] px-2 py-2 text-[11px] font-bold transition sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13.5px]",
+                    tab === id
+                      ? "bg-rasp text-white shadow-[0_3px_0_-1px_color-mix(in_srgb,var(--ink)_70%,transparent)]"
+                      : "text-ink2 hover:bg-ink/5",
+                  )}
                 >
-                  <Icon size={15} aria-hidden="true" />
-                  {tabLabel}
+                  <Icon size={17} aria-hidden="true" />
+                  <span className="truncate">{tabLabel}</span>
                   {id === "favourites" && favouriteIds.size > 0 && (
-                    <span className="rounded-full bg-slate-800 px-1.5 text-xs text-slate-300">{favouriteIds.size}</span>
+                    <span className="ml-0.5 rounded-full bg-ink/15 px-1.5 text-[10px] text-ink2 tnum sm:bg-ink/10">
+                      {favouriteIds.size}
+                    </span>
                   )}
                 </button>
               </li>
@@ -351,51 +407,128 @@ function App() {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-7xl px-5 py-10">
-        {error && !offline && <div className="mb-6 border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">{error}</div>}
+      /* `pt-7` not `pt-5`: a tab that opens straight into a heading (Favourites,
+        Discover) needs more air above the heading than below it, or the word
+        reads as part of the header above. */
+      <main className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-28 pt-7 sm:px-6 sm:pb-14 sm:pt-9">
+        {error && !offline && (
+          <Notice tone="error" role="alert" className="mb-6">
+            {error}
+          </Notice>
+        )}
 
         {offline && (
-          <div className="mb-6 flex items-center gap-2 border border-amber-900/60 bg-amber-950/20 px-4 py-3 text-sm text-amber-200" role="status">
-            <WifiOff size={16} aria-hidden="true" />
+          <Notice tone="warn" role="status" icon={<WifiOff size={16} aria-hidden="true" />} className="mb-6">
             Offline — showing the {device.books.length} {device.books.length === 1 ? "book" : "books"} downloaded to this device.
-          </div>
+          </Notice>
         )}
 
         {tab === "library" && (
           <>
-            <section className="mb-10 flex flex-col justify-between gap-5 border-b border-slate-800 pb-8 sm:flex-row sm:items-end">
-              <div><p className="mb-2 text-sm font-medium text-cyan-400">Your collection</p><h2 className="text-4xl font-bold tracking-tight">Browse your books.</h2><p className="mt-3 max-w-xl text-slate-400">Scan local folders to bring your audiobook metadata and artwork into one calm shelf.</p></div>
-              <button onClick={() => void runScan()} disabled={working || !roots.length} className="flex items-center justify-center gap-2 bg-cyan-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"><ScanLine size={18} /> Scan library</button>
-            </section>
+            {/*
+              Order is the thesis: the dock and the shelf come first, and every
+              operator control comes last.
 
-            <section className="mb-10">
-              <div className="mb-4 flex items-center justify-between"><h2 className="flex items-center gap-2 text-lg font-semibold"><Library size={19} className="text-cyan-400" /> Library folders</h2><button onClick={() => setShowRootForm((visible) => !visible)} className="flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300"><FolderPlus size={17} /> Add folder</button></div>
-              {showRootForm && <form onSubmit={submitRoot} className="mb-4 grid gap-3 border border-slate-800 bg-slate-900 p-4 sm:grid-cols-[1fr_180px_auto]"><input value={path} onChange={(event) => setPath(event.target.value)} placeholder="/data/audiobooks" required className="border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-cyan-400" /><input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Label (optional)" className="border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-cyan-400" /><button disabled={working} className="bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-white">Add folder</button></form>}
-              {roots.length ? <div className="grid gap-3 md:grid-cols-2">{roots.map((root) => <div key={root.id} className="flex items-center justify-between border border-slate-800 bg-slate-900/70 px-4 py-3"><div className="min-w-0"><p className="truncate font-medium">{root.label || root.path}</p><p className="truncate text-xs text-slate-500">{root.path} {root.scanState?.status && `· ${root.scanState.status}`}</p>{root.scanState?.message && <p className="mt-1 text-xs text-red-300">{root.scanState.message}</p>}</div><div className="ml-3 flex items-center gap-1"><button onClick={() => void runScan(root.id)} disabled={working} aria-label={`Scan ${root.label || root.path}`} className="rounded p-2 text-cyan-400 hover:bg-slate-800"><ScanLine size={16} /></button><button onClick={() => void removeRoot(root.id)} aria-label={`Remove ${root.label || root.path}`} className="rounded p-2 text-slate-500 hover:bg-slate-800 hover:text-red-400"><Trash2 size={16} /></button></div></div>)}</div> : <p className="text-sm text-slate-500">No folders configured yet.</p>}
-            </section>
-
-            {browse.enrichment && browse.enrichment.status !== "idle" && (
-              <p className="mb-6 border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-400">
-                Enrichment {browse.enrichment.status}: {browse.enrichment.processed}/{browse.enrichment.queued} checked · {browse.enrichment.applied} applied · {browse.enrichment.review} need review
-              </p>
-            )}
-
-            <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh({ silent: true }); void browse.refresh(); }} />
-
+              The previous arrangement put the hero, the scan button and the
+              library folders above the books, which meant the capsule -- the
+              signature move, and the only reason this app is not a list -- never
+              appeared in the first viewport on any device. A listener should see
+              what they have, not what the operator maintains.
+            */}
             <ContinueListening books={inProgressBooks(libraryBooks)} onSelect={setSelectedBook} />
             <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
             <section>
-              <div className="mb-5 flex items-center justify-between"><div><h2 className="text-2xl font-bold">All audiobooks</h2><p className="mt-1 text-sm text-slate-500">{searchedBooks.length} {searchedBooks.length === 1 ? "title" : "titles"}{search.trim() ? " matching your search" : " in your library"}</p></div>{working && <LoaderCircle className="animate-spin text-cyan-400" size={20} />}</div>
-              {loading ? <div className="py-20 text-center text-slate-500">Loading library...</div> : <AudiobookGrid books={searchedBooks} {...gridProps} />}
+              <MachineHead
+                title="All audiobooks"
+                count={`${searchedBooks.length} ${searchedBooks.length === 1 ? "title" : "titles"}${search.trim() ? " matching your search" : " in your library"}`}
+              >
+                {working ? <LoaderCircle className="animate-spin text-rasp" size={20} /> : null}
+              </MachineHead>
+              <StatusLegend className="mb-4" />
+              {loading ? (
+                <div className="panel panel--sunk px-6 py-20 text-center text-ink2">Loading library...</div>
+              ) : (
+                <AudiobookGrid books={searchedBooks} {...gridProps} />
+              )}
             </section>
+
+            <section className="mt-12">
+              <MachineHead title="Library folders" />
+              <p className="text-[13.5px] text-ink2">
+                Scan local folders to bring your audiobook metadata and artwork into one calm shelf.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Btn
+                  variant="primary"
+                  onClick={() => void runScan()}
+                  disabled={working || !roots.length}
+                >
+                  <ScanLine size={18} aria-hidden="true" /> Scan library
+                </Btn>
+                <Btn variant="quiet" size="sm" onClick={() => setShowRootForm((visible) => !visible)}>
+                  <FolderPlus size={17} aria-hidden="true" /> Add folder
+                </Btn>
+              </div>
+              {showRootForm && (
+                <form onSubmit={submitRoot} className="panel mb-4 grid gap-3 p-4 sm:grid-cols-[1fr_180px_auto]">
+                  <input value={path} onChange={(event) => setPath(event.target.value)} placeholder="/data/audiobooks" required className="field" aria-label="Library folder path" />
+                  <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Label (optional)" className="field" aria-label="Library folder label" />
+                  <Btn type="submit" disabled={working}>Add folder</Btn>
+                </form>
+              )}
+              {roots.length ? (
+                /* `min-w-0` on each panel is load-bearing. A grid item defaults to
+                   `min-width: auto`, so a single unbreakable value -- a Windows
+                   path like C:\Users\...\audiobook-manager\test -- sets the
+                   panel's min-content width and the grid blows out sideways.
+                   `min-w-0` on the inner flex child is not enough on its own; it
+                   lowers the child's minimum, not the track's. */
+                <div className="grid gap-3 md:grid-cols-2">
+                  {roots.map((root, index) => (
+                    <div key={root.id} className={cn("panel flex min-w-0 items-center justify-between gap-3 px-4 py-3", index % 2 && "rotate-[0.6deg]")}>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold">{root.label || root.path}</p>
+                        <p className="truncate text-[12px] text-ink3">
+                          {root.path} {root.scanState?.status && `· ${root.scanState.status}`}
+                        </p>
+                        {root.scanState?.message && <p className="mt-1 text-[12px] text-rasp-ink">{root.scanState.message}</p>}
+                      </div>
+                      <div className="ml-2 flex shrink-0 items-center gap-1">
+                        <IconBtn label={`Scan ${root.label || root.path}`} onClick={() => void runScan(root.id)} disabled={working}>
+                          <ScanLine size={16} aria-hidden="true" />
+                        </IconBtn>
+                        <IconBtn label={`Remove ${root.label || root.path}`} onClick={() => void removeRoot(root.id)}>
+                          <Trash2 size={16} aria-hidden="true" />
+                        </IconBtn>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="panel panel--sunk px-4 py-5 text-sm text-ink2">No folders configured yet.</p>
+              )}
+            </section>
+
+            <div className="mt-8">
+              {browse.enrichment && browse.enrichment.status !== "idle" && (
+                <Notice className="mb-4">
+                  Enrichment {browse.enrichment.status}: {browse.enrichment.processed}/{browse.enrichment.queued} checked ·{" "}
+                  {browse.enrichment.applied} applied · {browse.enrichment.review} need review
+                </Notice>
+              )}
+
+              <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh({ silent: true }); void browse.refresh(); }} />
+            </div>
           </>
         )}
 
         {tab === "browse" && (
           <>
-            <section className="mb-8">
-              <h2 className="text-2xl font-bold">Browse</h2>
-              <p className="mt-1 text-sm text-slate-500">Grouped by genre and series, using the metadata your library was enriched with.</p>
+            <section className="mb-7">
+              <h2 className="text-[30px] leading-[1.05] sm:text-4xl">Browse</h2>
+              <p className="mt-2 max-w-xl text-ink2">
+                Grouped by genre and series, using the metadata your library was enriched with.
+              </p>
             </section>
 
             <SearchBar value={search} onChange={onSearchChange} resultCount={filteredBooks.length} />
@@ -403,10 +536,7 @@ function App() {
 
             {isFilterActive(filters) || search.trim().length > 0 ? (
               <section>
-                <div className="mb-5">
-                  <h3 className="text-xl font-bold">Filtered results</h3>
-                  <p className="mt-1 text-sm text-slate-500">{filteredBooks.length} {filteredBooks.length === 1 ? "title" : "titles"}</p>
-                </div>
+                <MachineHead title="Filtered results" count={`${filteredBooks.length} ${filteredBooks.length === 1 ? "title" : "titles"}`} />
                 <AudiobookGrid books={filteredBooks} {...gridProps} />
               </section>
             ) : (
@@ -414,7 +544,7 @@ function App() {
                 <Shelves shelves={genreShelves} onSelect={setSelectedBook} favouriteIds={favouriteIds} onToggleFavourite={toggleFavourite} emptyMessage="No genre shelves yet. Enrichment assigns genres from the curated taxonomy — check the review queue for books still unmatched." />
                 {seriesShelves.length > 0 && (
                   <section className="mt-4">
-                    <h3 className="mb-4 text-xl font-bold">Series</h3>
+                    <MachineHead title="Series" />
                     <Shelves shelves={seriesShelves} onSelect={setSelectedBook} favouriteIds={favouriteIds} onToggleFavourite={toggleFavourite} />
                   </section>
                 )}
@@ -431,8 +561,8 @@ function App() {
 
         {tab === "favourites" && (
           <section>
-            <h2 className="mb-1 text-2xl font-bold">Favourites</h2>
-            <p className="mb-6 text-sm text-slate-500">
+            <h2 className="text-[30px] leading-[1.05] sm:text-4xl">Favourites</h2>
+            <p className="mb-6 mt-2 max-w-xl text-ink2">
               {favouriteIds.size === 0
                 ? "Books you favourite are private to your profile and seed your Discover suggestions."
                 : `${favouriteIds.size} ${favouriteIds.size === 1 ? "book" : "books"}, for this profile only.`}
@@ -442,7 +572,9 @@ function App() {
         )}
       </main>
 
-      <footer className="border-t border-slate-800 px-5 py-6 text-center text-xs text-slate-600">Audiobook Manager · local-first listening</footer>
+      <footer className="relative z-10 px-5 pb-28 pt-6 text-center text-[12px] text-ink3 sm:pb-10">
+        Audiobook Manager · local-first listening
+      </footer>
       {selectedBook && <AudiobookDetail
         book={selectedBook}
         onClose={() => setSelectedBook(undefined)}

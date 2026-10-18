@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Pencil, RotateCcw, Save } from "lucide-react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
 import type { useTagSuite } from "../useBrowse";
+import { Btn, cn } from "../ui/primitives";
 
 /**
- * Spec 20 — the full tag suite on the book detail screen.
+ * Spec 20 -- the full tag suite on the book detail screen.
  *
  * Every field is individually editable and shows its provenance: which values
  * are yours (an override, ADR 009) versus which came from a provider. The
@@ -101,13 +102,16 @@ export function TagSuiteEditor({
   };
 
   const Field = ({ label, field, placeholder }: { label: string; field: string; placeholder?: string }) => (
-    <label className="block">
-      <span className="mb-1 flex items-baseline justify-between gap-2 text-xs uppercase tracking-widest text-slate-500">
-        {label}
+    <label className="block min-w-0">
+      <span className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="text-[13px] font-bold text-ink">{label}</span>
         {/* The provenance badge is decorative next to the field name. Without
             aria-hidden it is read as part of the label, so every input's
             accessible name became "Title embedded" instead of "Title". */}
-        <span aria-hidden="true" className={overridden.has(field) ? "text-cyan-400" : "text-slate-600"}>
+        <span
+          aria-hidden="true"
+          className={cn("rounded-full border px-1.5 py-0.5 text-[10.5px] font-bold", overridden.has(field) ? "border-ink bg-rasp text-white" : "border-ink/25 text-ink3")}
+        >
           {provenance(field)}
         </span>
       </span>
@@ -117,45 +121,68 @@ export function TagSuiteEditor({
           value={String(draft[field] ?? "")}
           onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))}
           placeholder={placeholder}
-          className="w-full border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-cyan-400"
+          className="field"
         />
       ) : (
-        <p className="text-sm text-slate-200">{String(draft[field] ?? "") || <span className="text-slate-600">—</span>}</p>
+        <p className="text-[14px] text-ink2">{String(draft[field] ?? "") || <span className="text-ink3">—</span>}</p>
       )}
     </label>
   );
 
+  /** Genres and household tags are chosen with the same chip in both lists. */
+  const ChoiceChip = ({
+    selected,
+    editing: isEditing,
+    onClick,
+    children,
+  }: {
+    selected: boolean;
+    editing: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+  }) => (
+    <button
+      type="button"
+      disabled={!isEditing}
+      aria-pressed={selected}
+      onClick={onClick}
+      className={cn("chip", selected && "bg-ink text-surface border-ink", !isEditing && "cursor-default")}
+    >
+      {children}
+    </button>
+  );
+
   return (
-    <section className="mt-6 border border-slate-800 bg-slate-900/50 p-4" aria-labelledby="tag-suite">
+    <section className="panel mt-6 p-4 sm:p-5" aria-labelledby="tag-suite">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 id="tag-suite" className="text-sm font-semibold uppercase tracking-widest text-slate-400">Details</h2>
+        <h2 id="tag-suite" className="font-display text-[17px] font-semibold text-ink">Details</h2>
         <div className="flex items-center gap-2">
           {editing ? (
             <>
-              <button type="button" onClick={() => { void save(); }} className="flex items-center gap-1 rounded bg-cyan-400 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-cyan-300">
-                <Save size={13} /> Save
-              </button>
-              <button type="button" onClick={() => setEditing(false)} className="rounded px-2 py-1.5 text-xs text-slate-400">Cancel</button>
+              <Btn size="sm" variant="primary" onClick={() => { void save(); }}>
+                <Save size={13} aria-hidden="true" /> Save
+              </Btn>
+              <Btn size="sm" variant="quiet" onClick={() => setEditing(false)}>Cancel</Btn>
             </>
           ) : (
-            <button type="button" onClick={() => setEditing(true)} className="flex items-center gap-1 rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:border-cyan-400">
-              <Pencil size={13} /> Edit
-            </button>
+            <Btn size="sm" onClick={() => setEditing(true)}>
+              <Pencil size={13} aria-hidden="true" /> Edit
+            </Btn>
           )}
           {overridden.size > 0 && (
-            <button
-              type="button"
+            <Btn
+              size="sm"
+              variant="quiet"
               title="Clear your overrides so enrichment and embedded tags can update these again"
               onClick={() => void suite.reset().then(() => { setEditing(false); onSaved(); })}
-              className="flex items-center gap-1 rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-amber-400"
             >
-              <RotateCcw size={13} /> Reset
-            </button>
+              <RotateCcw size={13} aria-hidden="true" /> Reset
+            </Btn>
           )}
         </div>
       </div>
 
-      {status && <p className="mb-3 text-xs text-cyan-300">{status}</p>}
+      {status && <p role="status" className="mb-3 text-[12.5px] font-bold text-cobalt-ink">{status}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Title" field="title" />
@@ -170,30 +197,36 @@ export function TagSuiteEditor({
 
       {suite.suite.description !== undefined && (
         <div className="mt-4">
-          <span className="mb-1 block text-xs uppercase tracking-widest text-slate-500">Description</span>
+          <span className="mb-1 block text-[13px] font-bold text-ink">Description</span>
           {editing ? (
             <textarea
+              aria-label="Description"
               value={String(draft.description ?? "")}
               onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
               rows={4}
-              className="w-full border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-cyan-400"
+              className="field min-h-24 rounded-[22px_18px_22px_18px/18px_22px_18px_22px] py-2.5"
             />
           ) : (
-            <p className="text-sm leading-relaxed text-slate-300">{suite.suite.description || <span className="text-slate-600">—</span>}</p>
+            <p className="text-[14px] leading-relaxed text-ink2">
+              {suite.suite.description || <span className="text-ink3">—</span>}
+            </p>
           )}
         </div>
       )}
 
       {suite.suite.contributors.length > 0 && (
         <div className="mt-4">
-          <span className="mb-1 block text-xs uppercase tracking-widest text-slate-500">
+          <span className="mb-1.5 block text-[13px] font-bold text-ink">
             {suite.suite.contributors.filter((c) => c.role === "narrator").length > 0 ? "Narrators" : "Contributors"}
           </span>
           <ul className="flex flex-wrap gap-2">
             {suite.suite.contributors.map((contributor) => (
-              <li key={`${contributor.id}-${contributor.role}`} className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1 text-xs text-slate-300">
+              <li
+                key={`${contributor.id}-${contributor.role}`}
+                className="rounded-full border-2 border-ink/25 bg-sunk px-3 py-1 text-[12px] font-semibold text-ink2"
+              >
                 {contributor.name}
-                <span className="ml-1.5 text-slate-500">{contributor.role}</span>
+                <span className="ml-1.5 text-ink3">{contributor.role}</span>
               </li>
             ))}
           </ul>
@@ -202,17 +235,16 @@ export function TagSuiteEditor({
 
       {genres.length > 0 && (
         <fieldset className="mt-4">
-          <legend className="mb-2 text-xs uppercase tracking-widest text-slate-500">Genres</legend>
+          <legend className="mb-2 font-display text-[15px] font-semibold text-ink">Genres</legend>
           <div className="flex flex-wrap gap-2">
             {genres.flatMap((parent) => [parent, ...(parent.children ?? [])]).map((genre) => {
               const selected = ((draft.genreIds as number[]) ?? []).includes(genre.id);
               const count = suite.suite!.genres.filter((g) => g.id === genre.id).length;
               return (
-                <button
+                <ChoiceChip
                   key={genre.id}
-                  type="button"
-                  disabled={!editing}
-                  aria-pressed={selected}
+                  selected={selected}
+                  editing={editing}
                   onClick={() =>
                     setDraft((current) => {
                       const ids = (current.genreIds as number[]) ?? [];
@@ -222,11 +254,10 @@ export function TagSuiteEditor({
                       };
                     })
                   }
-                  className={`rounded-full border px-3 py-1 text-xs ${selected ? "border-cyan-400 bg-cyan-400 text-slate-950" : "border-slate-700 text-slate-400"} ${editing ? "" : "cursor-default"}`}
                 >
                   {genre.name}
                   {count > 0 && <span className="ml-1 opacity-70">✓</span>}
-                </button>
+                </ChoiceChip>
               );
             })}
           </div>
@@ -235,16 +266,15 @@ export function TagSuiteEditor({
 
       {tags.length > 0 && (
         <fieldset className="mt-4">
-          <legend className="mb-2 text-xs uppercase tracking-widest text-slate-500">Your tags</legend>
+          <legend className="mb-2 font-display text-[15px] font-semibold text-ink">Your tags</legend>
           <div className="flex flex-wrap gap-2">
             {tags.map((tag) => {
               const selected = ((draft.tagIds as number[]) ?? []).includes(tag.id);
               return (
-                <button
+                <ChoiceChip
                   key={tag.id}
-                  type="button"
-                  disabled={!editing}
-                  aria-pressed={selected}
+                  selected={selected}
+                  editing={editing}
                   onClick={() =>
                     setDraft((current) => {
                       const ids = (current.tagIds as number[]) ?? [];
@@ -254,10 +284,9 @@ export function TagSuiteEditor({
                       };
                     })
                   }
-                  className={`rounded-full border px-3 py-1 text-xs ${selected ? "border-cyan-400 bg-cyan-400 text-slate-950" : "border-slate-700 text-slate-400"} ${editing ? "" : "cursor-default"}`}
                 >
                   {tag.name}
-                </button>
+                </ChoiceChip>
               );
             })}
           </div>

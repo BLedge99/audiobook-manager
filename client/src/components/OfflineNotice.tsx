@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CloudOff, RefreshCw, Wifi } from "lucide-react";
+import { Btn, FullScreen, MachineMark, Wordmark } from "../ui/primitives";
 
 /**
  * Shown when the server cannot be reached **and** this device has nothing to
@@ -10,6 +11,9 @@ import { CloudOff, RefreshCw, Wifi } from "lucide-react";
  * check it against is the bug this replaced -- it sent the user in a circle with
  * no way out. Here there is simply nothing offline yet, and the way to fix that
  * is to download something while the server is reachable.
+ *
+ * The reassurance is the most important thing on this screen, so it gets the
+ * largest type on the page. A retry button in a dead end is not comfort.
  */
 export function OfflineNotice({
   hasBooks,
@@ -30,26 +34,30 @@ export function OfflineNotice({
   };
 
   return (
-    <div className="grid min-h-screen place-items-center bg-[#0b1117] px-5 text-slate-100">
-      <div className="w-full max-w-md border border-slate-800 bg-slate-900 p-8 text-center">
-        <CloudOff className="mx-auto text-slate-500" size={32} aria-hidden="true" />
-        <h1 className="mt-4 text-xl font-bold">Can&rsquo;t reach the server</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          {hasBooks
-            ? "Choose a profile to listen to the books already on this phone."
-            : "Nothing has been downloaded to this phone yet. Connect to the home WiFi, open the app and download a book — then it will play with no network at all."}
-        </p>
-        <button
-          type="button"
-          onClick={retry}
-          disabled={checking}
-          className="mt-6 inline-flex items-center gap-2 bg-cyan-400 px-5 py-2 font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-60"
-        >
-          {checking ? <RefreshCw size={16} className="animate-spin" /> : <Wifi size={16} />}
-          {checking ? "Checking…" : "Try again"}
-        </button>
+    <FullScreen>
+      <div className="flex flex-col items-center text-center">
+        <Wordmark title="Audiobook Manager" subtitle="local-first listening" />
+
+        <div className="panel mt-8 w-full px-6 py-7">
+          <span className="mx-auto grid size-16 -rotate-6 place-items-center rounded-[20px_16px_20px_16px/16px_20px_16px_20px] border-2 border-ink bg-sunk">
+            <CloudOff size={28} aria-hidden="true" className="text-ink3" />
+          </span>
+
+          <h1 className="mt-5 font-display text-2xl font-semibold text-ink">Can&rsquo;t reach the server</h1>
+
+          <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-ink2">
+            {hasBooks
+              ? "Choose a profile to listen to the books already on this phone."
+              : "Nothing has been downloaded to this phone yet. Connect to the home WiFi, open the app and download a book — then it will play with no network at all."}
+          </p>
+
+          <Btn variant="primary" onClick={retry} disabled={checking} className="mt-6 w-full sm:w-auto">
+            {checking ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Wifi size={16} aria-hidden="true" />}
+            {checking ? "Checking…" : "Try again"}
+          </Btn>
+        </div>
       </div>
-    </div>
+    </FullScreen>
   );
 }
 
@@ -61,8 +69,14 @@ export function OfflineNotice({
  */
 export function Splash() {
   return (
-    <div className="grid min-h-screen place-items-center bg-[#0b1117] text-slate-500">
-      <p className="text-sm">Connecting…</p>
-    </div>
+    <FullScreen>
+      <div className="flex flex-col items-center text-center">
+        {/* The mark breathes rather than a bare word: it tells the listener the
+            app opened and is working, which is the only question this screen is
+            answering. */}
+        <MachineMark className="dispense" />
+        <p className="mt-6 text-sm font-bold text-ink3">Connecting…</p>
+      </div>
+    </FullScreen>
   );
 }

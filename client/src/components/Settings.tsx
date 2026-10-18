@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { HardDriveDownload, LoaderCircle, Save, Server, WifiOff } from "lucide-react";
 import { getServerUrl, setServerUrl } from "../lib/api";
+import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
 
 export interface SettingsProps {
   /** Bytes held on the device, for the storage line. */
@@ -65,28 +66,26 @@ export function Settings({ usedBytes, downloadedCount, offline, onClose, onSaved
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0b1117]/98 px-5 py-10">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-ground px-4 py-8 sm:px-5">
       <div className="mx-auto max-w-xl">
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400">Settings</p>
-            <h2 className="mt-2 text-2xl font-bold">Home server</h2>
+        <div className="mb-7 flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <MachineMark />
+            <h2 className="min-w-0 font-display text-[26px] font-semibold leading-tight text-ink">
+              Home server
+            </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
-          >
+          <Btn variant="quiet" size="sm" onClick={onClose} className="shrink-0">
             Close
-          </button>
+          </Btn>
         </div>
 
-        <form onSubmit={test} className="grid gap-3 border border-slate-800 bg-slate-900/60 p-5">
-          <label htmlFor="server-url" className="flex items-center gap-2 text-sm font-medium text-slate-200">
-            <Server size={16} className="text-cyan-400" aria-hidden="true" />
+        <form onSubmit={test} className="panel grid gap-3 p-5">
+          <label htmlFor="server-url" className="flex items-center gap-2 text-[14px] font-bold text-ink">
+            <Server size={16} className="text-rasp" aria-hidden="true" />
             Server address
           </label>
-          <input
+          <Field
             id="server-url"
             value={value}
             onChange={(event) => setValue(event.target.value)}
@@ -94,17 +93,13 @@ export function Settings({ usedBytes, downloadedCount, offline, onClose, onSaved
             inputMode="url"
             autoComplete="off"
             spellCheck={false}
-            className="border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm outline-none focus:border-cyan-400"
+            className="font-mono"
           />
-          <p className="text-xs text-slate-500">
+          <p className="text-[12.5px] text-ink3">
             On the home WiFi. If the router gives the server a new address, change it here — no
             reinstall needed.
           </p>
-          <button
-            type="submit"
-            disabled={status === "checking"}
-            className="flex items-center justify-center gap-2 bg-cyan-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
-          >
+          <Btn type="submit" variant="primary" disabled={status === "checking"}>
             {status === "checking" ? (
               <>
                 <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
@@ -116,32 +111,31 @@ export function Settings({ usedBytes, downloadedCount, offline, onClose, onSaved
                 Save and test
               </>
             )}
-          </button>
+          </Btn>
 
           {message && (
-            <p
-              className={`text-sm ${status === "ok" ? "text-emerald-300" : "text-red-300"}`}
-              role="status"
-            >
-              {message}
-            </p>
+            <Notice tone={status === "ok" ? "info" : "error"} role="status">{message}</Notice>
           )}
         </form>
 
-        <section className="mt-6 border border-slate-800 bg-slate-900/60 p-5">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-            <HardDriveDownload size={16} className="text-cyan-400" aria-hidden="true" />
+        <section className="panel mt-4 p-5">
+          <h3 className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
+            <HardDriveDownload size={17} className="text-rasp" aria-hidden="true" />
             On this device
           </h3>
-          <p className="mt-2 text-3xl font-bold">{formatBytes(usedBytes)}</p>
-          <p className="text-sm text-slate-500">
+          {/* The tube, not a dial: there is no meaningful maximum to fill
+              against, so a proportional ring would be a lie. */}
+          <p className="mt-2 font-display text-[32px] font-semibold leading-none text-ink tnum">
+            {formatBytes(usedBytes)}
+          </p>
+          <p className="mt-1 text-[13.5px] text-ink2">
             {downloadedCount} {downloadedCount === 1 ? "book" : "books"} downloaded
           </p>
+          <Tube percent={downloadedCount > 0 ? 100 : 0} className="mt-3" />
           {offline && (
-            <p className="mt-4 flex items-center gap-2 text-sm text-amber-300" role="status">
-              <WifiOff size={15} aria-hidden="true" />
+            <Notice tone="warn" role="status" icon={<WifiOff size={15} aria-hidden="true" />} className="mt-4">
               The server is unreachable. Downloaded books still play.
-            </p>
+            </Notice>
           )}
         </section>
       </div>

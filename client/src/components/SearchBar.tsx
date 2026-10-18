@@ -3,10 +3,13 @@ import { Search as SearchIcon, X } from "lucide-react";
 import { describeSearch, parseSearchQuery } from "../lib/search";
 
 /**
- * Spec 22 — the search input.
+ * Spec 22 -- the search input.
  *
  * Holds no matching logic of its own: it owns the text, and `lib/search.ts`
  * owns what it means. Mirrors `FilterBar`'s split so the two stay testable.
+ *
+ * There is no submit button. The field filters as you type, and a result count
+ * in a `role="status"` is how the app tells you it heard you.
  */
 
 const EXAMPLES = ["author: rowling", "genre: thriller", "narrator: fry", "tag: bedtime"];
@@ -47,12 +50,13 @@ export function SearchBar({
   const active = !parsed.empty;
 
   return (
-    <section className="mb-4" aria-labelledby="search-bar">
+    <section className="mb-5" aria-labelledby="search-bar">
       <h2 id="search-bar" className="sr-only">
         Search the library
       </h2>
-      <div className="flex items-center gap-2 border border-slate-800 bg-slate-900/50 px-3 py-2 focus-within:border-cyan-500">
-        <SearchIcon size={16} aria-hidden="true" className="shrink-0 text-slate-500" />
+
+      <div className="panel panel--flat flex items-center gap-2.5 rounded-[24px_20px_24px_20px/20px_24px_20px_24px] px-4 py-2.5 focus-within:border-cobalt">
+        <SearchIcon size={17} aria-hidden="true" className="shrink-0 text-ink3" />
         <input
           ref={inputRef}
           type="search"
@@ -64,10 +68,10 @@ export function SearchBar({
               onChange("");
             }
           }}
-          placeholder="Search — try author: rowling or genre: thriller"
+          placeholder="Search your library"
           aria-label="Search the library"
           aria-describedby="search-help"
-          className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink3"
         />
         {draft.length > 0 && (
           <button
@@ -78,28 +82,28 @@ export function SearchBar({
               inputRef.current?.focus();
             }}
             aria-label="Clear search"
-            className="shrink-0 text-slate-500 hover:text-slate-200"
+            className="grid size-8 shrink-0 place-items-center rounded-full border-2 border-ink/25 text-ink2 transition hover:border-ink hover:text-ink"
           >
             <X size={15} aria-hidden="true" />
           </button>
         )}
       </div>
 
-      <p id="search-help" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+      <p id="search-help" className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-ink3">
         {active ? (
-          <span role="status">
+          <span role="status" className="font-bold text-ink2">
             {resultCount} {resultCount === 1 ? "match" : "matches"} for{" "}
-            <span className="text-cyan-400">{describeSearch(value)}</span>
+            <span className="text-cobalt-ink">{describeSearch(value)}</span>
           </span>
         ) : (
           <>
-            <span>Fields:</span>
+            <span className="font-bold">Fields:</span>
             {EXAMPLES.map((example) => (
               <button
                 key={example}
                 type="button"
                 onClick={() => setDraft(example)}
-                className="font-mono text-slate-400 hover:text-cyan-400"
+                className="rounded-full border border-ink/20 px-2 py-0.5 font-mono text-[12px] text-ink2 transition hover:border-ink hover:text-ink"
               >
                 {example}
               </button>
