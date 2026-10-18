@@ -83,7 +83,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       "http://localhost:5173",
       "http://localhost:3000",
       // Capacitor's local WebView origin (Android).
+      //
+      // BOTH schemes are listed, and they are not interchangeable. Capacitor's
+      // default is `https`, but `capacitor.config.ts` sets `androidScheme:
+      // "http"` so that a plain-HTTP LAN address is same-scheme rather than
+      // mixed content (decisions/014). That moves the app's origin from
+      // `https://localhost` to `http://localhost`, and CORS compares the origin
+      // as a whole -- so dropping the https entry when the scheme changed breaks
+      // every API call on the device with a bare `TypeError: Failed to fetch`,
+      // while the cause is a CORS rejection that is invisible from inside a
+      // fetch() promise. Keeping both means either scheme works.
       "https://localhost",
+      "http://localhost",
       // Capacitor's iOS origin. Not a target platform, but the same app code
       // would hit it, and the cost of allowing it is nil.
       "capacitor://localhost",

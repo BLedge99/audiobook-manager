@@ -123,7 +123,7 @@ correctness problem.
 ---
 
 ### 1.6 The Android WebView would not reach a home server by LAN address
-**Status: FIXED in `capacitor.config.ts` — awaiting on-device confirmation.**
+**Status: FIXED and verified on a cable-free device — 2026-10-18.**
 
 A Pixel 4a with `com.google.android.webview` **154.0.8037.106** refused every
 `fetch` from the app to a LAN address. Measured, from inside the app's own
@@ -149,11 +149,23 @@ standard's "potentially trustworthy origin" rule, which is exactly why the
 original `adb reverse` setup worked and a real Wi-Fi client never did. **The app
 worked over USB for a reason unrelated to how anyone actually uses it.**
 
-**Fix:** `server.androidScheme = "http"` in `capacitor.config.ts`, so the app is
-served from `http://localhost` and a LAN address is same-scheme rather than
-mixed content. The full reasoning, the alternatives rejected (including
-`Access-Control-Allow-Private-Network`, which is a plausible-sounding
-explanation that is *not* the mechanism here) and the security trade are in
+**Fix — two changes, not one.** `server.androidScheme = "http"` in
+`capacitor.config.ts` so the app is served from `http://localhost` and a LAN
+address is same-scheme rather than mixed content. **And** `http://localhost`
+added to the server's CORS allow-list, because the scheme change moves the app's
+origin and CORS compares the origin whole.
+
+> **The second change is the one that mattered, and it is invisible when missed.**
+> With only the scheme change the app *still* failed, in 21ms, exactly as before.
+> The renderer reports a CORS rejection to `fetch()` as a bare
+> `TypeError: Failed to fetch` — no mention of CORS in the message, the console
+> warning, or the promise. The two settings are coupled and the coupling is
+> silent, so both origins are now allowed and both are asserted in
+> `server/src/app.test.ts`.
+
+The full reasoning, the alternatives rejected (including
+`Access-Control-Allow-Private-Network`, a plausible-sounding explanation that is
+*not* the mechanism) and the security trade are in
 [`decisions/014-webview-http-scheme.md`](decisions/014-webview-http-scheme.md).
 
 **Why it mattered most of anything in this file:** the product's deployment *is*
@@ -165,9 +177,12 @@ that worked, and it did not.
 stored server URL and profile and shows the server-URL screen once. That is
 expected — not a deleted profile.
 
-**Verified:** not yet on a cable-free device. Every device result in this file
-was obtained over `adb reverse`, which continues to work, so nothing recorded
-here is invalidated by the fix.
+**Verified** on a **Motorola Defy, Android 11, WebView 155**, over Wi-Fi with
+`adb reverse --list` confirmed **empty** so nothing masked the network path:
+`/api/health` → `200` in 44ms, `/api/audiobooks` → `200` in 27ms, and a
+screenshot showing 12 real titles with real covers. The Pixel 4a has not been
+re-tested against the fix; the Defy's WebView is newer, which is the harder
+case.
 
 ### 1.7 The library is fetched before a profile exists, so progress is stale on arrival
 **Status: LIMITED — cosmetic but misleading. Found 2026-10-18.**

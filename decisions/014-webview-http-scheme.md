@@ -51,11 +51,47 @@ This is why the user remembered it working before: it did, but only over USB.
 
 ## Decision
 
-Set `server.androidScheme: "http"` in `capacitor.config.ts`.
+Two changes, and the second one is the reason this ADR needed rewriting.
+
+**1. Set `server.androidScheme: "http"` in `capacitor.config.ts`.**
 
 The app is then served from `http://localhost`. The page is no longer a secure
 context, so `http://192.168.x.x` is same-scheme rather than mixed content, and
 the request is issued normally.
+
+**2. Add `http://localhost` to the server's CORS allow-list** (`server/src/app.ts`).
+
+The allow-list named `https://localhost` — correct for Capacitor's default
+scheme, and therefore correct until change 1 landed. CORS compares the origin
+*whole*, so moving to `http://localhost` silently removed the app from its own
+allow-list.
+
+This was not caught by reasoning, or by any unit test, or by the browser. It was
+caught by installing the APK on a second phone and running the probe again,
+where the LAN fetch **still** failed in 21ms.
+
+The failure mode is unusually nasty and worth recording: the browser rejects the
+request as CORS, but the renderer reports it to `fetch()` as a bare
+`TypeError: Failed to fetch` with no mention of CORS in the message, the console
+warning, or the promise. Nothing in the app points at the cause. The only way to
+see it is to `curl` an `OPTIONS` preflight with `Origin: http://localhost` and
+notice the absent `Access-Control-Allow-Origin` header — which is exactly what
+had to be done here. Both schemes are now allowed and both are asserted in
+`server/src/app.test.ts`, because the two settings are coupled and the coupling
+is invisible.
+
+## A correction worth being explicit about
+
+The first version of this ADR claimed the scheme change alone was the fix. That
+was wrong, and it was wrong in the most misleading possible direction: it
+explained the symptom convincingly, was consistent with every measurement taken,
+and would have shipped as "done" while the app remained completely unusable over
+Wi-Fi. The measurements were sound; the inference from them was not.
+
+The lesson recorded for whoever hits this next: the original evidence could not
+distinguish between the two causes. A 1ms failure with a healthy network below
+it is consistent with *both* a renderer policy decision and a CORS rejection,
+and the fix that explains the symptom is not necessarily the fix that works.
 
 ## Alternatives rejected
 
@@ -97,7 +133,18 @@ burden. Recorded as the destination if the app ever leaves a trusted LAN.
 
 ## Verification
 
-This is the part that must not be asserted from reasoning. It is verified by
-running the installed app on a phone on Wi-Fi **with no USB cable attached** and
-confirming that `fetch` to the LAN address returns `200`. Until that is done,
-this ADR records the diagnosis and the intended fix, not a proven one.
+Verified on a **Motorola Defy, Android 11, WebView 155**, with **no USB cable
+and no `adb reverse` tunnel** — the whole point being that a tunnel would mask
+the failure it is supposed to detect:
+
+| Check | Result |
+|---|---|
+| `adb reverse --list` | empty — nothing masking the network path |
+| Phone → host over Wi-Fi | ping 0% loss, ~3.8ms |
+| Origin in the WebView | `http://localhost` (was `https://localhost`) |
+| `GET http://192.168.1.203:3000/api/health` from the app | `200`, 44ms |
+| `GET /api/audiobooks` | `200`, 27ms |
+| Screenshot | 12 real titles, real covers, favourites visible |
+
+The Pixel 4a (WebView 154) has not been re-tested against this fix; the Defy is
+a strictly newer WebView and passed, which is the harder case.

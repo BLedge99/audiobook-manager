@@ -132,6 +132,31 @@ describe("auth gate", () => {
     expect(res.headers["access-control-allow-origin"]).toBe("https://localhost");
   });
 
+  it("allows the Capacitor WebView origin under BOTH schemes", async () => {
+    // `capacitor.config.ts` sets `androidScheme: "http"` so that a plain-HTTP LAN
+    // address is same-scheme instead of mixed content (decisions/014). That moves
+    // the app's origin from `https://localhost` to `http://localhost`.
+    //
+    // CORS compares the origin whole, so changing the scheme without adding the
+    // other entry breaks every API call on the device -- and it breaks *silently*:
+    // the browser rejects it as CORS, which surfaces in the app as a bare
+    // `TypeError: Failed to fetch` with no mention of CORS anywhere.
+    //
+    // This is a regression that actually happened, on a real phone, after the
+    // scheme fix looked complete. Hence both are asserted.
+    for (const origin of ["http://localhost", "https://localhost"]) {
+      const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+      const cookieHeader = login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/audiobooks",
+        headers: { cookie: cookieHeader, origin },
+      });
+      expect(res.statusCode, `origin ${origin}`).toBe(200);
+      expect(res.headers["access-control-allow-origin"], `origin ${origin}`).toBe(origin);
+    }
+  });
+
   it("sends Access-Control-Allow-Credentials, so the session cookie survives", async () => {
     // Auth is a cookie. A browser only accepts a cross-origin cookie when the
     // response carries Allow-Credentials alongside a specific origin, so
