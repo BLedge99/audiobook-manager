@@ -201,6 +201,29 @@ progress" rather than as a fetch that has not happened yet.
 **Fix:** refetch once after a profile is selected. Small and contained, but it is
 a behaviour change and was not made under this spec, which preserves behaviour.
 
+### 1.8 Discover suggests **print** books, not audiobooks
+**Status: BY DESIGN, and the reason is provider reality. Found 2026-10-18.**
+
+Discover now returns real recommendations, which it never did before (see the
+amendment in [`decisions/010-recommendation-engine.md`](decisions/010-recommendation-engine.md)).
+But it draws them from Open Library, which catalogues print editions. Every
+suggestion therefore has **no narrator and no runtime**, and may describe a book
+with no audiobook edition at all.
+
+The UI labels each card `BOOK — NOT AN AUDIOBOOK YET` rather than letting a cover
+imply something playable. This is a real constraint, not a rendering nicety:
+**there is no free, key-less service that returns audiobook-to-audiobook
+similarity.** Audnexus resolves audiobooks by ASIN only, with no search; LibriVox
+matches titles exactly, so it cannot answer "what else is like this".
+
+So the wishlist, not the suggestion, is the load-bearing part of this feature: it
+remembers a title worth hunting down, and "mark as owned" closes the loop when it
+turns up as an audiobook.
+
+**If this needs to change,** every option is paid or account-bearing (Hardcover's
+GraphQL recommendations, or Audible's own catalogue). That is a product decision,
+not a bug.
+
 ---
 
 ## 2. Limited

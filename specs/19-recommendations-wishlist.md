@@ -15,8 +15,17 @@ learned recommender, and the UI must not imply otherwise.
   - Automatic: favourites → seeded from the union of the profile's favourites.
 - **Seed extraction (pure).** From a book or a favourites set, extract genres,
   authors, narrators, series and custom tags with weights.
-- **Provider expansion.** Seeds drive queries through the spec 16 chain.
-  Audnexus's per-author `similar` array is used when available.
+- **Provider expansion.** Seeds browse Open Library by subject, most distinctive
+  genre first.
+  > **Corrected 2026-10-18.** This originally read "Seeds drive queries through
+  > the spec 16 chain. Audnexus's per-author `similar` array is used when
+  > available." That was wrong in a way nothing caught: Audnexus's `search()` is a
+  > no-op without an ASIN, so it contributed nothing ever, and LibriVox matches
+  > titles *exactly*, so genre seeds matched nothing. Discover returned zero
+  > results from the day it shipped. See ADR 010's amendment and
+  > `searchOpenLibraryBySubject`.
+  > Because Open Library indexes **print** editions, results carry no narrator or
+  > runtime, and the UI labels every card as a book rather than an audiobook.
 - **Local ranking (pure).** Weighted tag overlap, declared as tested constants.
 - **Hard dedupe.** Anything the library already owns is removed, case- and
   punctuation-insensitively, matching on normalised title+author.
