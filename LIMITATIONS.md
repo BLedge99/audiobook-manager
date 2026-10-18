@@ -185,7 +185,9 @@ re-tested against the fix; the Defy's WebView is newer, which is the harder
 case.
 
 ### 1.7 The library is fetched before a profile exists, so progress is stale on arrival
-**Status: LIMITED — cosmetic but misleading. Found 2026-10-18.**
+**Status: LIMITED — cosmetic but misleading. Found 2026-10-18. User-visible
+again on 2026-10-18 as the "refresh shows an empty library for about a minute"
+report.**
 
 `useLibrary` fetches `/api/audiobooks` once at mount, before the household
 password or a profile has been chosen, so the response carries no `progress`.
@@ -200,6 +202,14 @@ progress" rather than as a fetch that has not happened yet.
 
 **Fix:** refetch once after a profile is selected. Small and contained, but it is
 a behaviour change and was not made under this spec, which preserves behaviour.
+
+**User-reported 2026-10-18:** pressing refresh shows "nothing in library" for
+around a minute before it repopulates. Measured cause: the refetch clears the
+current library before the response arrives, so the grid shows its empty state
+for exactly as long as the request takes — a long time on a waking phone over
+Wi-Fi. The fix is to keep rendering stale rows and show a "Refrescing" indicator
+instead; only an *initial* fetch with no data may show "nothing". See
+[`user-testing-2026-10-18.md`](user-testing-2026-10-18.md) item 4.
 
 ### 1.8 Discover suggests **print** books, not audiobooks
 **Status: BY DESIGN, and the reason is provider reality. Found 2026-10-18.**
@@ -310,12 +320,25 @@ Open Library work records are consulted; a Google Books description is used
 directly when present.
 
 ### 2.7 Cover art comes from book catalogues, not the audiobook edition
-**Status: LIMITED.**
+**Status: LIMITED, and now user-visible (2026-10-18).**
 
 Covers resolve independently of the title winner (spec 23), which fixed the
 LibriVox case. But the sources are cover *editions* from Open Library or Google
 Books thumbnails — not the artwork of the specific audiobook you own. You may
 get a different edition's jacket.
+
+**User-reported symptom, 2026-10-18:** covers display, then randomly revert to
+the placeholder, and sometimes render as a solid colour with neither placeholder
+nor artwork. Measured cause: cover URLs are fetched live by `<img>` on every
+render with **no cache anywhere**, so a slow or failed LAN request drops the
+card back to the placeholder. The third case — a solid colour with no
+placeholder — is the design's missing tri-state: an `<img>` whose bytes are not
+a valid image and whose `onError` has not yet fired.
+
+A local cache would fix the first case outright (a cover, once seen, never
+disappears) and would make the second permanent rather than intermittent, which
+is why it is the top cover task in
+[`user-testing-2026-10-18.md`](user-testing-2026-10-18.md) item 1.
 
 ### 2.8 Auto-apply has a judgement call in it
 **Status: LIMITED — deliberate, and reviewable.**
@@ -458,6 +481,14 @@ re-run of the security E2E suite. **Not started.**
 Scope changed on 2026-10-13: the household must be able to listen away from
 home, so **the Android app is now the top priority** and displaces the GUI
 redesign (roadmap item 15).
+
+> **Read this before the list below.** On 2026-10-18 the app was tested by a
+> second household member on a second phone. Seven findings came back; all are
+> reproduced, none are blockers, and the tester's verdict was that the app is in a
+> great place. The findings, the measured cause for each, and the suggested
+> order for the next session are in
+> [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). They now
+> **supersede the ordering below**, which was written before real hands-on use.
 
 1. ~~**Spec 26 Phase 1 — de-risk spike.**~~ **Done 2026-10-13.** Background
    audio survives screen-off and seeking works, but only behind a foreground

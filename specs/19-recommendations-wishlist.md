@@ -26,6 +26,14 @@ learned recommender, and the UI must not imply otherwise.
   > `searchOpenLibraryBySubject`.
   > Because Open Library indexes **print** editions, results carry no narrator or
   > runtime, and the UI labels every card as a book rather than an audiobook.
+  >
+  > **Known issue (2026-10-18 user testing):** results come back all at once
+  > (`limit=12` × 3 subjects) with no pagination, and the subject pool is huge
+  > and unordered, so the first screen reads as random. The tester asked for a
+  > **top 5 + "Load more"** shape and for better similarity. The pool is also
+  > fetched live on every tab open, so the tab is flaky when the external API
+  > is. See [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md)
+  > item 3.
 - **Local ranking (pure).** Weighted tag overlap, declared as tested constants.
 - **Hard dedupe.** Anything the library already owns is removed, case- and
   punctuation-insensitively, matching on normalised title+author.
