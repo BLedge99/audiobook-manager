@@ -146,6 +146,13 @@ export interface DiscoverResult {
   message?: string;
   seedTitle?: string;
   seededFrom?: { genres: string[]; authors: string[]; series: string[]; bookCount: number };
+  /** 1-based page, echoed back so the client can tell where it is. */
+  page?: number;
+  pageSize?: number;
+  /** Whether the server has another page. Drives the "Show more" control. */
+  hasMore?: boolean;
+  /** Ranked results in total, not just on this page. */
+  total?: number;
 }
 
 export interface WishlistItem {

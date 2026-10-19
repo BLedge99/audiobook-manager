@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
   candidateCoverFilename,
+  clearSubjectPoolCache,
   searchOpenLibrary,
   searchOpenLibraryBySubject,
   searchGoogleBooks,
@@ -286,6 +287,11 @@ describe("searchOpenLibrary", () => {
 });
 
 describe("searchOpenLibraryBySubject", () => {
+  // The subject pool is cached for 30 minutes (spec 15b feature 3), so every
+  // test here starts from an empty cache. Without this the first test's empty
+  // result is handed to the next two and they pass or fail for the wrong reason
+  // -- which is exactly what happened when the cache was added.
+  beforeEach(() => clearSubjectPoolCache());
   it("queries by subject, not by title", async () => {
     let requested = "";
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
@@ -334,6 +340,69 @@ describe("searchOpenLibraryBySubject", () => {
   it("returns [] on a non-OK response", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 503 })));
     expect(await searchOpenLibraryBySubject("horror")).toEqual([]);
+  });
+
+  it("asks for a specific page, because 'load more' needs a cursor", async () => {
+    let requested = "";
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      requested = String(url);
+      return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+    }));
+    await searchOpenLibraryBySubject("horror", { limit: 50, page: 2 });
+    // `page` starts at 1. Without it there is no second page, so anything
+    // appended later would be a fresh random draw rather than a continuation.
+    expect(requested).toContain("page=2");
+    expect(requested).toContain("limit=50");
+  });
+
+  it("identifies itself, which earns 3x the rate limit", async () => {
+    let headers: Record<string, string> = {};
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: { headers?: Record<string, string> }) => {
+      headers = init?.headers ?? {};
+      return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+    }));
+    await searchOpenLibraryBySubject("horror");
+    // Open Library's anonymous budget is ~100 requests / 5 minutes / IP and
+    // going over returns 403, which is indistinguishable from "provider is down".
+    expect(headers["User-Agent"]).toMatch(/Bookle/);
+  });
+
+  it("gives a hung provider a deadline instead of waiting forever", async () => {
+    // The tester's complaint was literally "it serves no results for a while".
+    // A hung request is half of that: the tab sits on nothing with no way to
+    // stop waiting.
+    let init: { signal?: AbortSignal } | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, options?: { signal?: AbortSignal }) => {
+      init = options;
+      throw Object.assign(new Error("aborted"), { name: "TimeoutError" });
+    }));
+    await expect(searchOpenLibraryBySubject("horror")).resolves.toEqual([]);
+    expect(init?.signal).toBeDefined();
+  });
+
+  it("serves a repeated page from cache rather than re-fetching", async () => {
+    const spy = vi.fn(async () => new Response(JSON.stringify({
+      docs: [{ key: "/works/OL1W", title: "The Shining", subject: ["horror"] }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", spy);
+
+    await searchOpenLibraryBySubject("horror", { limit: 50, page: 1 });
+    await searchOpenLibraryBySubject("horror", { limit: 50, page: 1 });
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // A different page is a different question, so it is not served from cache.
+    await searchOpenLibraryBySubject("horror", { limit: 50, page: 2 });
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("never caches a failed page, so an outage does not blank Discover for 30 minutes", async () => {
+    const spy = vi.fn(async () => new Response("nope", { status: 503 }));
+    vi.stubGlobal("fetch", spy);
+    await searchOpenLibraryBySubject("horror", { limit: 50, page: 1 });
+    await searchOpenLibraryBySubject("horror", { limit: 50, page: 1 });
+    // A failure is not an answer. Caching it would turn a blip into a feature
+    // that stays broken until the TTL expires.
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 });
 

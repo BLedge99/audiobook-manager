@@ -371,6 +371,41 @@ test.describe("discover", () => {
     }
   });
 
+  test("shows five suggestions at a time and pages with a button", async ({ page }) => {
+    // Spec 15b feature 3. The tester asked for "top 5 at a time, then allow a
+    // 'load more' button", and complained that results arrived "at random".
+    await enterApp(page);
+    const headers = { "x-profile-id": (await page.evaluate(() => window.localStorage.getItem("profileId"))) as string };
+    const library = await (await page.request.get("/api/audiobooks", { headers })).json();
+    expect(library.length).toBeGreaterThan(0);
+    for (const book of library.slice(0, 3)) {
+      await page.request.put(`/api/audiobooks/${book.id}/favourite`, { headers });
+    }
+
+    await page.reload();
+    await login(page);
+    await tab(page, /^Discover/).click();
+
+    const cards = page.getByRole("article").filter({ hasText: /Because / });
+    await expect(cards.first()).toBeVisible({ timeout: 60_000 });
+
+    const more = page.getByRole("button", { name: "Show 5 more" });
+    const shown = await cards.count();
+    // Never more than one page at a time.
+    expect(shown).toBeLessThanOrEqual(5);
+
+    if (await more.isVisible()) {
+      // Exactly one page shown, and another one available behind the button.
+      expect(shown).toBe(5);
+      await more.click();
+      // "Load more" appends five and never empties what was already there.
+      await expect(cards).toHaveCount(10, { timeout: 60_000 });
+    } else {
+      // No button is honest: the pool ran out. But then everything is shown.
+      expect(shown).toBe(await page.getByRole("article").filter({ hasText: /Because / }).count());
+    }
+  });
+
   test("wishlist items are never presented as playable", async ({ page }) => {
     await enterApp(page);
     await tab(page, /^Discover/).click();

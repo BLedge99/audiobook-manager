@@ -19,6 +19,22 @@ import { shouldAutoApply } from "./types";
 /** Matches applied to at/above this are written without asking. Spec 16. */
 export const AUTO_APPLY_CONFIDENCE = Number(process.env.AUTO_APPLY_CONFIDENCE ?? DEFAULT_CONFIDENCE_THRESHOLD);
 
+/**
+ * Prisma's "record to update not found" (P2025).
+ *
+ * Checked structurally rather than by importing Prisma's error classes, because
+ * `PrismaClientKnownRequestError` is a runtime value from the generated client
+ * and this module deliberately only imports its *type*.
+ */
+function isRecordNotFound(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2025"
+  );
+}
+
 /** Items processed at once. Deliberately low: this is a home server. */
 const CONCURRENCY = Number(process.env.ENRICHMENT_CONCURRENCY ?? 2);
 
@@ -209,10 +225,25 @@ export class EnrichmentManager {
 
   private async processRun(runId: number, threshold?: number): Promise<void> {
     const limit = threshold ?? AUTO_APPLY_CONFIDENCE;
-    await this.prisma.enrichmentRun.update({
-      where: { id: runId },
-      data: { status: "running", startedAt: new Date(), finishedAt: null },
-    });
+    try {
+      await this.prisma.enrichmentRun.update({
+        where: { id: runId },
+        data: { status: "running", startedAt: new Date(), finishedAt: null },
+      });
+    } catch (error) {
+      // The run row is gone -- it was deleted while this worker was queued behind
+      // another. There is nothing left to process and nothing to report into, so
+      // the run quietly stops.
+      //
+      // Letting this escape produced an *unhandled rejection* rather than a
+      // failing test, which is worse: it exits the whole suite non-zero while
+      // every assertion passes, so it looks like the code under test is broken
+      // when nothing is. It surfaced as flaky suite failures from adding an
+      // unrelated test file, because scheduling is what decides whether the
+      // worker outlives the teardown that deletes its row.
+      if (isRecordNotFound(error)) return;
+      throw error;
+    }
 
     try {
       const pending = await this.prisma.enrichmentItem.findMany({

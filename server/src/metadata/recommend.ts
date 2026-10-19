@@ -19,6 +19,13 @@ import { normalizeText } from "./types";
  * agrees on. Author and series are strong but narrow (they mostly return the
  * same author). Narrator is a deliberate niche signal: plenty of listeners
  * follow a narrator, and it is the one axis book-level services model badly.
+ *
+ * The last three arrived with spec 15b feature 3, after the tester said Discover
+ * "needs work to find more similar matches" and that results came back "at
+ * random". They are deliberately **small**: they refine an order that tag
+ * similarity already established. A large weight here would let era and cover
+ * presence override the actual signal, which is how a subject browse would
+ * become a popularity listing -- the failure the spec exists to prevent.
  */
 export const RECOMMENDATION_WEIGHTS = {
   genre: 1.0,
@@ -26,6 +33,12 @@ export const RECOMMENDATION_WEIGHTS = {
   narrator: 0.55,
   series: 0.7,
   customTag: 0.45,
+  /** Published-decade proximity to the seed's median. */
+  era: 0.25,
+  /** Having cover art at all -- see the note on `cover`. */
+  cover: 0.12,
+  /** The next book in a series the seed already reads. */
+  seriesNext: 0.3,
 } as const;
 
 export interface Taggable {
@@ -33,8 +46,14 @@ export interface Taggable {
   author?: string | null;
   narrators?: string[];
   seriesName?: string | null;
+  /** Position within the series, when known. Fractional for interstitials. */
+  seriesPosition?: number | null;
   genres?: string[];
   customTags?: string[];
+  /** First publication year. The era signal is derived from this. */
+  publishedYear?: number | null;
+  /** Whether the record carries cover art. See `scoreCandidate`. */
+  hasCover?: boolean;
 }
 
 export interface SeedProfile {
@@ -45,12 +64,40 @@ export interface SeedProfile {
   customTags: Map<string, number>;
   /** How many books contributed. A single book is a thin basis. */
   sources: number;
+  /**
+   * Median publication decade of the seed books, and the next position in each
+   * series the seed already reads.
+   *
+   * Both are added by feature 3 and both are deliberately coarse: a decade is
+   * a 10-year bucket, and "the next one in the series" tolerates an exact
+   * position match as well as the adjacent one.
+   */
+  medianDecade: number | null;
+  seriesNextPositions: Map<string, number[]>;
 }
 
 function bump(map: Map<string, number>, value: string | null | undefined, weight = 1): void {
   const key = normalizeText(value);
   if (!key) return;
   map.set(key, (map.get(key) ?? 0) + weight);
+}
+
+function decadeOf(year: number | null | undefined): number | null {
+  if (typeof year !== "number" || !Number.isFinite(year) || year < 1400 || year > 2200) return null;
+  return Math.floor(year / 10) * 10;
+}
+
+/**
+ * The median, not the mean.
+ *
+ * A household that owns one 1895 Poe collection and five modern commercial
+ * audiobooks has a mean decade in the 1970s, which describes nobody. The median
+ * describes the thing they mostly read.
+ */
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
 }
 
 /**
@@ -67,7 +114,12 @@ export function buildSeed(items: Taggable[]): SeedProfile {
     series: new Map(),
     customTags: new Map(),
     sources: items.length,
+    medianDecade: null,
+    seriesNextPositions: new Map(),
   };
+
+  const decades: number[] = [];
+  const positions = new Map<string, number[]>();
 
   for (const item of items) {
     bump(seed.authors, item.author, RECOMMENDATION_WEIGHTS.author);
@@ -75,6 +127,21 @@ export function buildSeed(items: Taggable[]): SeedProfile {
     for (const genre of item.genres ?? []) bump(seed.genres, genre);
     for (const narrator of item.narrators ?? []) bump(seed.narrators, narrator, RECOMMENDATION_WEIGHTS.narrator);
     for (const tag of item.customTags ?? []) bump(seed.customTags, tag, RECOMMENDATION_WEIGHTS.customTag);
+
+    const decade = decadeOf(item.publishedYear);
+    if (decade !== null) decades.push(decade);
+
+    const seriesKey = normalizeText(item.seriesName);
+    if (seriesKey && typeof item.seriesPosition === "number" && Number.isFinite(item.seriesPosition)) {
+      const list = positions.get(seriesKey) ?? [];
+      list.push(item.seriesPosition);
+      positions.set(seriesKey, list);
+    }
+  }
+
+  seed.medianDecade = median(decades);
+  for (const [key, list] of positions) {
+    seed.seriesNextPositions.set(key, list.map((position) => position + 1));
   }
 
   return seed;
@@ -105,7 +172,62 @@ export function scoreCandidate(candidate: Taggable, seed: SeedProfile): number {
   const seriesScore = dimension(seed.series, [candidate.seriesName ?? ""], RECOMMENDATION_WEIGHTS.series);
   const tagScore = dimension(seed.customTags, candidate.customTags ?? [], RECOMMENDATION_WEIGHTS.customTag);
 
-  return genreScore + authorScore + narratorScore + seriesScore + tagScore;
+  return (
+    genreScore +
+    authorScore +
+    narratorScore +
+    seriesScore +
+    tagScore +
+    eraScore(candidate, seed) +
+    seriesNextScore(candidate, seed) +
+    coverScore(candidate)
+  );
+}
+
+/**
+ * How close the candidate's decade is to the seed's median decade.
+ *
+ * 1.0 in the same decade, decaying by one decade of distance, and 0 beyond
+ * three decades out. A household that reads modern commercial audiobooks gets
+ * modern suggestions rather than whatever `subject:fiction` happened to rank
+ * first.
+ */
+export function eraScore(candidate: Taggable, seed: SeedProfile): number {
+  if (seed.medianDecade === null) return 0;
+  const decade = decadeOf(candidate.publishedYear);
+  if (decade === null) return 0;
+  const distance = Math.abs(decade - seed.medianDecade) / 10;
+  if (distance > 3) return 0;
+  return (1 - distance / 3) * RECOMMENDATION_WEIGHTS.era;
+}
+
+/**
+ * Is this the next book in a series the seed already reads?
+ *
+ * Exact and adjacent positions both count: a household at book 2 of a series
+ * wants book 3, but a provider's `series_position` is frequently missing or off
+ * by one, so a 1.0 tolerance recovers most of those.
+ */
+export function seriesNextScore(candidate: Taggable, seed: SeedProfile): number {
+  if (typeof candidate.seriesPosition !== "number" || !Number.isFinite(candidate.seriesPosition)) return 0;
+  const next = seed.seriesNextPositions.get(normalizeText(candidate.seriesName));
+  if (!next?.length) return 0;
+  return next.some((position) => Math.abs(position - candidate.seriesPosition!) <= 1)
+    ? RECOMMENDATION_WEIGHTS.seriesNext
+    : 0;
+}
+
+/**
+ * A small bonus for having cover art.
+ *
+ * Not cosmetic: Open Library's own relevance boosts editions that are readable
+ * and have a cover, and `subject:` search returns an enormous pool of records
+ * with neither. Without this, the top of Discover is dominated by entries the
+ * UI can only render as a placeholder. It is the smallest weight on purpose --
+ * it must not outrank an actual tag match.
+ */
+export function coverScore(candidate: Taggable): number {
+  return candidate.hasCover ? RECOMMENDATION_WEIGHTS.cover : 0;
 }
 
 /**

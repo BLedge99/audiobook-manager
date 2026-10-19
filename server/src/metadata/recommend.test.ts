@@ -236,3 +236,93 @@ describe("buildOwnedIdentities", () => {
     expect(owned.has(ownedIdentity("Dune", "Frank Herbert"))).toBe(true);
   });
 });
+/**
+ * Spec 15b feature 3 -- the three ranking signals added after the tester said
+ * Discover "needs work to find more similar matches".
+ *
+ * Each is a *refinement* of an order tag similarity already established, which
+ * is why the weights are small. A test that only checked "the new signal moves
+ * things up" would pass even if it moved them above an actual tag match, so
+ * there is a test for that too.
+ */
+describe("refinement signals (spec 15b feature 3)", () => {
+  const modernHorror: Taggable = {
+    title: "Modern Horror",
+    genres: ["horror"],
+    publishedYear: 2015,
+    hasCover: true,
+  };
+
+  it("prefers a candidate from the seed's era over one from a different one", () => {
+    const seed = buildSeed([{ title: "Seed", genres: ["horror"], publishedYear: 2015 }]);
+    const near = { title: "Near", genres: ["horror"], publishedYear: 2018 };
+    const far = { title: "Far", genres: ["horror"], publishedYear: 1961 };
+    // Same genre overlap, so only era separates them.
+    expect(scoreCandidate(near, seed)).toBeGreaterThan(scoreCandidate(far, seed));
+  });
+
+  it("uses the median decade, not the mean", () => {
+    // One 1895 collection and five modern books. A mean lands in the 1970s and
+    // describes nobody; the median describes what this household actually reads.
+    const seed = buildSeed([
+      { title: "Antique", genres: ["horror"], publishedYear: 1895 },
+      ...Array.from({ length: 5 }, (_, i) => ({ title: `Modern ${i}`, genres: ["horror"], publishedYear: 2015 })),
+    ]);
+    const modern = { title: "Modern Pick", genres: ["horror"], publishedYear: 2015 };
+    const antique = { title: "Antique Pick", genres: ["horror"], publishedYear: 1890 };
+    expect(scoreCandidate(modern, seed)).toBeGreaterThan(scoreCandidate(antique, seed));
+  });
+
+  it("gives no era signal when the seed has no years at all", () => {
+    // Rather than inventing a decade from nothing.
+    const seed = buildSeed([{ title: "Undated", genres: ["horror"] }]);
+    expect(scoreCandidate({ title: "Anything", genres: ["horror"], publishedYear: 2015 }, seed)).toBe(
+      scoreCandidate({ title: "Anything Else", genres: ["horror"] }, seed),
+    );
+  });
+
+  it("ignores absurd years rather than scoring them", () => {
+    const seed = buildSeed([modernHorror]);
+    const nonsense = { title: "Nonsense", genres: ["horror"], publishedYear: 0 };
+    const noYear = { title: "No Year", genres: ["horror"] };
+    expect(scoreCandidate(nonsense, seed)).toBe(scoreCandidate(noYear, seed));
+  });
+
+  it("prefers the next book in a series the seed already reads", () => {
+    const seed = buildSeed([
+      { title: "Expanse 1", genres: ["science-fiction"], seriesName: "The Expanse", seriesPosition: 1 },
+    ]);
+    const next = { title: "Expanse 2", genres: ["science-fiction"], seriesName: "The Expanse", seriesPosition: 2 };
+    const unrelated = { title: "Expanse 9", genres: ["science-fiction"], seriesName: "The Expanse", seriesPosition: 9 };
+    expect(scoreCandidate(next, seed)).toBeGreaterThan(scoreCandidate(unrelated, seed));
+  });
+
+  it("tolerates an off-by-one series position, because providers get it wrong", () => {
+    const seed = buildSeed([
+      { title: "Book 1", genres: ["fiction"], seriesName: "Trilogy", seriesPosition: 1 },
+    ]);
+    // Providers frequently omit or mis-shift `series_position`.
+    const shifted = { title: "Book 3", genres: ["fiction"], seriesName: "Trilogy", seriesPosition: 3 };
+    expect(scoreCandidate(shifted, seed)).toBeGreaterThan(0);
+  });
+
+  it("prefers a candidate that has cover art", () => {
+    // Not cosmetic: `subject:` search returns a pool with many coverless records,
+    // and the UI can only render those as a placeholder.
+    const seed = buildSeed([{ title: "Seed", genres: ["horror"] }]);
+    const withCover = { title: "A", genres: ["horror"], hasCover: true };
+    const without = { title: "B", genres: ["horror"], hasCover: false };
+    expect(scoreCandidate(withCover, seed)).toBeGreaterThan(scoreCandidate(without, seed));
+  });
+
+  it("keeps every refinement below an actual tag match", () => {
+    // The failure mode this feature could have caused: era and cover presence
+    // outranking similarity, turning a subject browse into a popularity listing.
+    const seed = buildSeed([{ title: "Seed", genres: ["horror"], publishedYear: 2015 }]);
+    const sameEraWithCover = { title: "Popular", genres: ["romance"], publishedYear: 2015, hasCover: true };
+    const differentEraButSameGenre = { title: "Related", genres: ["horror"], publishedYear: 1970 };
+    expect(scoreCandidate(differentEraButSameGenre, seed)).toBeGreaterThan(
+      scoreCandidate(sameEraWithCover, seed),
+    );
+  });
+});

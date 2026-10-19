@@ -112,13 +112,32 @@ export function useDiscover() {
   const [result, setResult] = useState<DiscoverResult>();
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(false);
+  /**
+   * A second page is being appended.
+   *
+   * Separate from `loading`, which blanks the list while the first page is
+   * fetched. "Load more" must never empty what is already on screen.
+   */
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string>();
 
+  /**
+   * What the current result was seeded from, so paging can ask for the *next*
+   * page of the same question.
+   *
+   * Tracked as state rather than inferred from the result: `seedTitle` is the
+   * book's name, not its id, and rebuilding a URL from it would be a guess.
+   */
+  const [source, setSource] = useState<{ kind: "favourites" } | { kind: "book"; bookId: number }>({
+    kind: "favourites",
+  });
+
   const loadForMe = useCallback(async () => {
+    setSource({ kind: "favourites" });
     setLoading(true);
     setError(undefined);
     try {
-      setResult(await request<DiscoverResult>("/api/discover/for-me"));
+      setResult(await request<DiscoverResult>("/api/discover/for-me?page=1"));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to load Discover");
     } finally {
@@ -127,16 +146,50 @@ export function useDiscover() {
   }, []);
 
   const loadSimilar = useCallback(async (bookId: number) => {
+    setSource({ kind: "book", bookId });
     setLoading(true);
     setError(undefined);
     try {
-      setResult(await request<DiscoverResult>(`/api/discover/similar/${bookId}`));
+      setResult(await request<DiscoverResult>(`/api/discover/similar/${bookId}?page=1`));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to find similar books");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  /**
+   * Append the next page.
+   *
+   * The server ranks one list and slices it, so page 2 continues page 1 rather
+   * than being a fresh draw -- which is what "results at random" meant. The
+   * client appends rather than replaces for the same reason.
+   *
+   * Guarded on `hasMore` and on not already being in flight, so a double tap
+   * cannot ask for the same page twice and duplicate every card.
+   */
+  const loadMore = useCallback(async () => {
+    if (!result?.hasMore || loadingMore || loading) return;
+    const nextPage = (result.page ?? 1) + 1;
+    const path =
+      source.kind === "book"
+        ? `/api/discover/similar/${source.bookId}?page=${nextPage}`
+        : `/api/discover/for-me?page=${nextPage}`;
+    setLoadingMore(true);
+    setError(undefined);
+    try {
+      const next = await request<DiscoverResult>(path);
+      setResult((current) =>
+        current
+          ? { ...next, recommendations: [...current.recommendations, ...next.recommendations] }
+          : next,
+      );
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to load more suggestions");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [result, loadingMore, loading, source]);
 
   const loadWishlist = useCallback(async () => {
     try {
@@ -180,7 +233,7 @@ export function useDiscover() {
     setWishlist((current) => current.map((item) => (item.id === id ? updated : item)));
   }, []);
 
-  return { result, wishlist, loading, error, loadForMe, loadSimilar, loadWishlist, save, remove, markOwned };
+  return { result, wishlist, loading, loadingMore, error, loadForMe, loadSimilar, loadMore, loadWishlist, save, remove, markOwned };
 }
 
 /** The full editable tag suite for one book (spec 17). */

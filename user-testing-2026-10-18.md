@@ -122,6 +122,15 @@ should not be started casually.
 > random, for example maybe display top 5 at a time, then allow a 'load more'
 > button"
 
+**Status: FIXED 2026-10-19** (spec 15b feature 3). Five at a time with a "Show 5
+more" button; the server pulls two provider pages per subject, **ranks the merged
+pool once and then slices it**, so page 2 continues page 1 instead of being a
+fresh draw. Ranking gained published-decade proximity, next-in-series and
+cover-present signals, all small enough that a real tag match still outranks
+them. Provider calls now identify themselves (3x the Open Library rate limit),
+carry an 8s deadline, and are cached for 30 minutes — and a failed page is never
+cached, so an outage cannot blank Discover for half an hour.
+
 **Current state:** After the 2026-10-18 fix (ADR 010 amendment,
 `searchOpenLibraryBySubject`) it does return results. But it has all three
 problems the tester described, and they are worth naming precisely:

@@ -17,7 +17,10 @@ import { trackTitleOverrideField } from "./metadata/chapters";
 import { buildQuery, EnrichmentManager } from "./metadata/run";
 import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy-service";
 import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
-import { RecommendationService } from "./metadata/recommend-service";
+import { RecommendationService, DEFAULT_PAGE_SIZE } from "./metadata/recommend-service";
+
+/** The largest page a client may ask for, matching the route schemas. */
+const MAX_PAGE_SIZE = 20;
 
 export interface BuildAppOptions {
   prisma?: PrismaClient;
@@ -1245,12 +1248,30 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Spec 19 — Discover & wishlist
   // ---------------------------------------------------------------------
 
-  app.get<{ Params: { id: string } }>("/api/discover/similar/:id", {
+  /**
+   * Paging parameters for both discover routes.
+   *
+   * Fastify has already coerced and range-checked these against the schemas, so
+   * anything that is still not a finite integer is clamped rather than trusted.
+   * `pageSize` is capped at the service's own maximum so a hand-typed
+   * `?pageSize=20` cannot ask for a different product shape than the UI renders.
+   */
+  function readPaging(query: { page?: number; pageSize?: number }): { page: number; pageSize: number } {
+    const page = Number.isInteger(query.page) && query.page! >= 1 ? query.page! : 1;
+    const requested = Number.isInteger(query.pageSize) && query.pageSize! >= 1 ? query.pageSize! : DEFAULT_PAGE_SIZE;
+    return { page, pageSize: Math.min(requested, MAX_PAGE_SIZE) };
+  }
+
+  app.get<{ Params: { id: string }; Querystring: { page?: number; pageSize?: number } }>("/api/discover/similar/:id", {
     schema: {
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
       querystring: {
         type: "object",
-        properties: { limit: { type: "integer", minimum: 1, maximum: 50 } },
+        properties: {
+          limit: { type: "integer", minimum: 1, maximum: 50 },
+          page: { type: "integer", minimum: 1, maximum: 100 },
+          pageSize: { type: "integer", minimum: 1, maximum: 20 },
+        },
       },
     },
   }, async (request, reply) => {
@@ -1259,16 +1280,29 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const exists = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
     if (!exists) return reply.code(404).send({ message: "Audiobook not found" });
 
-    const limit = (request.query as { limit?: number }).limit ?? 20;
-    const result = await recommendations.similarTo(id, limit);
+    const { page, pageSize } = readPaging(request.query);
+    const result = await recommendations.similarTo(id, { page, pageSize });
     return publicRecommendations(result);
   });
 
-  app.get("/api/discover/for-me", async (request, reply) => {
+  app.get<{ Querystring: { page?: number; pageSize?: number } }>("/api/discover/for-me", {
+    // Spec 11: every route validates its input. This one previously validated
+    // nothing and read `request.query` by hand, which is how a limit of
+    // "twenty" or "-1" would have reached the service as NaN.
+    schema: {
+      querystring: {
+        type: "object",
+        properties: {
+          page: { type: "integer", minimum: 1, maximum: 100 },
+          pageSize: { type: "integer", minimum: 1, maximum: 20 },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
-    const limit = Number((request.query as { limit?: string }).limit ?? 20);
-    const result = await recommendations.forProfile(profileId, Number.isFinite(limit) ? limit : 20);
+    const { page, pageSize } = readPaging(request.query);
+    const result = await recommendations.forProfile(profileId, { page, pageSize });
     return publicRecommendations(result);
   });
 

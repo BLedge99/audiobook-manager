@@ -27,14 +27,23 @@ learned recommender, and the UI must not imply otherwise.
   > Because Open Library indexes **print** editions, results carry no narrator or
   > runtime, and the UI labels every card as a book rather than an audiobook.
   >
-  > **Known issue (2026-10-18 user testing):** results come back all at once
-  > (`limit=12` × 3 subjects) with no pagination, and the subject pool is huge
-  > and unordered, so the first screen reads as random. The tester asked for a
-  > **top 5 + "Load more"** shape and for better similarity. The pool is also
-  > fetched live on every tab open, so the tab is flaky when the external API
-  > is. See [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md)
-  > item 3.
-- **Local ranking (pure).** Weighted tag overlap, declared as tested constants.
+  > **Resolved 2026-10-19** by spec 15b feature 3. Results are paged five at a
+  > time with a "Show 5 more" button, and the pool is *ranked once and then
+  > sliced* -- page 2 continues page 1 instead of being a fresh random draw.
+  > Ranking gained published-decade proximity, next-in-series and cover-present
+  > signals, all small enough that a real tag match still outranks them.
+  > Provider calls now identify themselves (Open Library grants identified
+  > requests 3x the rate limit), carry an 8s deadline so a hung provider cannot
+  > leave the tab waiting, and are cached for 30 minutes. A failed page is never
+  > cached, so an outage cannot blank the tab for half an hour.
+  >
+  > The honesty rule below is unchanged: these are still print records, every
+  > card is still labelled as a book rather than an audiobook, and the wishlist
+  > remains the load-bearing part of the feature.
+- **Local ranking (pure).** Weighted tag overlap, declared as tested constants,
+  refined by published-decade proximity, next-in-series and cover presence
+  (spec 15b feature 3). Ranking is **page-independent**: the whole pool is
+  ranked once and each page is a slice of it.
 - **Hard dedupe.** Anything the library already owns is removed, case- and
   punctuation-insensitively, matching on normalised title+author.
 - **External results are never playable.** Media is a read-only mount. Results

@@ -48,7 +48,41 @@ export interface DiscoverResult {
     series: string[];
     bookCount: number;
   };
+  /** 1-based page of results, for the "Show more" control. */
+  page: number;
+  pageSize: number;
+  /** Whether another page exists. Drives the button's presence. */
+  hasMore: boolean;
+  /** How many ranked results exist in total, not just on this page. */
+  total: number;
+  seedTitle?: string;
 }
+
+/** Suggestions shown at once, per the spec 15b acceptance criteria. */
+export const DEFAULT_PAGE_SIZE = 5;
+
+/**
+ * How much of Open Library a seed pulls in before ranking.
+ *
+ * Two pages of 50 per subject, for up to three subjects. The number matters
+ * because of *how* the result is used: the pool is ranked once and then sliced
+ * into pages, so a deeper pool means the second page is a continuation of the
+ * same ranking rather than a fresh random draw. Six requests is the ceiling on a
+ * cold seed, issued in parallel, cached for 30 minutes, and the server
+ * identifies itself so Open Library grants 3x the rate limit.
+ */
+const POOL_PAGES = 2;
+const POOL_PAGE_SIZE = 50;
+
+/**
+ * How many ranked results exist before paging begins.
+ *
+ * The pool is ranked *in full* and then sliced, so this is the ceiling on how
+ * many pages the button can ever offer. Ranking five at a time and re-ranking for
+ * the next five would produce a second page that disagrees with the first --
+ * which is the "results at random" complaint restated.
+ */
+const RANK_LIMIT = 100;
 
 function toTaggable(candidate: ProviderCandidate): Taggable {
   return {
@@ -56,7 +90,12 @@ function toTaggable(candidate: ProviderCandidate): Taggable {
     author: candidate.author,
     narrators: candidate.narrators ?? [],
     seriesName: candidate.seriesName,
+    seriesPosition: candidate.seriesPosition,
     genres: candidate.genres ?? [],
+    publishedYear: candidate.publishedYear,
+    // A record with no cover can only ever render as a placeholder, so the
+    // ranker treats it as a weaker candidate rather than a full one.
+    hasCover: Boolean(candidate.coverUrl),
   };
 }
 
@@ -109,6 +148,12 @@ export class RecommendationService {
    * this question. Audnexus's `search()` is a no-op without an ASIN, and LibriVox
    * matches titles exactly, so feeding it genre words returns nothing. See
    * `searchOpenLibraryBySubject` for the full reasoning.
+   *
+   * **Several pages are pulled and merged, because the caller ranks the merged
+   * pool once and only then slices it into pages.** That is the whole point of
+   * feature 3: returning one page of results per request would make "load more"
+   * a fresh random draw, which is precisely the behaviour the tester reported as
+   * "results at random".
    */
   private async expand(seed: ReturnType<typeof buildSeed>): Promise<ProviderCandidate[]> {
     // Subjects to browse, most distinctive first. Distinctive matters: a vague
@@ -119,14 +164,28 @@ export class RecommendationService {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([slug]) => slug);
+    if (!subjects.length) return [];
 
-    const results = await Promise.allSettled(subjects.map((subject) => searchOpenLibraryBySubject(subject)));
-
-    const pool: ProviderCandidate[] = [];
-    for (const result of results) {
-      if (result.status === "fulfilled") pool.push(...result.value);
+    const requests: Promise<ProviderCandidate[]>[] = [];
+    for (const subject of subjects) {
+      for (let page = 1; page <= POOL_PAGES; page += 1) {
+        requests.push(searchOpenLibraryBySubject(subject, { limit: POOL_PAGE_SIZE, page }));
+      }
     }
-    return pool;
+
+    const results = await Promise.allSettled(requests);
+
+    // Dedupe by provider key as they merge. The same book is returned by several
+    // subjects, and without this the pool is mostly repeats of its own head.
+    const byKey = new Map<string, ProviderCandidate>();
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      for (const candidate of result.value) {
+        const key = candidate.providerKey || `${candidate.title}::${candidate.author ?? ""}`;
+        if (!byKey.has(key)) byKey.set(key, candidate);
+      }
+    }
+    return [...byKey.values()];
   }
 
   private shape(
@@ -162,7 +221,10 @@ export class RecommendationService {
   }
 
   /** "Find more like this" for one owned book. */
-  async similarTo(mediaItemId: number, limit = 20): Promise<DiscoverResult & { seedTitle?: string }> {
+  async similarTo(mediaItemId: number, options: { page?: number; pageSize?: number } = {}): Promise<DiscoverResult> {
+    const page = Math.max(1, options.page ?? 1);
+    const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+
     const item = await this.prisma.mediaItem.findUnique({
       where: { id: mediaItemId },
       include: {
@@ -172,7 +234,7 @@ export class RecommendationService {
         series: true,
       },
     });
-    if (!item) return { status: "no-results", recommendations: [] };
+    if (!item) return { status: "no-results", recommendations: [], page, pageSize, hasMore: false, total: 0 };
 
     const taggable: Taggable = {
       title: item.title,
@@ -181,8 +243,11 @@ export class RecommendationService {
         .filter((link) => link.contributor.role === "narrator")
         .map((link) => link.contributor.name),
       seriesName: item.series?.name,
+      seriesPosition: item.seriesPosition,
       genres: item.genres.map((row) => row.genre.slug),
       customTags: item.customTags.map((row) => row.tag.name),
+      publishedYear: item.publishedYear,
+      hasCover: Boolean(item.coverImagePath),
     };
 
     const seed = buildSeed([taggable]);
@@ -195,12 +260,16 @@ export class RecommendationService {
         message: "This book needs a bit more metadata before we can suggest similar titles.",
         seededFrom,
         seedTitle: item.title,
+        page,
+        pageSize,
+        hasMore: false,
+        total: 0,
       };
     }
 
-    const pool = await this.expand(seed);
     const owned = await this.ownedIdentities();
-    const recommendations = this.shape(pool, seed, owned, limit);
+    const all = this.shape(await this.expand(seed), seed, owned, RANK_LIMIT);
+    const recommendations = all.slice((page - 1) * pageSize, page * pageSize);
 
     return {
       status: recommendations.length > 0 ? "ok" : "no-results",
@@ -208,11 +277,18 @@ export class RecommendationService {
       message: recommendations.length === 0 ? "No similar titles found." : undefined,
       seededFrom,
       seedTitle: item.title,
+      page,
+      pageSize,
+      hasMore: all.length > page * pageSize,
+      total: all.length,
     };
   }
 
   /** Seeded by the union of a profile's favourites. */
-  async forProfile(profileId: number, limit = 20): Promise<DiscoverResult> {
+  async forProfile(profileId: number, options: { page?: number; pageSize?: number } = {}): Promise<DiscoverResult> {
+    const page = Math.max(1, options.page ?? 1);
+    const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+
     const favourites = await this.prisma.favourite.findMany({
       where: { profileId },
       include: {
@@ -232,6 +308,10 @@ export class RecommendationService {
         status: "insufficient-metadata",
         recommendations: [],
         message: "Favourite a few books and Discover will use them to find more like these.",
+        page,
+        pageSize,
+        hasMore: false,
+        total: 0,
       };
     }
 
@@ -242,8 +322,11 @@ export class RecommendationService {
         .filter((link) => link.contributor.role === "narrator")
         .map((link) => link.contributor.name),
       seriesName: row.mediaItem.series?.name,
+      seriesPosition: row.mediaItem.seriesPosition,
       genres: row.mediaItem.genres.map((r) => r.genre.slug),
       customTags: row.mediaItem.customTags.map((r) => r.tag.name),
+      publishedYear: row.mediaItem.publishedYear,
+      hasCover: Boolean(row.mediaItem.coverImagePath),
     }));
 
     const seed = buildSeed(taggables);
@@ -255,18 +338,26 @@ export class RecommendationService {
         recommendations: [],
         message: "Your favourites need a bit more metadata before we can suggest anything.",
         seededFrom,
+        page,
+        pageSize,
+        hasMore: false,
+        total: 0,
       };
     }
 
-    const pool = await this.expand(seed);
     const owned = await this.ownedIdentities();
-    const recommendations = this.shape(pool, seed, owned, limit);
+    const all = this.shape(await this.expand(seed), seed, owned, RANK_LIMIT);
+    const recommendations = all.slice((page - 1) * pageSize, page * pageSize);
 
     return {
       status: recommendations.length > 0 ? "ok" : "no-results",
       recommendations,
       message: recommendations.length === 0 ? "No new titles found yet." : undefined,
       seededFrom,
+      page,
+      pageSize,
+      hasMore: all.length > page * pageSize,
+      total: all.length,
     };
   }
 

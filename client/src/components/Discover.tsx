@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Compass, Plus, RefreshCw, Trash2, Check } from "lucide-react";
+import { Compass, Plus, RefreshCw, Trash2, Check, LoaderCircle } from "lucide-react";
 import type { DiscoverResult, Recommendation, WishlistItem } from "../types";
 import type { useDiscover } from "../useBrowse";
 import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
@@ -128,12 +128,23 @@ function statusMessage(result: DiscoverResult): { tone: "info" | "warn"; text: s
 export function Discover({ discover, hasFavourites }: { discover: ReturnType<typeof useDiscover>; hasFavourites: boolean }) {
   const [saved, setSaved] = useState<Set<string>>(new Set());
 
+  // Destructured so the dependency list names *functions*, which are stable
+  // `useCallback`s, rather than `discover` itself, which is a fresh object on
+  // every render.
+  //
+  // Depending on the object made this effect re-run after every state change --
+  // including the `loadingMore` flag that "Show 5 more" sets. The click therefore
+  // fetched page 2 and then immediately re-fetched page 1 over the top of it, and
+  // the button appeared to do nothing. Nothing errored; the list simply never
+  // grew past five.
+  const { loadWishlist, loadForMe } = discover;
+
   useEffect(() => {
-    void discover.loadWishlist();
+    void loadWishlist();
     // Discover is computed on demand (spec 19), so opening the tab is the
     // trigger -- not a background job.
-    if (hasFavourites) void discover.loadForMe();
-  }, [discover, hasFavourites]);
+    if (hasFavourites) void loadForMe();
+  }, [loadWishlist, loadForMe, hasFavourites]);
 
   const { result, wishlist, loading, error } = discover;
   const notice = result ? statusMessage(result) : null;
@@ -181,27 +192,57 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
         )}
 
         {result?.recommendations.length ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {result.recommendations.map((recommendation, index) => {
-              const key = `${recommendation.provider}:${recommendation.providerKey ?? recommendation.title}`;
-              return (
-                <RecommendationCard
-                  key={key}
-                  index={index}
-                  recommendation={recommendation}
-                  saved={saved.has(key)}
-                  onSave={() => {
-                    setSaved((current) => new Set(current).add(key));
-                    void discover.save(recommendation).catch(() => setSaved((current) => {
-                      const next = new Set(current);
-                      next.delete(key);
-                      return next;
-                    }));
-                  }}
-                />
-              );
-            })}
-          </div>
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {result.recommendations.map((recommendation, index) => {
+                const key = `${recommendation.provider}:${recommendation.providerKey ?? recommendation.title}`;
+                return (
+                  <RecommendationCard
+                    key={key}
+                    index={index}
+                    recommendation={recommendation}
+                    saved={saved.has(key)}
+                    onSave={() => {
+                      setSaved((current) => new Set(current).add(key));
+                      void discover.save(recommendation).catch(() => setSaved((current) => {
+                        const next = new Set(current);
+                        next.delete(key);
+                        return next;
+                      }));
+                    }}
+                  />
+                );
+              })}
+            </div>
+
+            {/*
+              "Show 5 more" -- the shape the tester asked for by name.
+
+              The page is a slice of one ranking computed on the server, so what
+              arrives next continues the list rather than replacing it. That is
+              the whole difference between paging and "more results, who knows
+              which", and it is why the button appends and the server caches.
+            */}
+            {result.hasMore && (
+              <div className="mt-6 flex flex-col items-center gap-2">
+                <Btn variant="quiet" onClick={() => void discover.loadMore()} disabled={discover.loadingMore}>
+                  {discover.loadingMore ? (
+                    <>
+                      <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                      Finding more&hellip;
+                    </>
+                  ) : (
+                    "Show 5 more"
+                  )}
+                </Btn>
+                {typeof result.total === "number" && (
+                  <p className="text-[12px] text-ink3 tnum">
+                    Showing {result.recommendations.length} of {result.total}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         ) : null}
       </section>
 

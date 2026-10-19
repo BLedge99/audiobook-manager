@@ -265,30 +265,95 @@ export async function searchOpenLibrary(title: string, _author?: string): Promis
  * not own, not an audiobook they can buy. The UI labels them accordingly rather
  * than implying they are playable.
  */
-export async function searchOpenLibraryBySubject(subject: string, limit = 12): Promise<EnrichmentCandidate[]> {
-  const query = encodeURIComponent(`subject:${subject}`);
+/**
+ * One GET against Open Library.
+ *
+ * Three things every call to this host needs, gathered here so a new endpoint
+ * cannot forget one:
+ *
+ *  - **An identifying `User-Agent`.** Open Library asks applications to identify
+ *    themselves, and grants identified requests **3x** the anonymous rate
+ *    limit. The anonymous budget is roughly 100 requests per 5 minutes per IP,
+ *    and exceeding it returns 403 — which is indistinguishable, from the app's
+ *    point of view, from "this provider is down".
+ *  - **A timeout.** Discover's complaint was literally "it serves no results for
+ *    a while, then suddenly spams results". A hung request is half of that: the
+ *    tab sits on nothing with no explanation and no way to stop waiting.
+ *  - **Honest failure.** Returns undefined rather than throwing, because spec
+ *    16's rule is that one provider being down degrades results instead of
+ *    failing the request.
+ */
+async function openLibraryGet(url: string, timeoutMs = 8000): Promise<Response | undefined> {
   try {
-    const res = await fetch(
-      `https://openlibrary.org/search.json?q=${query}&limit=${limit}&fields=${encodeURIComponent(OPEN_LIBRARY_FIELDS)}`,
-    );
-    if (!res.ok) return [];
-    const data = (await res.json()) as { docs?: Record<string, unknown>[] };
-    return (data.docs ?? [])
-      .map((doc) => ({
-        source: "openlibrary" as const,
-        ...mapOpenLibraryDoc(doc),
-        description: undefined,
-        // Subject search is a topical match, not a title match, so confidence
-        // is a flat middling value rather than a similarity score. Scoring here
-        // would invent precision that was never measured.
-        confidence: 0.5,
-        raw: doc,
-      }))
-      .filter((candidate) => candidate.title && !isNonBookTitle(candidate.title));
+    return await fetch(url, {
+      headers: { "User-Agent": "Bookle/1.0 (local-first audiobook server; https://github.com/local/bookle)" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
   } catch {
-    // A provider being unreachable must never fail the request (spec 16 AC).
-    return [];
+    return undefined;
   }
+}
+
+/** How long a subject pool stays usable before it is re-fetched. */
+const SUBJECT_CACHE_TTL_MS = 30 * 60 * 1000;
+
+/** Bound on cached pools, so a long-lived server cannot grow without limit. */
+const SUBJECT_CACHE_MAX = 120;
+
+const subjectPoolCache = new Map<string, { at: number; candidates: EnrichmentCandidate[] }>();
+
+/**
+ * Fetch one page of an Open Library subject search.
+ *
+ * Paging uses the documented `page` + `limit` pair (page starts at 1). The
+ * previous shape returned a flat `limit=12` per subject, which made "load more"
+ * impossible: there was no cursor and no second page, so anything appended later
+ * would have been a fresh random draw rather than a continuation.
+ */
+export async function searchOpenLibraryBySubject(
+  subject: string,
+  options: { limit?: number; page?: number } = {},
+): Promise<EnrichmentCandidate[]> {
+  const limit = options.limit ?? 12;
+  const page = Math.max(1, options.page ?? 1);
+  const cacheKey = `${subject}:${limit}:${page}`;
+
+  const cached = subjectPoolCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < SUBJECT_CACHE_TTL_MS) return cached.candidates;
+
+  const query = encodeURIComponent(`subject:${subject}`);
+  const res = await openLibraryGet(
+    `https://openlibrary.org/search.json?q=${query}&page=${page}&limit=${limit}&fields=${encodeURIComponent(OPEN_LIBRARY_FIELDS)}`,
+  );
+  if (!res?.ok) return cached?.candidates ?? [];
+
+  const data = (await res.json()) as { docs?: Record<string, unknown>[] };
+  const candidates = (data.docs ?? [])
+    .map((doc) => ({
+      source: "openlibrary" as const,
+      ...mapOpenLibraryDoc(doc),
+      description: undefined,
+      // Subject search is a topical match, not a title match, so confidence is a
+      // flat middling value rather than a similarity score. Scoring here would
+      // invent precision that was never measured.
+      confidence: 0.5,
+      raw: doc,
+    }))
+    .filter((candidate) => candidate.title && !isNonBookTitle(candidate.title));
+
+  // Evict oldest-first. `Map` preserves insertion order, and a re-fetch moves
+  // the key to the end only if it is deleted and re-set.
+  if (subjectPoolCache.size >= SUBJECT_CACHE_MAX) {
+    const oldest = subjectPoolCache.keys().next().value;
+    if (oldest) subjectPoolCache.delete(oldest);
+  }
+  subjectPoolCache.set(cacheKey, { at: Date.now(), candidates });
+  return candidates;
+}
+
+/** Test seam: forget every cached subject pool. */
+export function clearSubjectPoolCache(): void {
+  subjectPoolCache.clear();
 }
 
 /**

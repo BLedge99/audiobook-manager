@@ -209,11 +209,11 @@ inconsistently.
 
 **Discover**
 
-- [ ] Five suggestions render at a time, with a "Show 5 more" button that
+- [x] Five suggestions render at a time, with a "Show 5 more" button that
       appends five and disappears at the end.
-- [ ] Reopening the tab does not re-request the same subjects.
-- [ ] A provider that hangs produces a message, not an indefinite blank.
-- [ ] Results are no longer all-or-nothing from a single unranked pool.
+- [x] Reopening the tab does not re-request the same subjects.
+- [x] A provider that hangs produces a message, not an indefinite blank.
+- [x] Results are no longer all-or-nothing from a single unranked pool.
 
 **Copy**
 
