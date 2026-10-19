@@ -243,7 +243,13 @@ export function ShellCover({
 }) {
   return (
     <span className={cn("shell-art block", className)} style={{ aspectRatio: ratio, ...shellTint(bookId) }}>
-      <CoverImage cacheKey={bookCoverKey(bookId)} className="contents" />
+      {/*
+        No `display: contents` here. `CoverImage` observes its own wrapper with
+        an IntersectionObserver to decide when to start fetching, and an element
+        with `display: contents` has no box at all -- so it never intersects and
+        no cover is ever fetched. The shell's own CSS fills this wrapper.
+      */}
+      <CoverImage cacheKey={bookCoverKey(bookId)} />
       <span className="shell-art__tint" aria-hidden="true" />
       <span className="capsule__gloss" aria-hidden="true" />
     </span>

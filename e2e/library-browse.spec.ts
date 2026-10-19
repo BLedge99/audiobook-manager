@@ -112,16 +112,35 @@ test.describe("library refresh", () => {
  * below cannot regress into that case without failing.
  */
 test.describe("cover art", () => {
-  test("renders every cover from cache or placeholder, never from the network", async ({ page }) => {
+  test("caches covers, then serves them with the network cut off", async ({ page }) => {
     await enterApp(page);
     const all = await books(page);
     test.skip(all.length === 0, "need a scanned library");
 
-    // A first pass with the network up, so the device has something to cache.
-    await page.waitForTimeout(1500);
+    /** Every cover's `src`, classified. */
+    const coverSources = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll("[data-cover] img")).map((img) => img.getAttribute("src") ?? ""),
+      );
 
-    // Then kill every cover request and reload. Anything still on screen came
-    // out of the device cache.
+    // **Step 1: covers must actually load.** This assertion is the one that was
+    // missing when this feature shipped: the original test only checked that no
+    // image pointed at the network, which is satisfied trivially when *nothing
+    // loads at all*. It passed against a build where no cover was ever fetched,
+    // because `display: contents` gave the observed wrapper no box and the
+    // IntersectionObserver never fired. So: prove the shelf is painted first.
+    await expect
+      .poll(
+        async () => (await coverSources()).filter((src) => src.startsWith("blob:")).length,
+        { timeout: 20_000 },
+      )
+      .toBeGreaterThan(0);
+
+    const warm = await coverSources();
+    expect(warm.every((src) => src === "/placeholder-cover.svg" || src.startsWith("blob:"))).toBe(true);
+
+    // **Step 2: cut the network and reload.** Anything still painted came out
+    // of the device cache.
     await page.route("**/cover*", (route) => route.abort());
     await page.reload();
     await login(page);
@@ -129,21 +148,16 @@ test.describe("cover art", () => {
 
     await expect
       .poll(
-        async () =>
-          page.evaluate(() => {
-            const images = Array.from(document.querySelectorAll("[data-cover] img"));
-            return images.length > 0 && images.every((img) => !/^https?:/.test(img.getAttribute("src") ?? ""));
-          }),
-        { timeout: 15_000 },
+        async () => (await coverSources()).filter((src) => src.startsWith("blob:")).length,
+        { timeout: 20_000 },
       )
-      .toBe(true);
+      .toBeGreaterThan(0);
 
-    const sources = await page.evaluate(() =>
-      Array.from(document.querySelectorAll("[data-cover] img")).map((img) => img.getAttribute("src") ?? ""),
+    const offline = await coverSources();
+    expect(offline.every((src) => src === "/placeholder-cover.svg" || src.startsWith("blob:"))).toBe(true);
+    expect(offline.filter((src) => src.startsWith("blob:")).length).toBeGreaterThanOrEqual(
+      warm.filter((src) => src.startsWith("blob:")).length,
     );
-    for (const src of sources) {
-      expect(src === "/placeholder-cover.svg" || src.startsWith("blob:")).toBe(true);
-    }
   });
 });
 

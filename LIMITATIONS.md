@@ -510,6 +510,46 @@ re-run of the security E2E suite. **Not started.**
   Wireless debugging is the alternative and needs no driver at all — the phone
   and PC are on the same home network anyway, which is how the app itself
   reaches the server.
+- **An Android WebView can serve `IntersectionObserver` and never call it back**
+  (measured on a Pixel 4a / Android 13, 2026-10-19).
+
+  An observer on an element that was demonstrably on screen — 161×235 at
+  `top: 388`, inside a visible card — **never delivered a callback in 4
+  seconds**, and neither did one on `document.body`.
+  `requestAnimationFrame` fired normally, so the rendering pipeline was alive.
+  Scrolling the page by 50px made the callback arrive immediately. Chromium,
+  which the unit tests and the desktop E2E suite run on, delivers the initial
+  observation pass straight away, so **nothing about this was visible anywhere
+  except on the device.**
+
+  Consequence here: the cover cache gated its fetching on that observer, so on
+  the real phone **no cover was ever fetched** — sixteen placeholders, no error,
+  and an E2E test that passed because it only asserted that no image pointed at
+  the network, which is trivially true when nothing loads at all. The fix is a
+  deadline (`NEAR_VIEWPORT_FALLBACK_MS`). **A lazy-load gate that can silently
+  prevent all loading is worse than no gate at all.**
+- **`display: contents` gives an element no box, and a boxless element never
+  intersects.** The cover wrapper was given `display: contents` to avoid an
+  extra layout box, which silently disabled the observer above. The rule: **an
+  element that is observed must have a real box**, and `className="contents"` on
+  one is always a bug.
+- **Do not drive this WebView by tapping coordinates.** `adb shell input tap` on
+  the server-URL field did not focus it at all (`mServedView=null`,
+  `mInputShown=false`), and a mistimed tap pulled down the notification shade
+  instead. Drive the page over the Chrome DevTools Protocol, and assert on *what
+  the page is holding* — `document.querySelectorAll('[data-cover] img')` and
+  their `src` — which is more reliable than a screenshot and is the actual claim
+  under test.
+
+  ```bash
+  adb forward tcp:9222 localabstract:webview_devtools_remote_$(adb shell pidof com.technative.audiobookmanager)
+  curl -s localhost:9222/json    # then connect to webSocketDebuggerUrl
+  ```
+
+  **Pass the JavaScript to the harness in a file, never as a command argument.**
+  Every expression contains quotes and a space, and PowerShell's argv quoting
+  split them into nonsense like `Failed to parse URL from
+  http://127.0.0.1:Evil/.test(x.innerText)`.
 - **Capacitor 7/8 needs JDK 21.** An older JDK fails `assembleDebug` with an
   unhelpful Gradle error. `JAVA_HOME=C:\Tools\jdk21` in the build script.
 - **PowerShell `>` corrupts binary output**, so `adb exec-out screencap` produces

@@ -37,7 +37,9 @@ function RecommendationCard({
             has no book id. Cached on the device like every other cover, so the
             same resolver -- and the same three states -- apply here. */}
         {recommendation.coverUrl ? (
-          <CoverImage cacheKey={urlCoverKey(recommendation.coverUrl)} className="contents" />
+          /* No `display: contents`: see ShellCover. A boxless wrapper never
+             intersects, so its cover would never be fetched. */
+          <CoverImage cacheKey={urlCoverKey(recommendation.coverUrl)} />
         ) : (
           <img src="/placeholder-cover.svg" alt="" aria-hidden="true" className="h-full w-full object-cover" />
         )}

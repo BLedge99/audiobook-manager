@@ -251,6 +251,66 @@ describe("cover cache", () => {
     expect(String(fetchMock.mock.calls[0][0])).toBe(href);
   });
 
+  it("loads a cover even when IntersectionObserver never calls back", async () => {
+    // The exact behaviour measured on the Pixel 4a / Android 13 WebView on
+    // 2026-10-19: an observer on a plainly visible element never delivered its
+    // initial pass unless something scrolled. Chromium does deliver it, so this
+    // is invisible to every other environment -- and with an observer-only gate
+    // it means *no cover is ever fetched* and nothing errors.
+    //
+    // Stubbed here as an observer that observes and then says nothing, which is
+    // what the device did.
+    const observed: Element[] = [];
+    class SilentObserver {
+      constructor(_cb: IntersectionObserverCallback, _options?: IntersectionObserverInit) {}
+      observe(element: Element) {
+        observed.push(element);
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    }
+    vi.stubGlobal("IntersectionObserver", SilentObserver);
+
+    cache = await startSession();
+    fetchMock.mockResolvedValue(imageResponse());
+    render(<cache.CoverImage cacheKey={cache.bookCoverKey(30)} />);
+
+    // It did observe -- and then, as on the device, said nothing.
+    expect(observed.length).toBe(1);
+    // The deadline is ~1s, and RTL's default `waitFor` is also 1s, so this needs
+    // headroom: the point of the test is precisely that it takes a moment.
+    await waitFor(() => expect(screen.getByTestId("cover-img").getAttribute("src")).toMatch(/^blob:/), {
+      timeout: 4000,
+    });
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("does not wait for the fallback when the observer does report", async () => {
+    // The optimisation still works: a cover the observer vouches for loads
+    // without waiting out the deadline.
+    class EagerObserver {
+      constructor(private cb: IntersectionObserverCallback) {}
+      observe(_element: Element) {
+        this.cb([{ isIntersecting: true } as IntersectionObserverEntry], this as never);
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    }
+    vi.stubGlobal("IntersectionObserver", EagerObserver);
+
+    cache = await startSession();
+    fetchMock.mockResolvedValue(imageResponse());
+    render(<cache.CoverImage cacheKey={cache.bookCoverKey(31)} />);
+
+    await waitFor(() => expect(screen.getByTestId("cover-img").getAttribute("src")).toMatch(/^blob:/));
+  });
+
   it("clears on request and refetches afterwards", async () => {
     cache = await startSession();
     fetchMock.mockResolvedValue(imageResponse());

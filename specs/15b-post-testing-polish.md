@@ -199,8 +199,13 @@ inconsistently.
 - [x] A cover changed on the server replaces the cached one.
 - [x] Scrolling a full grid does not issue one request per card at once.
 - [x] Book covers and provider-URL covers both work.
-- [ ] **On device:** covers survive airplane mode after a single online load.
-      Not covered by any unit test — see the `fake-indexeddb` trap below.
+- [x] **On device:** covers survive airplane mode after a single online load.
+      Verified on a Pixel 4a / Android 13: Wi-Fi disabled and the server proven
+      unreachable, cold-started from a force-stop — both downloaded books render
+      with **2 covers from the device cache, 0 from the network**, and the stored
+      blobs decode into real artwork. IndexedDB held 11 records / 516 KB of
+      `image/jpeg`, closing the `fake-indexeddb` gap below. Screenshot:
+      [`evidence/offline-covers-pixel4a-2026-10-19.png`](evidence/offline-covers-pixel4a-2026-10-19.png).
 
 **Discover**
 
@@ -283,6 +288,34 @@ conditional fetch. Record the call boundary before switching sessions. Sessions
 are modelled with `vi.resetModules()`, which is what reopening the app actually
 is: the cache's "revalidated at most once per session" is enforced by module
 state, and a re-render inside one session must *not* refetch.
+
+**An E2E assertion that a thing is absent passes when the thing never happened.**
+This is the worst one here, because the cover test was green for a build where
+**no cover was ever fetched**. It asserted "no `<img>` points at the network",
+which is trivially true when every image is a placeholder — which is exactly
+what was on screen. The fix asserts the *positive* first ("at least one cover is
+a blob URL"), and only then the negative. **Assert that the feature happened
+before asserting that it cannot go wrong.**
+
+**The device had two bugs that were invisible to every other environment**, and
+the first one was only found by driving the real phone:
+
+1. An Android WebView can serve `IntersectionObserver` and **never deliver its
+   initial callback** on a page that is not scrolling — measured: no callback in
+   4 seconds on a visible element or on `document.body`, `requestAnimationFrame`
+   firing normally, and the callback arriving instantly once the page was
+   scrolled by 50px. Chromium delivers it immediately, so unit tests and desktop
+   E2E could never see it. The cover cache gated fetching on that observer, so
+   **no cover loaded at all** — sixteen placeholders, no error.
+2. The wrapper was given `display: contents`, which gives an element no box, and
+   a boxless element never intersects. It compounded (1) by removing the very
+   thing the observer measures.
+
+The general rule, and the one worth more than the two fixes: **a lazy-load gate
+must be an optimisation with a guaranteed escape, never the only path to
+loading.** `NEAR_VIEWPORT_FALLBACK_MS` is that escape, and the regression test
+stubs an observer that observes and then says nothing — which is what the device
+did.
 
 ## Not in this spec
 

@@ -64,6 +64,27 @@ const MAX_CONCURRENT_FETCHES = 4;
 /** How far ahead of the viewport a cover starts fetching. */
 const VIEWPORT_MARGIN = "320px";
 
+/**
+ * How long to wait for an intersection before fetching anyway.
+ *
+ * **Measured on a Pixel 4a / Android 13 WebView, 2026-10-19.** An
+ * IntersectionObserver on an element that is plainly on screen, inside a page
+ * that is not scrolling, **never delivered its callback**. `requestAnimationFrame`
+ * fired normally, so the rendering pipeline was alive; scrolling by 50px made the
+ * callback arrive immediately. Chromium — which is what the unit tests and the
+ * desktop E2E suite run on — delivers the initial observation pass straight away,
+ * so nothing about this was visible anywhere except on the device.
+ *
+ * Without a deadline the consequence is not "covers load a bit later". The gate
+ * never opens, **no cover is ever fetched**, and nothing errors: the shelf shows
+ * sixteen placeholders and looks like a network problem.
+ *
+ * So the observer is an *optimisation*, not a gate: after this deadline the cover
+ * loads anyway. It costs at most one second of laziness on a slow device, which is
+ * nothing next to never rendering the artwork at all.
+ */
+const NEAR_VIEWPORT_FALLBACK_MS = 1000;
+
 export type CoverState =
   | { status: "absent" }
   | { status: "loading" }
@@ -429,16 +450,21 @@ export async function warmCoverCache(): Promise<void> {
 let warmPromise: Promise<void> | undefined;
 
 /**
- * True once the element is near the viewport.
+ * True once the element is near the viewport, or once it plainly should be.
  *
  * `loading="lazy"` does not do this job: the browser still issues a request per
  * card that is laid out, which on a grid is most of them. It is here because a
  * cover that is never scrolled to should cost nothing.
  *
+ * **The deadline is not belt-and-braces, it is the fix.** See
+ * `NEAR_VIEWPORT_FALLBACK_MS`: on the device this ships to, the observer's
+ * initial pass never arrives, so an observer-only gate means no cover is ever
+ * fetched and nothing reports an error.
+ *
  * jsdom has no `IntersectionObserver`, and a component that threw on a missing
  * browser API would fail every unit test for a reason that has nothing to do
  * with this feature. Missing API means "assume visible", which is the safe
- * direction: a test sees the fetch.
+ * direction.
  */
 function useNearViewport<T extends HTMLElement>(): [React.RefObject<T | null>, boolean] {
   const ref = useRef<T>(null);
@@ -447,17 +473,34 @@ function useNearViewport<T extends HTMLElement>(): [React.RefObject<T | null>, b
   useEffect(() => {
     const node = ref.current;
     if (!node || near) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setNear(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: VIEWPORT_MARGIN },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
+    let settled = false;
+    let observer: IntersectionObserver | null = null;
+
+    const open = () => {
+      if (settled) return;
+      settled = true;
+      observer?.disconnect();
+      setNear(true);
+    };
+
+    if (typeof IntersectionObserver !== "undefined") {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) open();
+        },
+        { rootMargin: VIEWPORT_MARGIN },
+      );
+      observer.observe(node);
+    }
+
+    // The escape hatch. A cover is ~47 KB on a home LAN; one second of extra
+    // laziness is invisible, and never fetching it is not.
+    const timer = window.setTimeout(open, NEAR_VIEWPORT_FALLBACK_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      observer?.disconnect();
+    };
   }, [near]);
 
   return [ref, near];
