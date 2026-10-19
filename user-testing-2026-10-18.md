@@ -6,6 +6,13 @@ WebView 154–155) over Wi-Fi, real 12-book library, real listening sessions.
 **Verdict from the tester:** happy, the app is in a great place, keep pushing to
 perfect. None of these are blockers. They are polish and correctness.
 
+**Status, 2026-10-19.** Findings 4, 5, 1, 3 and 7 are being worked as
+[`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md), one
+commit each, in that order. Findings 2 and 6 are deliberately not being started:
+2 needs its own ADR before code, and 6 needs measuring before fixing.
+**Suggested order for tomorrow** at the end of this file is superseded by that
+spec.
+
 ---
 
 ## 1. Cover art is unstable
@@ -299,3 +306,10 @@ tester is right that it reads inconsistently.
 (also small), then 1 (biggest real gain), then 3, then 7. Leave 2 (profile
 privacy + biometrics) for a dedicated session — it is the only one that
 deserves its own ADR before code is written.
+
+**That order was adopted and is now the build order** for
+[`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md), with
+finding 2 left out as advised. One correction to this document while working
+through it: the paths named above are `client/src/useLibrary.ts` and
+`client/src/components/RefreshButton.tsx` — there is no `hooks/` directory, and
+the refresh control is an `IconBtn` in `App.tsx`, not its own component.

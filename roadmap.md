@@ -24,7 +24,7 @@ has a matching spec in `specs/`.
 | 13 | Media tools (stretch) | Manual, explicit metadata/cover embedding into files with confirmation; no silent writes |
 | 14 | Listening position display | Player shows chapter + position in chapter + book % and time left, with chapter ticks and a session-start marker; grid shows a Continue listening section. Position maths lives in a tested pure module |
 | 15 | GUI redesign | **Done.** All twenty client surfaces restyled as one mobile-first system — capsule world, light/dark toggle, self-hosted faces. Player, grid and library shell done; reuses spec 14's `position.ts` and `ProgressTimeline` rather than rebuilding them. See [`specs/15-gui-redesign.md`](specs/15-gui-redesign.md) and [`DESIGN.md`](DESIGN.md). Renaming the wordmark to Bookle is still to schedule |
-| 15b | Post-testing polish | **New.** Seven findings from real household use on two phones — cover caching, per-profile privacy, Discover pagination, refresh empty window, player-first book page, lock-screen latency, copy review. Full detail in [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). Supersedes the ordering in `LIMITATIONS` §6 |
+| 15b | Post-testing polish | **In progress.** Seven findings from real household use on two phones — cover caching, per-profile privacy, Discover pagination, refresh empty window, player-first book page, lock-screen latency, copy review. Five of the seven ship here, in the order `4 → 5 → 1 → 3 → 7`; profile privacy (2) and lock-screen latency (6) are deliberately out. Finish line: a refresh never blanks the library, the player leads the book page, covers are cached on the device and rendered in three states, Discover returns five ranked suggestions at a time, and every user-facing string lives in `client/src/copy.ts`. See [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md) and [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). Supersedes the ordering in `LIMITATIONS` §6 |
 | 16 | Provider expansion & background enrichment | Audnexus + LibriVox clients joined in an adaptive chain; a resumable post-scan pass auto-applies high-confidence matches and queues the rest; no media writes |
 | 17 | Tag & taxonomy model | Curated genre tree, multiple narrators, series + position, publication facts, and per-field user overrides that survive rescans without freezing unrelated fields |
 | 18 | Favourites & custom tags | Per-profile favourites; household-managed tag vocabulary with create/rename/merge/delete; assignments survive rescan |
@@ -35,7 +35,7 @@ has a matching spec in `specs/`.
 | 23 | Cover art fallback | A book whose winning provider has no cover (LibriVox carries no cover field) gets artwork from the best candidate that does, borrowing only the image |
 | 24 | Narrator resolution | Narrator resolved from `composer`, then a "Read By X" comment tag, then a bracketed folder name; full casts become one contributor per person; no guess when nothing matches |
 | 25 | Catalogue enrichment | Genres, series, publisher, year, ISBN and description populated from Open Library and Google Books; study-guide spam rejected; auto-apply banded so a lowered floor cannot apply the wrong author |
-| 26 | Android app with offline listening | Sideloaded APK plays downloaded books with no network; metadata readable offline; progress syncs without ever silently regressing; "remove from device" frees space; server URL configurable in-app. Narrows item 09. **In progress:** auth, download and covers verified on device; offline playback, the server-URL gate and visible downloaded files remain |
+| 26 | Android app with offline listening | Sideloaded APK plays downloaded books with no network; metadata readable offline; progress syncs without ever silently regressing; "remove from device" frees space; server URL configurable in-app. Narrows item 09. **In progress:** auth, download, covers, first-run server-URL setup and offline playback are verified; **the visible list of downloaded books and "Remove from device" remain** — the user removed it from the 15b polish pass on 2026-10-19, and it is recorded as an unmet criterion in `LIMITATIONS` |
 
 ## Notes
 
@@ -84,3 +84,9 @@ presentation work lives in 16–20 instead.
 **Item 26 preserves ADR 006** (`decisions/006-remote-access.md`). Books are
 downloaded over the LAN and progress syncs on returning home, so no remote
 access to the home server is required.
+
+**Item 15b is the current session's work** and takes precedence over the
+ordering above. It is a polish pass on the shipped app rather than new
+capability, so it runs alongside 16–26 instead of before them. Its five
+features each land as their own commit against the acceptance criteria in
+[`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).

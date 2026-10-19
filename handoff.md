@@ -12,25 +12,32 @@
 
 - Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
   (also reachable at `/mnt/c/...` from WSL, which is where Docker runs).
-- Branch: master, pushed to `origin/master`. Specs `01..14, 16..26` and
-  decisions `001..012` exist.
-  **There is no `specs/15-*.md`** — roadmap 15 (GUI redesign) is unwritten, is
-  now sequenced **last**, and is preceded by roadmap item 26 (Android app).
+- Branch: master. Specs `01..15, 15b, 16..26` and decisions `001..014` exist.
+  **The current work is roadmap item 15b**, the post-testing polish pass:
+  [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).
+  Five features, one commit each, in the order **4 → 5 → 1 → 3 → 7** (refresh →
+  player-first → covers → Discover → copy). Findings 2 (profile privacy) and 6
+  (lock-screen latency) are deliberately not being started: 2 needs an ADR before
+  code, 6 needs measuring before fixing.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
   `test/` now holds ~3.6 GB: the LibriVox set plus six **commercial**
   audiobooks, including one M4B, because the product targets commercial books.
-- Test counts as of 2026-10-13: **server 368** (1 skipped), **client 141**,
-  **Playwright 35** (all three tiers green; run E2E from WSL via
-  `scripts/e2e-wsl.sh`).
-- **Scope changed 2026-10-13:** the household must be able to listen away from
-  home. The app cannot do this at all today — see `specs/26-android-app.md`
-  and `LIMITATIONS.md` §1.4.
+- **Spec 26 is much further along than this file previously claimed.** The
+  foreground service, download to the device, the Dexie replica, cover URLs in
+  the shell, the in-app server-URL screen and offline playback all work. The
+  only unmet acceptance criterion is the visible downloaded-books list with
+  "Remove from device", which the household removed from the polish pass on
+  2026-10-19. See `LIMITATIONS.md` §1.4 and §3.
+- Test counts as of 2026-10-18: **server 368** (1 skipped), **client 266**,
+  **Playwright 40** (all green; run E2E from WSL via `scripts/e2e-wsl.sh`).
+  Re-run the suites rather than trusting these counts after the 15b features.
 
 ## Working agreement
 
-- Implement roadmap features in order. 01–21 are done except **13 (deferred,
-  stretch)**; **15 is unwritten and is next**. See "Build order after 14".
+- Implement roadmap features in order. 01–25 are done except **13 (deferred,
+  stretch)**; **15 (GUI redesign) is done and landed 2026-10-18**; **15b is the
+  current session**. See "Build order after 14" in `roadmap.md`.
 - Each feature claims a spec; when done, update its checklist in the spec file
   and mark it done in this handoff.
 - **An unchecked acceptance criterion is not evidence.** Spec 21 shipped a
@@ -40,6 +47,8 @@
   targeted unit tests as they go).
 - Ask the user before deviating from spec order, restructuring infra, or when
   a product decision is needed.
+- **Say what you are about to push to a phone.** Never rebuild or reinstall an
+  APK while someone is mid-listen; it looks exactly like playback dying.
 
 ## Progress log
 
@@ -122,12 +131,31 @@ tools) stays out of scope - media is a read-only mount by design.
 
 ### Next action — read this first
 
-**Downloads work end to end and are verified byte-for-byte (commit `6c2fbf1`).
-The Android offline path is functional. Remaining work is listed below.**
+**Roadmap item 15b, the post-testing polish pass, is the current work.** Its
+contract is [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md);
+its evidence is
+[`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). Five features, one
+commit each, in this order:
 
-A book downloads, shows real progress, lands on disk, and every file matches the
-server's `Content-Length` exactly. See "Downloads" below for the full history,
-because getting here took four wrong turns and the reasons are the useful part.
+| # | Feature | Primary files |
+|---|---------|---------------|
+| 4 | A refresh never blanks the library | `client/src/useLibrary.ts`, `App.tsx`, server `app.ts` |
+| 5 | Player first on the book page | `client/src/components/AudiobookDetail.tsx` |
+| 1 | Cover cache + tri-state cover | new `client/src/local/coverCache.ts`, `components/CoverArt.tsx`, `ui/primitives.tsx` |
+| 3 | Discover: 5 ranked + "Show 5 more" | `server/src/metadata/recommend*.ts`, `enrichment.ts`, `client/src/components/Discover.tsx` |
+| 7 | Copy review into `client/src/copy.ts` | everything, with impeccable `clarify` |
+
+Each ends at: unit tests → `npx tsc --noEmit` → `node scripts/capture-ui.js` →
+`npx playwright test` **in a single WSL session**. Feature 1 additionally gets an
+on-device pass (airplane mode with a warm cache).
+
+**Not being started, deliberately:** finding 2 (per-profile privacy) needs its
+own ADR before code; finding 6 (lock-screen latency) needs measuring before it
+is fixed — `LIMITATIONS.md` §5 records two false diagnoses there.
+
+**The Android offline path is functional.** Downloads work end to end and are
+verified byte-for-byte (commit `6c2fbf1`). The historical record below is kept
+because getting there took four wrong turns and the reasons are the useful part.
 
 ### Downloads: the four bugs, in the order they had to be fixed
 
@@ -1205,13 +1233,13 @@ Remaining follow-ups:
 - `npm audit` in `server/` still flags `@fastify/static` (route-guard bypass /
   non-canonical path), `vitest` and `esbuild`. The upgrades are breaking major
   bumps, so they need their own change with a re-run of the security suite.
-- **Spec 15 (GUI redesign) is next**, and has no spec file yet — writing
-  `specs/15-gui-redesign.md` is the first task. It should restyle
-  `ProgressTimeline` and `position.ts` rather than rebuild them, and
-  `decisions/007` (keep the native range input) should be honoured unless a new
-  ADR supersedes it. Remaining position-display ideas, in rough priority order:
-  tick hover tooltips naming the chapter, a drag-to-scrub time bubble, and
-  bookmarks/highlights on the timeline (the last one needs a new data model).
+- ~~**Spec 15 (GUI redesign) is next**, and has no spec file yet~~ — **done
+  2026-10-18.** `specs/15-gui-redesign.md` exists, the redesign landed, and
+  `DESIGN.md` records the built system. What is next is item 15b, the
+  post-testing polish pass (see "Current task"). Position-display ideas still
+  unbuilt, in rough priority order: tick hover tooltips naming the chapter, a
+  drag-to-scrub time bubble, and bookmarks/highlights on the timeline (the last
+  one needs a new data model).
 - **Chapter editing UI.** Spec 21 shipped the
   `PUT /api/audiobooks/:id/tracks/:trackNumber/title` endpoint but no editor,
   so a user cannot yet set a track title by hand. Spec 06 deferred the editor;

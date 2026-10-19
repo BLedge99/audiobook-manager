@@ -9,6 +9,13 @@ inferred. Every claim below was verified against the running stack or the live
 provider APIs, not inferred from reading code. Where a number is given, it is
 measured.
 
+**Updated 2026-10-19** to reconcile this file with what actually shipped, and to
+record the polish pass now under way in
+[`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md). Two
+claims here turned out to be stale and are corrected below: §1.4's first-run
+dead end is fixed, and §1.7's missing post-profile refetch is being closed as
+the first feature of the 15b pass. Everything else is unchanged.
+
 Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
 than intended · **DEFERRED** = deliberately not built.
 
@@ -57,8 +64,9 @@ end.
 Either add the file or delete the script entry.
 
 ### 1.4 The Android app cannot work away from home
-**Status: MOSTLY FIXED (2026-10-14). Downloads verified on device; offline
-playback and first-run setup are not.**
+**Status: MOSTLY FIXED (2026-10-14, reconciled 2026-10-19). Downloads, offline
+playback and first-run setup all work; only the storage-management UI is
+missing.**
 
 Sprint 2 has landed. What now works, verified on a Pixel 4a:
 
@@ -76,14 +84,26 @@ Sprint 2 has landed. What now works, verified on a Pixel 4a:
 
 Still broken:
 
-- **Offline playback is unverified.** The files are correct on disk; nobody has
-  yet pulled the network and confirmed audio plays from them.
-- **First-run is a dead end.** `needsServerUrl()` has no call site, so
+- ~~**First-run is a dead end.** `needsServerUrl()` has no call site, so
   `ProfileGate` blocks the only route to Settings and a new user cannot enter a
-  server address. This is the most user-visible remaining bug.
+  server address. This was the most user-visible remaining bug.~~
+  **Corrected 2026-10-19 — this is fixed.** `needsServerUrl()` is called at the
+  top of `App`'s render (`client/src/App.tsx`), so the server-URL screen is the
+  first thing a new install sees and `ProfileGate` is never reached without a
+  server to fetch profiles from. The claim above was true when written and was
+  not re-measured before being quoted here.
 - **Downloaded audio is invisible.** `Directory.Data` is app-private: no file
   manager can see, free or delete downloaded books. ADR 012 accepted this; for a
   household app it is probably the wrong trade.
+  **Note (2026-10-19):** the household removed the storage-management work from
+  the polish pass, so this remains an unmet spec 26 acceptance criterion rather
+  than a scheduled one. It is recorded in §3 as deferred.
+
+**Offline playback — reported working, not yet independently verified.** On
+2026-10-19 the user confirmed from daily use that downloaded books download and
+play offline. That is a human report from real listening, which is stronger
+evidence than a spike, but it has not been re-verified against the spec 26
+manual checklist (airplane mode, seek, screen off) on a second run.
 
 **Sprint 1 is complete** and it de-risked the two things that could have changed
 the architecture. On a Pixel 4a / Android 13:
@@ -185,9 +205,7 @@ re-tested against the fix; the Defy's WebView is newer, which is the harder
 case.
 
 ### 1.7 The library is fetched before a profile exists, so progress is stale on arrival
-**Status: LIMITED — cosmetic but misleading. Found 2026-10-18. User-visible
-again on 2026-10-18 as the "refresh shows an empty library for about a minute"
-report.**
+**Status: LIMITED — being fixed as the first feature of the spec 15b pass.**
 
 `useLibrary` fetches `/api/audiobooks` once at mount, before the household
 password or a profile has been chosen, so the response carries no `progress`.
@@ -200,8 +218,9 @@ Pre-existing, but the redesign makes it far more visible: the dock is now the
 first thing on the Library tab, so an empty dock reads as "you have nothing in
 progress" rather than as a fetch that has not happened yet.
 
-**Fix:** refetch once after a profile is selected. Small and contained, but it is
-a behaviour change and was not made under this spec, which preserves behaviour.
+**Fix:** refetch once after a profile is selected, and stop `loading` from
+meaning "refetching" so a refresh that already has rows never blanks the grid.
+Both are in [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).
 
 **User-reported 2026-10-18:** pressing refresh shows "nothing in library" for
 around a minute before it repopulates. Measured cause: the refetch clears the
@@ -340,6 +359,18 @@ disappears) and would make the second permanent rather than intermittent, which
 is why it is the top cover task in
 [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md) item 1.
 
+**Decision taken 2026-10-19 (spec 15b):** both halves are implemented. The
+server sends `Cache-Control: private, max-age=86400` and an `ETag`, so the
+browser and PWA revalidate instead of refetching; and the device keeps a
+persistent IndexedDB cover cache so a cover survives airplane mode in the
+Android shell, where a service worker is not available.
+
+**The cost, stated plainly:** caching makes a wrong cover *sticky*. Before, a
+failed fetch at least left the placeholder as an honest "we don't have this";
+now the wrong edition persists until the `ETag` changes. That is the trade the
+15b spec accepts, and it is worth knowing when a cover looks like a different
+edition's jacket.
+
 ### 2.8 Auto-apply has a judgement call in it
 **Status: LIMITED — deliberate, and reviewable.**
 
@@ -376,6 +407,8 @@ Audnexus reachable permanently rather than incidentally.
 | Item | Why |
 |---|---|
 | **Spec 13 — media tools** | Out of scope by decision. Media is a read-only mount; writing tags into user files is not wanted. |
+| **Downloaded-books list and "Remove from device"** | An unmet spec 26 acceptance criterion: Settings shows a byte total and a count, but no list and no way to free a book from the UI. Removed from the 15b polish pass by the user on 2026-10-19; recorded here so it is not lost. `useDeviceLibrary.remove()` and `Settings` already exist — it is a UI, not a feature. |
+| **Per-profile privacy (PIN + biometrics)** | Finding 2 of the user testing. Needs its own ADR before any code: a new auth level, a schema change and a biometric path, with spec 11's auth-model constraints shaping it rather than following it. |
 | **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. Now sequenced **after** spec 26, since restyling a shell that is about to be wrapped in an APK would mean restyling it twice. |
 | **Chapter/track title editor UI** | Spec 24 shipped the `PUT /tracks/:trackNumber/title` endpoint and the `FieldOverride` storage, but **no UI**. A hand-set narrator/track title is only reachable via API. |
 | **Bookmarks & highlights** | Needs a new data model. Deliberately out of spec 14. |
@@ -479,33 +512,51 @@ re-run of the security E2E suite. **Not started.**
 ## 6. Suggested order of work
 
 Scope changed on 2026-10-13: the household must be able to listen away from
-home, so **the Android app is now the top priority** and displaces the GUI
-redesign (roadmap item 15).
+home, so the Android app became the top priority and displaced the GUI redesign.
 
-> **Read this before the list below.** On 2026-10-18 the app was tested by a
-> second household member on a second phone. Seven findings came back; all are
-> reproduced, none are blockers, and the tester's verdict was that the app is in a
-> great place. The findings, the measured cause for each, and the suggested
-> order for the next session are in
-> [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). They now
-> **supersede the ordering below**, which was written before real hands-on use.
+> **Superseded 2026-10-18, and now reconciled 2026-10-19.** On 2026-10-18 the
+> app was tested by a second household member on a second phone. Seven findings
+> came back; all are reproduced, none are blockers, and the tester's verdict was
+> that the app is in a great place. They are in
+> [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md) and are now being
+> worked as [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).
+>
+> **What shipped underneath that, and is no longer work:** spec 26 Phase 1 (the
+> foreground service de-risk spike), spec 26 Phase 2 (download to the device
+> filesystem, Dexie replica, cover URLs in the shell), the `http` WebView scheme
+> fix (§1.6), the in-app server-URL screen (§1.4), and the Discover enrichment
+> fix of 2026-10-18. What is left of the old list is carried into the list
+> below rather than dropped.
 
-1. ~~**Spec 26 Phase 1 — de-risk spike.**~~ **Done 2026-10-13.** Background
-   audio survives screen-off and seeking works, but only behind a foreground
-   service — see §1.4 and `specs/26-android-app.md`. The architecture in ADR
-   012 stands, so the spike did its job.
-2. **Spec 26 Phase 2 — download to the device.** Audio to the native filesystem
-   (not IndexedDB: `<audio>` cannot seek a blob in IDB), metadata to Dexie.
-   Now the highest-value remaining work, since §1.4 is the largest product gap.
-3. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest enrichment gain (§1.1).
-4. **Spec 26 Phase 0** — the `LibraryStore` read-model seam. Server-only, no
-   user-visible payoff, so it is reviewed on its own.
-5. **Fix or delete the `scan` script** — two minutes (§1.3).
-6. **Spec 26 Phases 3–4** — progress sync, storage management.
-7. **Dependency upgrades with a security E2E re-run** — §4.
+**Current order — the 15b polish pass, five features, one commit each:**
+
+1. **Refresh must never blank the library.** Close §1.7, plus coalescing and a
+   `304` path. Small, and the most immediately visible defect a household hits.
+2. **Player first on the book page.** A reorder against ADR 012's thesis,
+   reusing spec 14's position maths rather than rebuilding it.
+3. **Cover cache and a tri-state cover.** The largest real gain: server cache
+   headers plus a device-persistent IndexedDB cache and one shared cover
+   element across all seven surfaces. Needs an on-device pass.
+4. **Discover: five ranked suggestions and "Show 5 more".** Pagination *and*
+   ranking together, with a provider pool cache and a request timeout.
+5. **Copy review into `client/src/copy.ts`,** with impeccable `clarify`. Last, so
+   it does not fight the layout moves.
+
+**Then, each needing its own session or ADR:**
+
+6. **Per-profile privacy (PIN, optional biometrics).** Finding 2. ADR first.
+7. **Lock-screen control latency.** Finding 6. Measure before fixing — §5 records
+   two false diagnoses in this exact area.
 8. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable
    by a human (§3).
-9. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
-   appear (§2.10).
-10. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).
-11. **`specs/15-gui-redesign.md`** — last.
+9. **Downloaded-books list and "Remove from device"** — unmet spec 26 criterion,
+   removed from the polish pass on 2026-10-19.
+10. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest enrichment gain (§1.1).
+    Still waiting on the user; the mapping code is written and tested.
+11. **Fix or delete the `scan` script** — two minutes (§1.3).
+12. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
+    appear (§2.10).
+13. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).
+14. **Dependency upgrades with a security E2E re-run** — §4.
+15. **Spec 26 Phase 0** — the `LibraryStore` read-model seam. Server-only, no
+    user-visible payoff, so it is reviewed on its own.
