@@ -223,10 +223,17 @@ inconsistently.
 
 **Whole pass**
 
-- [ ] `npm --prefix client test`, `npm --prefix server test`, `npx tsc --noEmit`,
+- [x] `npm --prefix client test`, `npm --prefix server test`, `npx tsc --noEmit`,
       `node scripts/capture-ui.js` and `npx playwright test` all pass, with no
       existing assertion weakened.
-- [ ] On device: covers survive airplane mode after a single online load.
+      **Re-verified after feature 3** (`cb28038`): server 416 (1 skipped),
+      client 295, Playwright 46, `tsc` clean on both tiers, `capture-ui.js`
+      reports "layout guards pass". **Must be re-run after feature 7.**
+- [x] On device: covers survive airplane mode after a single online load.
+      Done in feature 1 — Pixel 4a, Wi-Fi off, server unreachable, cold start
+      from a force-stop: both downloaded books rendered with **2 covers from the
+      device cache and 0 from the network**. Screenshot:
+      [`evidence/offline-covers-pixel4a-2026-10-19.png`](evidence/offline-covers-pixel4a-2026-10-19.png).
 
 ## Verification
 
@@ -316,6 +323,73 @@ must be an optimisation with a guaranteed escape, never the only path to
 loading.** `NEAR_VIEWPORT_FALLBACK_MS` is that escape, and the regression test
 stubs an observer that observes and then says nothing — which is what the device
 did.
+
+**An effect that depends on an object which is a fresh literal on every render
+re-runs on every render.** The Discover component opened with
+
+```ts
+useEffect(() => { void discover.loadWishlist(); if (hasFavourites) void discover.loadForMe(); },
+  [discover, hasFavourites]);
+```
+
+`discover` is the hook's return value — a new object every render. So the effect
+re-ran after *every* state change, including the `loadingMore` flag that "Show 5
+more" sets. The click fetched page 2, the re-render re-ran the effect, and page 1
+was fetched over the top of it. Nothing errored and nothing logged: **the button
+simply did nothing, and the list never grew past five.** The dependency list now
+names the stable `useCallback`s instead.
+
+This is the third time in this project that a change was invisible because
+nothing failed. The E2E caught it only because it asserted a *count* going up.
+
+**The Vite dev server in Docker misses edits made over the `/mnt/c` bind mount.**
+After fixing the effect above, the E2E still failed — against the old code.
+`docker compose restart client` made it pass. `LIMITATIONS.md` §5 records this,
+and it is worth repeating here because the symptom is identical to "my fix does
+not work": **restart the client before concluding a client change did nothing.**
+
+**A background worker that outlives its test fails the whole suite, not one
+test.** Adding a test file shifted the scheduler enough to expose a
+pre-existing race: an `EnrichmentManager` run was still updating its row after
+the test that created it had torn the database down. The Prisma error escaped
+as an *unhandled rejection*, so every assertion passed and `npm test` still
+exited 1 — the worst kind of failure, because it looks like the code under test
+is broken. `processRun` now treats P2025 ("record to update not found") as "the
+run was deleted; stop quietly" and returns.
+
+The general rule: **a suite that exits non-zero on a green run is a broken
+suite**, and a background job that writes to the database must survive its
+teardown.
+
+**A module-level cache outlives `clearMocks`.** The subject-pool cache lives at
+module scope, so the first test's (empty) result was served to the next three,
+which then failed for reasons that had nothing to do with their assertions. The
+cache now has a `clearSubjectPoolCache()` seam and the suite calls it in
+`beforeEach`. Anything cached at module scope needs an explicit reset.
+
+**A green test suite says nothing about types.** `vitest run` does not
+typecheck, and no test script is wired to `tsc`. The new
+`recommend-service.test.ts` imported a type that does not exist —
+`EnrichmentCandidate`, when the real name is `ProviderCandidate` — and **all
+eight of its tests were green** while the file did not compile. It also set a
+`hasCover` field on the candidate that the provider type does not have,
+because the service *derives* that from `coverUrl`; the test passed anyway
+because the derived value happened to agree.
+
+`tsc --noEmit` caught both, but only because it is a separate manual step in
+this spec's verification list. It is easy to skip, and a skipped step is
+indistinguishable from a passing one. **A `typecheck` script on both packages,
+wired into `make test`, is the fix** — queued in `LIMITATIONS.md` §6.
+
+The general rule: **run the type checker, and never read a green suite as
+"it compiles".**
+
+**A refinement signal that only moves things up is not tested.** Each new
+ranking signal (era, next-in-series, cover present) is a *tie-breaker*, and the
+failure mode is that it becomes a primary signal — turning a subject browse
+into a popularity listing. A test that asserts only "the signal moves things up"
+passes even when it moves them above a real tag match. There is a test for that
+specifically: a real tag match must still outrank era + cover together.
 
 ## Not in this spec
 

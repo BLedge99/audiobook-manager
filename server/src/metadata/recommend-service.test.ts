@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { RecommendationService } from "./recommend-service";
 import { clearSubjectPoolCache } from "../enrichment";
-import type { EnrichmentCandidate } from "./types";
+import type { ProviderCandidate } from "./types";
 
 /**
  * Spec 15b feature 3 — Discover's paging and ranking.
@@ -23,8 +23,14 @@ vi.mock("../enrichment", async (importOriginal) => ({
   searchOpenLibraryBySubject: subjectSearch,
 }));
 
-/** A candidate shaped like what the Open Library mapper produces. */
-function candidate(title: string, extra: Partial<EnrichmentCandidate> = {}): EnrichmentCandidate {
+/**
+ * A candidate shaped like what the Open Library mapper produces.
+ *
+ * `hasCover` is deliberately *not* set: the service derives it from `coverUrl`
+ * (`toTaggable` sets `hasCover: Boolean(candidate.coverUrl)`), so a candidate
+ * with a cover URL already scores as having one.
+ */
+function candidate(title: string, extra: Partial<ProviderCandidate> = {}): ProviderCandidate {
   return {
     source: "openlibrary",
     title,
@@ -33,16 +39,15 @@ function candidate(title: string, extra: Partial<EnrichmentCandidate> = {}): Enr
     confidence: 0.5,
     providerKey: `/works/${title}`,
     ...extra,
-  } as EnrichmentCandidate;
+  };
 }
 
 /** A pool with a known spread of scores, so page boundaries are predictable. */
-function poolOf(count: number): EnrichmentCandidate[] {
+function poolOf(count: number): ProviderCandidate[] {
   return Array.from({ length: count }, (_, i) =>
     candidate(`Book ${String(i).padStart(3, "0")}`, {
       // Varying year shifts the era signal, giving a deterministic order.
       publishedYear: 2000 + (count - i),
-      hasCover: true,
       coverUrl: `http://covers/${i}.jpg`,
     }),
   );

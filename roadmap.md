@@ -24,7 +24,7 @@ has a matching spec in `specs/`.
 | 13 | Media tools (stretch) | Manual, explicit metadata/cover embedding into files with confirmation; no silent writes |
 | 14 | Listening position display | Player shows chapter + position in chapter + book % and time left, with chapter ticks and a session-start marker; grid shows a Continue listening section. Position maths lives in a tested pure module |
 | 15 | GUI redesign | **Done.** All twenty client surfaces restyled as one mobile-first system — capsule world, light/dark toggle, self-hosted faces. Player, grid and library shell done; reuses spec 14's `position.ts` and `ProgressTimeline` rather than rebuilding them. See [`specs/15-gui-redesign.md`](specs/15-gui-redesign.md) and [`DESIGN.md`](DESIGN.md). Renaming the wordmark to Bookle is still to schedule |
-| 15b | Post-testing polish | **In progress.** Seven findings from real household use on two phones — cover caching, per-profile privacy, Discover pagination, refresh empty window, player-first book page, lock-screen latency, copy review. Five of the seven ship here, in the order `4 → 5 → 1 → 3 → 7`; profile privacy (2) and lock-screen latency (6) are deliberately out. Finish line: a refresh never blanks the library, the player leads the book page, covers are cached on the device and rendered in three states, Discover returns five ranked suggestions at a time, and every user-facing string lives in `client/src/copy.ts`. See [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md) and [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). Supersedes the ordering in `LIMITATIONS` §6 |
+| 15b | Post-testing polish | **In progress — 4 of 5 features shipped.** Seven findings from real household use on two phones — cover caching, per-profile privacy, Discover pagination, refresh empty window, player-first book page, lock-screen latency, copy review. Five of the seven ship here, in the order `4 → 5 → 1 → 3 → 7`; profile privacy (2) and lock-screen latency (6) are deliberately out. **Shipped:** refresh never blanks the library (`235aa28`), the player leads the book page (`35316d5`), covers are cached on the device and rendered in three states (`4a7df3c`, `fb19435`), Discover returns five ranked suggestions at a time with a "Show 5 more" button (`cb28038`). **Remaining: feature 7, the copy review** into `client/src/copy.ts`. Finish line: a refresh never blanks the library, the player leads the book page, covers are cached on the device and rendered in three states, Discover returns five ranked suggestions at a time, and every user-facing string lives in `client/src/copy.ts`. See [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md) and [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). Supersedes the ordering in `LIMITATIONS` §6 |
 | 16 | Provider expansion & background enrichment | Audnexus + LibriVox clients joined in an adaptive chain; a resumable post-scan pass auto-applies high-confidence matches and queues the rest; no media writes |
 | 17 | Tag & taxonomy model | Curated genre tree, multiple narrators, series + position, publication facts, and per-field user overrides that survive rescans without freezing unrelated fields |
 | 18 | Favourites & custom tags | Per-profile favourites; household-managed tag vocabulary with create/rename/merge/delete; assignments survive rescan |
@@ -36,6 +36,7 @@ has a matching spec in `specs/`.
 | 24 | Narrator resolution | Narrator resolved from `composer`, then a "Read By X" comment tag, then a bracketed folder name; full casts become one contributor per person; no guess when nothing matches |
 | 25 | Catalogue enrichment | Genres, series, publisher, year, ISBN and description populated from Open Library and Google Books; study-guide spam rejected; auto-apply banded so a lowered floor cannot apply the wrong author |
 | 26 | Android app with offline listening | Sideloaded APK plays downloaded books with no network; metadata readable offline; progress syncs without ever silently regressing; "remove from device" frees space; server URL configurable in-app. Narrows item 09. **In progress:** auth, download, covers, first-run server-URL setup and offline playback are verified; **the visible list of downloaded books and "Remove from device" remain** — the user removed it from the 15b polish pass on 2026-10-19, and it is recorded as an unmet criterion in `LIMITATIONS` |
+| 27 | Per-profile library membership | Each profile has its own shelf of books, chosen from the server's library. **New profiles start empty; existing profiles are migrated to contain every book**, so nobody's library changes on upgrade — one line to flip. A separate "Server library" tab is where books are added from; removing a book offers to delete its download too. Membership is a row, not a file: the audio stays where it is and two profiles can hold the same book. The 512 MB cover cache is untouched by this. **Planned, not started** — spec first: [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md) |
 
 ## Notes
 
@@ -56,6 +57,14 @@ has a matching spec in `specs/`.
 ## Build order after 14
 
 **16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 15.**
+
+**15b runs alongside the above, and 27 follows it.** 15b is a polish pass on the
+shipped app rather than new capability, so it interleaves rather than blocking.
+27 (per-profile library membership) comes after 15b closes, because it changes
+what `GET /api/audiobooks` returns — and 15b's remaining feature (the copy
+review) touches every user-facing string, which is exactly the surface 27 will
+add a new tab to. Doing the copy review first means the new tab inherits a
+reviewed voice instead of introducing a second one.
 
 Each of 16–19 is a data-layer feature with no new UI, so they are
 independently shippable and testable. 20 adds the browse and Discover surfaces

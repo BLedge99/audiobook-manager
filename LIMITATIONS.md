@@ -477,6 +477,43 @@ re-run of the security E2E suite. **Not started.**
   so entering on `?tab=browse` times out inside the helper.
 - **PowerShell mangles nested quotes** in `wsl -e bash -lc "..."`. Write a
   script file and invoke it instead.
+- **A green suite that exits non-zero is a broken suite, not a flaky test.**
+  Found 2026-10-19 while adding a test file to the server suite. Every
+  assertion passed and `npm test` still exited 1, because a background
+  `EnrichmentManager` run outlived the test that created it, tried to update a
+  row its teardown had deleted, and the Prisma error escaped as an **unhandled
+  rejection**. The trigger was a *new test file changing the scheduler* — the
+  race was always there and nothing had perturbed it. `processRun` now treats
+  P2025 as "the run was deleted; stop quietly".
+
+  The general rule: **a background job that writes to the database must survive
+  its teardown**, and a non-zero exit from a green run has to be chased down
+  rather than re-run until it goes away.
+- **A module-level cache outlives `clearMocks`.** The Open Library subject-pool
+  cache lives at module scope, so the first test's result was served to the
+  next three tests, which then failed for reasons unrelated to their
+  assertions. Anything cached at module scope needs an explicit reset seam and
+  a `beforeEach` that calls it.
+- **An effect that depends on a hook's return object re-runs every render.**
+  Found 2026-10-19: the Discover component listed `discover` — a fresh object
+  literal on every render — in its dependency list, so "Show 5 more" re-fetched
+  page 1 over the top of the page it had just appended. **Nothing errored and
+  nothing logged; the button simply did nothing.** Depend on the stable
+  `useCallback`s, not on the object they come back in. See the 15b spec's
+  trap notes.
+- **Neither `npm test` nor `make test` typechecks.** `vitest run` does not
+  typecheck, and no test script is wired to `tsc`. A test file that imports a
+  type which does not exist **passes the whole suite** and only fails
+  `npx tsc --noEmit` — which, being a separate manual step, is easy to skip.
+  Found 2026-10-19 when `recommend-service.test.ts` imported a
+  `EnrichmentCandidate` that is actually called `ProviderCandidate`; all 8 of
+  its tests were green and the type error was invisible until `tsc` ran.
+
+  The 15b verification checklist *does* include `npx tsc --noEmit` for every
+  feature, so the process catches it — the harness just does not enforce it.
+  **A `typecheck` script on both packages, wired into `make test`, is the
+  obvious fix** and is queued in §6. Until then: run `tsc` yourself, and
+  remember that a green test suite says nothing about types.
 - **`handoff.md` contains two stale mentions** of "owner pushes manually" inside
   dated 2026-10-02 session entries. They are an accurate record of those
   sessions and are intentionally left.
@@ -604,33 +641,53 @@ home, so the Android app became the top priority and displaced the GUI redesign.
 
 **Current order — the 15b polish pass, five features, one commit each:**
 
-1. **Refresh must never blank the library.** Close §1.7, plus coalescing and a
-   `304` path. Small, and the most immediately visible defect a household hits.
-2. **Player first on the book page.** A reorder against ADR 012's thesis,
-   reusing spec 14's position maths rather than rebuilding it.
-3. **Cover cache and a tri-state cover.** The largest real gain: server cache
-   headers plus a device-persistent IndexedDB cache and one shared cover
-   element across all seven surfaces. Needs an on-device pass.
-4. **Discover: five ranked suggestions and "Show 5 more".** Pagination *and*
-   ranking together, with a provider pool cache and a request timeout.
-5. **Copy review into `client/src/copy.ts`,** with impeccable `clarify`. Last, so
-   it does not fight the layout moves.
+> **Reconciled 2026-10-19, after feature 3 landed.** Four of the five are done.
+> What remains is the copy review, and then the per-profile library membership
+> that was planned alongside it.
 
-**Then, each needing its own session or ADR:**
+1. ~~**Refresh must never blank the library.**~~ **DONE** — `235aa28`. Close
+   §1.7, plus coalescing and a `304` path. Small, and the most immediately
+   visible defect a household hits.
+2. ~~**Player first on the book page.**~~ **DONE** — `35316d5`. A reorder
+   against ADR 012's thesis, reusing spec 14's position maths rather than
+   rebuilding it.
+3. ~~**Cover cache and a tri-state cover.**~~ **DONE** — `4a7df3c`, fixed
+   `fb19435`. The largest real gain: server cache headers plus a
+   device-persistent IndexedDB cache and one shared cover element across all
+   seven surfaces. **On-device pass done** (Pixel 4a, airplane mode, cold
+   start: 2 covers from cache, 0 from network).
+4. ~~**Discover: five ranked suggestions and "Show 5 more".**~~ **DONE** —
+   `cb28038`. Pagination *and* ranking together, with a provider pool cache and
+   a request timeout. The pool is now ranked **once** and sliced, so page two
+   continues page one.
+5. **Copy review into `client/src/copy.ts`,** with impeccable `clarify`. Last,
+   so it does not fight the layout moves. **This is the only 15b feature left.**
 
-6. **Per-profile privacy (PIN, optional biometrics).** Finding 2. ADR first.
-7. **Lock-screen control latency.** Finding 6. Measure before fixing — §5 records
+**Then:**
+
+6. **Per-profile library membership** — roadmap item 27,
+   [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md).
+   New profiles start empty; existing profiles are migrated to contain every
+   book, so nobody's library changes on upgrade. A separate "Server library"
+   tab; removing a book offers to delete its download too. The 512 MB cover
+   cache is deliberately untouched by it.
+7. **Per-profile privacy (PIN, optional biometrics).** Finding 2. ADR first.
+8. **Lock-screen control latency.** Finding 6. Measure before fixing — §5 records
    two false diagnoses in this exact area.
-8. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable
+9. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable
    by a human (§3).
-9. **Downloaded-books list and "Remove from device"** — unmet spec 26 criterion,
-   removed from the polish pass on 2026-10-19.
-10. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest enrichment gain (§1.1).
+10. **Downloaded-books list and "Remove from device"** — unmet spec 26 criterion,
+    removed from the polish pass on 2026-10-19.
+11. **Add `GOOGLE_BOOKS_API_KEY`** — one line, largest enrichment gain (§1.1).
     Still waiting on the user; the mapping code is written and tested.
-11. **Fix or delete the `scan` script** — two minutes (§1.3).
-12. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
+12. **Fix or delete the `scan` script** — two minutes (§1.3).
+13. **Write ASIN at scan time** — makes Audnexus reachable if such files ever
     appear (§2.10).
-13. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).
-14. **Dependency upgrades with a security E2E re-run** — §4.
-15. **Spec 26 Phase 0** — the `LibraryStore` read-model seam. Server-only, no
+14. **Contributor merge rules** — needed before Audnexus is ever wired in (§2.9).
+15. **Dependency upgrades with a security E2E re-run** — §4.
+16. **Spec 26 Phase 0** — the `LibraryStore` read-model seam. Server-only, no
     user-visible payoff, so it is reviewed on its own.
+17. **Add a `typecheck` script to both packages and wire it into `make test`** —
+    five minutes, and it closes the gap where a test file with a broken import
+    passes the entire suite (§5). `vitest run` does not typecheck, and
+    `npx tsc --noEmit` is currently a manual step that is easy to skip.

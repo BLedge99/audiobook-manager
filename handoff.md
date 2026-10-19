@@ -12,13 +12,20 @@
 
 - Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
   (also reachable at `/mnt/c/...` from WSL, which is where Docker runs).
-- Branch: master. Specs `01..15, 15b, 16..26` and decisions `001..014` exist.
+- Branch: master. Specs `01..15, 15b, 16..27` and decisions `001..014` exist.
   **The current work is roadmap item 15b**, the post-testing polish pass:
   [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).
   Five features, one commit each, in the order **4 → 5 → 1 → 3 → 7** (refresh →
-  player-first → covers → Discover → copy). Findings 2 (profile privacy) and 6
-  (lock-screen latency) are deliberately not being started: 2 needs an ADR before
-  code, 6 needs measuring before fixing.
+  player-first → covers → Discover → copy). **Four are shipped; feature 7 (the
+  copy review) is the only one left.** Findings 2 (profile privacy) and 6
+  (lock-screen latency) are deliberately not being started: 2 needs an ADR
+  before code, 6 needs measuring before fixing.
+- **After 15b closes: roadmap item 27, per-profile library membership**
+  ([`specs/27-per-profile-library.md`](specs/27-per-profile-library.md)). New
+  profiles start empty; existing profiles are migrated to contain every book,
+  so nobody's library changes on upgrade — and it is one line to flip. A
+  separate "Server library" tab; removing a book offers to delete its download
+  too. The 512 MB cover cache is deliberately untouched by it.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
   `test/` now holds ~3.6 GB: the LibriVox set plus six **commercial**
@@ -29,9 +36,12 @@
   only unmet acceptance criterion is the visible downloaded-books list with
   "Remove from device", which the household removed from the polish pass on
   2026-10-19. See `LIMITATIONS.md` §1.4 and §3.
-- Test counts as of 2026-10-18: **server 368** (1 skipped), **client 266**,
-  **Playwright 40** (all green; run E2E from WSL via `scripts/e2e-wsl.sh`).
-  Re-run the suites rather than trusting these counts after the 15b features.
+- Test counts as of 2026-10-19, after feature 3: **server 416** (1 skipped),
+  **client 295**, **Playwright 46** (all green; run E2E from WSL via
+  `scripts/e2e-wsl.sh`). Re-run the suites rather than trusting these counts
+  after the next feature.
+- **Pushes are the owner's call.** Feature 3 (`cb28038`) was pushed from this
+  session; the doc commits after it were left for the owner to push.
 
 ## Working agreement
 
@@ -78,7 +88,9 @@
 | 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint |
 | 24 | narrator-resolution | **done** | `narrator.ts` (pure, 22 tests): `composer` atom → `comment` (`Read By X`) → bracketed folder name (`{Stephen Fry}`). Full casts become one contributor per person. Person-name guard stops `{Unabridged}` being credited as a narrator. No guess when nothing matches. Makes the narrator work for commercial audiobooks, which no free online source can supply |
 | 25 | catalogue-enrichment | **done** | Genres/series/publisher/year/ISBN/description populated from both catalogues. Six root causes fixed: unrequested `fields=`, unread default fields, author polluting the query, study-guide spam, non-idempotent candidate storage, and a missing Google Books key. Auto-apply banded 0.7–0.9 with an author guard. **Note: enrichment is not deterministic run to run.** |
+| 15b | post-testing-polish | **4 of 5 done** | Spec `specs/15b-post-testing-polish.md`; evidence `user-testing-2026-10-18.md`. Shipped: **4** refresh never blanks the library (`235aa28`), **5** player-first book page (`35316d5`), **1** cover cache + tri-state cover (`4a7df3c`, on-device fix `fb19435`), **3** Discover 5-at-a-time + "Show 5 more" (`cb28038`). **Remaining: 7**, the copy review into `client/src/copy.ts` with impeccable `clarify`. Findings 2 (per-profile privacy) and 6 (lock-screen latency) are deliberately out — 2 needs an ADR first, 6 needs measuring first. |
 | 26 | android-app | **Sprint 2 done** | Offline listening on Android. `specs/26-android-app.md` + ADR 012. Device is a **read replica + progress**, not a second library manager. **Verified on device: cross-origin auth (header token, cookie is dropped cross-scheme), cover art, download with real progress.** All 5 tracks of a book downloaded byte-for-byte identical to `Content-Length`. Stage tracing (`trace.ts`) makes every pipeline step time-boxed and visible. See "Downloads" in Current task for the four bugs behind this. **Next: server-URL gate, then offline playback with the network off** |
+| 27 | per-profile-library | **planned, not started** | Spec `specs/27-per-profile-library.md`. Each profile gets its own shelf of books, chosen from the server's library. **New profiles start empty; existing profiles are migrated to contain every book** (reversible, one line). A separate "Server library" tab; removing a book offers to delete its download too. Membership is a row, not a file — two profiles can hold the same book, the audio stays put. The 512 MB cover cache is untouched by it. Three open questions are listed in the spec and must be settled before the endpoint is written. |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -137,17 +149,30 @@ its evidence is
 [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). Five features, one
 commit each, in this order:
 
-| # | Feature | Primary files |
-|---|---------|---------------|
-| 4 | A refresh never blanks the library | `client/src/useLibrary.ts`, `App.tsx`, server `app.ts` |
-| 5 | Player first on the book page | `client/src/components/AudiobookDetail.tsx` |
-| 1 | Cover cache + tri-state cover | new `client/src/local/coverCache.ts`, `components/CoverArt.tsx`, `ui/primitives.tsx` |
-| 3 | Discover: 5 ranked + "Show 5 more" | `server/src/metadata/recommend*.ts`, `enrichment.ts`, `client/src/components/Discover.tsx` |
-| 7 | Copy review into `client/src/copy.ts` | everything, with impeccable `clarify` |
+| # | Feature | Primary files | Status |
+|---|---------|---------------|--------|
+| 4 | A refresh never blanks the library | `client/src/useLibrary.ts`, `App.tsx`, server `app.ts` | **done** `235aa28` |
+| 5 | Player first on the book page | `client/src/components/AudiobookDetail.tsx` | **done** `35316d5` |
+| 1 | Cover cache + tri-state cover | `client/src/local/CoverImage.tsx`, `client/src/local/db.ts` | **done** `4a7df3c`, `fb19435` |
+| 3 | Discover: 5 ranked + "Show 5 more" | `server/src/metadata/recommend*.ts`, `enrichment.ts`, `client/src/components/Discover.tsx` | **done** `cb28038` |
+| 7 | Copy review into `client/src/copy.ts` | everything, with impeccable `clarify` | **NEXT** |
 
 Each ends at: unit tests → `npx tsc --noEmit` → `node scripts/capture-ui.js` →
-`npx playwright test` **in a single WSL session**. Feature 1 additionally gets an
-on-device pass (airplane mode with a warm cache).
+`npx playwright test` **in a single WSL session**. Feature 1 additionally got an
+on-device pass (airplane mode with a warm cache) — **done**, and the screenshot
+is committed at `specs/evidence/offline-covers-pixel4a-2026-10-19.png`.
+
+**Feature 7 is the last one.** The plan: move every user-facing string into
+`client/src/copy.ts`, keyed by surface, then run the impeccable `clarify` pass
+over it, then record the voice decision (warm, plain, brief) in `PRODUCT.md`,
+which currently lists voice as undecided. Acceptance criteria are the two
+unticked boxes at the bottom of the 15b spec's "Copy" section, plus the
+whole-pass checklist.
+
+**After 15b: roadmap item 27, per-profile library membership.** Spec already
+written — [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md).
+It is deliberately sequenced *after* the copy review, because 27 adds a new tab
+and the copy review is what stops the new tab introducing a second voice.
 
 **Not being started, deliberately:** finding 2 (per-profile privacy) needs its
 own ADR before code; finding 6 (lock-screen latency) needs measuring before it
@@ -156,6 +181,62 @@ is fixed — `LIMITATIONS.md` §5 records two false diagnoses there.
 **The Android offline path is functional.** Downloads work end to end and are
 verified byte-for-byte (commit `6c2fbf1`). The historical record below is kept
 because getting there took four wrong turns and the reasons are the useful part.
+
+### Feature 3 (Discover) — what shipped, and the three bugs under it
+
+`cb28038`. The tester said results came back "at random" and asked for "top 5
+at a time, then allow a 'load more' button". Both halves are one change:
+**the pool is ranked once and then sliced**, so page two continues page one
+rather than being a fresh draw.
+
+- **Server.** Open Library subject search gained `page`/`limit` paging, an
+  identifying `User-Agent` (identified requests get 3× the anonymous rate
+  limit), an 8s `AbortSignal.timeout`, and a 30-minute per-`subject:page` pool
+  cache with a `clearSubjectPoolCache()` seam. A **failed** page is never
+  cached, so an outage cannot blank Discover for half an hour. Ranking gained
+  published-decade proximity (by **median** decade, not mean), next-in-series
+  and cover-present, all as pure tested functions with small weights — a real
+  tag match still outranks them, and there is a test for exactly that.
+- **Client.** `useDiscover` gained `page`, `hasMore`, `loadingMore` and
+  `loadMore()`, which **appends**. The UI shows five cards and a "Show 5 more"
+  button that disappears at the end, plus a "Showing N of M" line.
+
+**Three bugs, in the order they had to be found:**
+
+1. **The button did nothing, and nothing errored.** The Discover component's
+   effect listed the whole `discover` object in its dependencies — and the hook
+   returns a fresh object every render. So clicking "Show 5 more" set
+   `loadingMore`, re-rendered, re-ran the effect, and **re-fetched page 1 over
+   the top of the page it had just appended**. The list never grew past five
+   and there was no error, no log, no console message. Fixed by depending on the
+   stable `useCallback`s. This is the same class of bug as the
+   "unchecked acceptance criterion is not evidence" note above: **a change that
+   fails silently is the expensive kind.**
+2. **The E2E failed against stale code.** After the fix, the E2E *still*
+   failed — because the Vite dev server in Docker does not see edits made over
+   the `/mnt/c` bind mount. `docker compose restart client` and it passed.
+   `LIMITATIONS.md` §5 records this; the symptom is identical to "my fix does
+   not work".
+3. **A green suite that exited 1.** Adding a test file shifted the scheduler
+   enough to expose a pre-existing race: an `EnrichmentManager` run was still
+   updating its row after its test had torn the database down. The Prisma
+   error escaped as an **unhandled rejection**, so every assertion passed and
+   `npm test` still exited non-zero. `processRun` now treats P2025 as "the run
+   was deleted; stop quietly". **A suite that exits non-zero on a green run is
+   a broken suite.**
+
+Also fixed on the way: the module-level `subjectPoolCache` outlived
+`clearMocks`, so the first test's empty result was served to the next three.
+
+**And one that was almost missed:** `recommend-service.test.ts` imported a type
+that does not exist (`EnrichmentCandidate`; the real name is
+`ProviderCandidate`) and set a field the type does not have (`hasCover`; the
+service derives it from `coverUrl`). **All eight of its tests were green** —
+`vitest run` does not typecheck — and the file did not compile. It was caught
+by `npx tsc --noEmit`, which is a *separate manual step* and is easy to skip.
+**A `typecheck` script on both packages, wired into `make test`, is queued as
+item 17 in `LIMITATIONS.md` §6.** Until that lands, run `tsc` yourself: a green
+suite is not evidence that the code compiles.
 
 ### Downloads: the four bugs, in the order they had to be fixed
 
@@ -275,6 +356,19 @@ playback is unverified end to end.
   `C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot`; `ANDROID_HOME` must be
   set to `C:\Users\benle\AppData\Local\Android\Sdk` too (`local.properties` does
   not exist and is machine-specific).
+  **Update 2026-10-19:** a second JDK is now present at `C:\Tools\jdk21`, and
+  `JAVA_HOME` is set to that one in the shell used for the device work. Both
+  paths exist — use `C:\Tools\jdk21`.
+- **`adb` is not on `PATH`.** It lives at
+  `C:\Users\benle\AppData\Local\Android\Sdk\platform-tools\adb.exe`. The device
+  is a **Pixel 4a, Android 13 (SDK 33)**, serial `07261JEC203154`.
+  `client/android/local.properties` now exists with `sdk.dir` set (already
+  gitignored by `client/android/.gitignore:27`).
+- **CDP helper scripts read JS from a file, not from `argv`.** PowerShell's
+  argument quoting mangles inline expressions badly enough to change their
+  meaning. The helpers live in the temp directory, outside the repo:
+  `run-e2e.sh`, `hold-stack.sh`, `probe-etag.sh`, `probe-discover.sh`,
+  `cdp.mjs`, `cdp-stdin.mjs`.
 - **Gradle's `clean` task cannot delete `build/`** — a daemon holds
   `build/reports`. Use `gradlew --stop`, then `Remove-Item -Recurse -Force build`,
   then `assembleDebug`. That is equivalent to `clean` and is what the "do not

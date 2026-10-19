@@ -13,6 +13,11 @@ commit each, in that order. Findings 2 and 6 are deliberately not being started:
 **Suggested order for tomorrow** at the end of this file is superseded by that
 spec. Each finding below carries its own status line.
 
+**Progress: 4 of 5 shipped.** Features 4 (`235aa28`), 5 (`35316d5`), 1
+(`4a7df3c`, on-device fix `fb19435`) and 3 (`cb28038`) are done. **Feature 7,
+the copy review, is the last one** — it moves every user-facing string into
+`client/src/copy.ts` and records the voice decision in `PRODUCT.md`.
+
 ---
 
 **Status: FIXED and verified on device 2026-10-19** (spec 15b feature 1).
