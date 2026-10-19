@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import type { Audiobook } from "../types";
 import { Btn, MachineHead, Swatch, cn } from "../ui/primitives";
+import { CoverImage, urlCoverKey } from "../local/CoverImage";
 
 /**
  * Spec 20 -- the enrichment review queue.
@@ -99,13 +100,16 @@ function CandidateRow({
 
   return (
     <div className="mt-3 flex gap-3 rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink/25 bg-sunk p-3">
+      {/*
+        The same cached cover as every other surface. It previously used a
+        third fallback convention -- `style.display = "none"` on error -- which
+        is why a cover could vanish with nothing in its place. One resolver, one
+        fallback, one behaviour.
+      */}
       {candidate.coverUrl && (
-        <img
-          src={candidate.coverUrl}
-          alt=""
-          onError={(event) => { event.currentTarget.style.display = "none"; }}
-          className="h-20 w-14 shrink-0 rounded-[8px_6px_8px_6px/6px_8px_6px_8px] border border-ink/25 object-cover"
-          loading="lazy"
+        <CoverImage
+          cacheKey={urlCoverKey(candidate.coverUrl)}
+          className="h-20 w-14 shrink-0 rounded-[8px_6px_8px_6px/6px_8px_6px_8px] border border-ink/25 [&>img]:h-full [&>img]:w-full [&>img]:object-cover"
         />
       )}
       <div className="min-w-0 flex-1">

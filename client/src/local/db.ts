@@ -66,8 +66,33 @@ export interface ReplicaBook {
   tracks: Record<string, DownloadedTrack>;
 }
 
+/**
+ * One cached cover.
+ *
+ * The `Blob` is stored rather than a data URI: a base64 string costs a third
+ * more memory, and this is the one place in the app where bytes are large enough
+ * for that to matter.
+ */
+export interface CoverRecord {
+  /**
+   * `book:<id>` for a book's own cover, `url:<href>` for a provider URL.
+   *
+   * Keyed by identity rather than by request URL so the cache survives a session
+   * token changing -- the token is in the cover URL's query string, and keying
+   * on the full URL would strand every cached cover on the next login.
+   */
+  key: string;
+  blob: Blob;
+  /** The server's ETag for these bytes, replayed as `If-None-Match`. */
+  etag: string | null;
+  /** When these bytes were stored. Also the eviction order. */
+  savedAt: number;
+  bytes: number;
+}
+
 export class LocalLibraryDatabase extends Dexie {
   books!: Table<ReplicaBook, number>;
+  covers!: Table<CoverRecord, string>;
 
   constructor(name = "audiobooks") {
     super(name);
@@ -75,6 +100,11 @@ export class LocalLibraryDatabase extends Dexie {
     // a book can always be re-downloaded from the server -- so the upgrade path
     // is a delete and re-download rather than a migration.
     this.version(1).stores({ books: "id" });
+    // Spec 15b feature 1. Additive only: version 1's `books` rows are left
+    // exactly as they are, so every already-downloaded book survives the
+    // upgrade. Covers are re-fetchable, which is the whole point of caching
+    // them, so there is nothing here worth migrating.
+    this.version(2).stores({ books: "id", covers: "&key" });
   }
 }
 

@@ -204,9 +204,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     request: { headers: Record<string, unknown> },
     reply: { header: (name: string, value: string) => unknown; code: (status: number) => { send: () => unknown } },
     payload: T,
-    options: { vary?: string[] } = {},
+    options: { match?: string; vary?: string[] } = {},
   ): T | unknown {
-    const serialised = JSON.stringify(payload, (_key, value) =>
+    // `match` is what the tag hashes. For JSON it is the serialised payload,
+    // deliberately: the library response mixes `MediaItem` columns, four join
+    // tables and the *caller's own* progress, and a hand-picked set of
+    // `updatedAt` columns would silently miss a genre applied after the last
+    // rescan. A stream cannot be serialised at all, so the cover route passes
+    // the file's mtime and size instead.
+    const serialised = options.match ?? JSON.stringify(payload, (_key, value) =>
       typeof value === "bigint" ? value.toString() : value,
     );
     const tag = `"${createHash("sha1").update(serialised).digest("hex")}"`;
@@ -408,7 +414,28 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       return reply.code(404).send({ message: "Cover not found" });
     }
     reply.type(`image/${path.extname(item.coverImagePath).slice(1) || "jpeg"}`);
-    return reply.send(createReadStream(item.coverImagePath));
+    // Spec 15b feature 1 -- conditional cover delivery.
+    //
+    // The symptom this fixes was the opposite of a caching miss: covers
+    // reappearing as the placeholder because every render re-fetched them over
+    // a home LAN. The tag is mtime + size rather than content, because hashing
+    // every cover on every request to prove it had not changed costs more than
+    // the revalidation saves, and both change together when a re-enrich
+    // replaces the file.
+    //
+    // `private`, never `immutable`: an operator can re-enrich a book and change
+    // its artwork at any time, so the cache must be allowed to end. It is
+    // private because the route is behind the household session and the token
+    // travels in the query string for `<img>` requests, which makes any shared
+    // caching wrong anyway.
+    let match: string;
+    try {
+      const stats = await stat(item.coverImagePath);
+      match = `${item.coverImagePath}:${stats.mtimeMs}:${stats.size}`;
+    } catch {
+      return reply.code(404).send({ message: "Cover not found" });
+    }
+    return sendConditional(request, reply, createReadStream(item.coverImagePath), { match });
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/stream", async (request, reply) => {

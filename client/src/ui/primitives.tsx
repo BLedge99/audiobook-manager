@@ -2,7 +2,7 @@ import { type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, ty
 import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Sun, Moon, MonitorSmartphone } from "lucide-react";
-import { coverUrl } from "../lib/api";
+import { CoverImage, bookCoverKey } from "../local/CoverImage";
 import { useLightEffects, useTheme, type ThemeChoice } from "./theme";
 
 export function cn(...inputs: ClassValue[]) {
@@ -226,6 +226,11 @@ export function shellTint(seed: number) {
  * sits over the tint, so the cover reads as being *inside* the shell. `alt` is
  * left empty on purpose -- the title is always set as text next to it, so a
  * screen reader hears the title once rather than twice.
+ *
+ * The bytes come from the device cover cache (spec 15b feature 1) rather than
+ * from a live `<img src>`. Every surface in the app now resolves covers the same
+ * way, so a cover that has been seen stays seen, and a fetch that fails shows
+ * the placeholder instead of a half-painted image.
  */
 export function ShellCover({
   bookId,
@@ -238,15 +243,7 @@ export function ShellCover({
 }) {
   return (
     <span className={cn("shell-art block", className)} style={{ aspectRatio: ratio, ...shellTint(bookId) }}>
-      <img
-        src={coverUrl(bookId)}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        onError={(event) => {
-          event.currentTarget.src = "/placeholder-cover.svg";
-        }}
-      />
+      <CoverImage cacheKey={bookCoverKey(bookId)} className="contents" />
       <span className="shell-art__tint" aria-hidden="true" />
       <span className="capsule__gloss" aria-hidden="true" />
     </span>

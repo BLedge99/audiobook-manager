@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
@@ -406,6 +406,55 @@ describe("conditional library GET", () => {
     const { cookie } = await authed();
     const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "if-none-match": '"not-the-tag"' } });
     expect(res.statusCode).toBe(200);
+  });
+
+  it("serves a cover with an ETag, and answers 304 for the same bytes", async () => {
+    // Spec 15b feature 1. The client caches covers on the device and
+    // revalidates with If-None-Match, so the route has to be able to say
+    // "unchanged" -- which for a file means mtime and size, not a hash.
+    const { cookie } = await authed();
+    const dir = mkdtempSync(path.join(tmpdir(), "cover-test-"));
+    const file = path.join(dir, "cover.png");
+    writeFileSync(file, Buffer.from("89504e470d0a1a0a", "hex"));
+    // The cover must live inside a library root or COVER_DIR -- the path guard
+    // answers 403 otherwise, which is spec 11 doing its job.
+    const root = await prisma.libraryRoot.create({ data: { path: dir, label: "Cover ETag" } });
+    const item = await prisma.mediaItem.create({
+      data: {
+        libraryRootId: root.id,
+        filePath: path.join(dir, "etag-cover.mp3"),
+        title: "ETag Cover",
+        author: "Unknown",
+        fileFormat: "mp3",
+        duration: 10,
+        coverImagePath: file,
+      },
+    });
+
+    const first = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/cover`, headers: { cookie } });
+    expect(first.statusCode).toBe(200);
+    expect(first.headers.etag).toMatch(/^"[0-9a-f]+"$/);
+    expect(first.headers["cache-control"]).toBe("private, no-cache");
+    // `immutable` would be a lie: an operator can re-enrich and change the art.
+    expect(first.headers["cache-control"]).not.toContain("immutable");
+
+    const again = await app.inject({
+      method: "GET",
+      url: `/api/audiobooks/${item.id}/cover`,
+      headers: { cookie, "if-none-match": first.headers.etag as string },
+    });
+    expect(again.statusCode).toBe(304);
+
+    // Rewriting the file must invalidate, or a changed cover would never
+    // reach a device that had already seen the old one.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    writeFileSync(file, Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"));
+    const changed = await app.inject({
+      method: "GET",
+      url: `/api/audiobooks/${item.id}/cover`,
+      headers: { cookie, "if-none-match": first.headers.etag as string },
+    });
+    expect(changed.statusCode).toBe(200);
   });
 
   it("revalidates library roots separately, for scan state", async () => {

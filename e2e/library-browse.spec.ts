@@ -98,6 +98,55 @@ test.describe("library refresh", () => {
   });
 });
 
+/**
+ * Spec 15b feature 1 — cover art.
+ *
+ * The report was that covers randomly reverted to the placeholder, and
+ * sometimes rendered as "a solid colour with no placeholder or proper cover".
+ *
+ * The second symptom is the interesting one, and it is asserted structurally
+ * rather than by looking at a screenshot: **no `<img>` may point at the
+ * network.** A cover is either a blob URL the browser already holds bytes for, or
+ * the bundled placeholder. An image element handed a LAN URL is exactly what
+ * painted a half-decoded frame before its `onError` could fire, so the assertion
+ * below cannot regress into that case without failing.
+ */
+test.describe("cover art", () => {
+  test("renders every cover from cache or placeholder, never from the network", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+
+    // A first pass with the network up, so the device has something to cache.
+    await page.waitForTimeout(1500);
+
+    // Then kill every cover request and reload. Anything still on screen came
+    // out of the device cache.
+    await page.route("**/cover*", (route) => route.abort());
+    await page.reload();
+    await login(page);
+    await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const images = Array.from(document.querySelectorAll("[data-cover] img"));
+            return images.length > 0 && images.every((img) => !/^https?:/.test(img.getAttribute("src") ?? ""));
+          }),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+
+    const sources = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("[data-cover] img")).map((img) => img.getAttribute("src") ?? ""),
+    );
+    for (const src of sources) {
+      expect(src === "/placeholder-cover.svg" || src.startsWith("blob:")).toBe(true);
+    }
+  });
+});
+
 test.describe("favourites", () => {
   test("favouriting a book moves it into the Favourites tab and survives a reload", async ({ page }) => {
     await enterApp(page);

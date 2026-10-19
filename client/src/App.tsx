@@ -25,6 +25,7 @@ import {
 } from "./lib/browse";
 import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { isNativeShell } from "./lib/platform";
+import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
 import { useDeviceLibrary } from "./local/useDeviceLibrary";
 import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
@@ -62,6 +63,14 @@ function App() {
   const device = useDeviceLibrary(isNativeShell());
   const browse = useBrowse();
   const discover = useDiscover();
+  // Read the device cover cache into memory once, before the grid renders its
+  // first card (spec 15b feature 1). Without this a cold start asks IndexedDB
+  // per cover, and a cold start *offline* would show a shelf of placeholders
+  // while each one discovered, one at a time, that it already had the bytes.
+  useEffect(() => {
+    void warmCoverCache();
+  }, []);
+
   const [selectedBook, setSelectedBook] = useState<Audiobook>();
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
@@ -651,6 +660,8 @@ function App() {
           usedBytes={device.usedBytes}
           downloadedCount={device.books.length}
           offline={offline}
+          coverBytes={coverCacheBytes()}
+          onClearCovers={async () => { await clearCoverCache(); }}
           onClose={() => setShowSettings(false)}
           onSaved={() => { void refresh(); void device.refresh(); }}
         />

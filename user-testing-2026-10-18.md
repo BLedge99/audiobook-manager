@@ -15,6 +15,13 @@ spec. Each finding below carries its own status line.
 
 ---
 
+**Status: FIXED 2026-10-19** (spec 15b feature 1), pending the on-device pass.
+Covers are cached in IndexedDB and resolved through one `CoverImage` element on
+all seven surfaces. The structural fix for "a solid colour with no placeholder"
+is that an `<img>` is never handed a network URL — only a blob URL the browser
+already holds bytes for, or the bundled placeholder. Cache budget is 512 MB
+(~11,000 covers at this household's measured 47 KB mean).
+
 ## 1. Cover art is unstable
 
 > "sometimes work and display, then randomly stop and go back to the

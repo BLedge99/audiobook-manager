@@ -191,14 +191,16 @@ inconsistently.
 
 **Covers**
 
-- [ ] A cover that has been seen never disappears when the network fails or the
+- [x] A cover that has been seen never disappears when the network fails or the
       phone is in airplane mode.
-- [ ] No surface shows a broken frame or a solid colour in place of a cover.
-- [ ] Every cover surface — grid, dock, shelves, detail, Discover, wishlist,
+- [x] No surface shows a broken frame or a solid colour in place of a cover.
+- [x] Every cover surface — grid, dock, shelves, detail, Discover, wishlist,
       review queue — resolves through the same element and cache.
-- [ ] A cover changed on the server replaces the cached one.
-- [ ] Scrolling a full grid does not issue one request per card at once.
-- [ ] Book covers and provider-URL covers both work.
+- [x] A cover changed on the server replaces the cached one.
+- [x] Scrolling a full grid does not issue one request per card at once.
+- [x] Book covers and provider-URL covers both work.
+- [ ] **On device:** covers survive airplane mode after a single online load.
+      Not covered by any unit test — see the `fake-indexeddb` trap below.
 
 **Discover**
 
@@ -266,6 +268,21 @@ rendered.** Returning `{}` for the tag-suite response makes `TagSuiteEditor`
 throw on `suite.genres.map(...)`; with no error boundary React unmounts the
 whole tree, so the fold looks like it never opened and the failure reads as a
 state bug. Stubs for a real payload shape, not a plausible one.
+
+**`fake-indexeddb` does not round-trip a `Blob`.** A cover record written and
+read back comes with `blob.type` and `blob.size` undefined. So the cache's unit
+tests verify the *logic* — found, kept, replaced, revalidated, evicted — and
+never that the stored bytes decode. `URL.createObjectURL` is stubbed, which
+papers over exactly the thing that is untested. That gap is real, it is named in
+`CoverImage.test.tsx`, and it is closed by the on-device pass or not at all.
+
+**A mock's `calls[0]` is not "the call you are looking at".** Asserting on the
+first recorded call across a simulated app restart silently asserts the *first
+session's* request — which is unconditional, and looks exactly like a failing
+conditional fetch. Record the call boundary before switching sessions. Sessions
+are modelled with `vi.resetModules()`, which is what reopening the app actually
+is: the cache's "revalidated at most once per session" is enforced by module
+state, and a re-render inside one session must *not* refetch.
 
 ## Not in this spec
 

@@ -404,6 +404,22 @@ button:focus {
   object-fit: cover;
   display: block;
 }
+
+/* `CoverImage` wraps its <img> in a <span>, so the shell's own img rule would
+   otherwise match nothing and the cover would collapse to zero height. The
+   wrapper is `position: absolute` so it fills the shell exactly like the bare
+   <img> did, and `> img` keeps the rule from reaching the tint or gloss. */
+.shell-art > [data-cover] {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.shell-art > [data-cover] > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .shell-art__tint {
   position: absolute;
   inset: 0;

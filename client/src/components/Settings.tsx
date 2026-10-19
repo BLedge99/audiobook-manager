@@ -10,6 +10,10 @@ export interface SettingsProps {
   downloadedCount: number;
   /** True when the server could not be reached on the last attempt. */
   offline: boolean;
+  /** Bytes of cover art cached. Omitted in shells with no cover cache. */
+  coverBytes?: number;
+  /** Forget every cached cover. Optional, so a caller may omit the control. */
+  onClearCovers?: () => void;
   onClose: () => void;
   /** Re-run the library load after a URL change. */
   onSaved: () => void;
@@ -30,10 +34,19 @@ function formatBytes(bytes: number): string {
  * is not an acceptable answer. This was previously `server.url` in
  * `capacitor.config.ts`, which meant a rebuild.
  */
-export function Settings({ usedBytes, downloadedCount, offline, onClose, onSaved }: SettingsProps) {
+export function Settings({
+  usedBytes,
+  downloadedCount,
+  offline,
+  coverBytes,
+  onClearCovers,
+  onClose,
+  onSaved,
+}: SettingsProps) {
   const [value, setValue] = useState(getServerUrl());
   const [status, setStatus] = useState<"idle" | "checking" | "ok" | "failed">("idle");
   const [message, setMessage] = useState("");
+  const [coversCleared, setCoversCleared] = useState(false);
 
   const test = async (event: FormEvent) => {
     event.preventDefault();
@@ -136,6 +149,42 @@ export function Settings({ usedBytes, downloadedCount, offline, onClose, onSaved
             <Notice tone="warn" role="status" icon={<WifiOff size={15} aria-hidden="true" />} className="mt-4">
               The server is unreachable. Downloaded books still play.
             </Notice>
+          )}
+
+          {/*
+            Covers are cached separately from downloads, and for a different
+            reason: a download is a deliberate copy the listener asked for,
+            while covers exist so a shelf can be looked at offline. They are
+            small (measured: 47 KB mean per cover) and refill themselves, so
+            this is offered as a convenience rather than a rescue.
+
+            The number is read on open rather than tracked live, so it cannot go
+            stale while the panel is sitting there.
+          */}
+          {typeof coverBytes === "number" && (
+            <div className="mt-4 border-t-2 border-dashed border-ink/20 pt-4">
+              <p className="text-[13.5px] text-ink2">
+                <span className="font-bold text-ink tnum">{formatBytes(coverBytes)}</span> of cover art
+                cached, so covers still show with no connection.
+              </p>
+              {coversCleared ? (
+                <p role="status" className="mt-2 text-[13px] font-bold text-cobalt-ink">
+                  Cached covers cleared. They will come back as you browse.
+                </p>
+              ) : (
+                <Btn
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => {
+                    void onClearCovers?.();
+                    setCoversCleared(true);
+                  }}
+                  className="mt-2"
+                >
+                  Clear cached covers
+                </Btn>
+              )}
+            </div>
           )}
         </section>
       </div>

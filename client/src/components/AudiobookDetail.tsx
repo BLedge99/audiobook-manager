@@ -1,7 +1,7 @@
 import { X, Clock3, Compass, FileAudio, ChevronDown, Heart, Sparkles } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
-import { coverUrl } from "../lib/api";
+import { bookCoverKey, CoverImage } from "../local/CoverImage";
 import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
@@ -204,12 +204,13 @@ export function AudiobookDetail({
             a 270px-tall cover pushed the player -- the thing someone opened the
             book for -- below the fold. 120px keeps the artwork recognisable and
             brings the transport up with the title.
+
+            The bytes come from the device cache like every other cover, so a
+            book opened on a train shows its cover.
           */}
-          <img
-            src={coverUrl(book.id)}
-            onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }}
-            alt=""
-            className="mx-auto aspect-[2/3] w-full max-w-[120px] min-w-0 object-cover sm:max-w-[180px] md:h-full md:max-w-none"
+          <CoverImage
+            cacheKey={bookCoverKey(book.id)}
+            className="mx-auto block aspect-[2/3] w-full max-w-[120px] min-w-0 [&>img]:h-full [&>img]:w-full [&>img]:object-cover sm:max-w-[180px] md:h-full md:max-w-none"
           />
           <span className="capsule__seam" aria-hidden="true" />
         </div>

@@ -3,6 +3,7 @@ import { Compass, Plus, RefreshCw, Trash2, Check } from "lucide-react";
 import type { DiscoverResult, Recommendation, WishlistItem } from "../types";
 import type { useDiscover } from "../useBrowse";
 import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
+import { CoverImage, urlCoverKey } from "../local/CoverImage";
 
 /**
  * Spec 20 -- the Discover tab.
@@ -32,13 +33,14 @@ function RecommendationCard({
       )}
     >
       <span className="shell-art block h-24 w-16 shrink-0">
-        <img
-          src={recommendation.coverUrl ?? "/placeholder-cover.svg"}
-          onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }}
-          alt=""
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
+        {/* Keyed by URL, because a suggestion's cover comes from a provider and
+            has no book id. Cached on the device like every other cover, so the
+            same resolver -- and the same three states -- apply here. */}
+        {recommendation.coverUrl ? (
+          <CoverImage cacheKey={urlCoverKey(recommendation.coverUrl)} className="contents" />
+        ) : (
+          <img src="/placeholder-cover.svg" alt="" aria-hidden="true" className="h-full w-full object-cover" />
+        )}
       </span>
       <div className="min-w-0 flex-1">
         <h3 className="truncate font-display text-[15px] font-semibold text-ink">{recommendation.title}</h3>
