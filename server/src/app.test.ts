@@ -239,6 +239,199 @@ describe("profiles", () => {
 });
 
 /**
+ * Spec 15b feature 4 — the conditional library GET.
+ *
+ * The tag is hashed over the whole payload rather than over a hand-picked set
+ * of `updatedAt` columns, because the response mixes `MediaItem` columns, four
+ * join tables and the caller's own progress. The test that matters most is the
+ * one that proves a genre applied *after* the last rescan still invalidates the
+ * tag: that is precisely the case a timestamp-based tag would get wrong.
+ */
+describe("conditional library GET", () => {
+  async function authed() {
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    return { cookie: login.cookies.map((c) => `${c.name}=${c.value}`).join("; ") };
+  }
+
+  async function seedBook(title: string) {
+    const root =
+      (await prisma.libraryRoot.findFirst()) ??
+      (await prisma.libraryRoot.create({ data: { path: "/lib", label: "Test" } }));
+    const item = await prisma.mediaItem.create({
+      data: { libraryRootId: root.id, filePath: `/lib/etag-${Date.now()}-${title}`, title, author: "Unknown", fileFormat: "mp3", duration: 300 },
+    });
+    // A real book always has tracks, and a track always has a `sizeBytes`
+    // BigInt that `publicMediaItem` does not strip. Hashing the payload without
+    // a BigInt-safe replacer threw `Do not know how to serialize a BigInt` and
+    // 500'd every library request -- a bug no fixture without tracks could see.
+    await prisma.track.create({
+      data: {
+        mediaItemId: item.id,
+        filePath: `/lib/etag-${item.id}/track-1.mp3`,
+        title: "Section 01",
+        duration: 300,
+        trackNumber: 1,
+        sizeBytes: 12_345_678n,
+      },
+    });
+    return item;
+  }
+
+  it("sends an ETag and a revalidating cache directive", async () => {
+    const { cookie } = await authed();
+    await seedBook("ETag Basics");
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers.etag).toMatch(/^"[0-9a-f]+"$/);
+    // `no-cache`, not `no-store`: the client may keep the body but must
+    // revalidate. `no-store` would throw away the thing this feature buys.
+    expect(res.headers["cache-control"]).toBe("private, no-cache");
+    expect(res.headers.vary).toContain("x-profile-id");
+  });
+
+  it("survives a track sizeBytes BigInt in the payload", async () => {
+    // The regression this whole block needed: `Track.sizeBytes` is a Prisma
+    // BigInt and reaches the payload, so hashing it with a bare JSON.stringify
+    // threw and every library request 500'd. A fixture book with no tracks
+    // cannot see it, which is why this test seeds a real track.
+    const { cookie } = await authed();
+    const item = await seedBook("ETag BigInt");
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers.etag).toMatch(/^"[0-9a-f]+"$/);
+    // The size must still be in the body the client receives.
+    expect(res.json().find((book: { id: number }) => book.id === item.id).tracks[0].sizeBytes).toBeDefined();
+  });
+
+  it("gives two different track sizes two different tags", async () => {
+    // Guards the reason the replacer emits a string rather than a Number: above
+    // 2^53 two distinct BigInts become the same double, and equal tags would
+    // serve a stale body.
+    const { cookie } = await authed();
+    const item = await seedBook("ETag BigInt Distinct");
+    const first = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+    await prisma.track.updateMany({
+      where: { mediaItemId: item.id },
+      data: { sizeBytes: 12_345_679n },
+    });
+    const second = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { cookie, "if-none-match": first.headers.etag as string },
+    });
+    expect(second.statusCode).toBe(200);
+  });
+
+  it("answers 304 with no body when nothing changed", async () => {
+    const { cookie } = await authed();
+    await seedBook("ETag Unchanged");
+    const first = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+    const second = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { cookie, "if-none-match": first.headers.etag as string },
+    });
+    expect(second.statusCode).toBe(304);
+    expect(second.body).toBe("");
+  });
+
+  it("invalidates when a book changes", async () => {
+    const { cookie } = await authed();
+    const item = await seedBook("ETag Changes");
+    const first = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+    await prisma.mediaItem.update({ where: { id: item.id }, data: { title: "ETag Changes (edited)" } });
+    const second = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { cookie, "if-none-match": first.headers.etag as string },
+    });
+    expect(second.statusCode).toBe(200);
+  });
+
+  it("invalidates when a join table changes, which no updatedAt column would catch", async () => {
+    // The case that rules out hashing `MediaItem.updatedAt`: applying a genre
+    // writes `MediaItemGenre` and touches no book column at all.
+    const { cookie } = await authed();
+    const item = await seedBook("ETag Join Table");
+    const genre = await prisma.genre.create({ data: { slug: `etag-${Date.now()}`, name: "Etag Genre" } });
+    const first = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+    await prisma.mediaItemGenre.create({ data: { mediaItemId: item.id, genreId: genre.id, source: "test" } });
+    const second = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { cookie, "if-none-match": first.headers.etag as string },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().find((book: { id: number }) => book.id === item.id).genres).toHaveLength(1);
+  });
+
+  it("never reuses one profile's tag for another's progress", async () => {
+    // The reason the tag covers progress at all. Two listeners, one cached
+    // response: if progress were not in the hash, profile B would receive a 304
+    // and keep seeing profile A's bookmarks.
+    const { cookie } = await authed();
+    const item = await seedBook("ETag Progress");
+    const a = await prisma.profile.create({ data: { name: `Etag A ${Date.now()}` } });
+    const b = await prisma.profile.create({ data: { name: `Etag B ${Date.now()}` } });
+    await prisma.listeningHistory.create({ data: { mediaItemId: item.id, profileId: a.id, position: 120 } });
+
+    const forA = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "x-profile-id": String(a.id) } });
+    expect(forA.json().find((book: { id: number }) => book.id === item.id).progress.position).toBe(120);
+
+    // A's tag replayed as B's: the position differs, so this must not be a 304.
+    const forB = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { cookie, "x-profile-id": String(b.id), "if-none-match": forA.headers.etag as string },
+    });
+    expect(forB.statusCode).toBe(200);
+    expect(forB.json().find((book: { id: number }) => book.id === item.id).progress).toBeNull();
+  });
+
+  it("accepts a tag list and a wildcard", async () => {
+    const { cookie } = await authed();
+    const first = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+    const tag = first.headers.etag as string;
+    const list = await app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: { cookie, "if-none-match": `"deadbeef", ${tag}` },
+    });
+    expect(list.statusCode).toBe(304);
+    const wildcard = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "if-none-match": "*" } });
+    expect(wildcard.statusCode).toBe(304);
+  });
+
+  it("ignores a tag that does not match", async () => {
+    const { cookie } = await authed();
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "if-none-match": '"not-the-tag"' } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("revalidates library roots separately, for scan state", async () => {
+    // Scan state changes during a scan without any book changing, so the two
+    // endpoints must not share one tag.
+    const { cookie } = await authed();
+    const first = await app.inject({ method: "GET", url: "/api/library-roots", headers: { cookie } });
+    expect(first.headers.etag).toMatch(/^"[0-9a-f]+"$/);
+    const second = await app.inject({
+      method: "GET",
+      url: "/api/library-roots",
+      headers: { cookie, "if-none-match": first.headers.etag as string },
+    });
+    expect(second.statusCode).toBe(304);
+
+    const books = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+    const crossed = await app.inject({
+      method: "GET",
+      url: "/api/library-roots",
+      headers: { cookie, "if-none-match": books.headers.etag as string },
+    });
+    expect(crossed.statusCode).toBe(200);
+  });
+});
+
+/**
  * Spec 21 — setting a chapter title by hand.
  *
  * This is the endpoint that makes "a user-set track title is never overwritten"

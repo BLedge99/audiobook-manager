@@ -2,7 +2,7 @@ import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import { PrismaClient } from "@prisma/client";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
@@ -171,6 +171,58 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return Number.isInteger(id) && id >= 1 ? id : null;
   }
 
+  /**
+   * Answer a conditional request, or send the payload.
+   *
+   * Fastify does not add `ETag` for you (unlike Express), and relying on its
+   * implicit 304 handling is a second thing to be right about -- especially for
+   * the cover route, whose payload is a stream. So the decision is made here,
+   * explicitly, and is testable as a unit.
+   *
+   * `match` is the value hashed into the tag. For the library it is the
+   * serialised payload, deliberately: the response mixes `MediaItem` columns,
+   * four join tables and the *caller's own* progress, and a hand-picked set of
+   * `updatedAt` columns would silently miss a genre or tag applied after the
+   * last rescan. Hashing the output is correct by construction -- if the bytes
+   * would have differed, the tag differs.
+   *
+   * `cacheControl` is `no-cache`, not `no-store`: the client may keep the body
+   * but must revalidate, which is exactly the "refresh costs bytes, not a
+   * round trip's worth of JSON" behaviour the phone needs.
+   *
+   * **BigInt.** `Track.sizeBytes` is a Prisma `BigInt` and it does reach this
+   * payload -- `publicMediaItem` strips `filePath`, not `sizeBytes`. Fastify's
+   * own serialiser copes with that; a bare `JSON.stringify` throws `Do not know
+   * how to serialize a BigInt`, which turned every library request into a 500.
+   * The replacer renders it as a decimal *string* rather than a `Number`,
+   * because a number silently loses precision above 2^53 and two different
+   * sizes could then hash alike -- a wrong 304, serving a stale body. The unit
+   * tests did not catch this because every fixture book they seeded had no
+   * tracks; the E2E run against the real library did.
+   */
+  function sendConditional<T>(
+    request: { headers: Record<string, unknown> },
+    reply: { header: (name: string, value: string) => unknown; code: (status: number) => { send: () => unknown } },
+    payload: T,
+    options: { vary?: string[] } = {},
+  ): T | unknown {
+    const serialised = JSON.stringify(payload, (_key, value) =>
+      typeof value === "bigint" ? value.toString() : value,
+    );
+    const tag = `"${createHash("sha1").update(serialised).digest("hex")}"`;
+    reply.header("etag", tag);
+    reply.header("cache-control", "private, no-cache");
+    if (options.vary) reply.header("vary", options.vary.join(", "));
+    // A client may send a list, and `*` matches anything. Comparing the whole
+    // header as a string would miss both.
+    const ifNoneMatch = request.headers["if-none-match"];
+    const tags = Array.isArray(ifNoneMatch) ? ifNoneMatch : [ifNoneMatch];
+    if (tags.some((value) => value === "*" || value === tag || String(value ?? "").split(",").some((entry) => entry.trim() === tag))) {
+      return reply.code(304).send();
+    }
+    return payload;
+  }
+
   app.get("/api/health", async () => ({ status: "ok" }));
 
   // Serve the built client (production single-origin). In dev the Vite dev
@@ -196,7 +248,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return Number.isInteger(profileId) && profileId >= 1 ? profileId : null;
   }
 
-  app.get("/api/audiobooks", async (request) => {
+  app.get("/api/audiobooks", async (request, reply) => {
     // Spec 20: the browse UI needs genres, series and custom tags on the list
     // payload -- fetching them per-book would be an N+1 request per shelf.
     const items = await prisma.mediaItem.findMany({
@@ -220,7 +272,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Spec 14: the grid needs each book's saved position to render
     // "continue listening" without N+1 requests. Scoped to the caller's profile,
     // so one household member never sees another's position.
-    return items.map((item) => {
+    const payload = items.map((item) => {
       const row = byItem.get(item.id);
       return {
         // Spec 11: never expose server filesystem paths to a client.
@@ -250,6 +302,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           : null,
       };
     });
+
+    // Spec 15b: a refresh that changed nothing must not resend the library.
+    // The tag covers the progress rows too, so it can never be correct for the
+    // wrong profile -- and `vary` says so for anything between us and the
+    // client that might cache this.
+    return sendConditional(request, reply, payload, {
+      vary: ["x-profile-id", "x-house-session"],
+    });
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id", async (request, reply) => {
@@ -269,8 +329,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   });
 
-  app.get("/api/library-roots", async () => {
-    return prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { createdAt: "asc" } });
+  app.get("/api/library-roots", async (request, reply) => {
+    // Conditional for the same reason as the library, and separately: scan
+    // state changes during a scan even when no book does, so sharing one tag
+    // with `/api/audiobooks` would hide a running scan.
+    const roots = await prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { createdAt: "asc" } });
+    return sendConditional(request, reply, roots);
   });
 
   app.post<{ Body: { path?: string; label?: string } }>("/api/library-roots", async (request, reply) => {

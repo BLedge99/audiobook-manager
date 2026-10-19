@@ -11,7 +11,7 @@ perfect. None of these are blockers. They are polish and correctness.
 commit each, in that order. Findings 2 and 6 are deliberately not being started:
 2 needs its own ADR before code, and 6 needs measuring before fixing.
 **Suggested order for tomorrow** at the end of this file is superseded by that
-spec.
+spec. Each finding below carries its own status line.
 
 ---
 
@@ -157,6 +157,11 @@ suggestions" test).
 
 > "The refresh button seemed very slow, after pressing it made the app show as
 > nothing in library for around a minute before repopulating library"
+
+**Status: FIXED 2026-10-19** (spec 15b feature 4). Rows stay on screen with a
+"Refreshing..." indicator, requests coalesce, the library refetches once a
+profile is picked, and `GET /api/audiobooks` answers 304 — measured at 56,717
+bytes down to 0 for a refresh that changed nothing.
 
 **Current state:** This is a known and now-measured behaviour, not a mystery.
 

@@ -205,30 +205,37 @@ re-tested against the fix; the Defy's WebView is newer, which is the harder
 case.
 
 ### 1.7 The library is fetched before a profile exists, so progress is stale on arrival
-**Status: LIMITED — being fixed as the first feature of the spec 15b pass.**
+**Status: FIXED (2026-10-19) by spec 15b feature 4.**
 
-`useLibrary` fetches `/api/audiobooks` once at mount, before the household
-password or a profile has been chosen, so the response carries no `progress`.
-After `ProfileGate` succeeds nothing refetches; the only refetch triggers are
-window `focus` and `visibilitychange`. A listener who opens the app, picks a
-profile and starts browsing sees no progress bars and no "Continue listening"
-until they leave and come back.
+**Was:** `useLibrary` fetched `/api/audiobooks` once at mount, before the
+household password or a profile had been chosen, so the response carried no
+`progress`. After `ProfileGate` succeeded nothing refetched; the only refetch
+triggers were window `focus` and `visibilitychange`. A listener who opened the
+app, picked a profile and started browsing saw no progress bars and no
+"Continue listening" until they left and came back.
 
-Pre-existing, but the redesign makes it far more visible: the dock is now the
+Pre-existing, but the redesign made it far more visible: the dock is now the
 first thing on the Library tab, so an empty dock reads as "you have nothing in
 progress" rather than as a fetch that has not happened yet.
 
-**Fix:** refetch once after a profile is selected, and stop `loading` from
-meaning "refetching" so a refresh that already has rows never blanks the grid.
-Both are in [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).
+A second symptom was reported the same day: pressing refresh showed "nothing in
+library" for around a minute. Measured cause: the refetch cleared the current
+library before the response arrived, so the grid rendered its empty state for
+exactly as long as the request took — a long time on a waking phone over Wi-Fi.
 
-**User-reported 2026-10-18:** pressing refresh shows "nothing in library" for
-around a minute before it repopulates. Measured cause: the refetch clears the
-current library before the response arrives, so the grid shows its empty state
-for exactly as long as the request takes — a long time on a waking phone over
-Wi-Fi. The fix is to keep rendering stale rows and show a "Refrescing" indicator
-instead; only an *initial* fetch with no data may show "nothing". See
-[`user-testing-2026-10-18.md`](user-testing-2026-10-18.md) item 4.
+**What shipped (spec 15b feature 4), measured against the live stack.**
+
+- `loading` is true only until the first response has ever arrived. A refetch
+  keeps the rows on screen and shows a "Refreshing..." status beside the library
+  heading; only an initial fetch may say "nothing".
+- Concurrent triggers share one in-flight promise, so the focus handler, the
+  visibility handler, the scan poller and a manual tap can no longer stack
+  requests.
+- The library refetches when a profile is selected, so progress is present on
+  arrival rather than after the next trip out of the app.
+- `GET /api/audiobooks` and `/api/library-roots` answer `304` to a matching
+  `If-None-Match`: **56,717 bytes → 0 bytes** for a refresh that changed
+  nothing. See [`user-testing-2026-10-18.md`](user-testing-2026-10-18.md) item 4.
 
 ### 1.8 Discover suggests **print** books, not audiobooks
 **Status: BY DESIGN, and the reason is provider reality. Found 2026-10-18.**

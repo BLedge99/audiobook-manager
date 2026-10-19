@@ -37,6 +37,67 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Spec 15b feature 4 — a refresh must never blank the library.
+ *
+ * The report was "pressed refresh, the app showed nothing in library for around
+ * a minute, then repopulated". The cause was that the refetch cleared the rows
+ * before the response arrived, so the grid rendered its empty state for exactly
+ * as long as the request took.
+ *
+ * So the test delays the response by two seconds -- long enough that a
+ * regression is unmissable -- and asserts the books are still on screen
+ * throughout, rather than asserting that they come back eventually.
+ */
+test.describe("library refresh", () => {
+  test("keeps the books on screen while a slow refresh is in flight", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+    const book = all[0];
+
+    // Delay only the client-side request the refresh button triggers. The
+    // `page.request` helpers above are a separate channel and are unaffected.
+    let release: (() => void) | undefined;
+    await page.route("**/api/audiobooks*", async (route) => {
+      if (!release) {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      }
+      await route.continue();
+    });
+
+    await page.getByRole("button", { name: "Refresh library" }).click();
+
+    // Mid-flight: the book is still there, and something says what is happening.
+    await expect(page.getByRole("heading", { name: book.title, exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Refreshing" })).toBeVisible();
+
+    release?.();
+    await expect(page.getByRole("status").filter({ hasText: "Refreshing" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: book.title, exact: true }).first()).toBeVisible();
+
+    // The regression this file exists for: the empty state appearing at all.
+    await expect(page.getByText("Loading library...")).toHaveCount(0);
+    await expect(page.getByText("Your library is empty")).toHaveCount(0);
+  });
+
+  test("picking a profile loads progress without leaving the app", async ({ page }) => {
+    // LIMITATIONS 1.7: the first fetch happened before a profile existed, so it
+    // carried no progress and nothing refetched it -- the dock read as empty
+    // until the listener left and came back.
+    await page.goto("/");
+    await login(page);
+
+    // With no profile stored, the gate must appear; picking one must not.
+    await expect(page.getByRole("heading", { name: "Who's listening?" })).toBeVisible();
+    await pickAnyProfile(page);
+    await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+    await expect(page.getByText("Loading library...")).toHaveCount(0);
+  });
+});
+
 test.describe("favourites", () => {
   test("favouriting a book moves it into the Favourites tab and survives a reload", async ({ page }) => {
     await enterApp(page);

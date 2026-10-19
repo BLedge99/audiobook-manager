@@ -58,7 +58,7 @@ function Mark() {
 }
 
 function App() {
-  const { audiobooks, roots, loading, error, refresh, addRoot, removeRoot, scan } = useLibrary();
+  const { audiobooks, roots, loading, refreshing, error, refresh, addRoot, removeRoot, scan } = useLibrary();
   const device = useDeviceLibrary(isNativeShell());
   const browse = useBrowse();
   const discover = useDiscover();
@@ -233,16 +233,33 @@ function App() {
    *
    * Also refetch when the tab is focused or becomes visible again: the same
    * staleness appears when listening happened on another device.
+   *
+   * A refetch no longer blanks the shelf, so none of these need a "silent"
+   * variant any more -- that flag existed only to suppress the empty state, and
+   * the empty state is now correct in every case.
    */
   const [libraryTick, setLibraryTick] = useState(0);
   useEffect(() => {
-    if (!libraryTick || !profileId) return;
-    void refresh({ silent: true });
-  }, [libraryTick, profileId, refresh]);
+    if (!libraryTick) return;
+    void refresh();
+  }, [libraryTick, refresh]);
+
+  /**
+   * LIMITATIONS 1.7: the first fetch happens before a profile exists, so its
+   * response carries no `progress`. Picking a profile has to trigger a second
+   * fetch or the dock reads as empty until the listener leaves and comes back.
+   *
+   * Keyed on the profile itself rather than on a tick, so it fires on every
+   * change of who is listening, including a switch from the profile menu.
+   */
+  useEffect(() => {
+    if (!profileId) return;
+    void refresh();
+  }, [profileId, refresh]);
 
   useEffect(() => {
     if (!profileId) return;
-    const refetch = () => { void refresh({ silent: true }); };
+    const refetch = () => { void refresh(); };
     window.addEventListener("focus", refetch);
     const onVisible = () => { if (document.visibilityState === "visible") refetch(); };
     document.addEventListener("visibilitychange", onVisible);
@@ -363,8 +380,18 @@ function App() {
             <IconBtn label="Settings" onClick={() => setShowSettings(true)}>
               <BookOpen size={19} aria-hidden="true" />
             </IconBtn>
-            <IconBtn label="Refresh library" onClick={() => void refresh()}>
-              <RefreshCw size={19} aria-hidden="true" />
+            {/*
+              The refresh control reports what it is doing rather than making
+              the shelf vanish. Spinning the icon and `aria-busy` are enough to
+              say "working" without taking the books away from someone who was
+              reading the list.
+            */}
+            <IconBtn
+              label={refreshing ? "Refreshing library" : "Refresh library"}
+              aria-busy={refreshing || undefined}
+              onClick={() => void refresh()}
+            >
+              <RefreshCw size={19} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
             </IconBtn>
             <ProfileSwitcher />
           </div>
@@ -447,9 +474,24 @@ function App() {
                 count={`${searchedBooks.length} ${searchedBooks.length === 1 ? "title" : "titles"}${search.trim() ? " matching your search" : " in your library"}`}
               >
                 {working ? <LoaderCircle className="animate-spin text-rasp" size={20} /> : null}
+                {/*
+                  The books stay on screen while a refresh is in flight, so
+                  something has to say the numbers are about to change.
+                  `role="status"` because it appears without being asked for and
+                  a screen reader should announce it once, politely.
+                */}
+                {refreshing && (
+                  <span role="status" className="flex items-center gap-1.5 text-[12.5px] font-bold text-ink3">
+                    <RefreshCw size={13} className="animate-spin" aria-hidden="true" />
+                    Refreshing...
+                  </span>
+                )}
               </MachineHead>
               <StatusLegend className="mb-4" />
               {loading ? (
+                /* Only reachable before the first response has ever arrived: the
+                   hook latches `loading` false once anything has loaded, so a
+                   refresh can never get here. */
                 <div className="panel panel--sunk px-6 py-20 text-center text-ink2">Loading library...</div>
               ) : (
                 <AudiobookGrid books={searchedBooks} {...gridProps} />
@@ -521,7 +563,7 @@ function App() {
                 </Notice>
               )}
 
-              <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh({ silent: true }); void browse.refresh(); }} />
+              <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh(); void browse.refresh(); }} />
             </div>
           </>
         )}
@@ -588,7 +630,7 @@ function App() {
         favourited={favouriteIds.has(selectedBook.id)}
         onToggleFavourite={toggleFavourite}
         onFindSimilar={findSimilar}
-        onBookUpdated={() => { void refresh({ silent: true }); void browse.refresh(); }}
+        onBookUpdated={() => { void refresh(); void browse.refresh(); }}
         deviceAction={
           isNativeShell() ? (
             <DownloadButton

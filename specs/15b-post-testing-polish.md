@@ -173,11 +173,11 @@ inconsistently.
 
 **Refresh**
 
-- [ ] Refreshing with books already on screen never renders an empty state.
-- [ ] A "Refreshing" indicator is visible for the duration of the request.
-- [ ] Three simultaneous triggers produce one request.
-- [ ] Selecting a profile refetches the library, so progress is present on arrival.
-- [ ] `GET /api/audiobooks` returns `304` for an unchanged library *and* for
+- [x] Refreshing with books already on screen never renders an empty state.
+- [x] A "Refreshing" indicator is visible for the duration of the request.
+- [x] Three simultaneous triggers produce one request.
+- [x] Selecting a profile refetches the library, so progress is present on arrival.
+- [x] `GET /api/audiobooks` returns `304` for an unchanged library *and* for
       unchanged progress, and never reuses one profile's tag for another's.
 
 **Player first**
@@ -232,6 +232,26 @@ one item that must work offline in the native shell and IndexedDB in a WebView
 is not the same thing as IndexedDB in Chromium. Per `LIMITATIONS.md` §5, an APK
 is never rebuilt while someone is mid-listen, and what is *installed* is
 verified rather than what is on disk.
+
+## Traps recorded here, because they cost real time
+
+**A route test with a hand-built fixture can be blind to a real payload.**
+Feature 4's conditional GET hashed the serialised library payload, which is the
+correct way to build an ETag — and it 500'd every request in the running app,
+because `Track.sizeBytes` is a Prisma `BigInt` and a bare `JSON.stringify`
+throws on it. Fastify's own serialiser handles BigInt, which is exactly why the
+endpoint had worked for months.
+
+The unit suite passed throughout: **36 green, including eight new tests written
+for the feature.** Every fixture book they seeded had no tracks, so no
+`sizeBytes` ever reached the hash. Only the E2E run against the real 12-book
+library produced a 500. The fixture now seeds a real track, and a test asserts
+two different sizes produce two different tags — which is also what pins the
+replacer to a decimal *string* rather than a `Number`, since a number silently
+loses precision above 2^53 and equal tags would serve a stale body.
+
+The general rule: **a fixture that is simpler than reality is a test that
+cannot fail.**
 
 ## Not in this spec
 
