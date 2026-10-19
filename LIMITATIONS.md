@@ -483,6 +483,42 @@ re-run of the security E2E suite. **Not started.**
 - **Android SDK installers stall on Windows.** `winget` sat at 0 bytes and the
   Android Studio installer froze on a GUI prompt. Plain `curl` of the
   commandline-tools zip worked at ~10 MB/s. Do not reach for an installer GUI.
+- **A phone can enumerate to Windows and still be invisible to adb, because the
+  installed USB driver is too old to cover it** (found 2026-10-19, while trying
+  to run the spec 15b cover-cache device pass).
+
+  The symptom is genuinely misleading and worth writing down: `adb devices`
+  listed **nothing at all**, which reads as "the cable is charge-only" or "USB
+  debugging is off" — neither of which was true. `Get-PnpDevice` showed the
+  device twice, `Android Composite ADB Interface`, both with `Status = Unknown`.
+  `Unknown` here means *no driver started*, not *the device is absent*.
+
+  The installed `android_winusb.inf` was version **11.0.0.0, dated 2014**, from
+  an SDK that had never had `extras;google;usb_driver` installed. The current
+  driver from `sdkmanager "extras;google;usb_driver"` explicitly lists the
+  device's IDs:
+
+  ```
+  %CompositeAdbInterface% = USB_Install, USB\VID_18D1&PID_4EE2&MI_01
+  %CompositeAdbInterface% = USB_Install, USB\VID_18D1&PID_4EE7
+  ```
+
+  — which are exactly the two instances Windows reported as `Unknown`. So the
+  diagnosis is a one-line check: **compare the instance IDs from
+  `Get-PnpDevice` against the `USB_Install` lines in the INF.** If the IDs are
+  absent, the driver is the problem and no amount of re-plugging will help.
+
+  The fix needs an **elevated** shell, which a background agent cannot raise:
+
+  ```powershell
+  pnputil /add-driver "$env:LOCALAPPDATA\Android\Sdk\extras\google\usb_driver\android_winusb.inf" /install
+  ```
+
+  then re-plug. Installing the driver package via `sdkmanager` needs no
+  elevation; *binding* it to the already-enumerated device does.
+  **Wireless debugging is the alternative** and needs no driver at all — the
+  phone and PC are on the same home network anyway, which is how the app itself
+  reaches the server.
 - **Capacitor 7/8 needs JDK 21.** An older JDK fails `assembleDebug` with an
   unhelpful Gradle error. `JAVA_HOME=C:\Tools\jdk21` in the build script.
 - **PowerShell `>` corrupts binary output**, so `adb exec-out screencap` produces
