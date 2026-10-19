@@ -1,11 +1,11 @@
-import { X, Clock3, Compass, FileAudio, Heart, Sparkles } from "lucide-react";
+import { X, Clock3, Compass, FileAudio, ChevronDown, Heart, Sparkles } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
 import { coverUrl } from "../lib/api";
 import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
-import { Btn, durationLabel } from "../ui/primitives";
+import { Btn, cn, durationLabel } from "../ui/primitives";
 
 interface Candidate {
   id: number;
@@ -75,6 +75,46 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   );
 }
 
+/**
+ * Everything behind the "Book details" fold (spec 15b feature 5).
+ *
+ * Its own component for one reason that matters: it is mounted only when the
+ * fold is open, so `useTagSuite` -- which fetches on mount -- does not run every
+ * time someone opens a book. Called from `AudiobookDetail` instead, the hook
+ * would fire on every open no matter what the disclosure said, and the comment
+ * claiming otherwise would have been a lie that only the network could correct.
+ *
+ * It holds only what the fold's own "Details" panel does not already show.
+ * Series and the description used to be printed twice on this screen -- once as
+ * prose and once inside `TagSuiteEditor`, which renders every field as readable
+ * text when it is not being edited. That predates this spec; moving the panel
+ * behind a disclosure was the moment to stop printing it twice, and adding a
+ * prose copy back here would have re-created it.
+ */
+function BookDetails({
+  book,
+  genres,
+  tags,
+  onBookUpdated,
+}: {
+  book: Audiobook;
+  genres: GenreNode[];
+  tags: TagSummary[];
+  onBookUpdated?: () => void;
+}) {
+  const suite = useTagSuite(book.id);
+
+  return (
+    <>
+      {/* Spec 20: the full, individually editable tag suite with provenance,
+          including series, description, genres, tags and narrators. */}
+      <TagSuiteEditor book={book} genres={genres ?? []} tags={tags ?? []} suite={suite} onSaved={() => onBookUpdated?.()} />
+
+      <MetadataEditor book={book} onUpdated={() => onBookUpdated?.()} />
+    </>
+  );
+}
+
 export function AudiobookDetail({
   book,
   onClose,
@@ -111,8 +151,16 @@ export function AudiobookDetail({
    */
   localUrlForTrack?: (bookId: number, trackId: number) => Promise<string | undefined>;
 }) {
-  const suite = useTagSuite(book.id);
   const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
+  /**
+   * Spec 15b feature 5 — the metadata lives behind a disclosure, and is not
+   * rendered at all until it is opened.
+   *
+   * A native `<details>` would have kept its children in the DOM, which means
+   * the tag suite would still mount and still fetch on every book open. See
+   * `BookDetails` for why that hook moved.
+   */
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
     /* `fixed inset-0` with the <article> as its direct child is load-bearing:
@@ -150,15 +198,36 @@ export function AudiobookDetail({
             width, so the page was fine while the dialog scrolled inside itself.
             It now asserts the dialog does not scroll internally too. */}
         <div className="relative min-w-0">
+          {/*
+            Smaller on a phone than the `md` 180px cap. The detail dialog stacks
+            on one column below `md`, so on the device this app mostly runs on,
+            a 270px-tall cover pushed the player -- the thing someone opened the
+            book for -- below the fold. 120px keeps the artwork recognisable and
+            brings the transport up with the title.
+          */}
           <img
             src={coverUrl(book.id)}
             onError={(event) => { event.currentTarget.src = "/placeholder-cover.svg"; }}
             alt=""
-            className="mx-auto aspect-[2/3] w-full max-w-[180px] min-w-0 object-cover md:h-full md:max-w-none"
+            className="mx-auto aspect-[2/3] w-full max-w-[120px] min-w-0 object-cover sm:max-w-[180px] md:h-full md:max-w-none"
           />
           <span className="capsule__seam" aria-hidden="true" />
         </div>
 
+        {/*
+          Spec 15b feature 5 — player first.
+
+          The order here is the argument: cover, what this is, **play it**, then
+          the things a listener does next, then the one-line facts, then a fold
+          for everything the operator cares about. It previously ran
+          tags → description → online metadata lookup → player, so the most
+          common reason for opening a book was the last thing on the page. That
+          is ADR 012's own thesis -- the device is a synchronised player, not a
+          second library manager -- contradicted by its own layout.
+
+          Nothing here was rebuilt. `ChapterPlayer`, `position.ts` and
+          `ProgressTimeline` are spec 14/15's work and are untouched.
+        */}
         <div className="min-w-0 p-5 pt-14 md:p-8 md:pt-8">
           <h2 className="pr-10 text-[26px] leading-[1.08] md:text-3xl">{book.title}</h2>
           {book.subtitle && <p className="mt-1 text-[16px] italic text-ink2 md:text-lg">{book.subtitle}</p>}
@@ -167,13 +236,11 @@ export function AudiobookDetail({
             <p className="mt-1 text-[13.5px] text-ink3">Narrated by {narrators.map((entry) => entry.name).join(", ")}</p>
           )}
           {deviceAction && <div className="mt-5">{deviceAction}</div>}
-          {book.series && (
-            <p className="mt-1 text-[13.5px] text-ink3">
-              {book.series.name}{book.seriesPosition != null && ` · Book ${book.seriesPosition}`}
-            </p>
-          )}
 
-          {/* Spec 18/19/20: favourite and find-more-like actions on the book. */}
+          <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} />
+
+          {/* Spec 18/19/20: favourite and find-more-like actions on the book.
+              Above the fold, because both are things a listener does next. */}
           {(onToggleFavourite || onFindSimilar) && (
             <div className="mt-4 flex flex-wrap gap-2">
               {onToggleFavourite && (
@@ -194,19 +261,38 @@ export function AudiobookDetail({
             </div>
           )}
 
-          <div className="mt-5 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] font-semibold text-ink2">
+          {/* The facts that fit on one line stay out of the fold. A reader
+              choosing between two books needs "how long is it", not a
+              paragraph. */}
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] font-semibold text-ink2">
             <span className="flex items-center gap-1.5"><Clock3 size={15} aria-hidden="true" /> {durationLabel(book.duration)}</span>
             <span className="flex items-center gap-1.5"><FileAudio size={15} aria-hidden="true" /> {book.fileFormat.toUpperCase()}</span>
             {book.publishedYear && <span className="tnum">{book.publishedYear}</span>}
             {book.publisher && <span className="truncate">{book.publisher}</span>}
           </div>
-          {book.description && <p className="mt-5 leading-relaxed text-ink2">{book.description}</p>}
 
-          {/* Spec 20: the full, individually editable tag suite with provenance. */}
-          <TagSuiteEditor book={book} genres={genres ?? []} tags={tags ?? []} suite={suite} onSaved={() => onBookUpdated?.()} />
+          <div className="mt-5">
+            <Btn
+              variant="quiet"
+              size="sm"
+              onClick={() => setDetailsOpen((open) => !open)}
+              aria-expanded={detailsOpen}
+              aria-controls="book-details"
+            >
+              <ChevronDown
+                size={16}
+                aria-hidden="true"
+                className={cn("transition-transform", detailsOpen && "rotate-180")}
+              />
+              Book details
+            </Btn>
 
-          <MetadataEditor book={book} onUpdated={() => onBookUpdated?.()} />
-          <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} />
+            {detailsOpen && (
+              <div id="book-details" className="mt-4 grid gap-5">
+                <BookDetails book={book} genres={genres ?? []} tags={tags ?? []} onBookUpdated={onBookUpdated} />
+              </div>
+            )}
+          </div>
         </div>
       </article>
     </div>

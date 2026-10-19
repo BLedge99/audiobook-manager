@@ -78,6 +78,37 @@ test.describe("phone layout", () => {
     });
   }
 
+  test("opening a book shows the player without scrolling", async ({ page }) => {
+    // Spec 15b feature 5. The tester asked for this directly: "the player for
+    // books should be at the top rather than below a load of info like tags
+    // etc, the most common reason for opening a book is to play it". The detail
+    // page used to end with the player, under tags, series and the description.
+    //
+    // Asserted as geometry rather than presence, because "the player exists"
+    // was true before this change too -- it was simply below the fold.
+    const height = 780;
+    await page.setViewportSize({ width: 390, height });
+    await page.goto("/");
+    await login(page);
+    await pickAnyProfile(page);
+    await expect(page.getByRole("heading", { name: /all audiobooks/i }).first()).toBeVisible();
+
+    await page.locator("[data-book-id], article, button").filter({ hasText: /tracks/i }).first().click();
+    const dialog = page.locator("div.fixed.inset-0 > article").first();
+    await expect(dialog).toBeVisible();
+
+    const player = page.getByLabel("Audiobook player");
+    await expect(player).toBeVisible();
+    const box = await player.boundingBox();
+    expect(box, "the player has no layout box").not.toBeNull();
+    // Inside the first viewport, so nobody has to scroll to press play.
+    expect(box!.y, `player starts at y=${box!.y}, below the ${height}px viewport`).toBeLessThan(height);
+
+    // And the metadata that used to sit above it is not on screen at all.
+    await expect(page.getByRole("region", { name: "Details" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Book details" })).toBeVisible();
+  });
+
   test("book detail modal does not scroll sideways at 360px", async ({ page }) => {
     // The regression lived here: the modal stacks below `md`, so its cover was
     // `w-full` at `aspect-[2/3]` and blew the layout out to several screen widths.

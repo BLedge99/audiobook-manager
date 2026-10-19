@@ -182,12 +182,12 @@ inconsistently.
 
 **Player first**
 
-- [ ] Opening a book shows the player without scrolling.
-- [ ] Metadata, tags and the metadata lookup are reachable in one tap and hidden
+- [x] Opening a book shows the player without scrolling.
+- [x] Metadata, tags and the metadata lookup are reachable in one tap and hidden
       by default.
-- [ ] Spec 14's position display is unchanged: chapter, position in chapter,
+- [x] Spec 14's position display is unchanged: chapter, position in chapter,
       book percentage, time left, chapter ticks, session-start marker.
-- [ ] `e2e/phone-layout.spec.ts` passes without editing an assertion.
+- [x] `e2e/phone-layout.spec.ts` passes without editing an assertion.
 
 **Covers**
 
@@ -252,6 +252,20 @@ loses precision above 2^53 and equal tags would serve a stale body.
 
 The general rule: **a fixture that is simpler than reality is a test that
 cannot fail.**
+
+**jsdom does no layout, so geometry assertions are vacuous there.** The obvious
+way to test "the player is above the metadata" is `getBoundingClientRect()`.
+In jsdom every rect is `0×0`, so both comparisons are `0 > 0` and the test
+passes whatever the markup says. The unit tests compare
+`compareDocumentPosition` instead, and the real check is an E2E one that
+measures the player's `y` against the viewport — because the defect this feature
+fixes is *visual*, and only a browser can see it.
+
+**An empty object stub can throw inside a child and look like the parent never
+rendered.** Returning `{}` for the tag-suite response makes `TagSuiteEditor`
+throw on `suite.genres.map(...)`; with no error boundary React unmounts the
+whole tree, so the fold looks like it never opened and the failure reads as a
+state bug. Stubs for a real payload shape, not a plausible one.
 
 ## Not in this spec
 

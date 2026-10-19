@@ -367,6 +367,11 @@ test.describe("tag suite", () => {
 
     try {
       await page.getByRole("heading", { name: book.title, exact: true }).first().click();
+
+      // Spec 15b feature 5 moved the metadata behind a disclosure, so the panel
+      // has to be opened before it exists. The assertions below are unchanged;
+      // only the two lines that reach it are new.
+      await page.getByRole("button", { name: "Book details" }).click();
       const details = page.getByRole("region", { name: "Details" });
       await expect(details).toBeVisible();
 

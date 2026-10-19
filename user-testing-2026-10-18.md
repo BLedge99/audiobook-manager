@@ -201,6 +201,15 @@ the empty-state logic), `client/src/components/LibraryGrid.tsx` /
 > like tags etc, the most common reason for opening a book is to play it, so
 > the media player should be front and center at the top of the screen"
 
+**Status: FIXED 2026-10-19** (spec 15b feature 5). The player now sits directly
+under the title, with favourite / find-more-like and a one-line fact strip
+below it; series, description, tags and the online metadata lookup are behind a
+"Book details" fold. The mobile cover was also capped at 120px, because the
+dialog stacks on one column and a 270px cover pushed the transport below the
+fold. Spec 14's position display was reused, not rebuilt, and the duplication
+this exposed — series and description were being printed twice, once as prose and
+once inside the Details panel — is gone.
+
 **Current state:** The detail page currently renders metadata — tags, series,
 contributors, enrichment status, review-queue actions — above the player.
 The tester's instinct matches ADR 012's whole thesis: **the device is a
