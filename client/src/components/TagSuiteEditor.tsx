@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pencil, RotateCcw, Save } from "lucide-react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
 import type { useTagSuite } from "../useBrowse";
+import { copy } from "../copy";
 import { Btn, cn } from "../ui/primitives";
 
 /**
@@ -61,7 +62,7 @@ export function TagSuiteEditor({
 
   const overridden = new Set(suite.suite.overriddenFields);
   const provenance = (field: string) =>
-    overridden.has(field) ? "Yours" : (suite.suite!.metadataSource ?? "embedded");
+    overridden.has(field) ? copy.tagSuite.yours : (suite.suite!.metadataSource ?? copy.tagSuite.embedded);
 
   const save = async () => {
     setStatus(undefined);
@@ -78,7 +79,7 @@ export function TagSuiteEditor({
 
     if (Object.keys(changed).length === 0) {
       setEditing(false);
-      setStatus("Nothing changed.");
+      setStatus(copy.tagSuite.nothingChanged);
       return;
     }
 
@@ -94,10 +95,10 @@ export function TagSuiteEditor({
     try {
       await suite.save(changed);
       setEditing(false);
-      setStatus("Saved. These values now win over anything the providers suggest.");
+      setStatus(copy.tagSuite.saved);
       onSaved();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Could not save");
+      setStatus(error instanceof Error ? error.message : copy.tagSuite.saveFailed);
     }
   };
 
@@ -155,28 +156,28 @@ export function TagSuiteEditor({
   return (
     <section className="panel mt-6 p-4 sm:p-5" aria-labelledby="tag-suite">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 id="tag-suite" className="font-display text-[17px] font-semibold text-ink">Details</h2>
+        <h2 id="tag-suite" className="font-display text-[17px] font-semibold text-ink">{copy.tagSuite.heading}</h2>
         <div className="flex items-center gap-2">
           {editing ? (
             <>
               <Btn size="sm" variant="primary" onClick={() => { void save(); }}>
-                <Save size={13} aria-hidden="true" /> Save
+                <Save size={13} aria-hidden="true" /> {copy.tagSuite.save}
               </Btn>
-              <Btn size="sm" variant="quiet" onClick={() => setEditing(false)}>Cancel</Btn>
+              <Btn size="sm" variant="quiet" onClick={() => setEditing(false)}>{copy.tagSuite.cancel}</Btn>
             </>
           ) : (
             <Btn size="sm" onClick={() => setEditing(true)}>
-              <Pencil size={13} aria-hidden="true" /> Edit
+              <Pencil size={13} aria-hidden="true" /> {copy.tagSuite.edit}
             </Btn>
           )}
           {overridden.size > 0 && (
             <Btn
               size="sm"
               variant="quiet"
-              title="Clear your overrides so enrichment and embedded tags can update these again"
+              title={copy.tagSuite.resetHelp}
               onClick={() => void suite.reset().then(() => { setEditing(false); onSaved(); })}
             >
-              <RotateCcw size={13} aria-hidden="true" /> Reset
+              <RotateCcw size={13} aria-hidden="true" /> {copy.tagSuite.reset}
             </Btn>
           )}
         </div>
@@ -185,22 +186,22 @@ export function TagSuiteEditor({
       {status && <p role="status" className="mb-3 text-[12.5px] font-bold text-cobalt-ink">{status}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Title" field="title" />
-        <Field label="Author" field="author" />
-        <Field label="Publisher" field="publisher" />
-        <Field label="Year" field="publishedYear" />
-        <Field label="Series" field="seriesName" placeholder="e.g. The Expanse" />
-        <Field label="Series #" field="seriesPosition" placeholder="e.g. 2 or 2.5" />
-        <Field label="Language" field="language" />
-        <Field label="Subtitle" field="subtitle" />
+        <Field label={copy.tagSuite.fields.title} field="title" />
+        <Field label={copy.tagSuite.fields.author} field="author" />
+        <Field label={copy.tagSuite.fields.publisher} field="publisher" />
+        <Field label={copy.tagSuite.fields.year} field="publishedYear" />
+        <Field label={copy.tagSuite.fields.series} field="seriesName" placeholder={copy.tagSuite.seriesPlaceholder} />
+        <Field label={copy.tagSuite.fields.seriesPosition} field="seriesPosition" placeholder={copy.tagSuite.seriesPositionPlaceholder} />
+        <Field label={copy.tagSuite.fields.language} field="language" />
+        <Field label={copy.tagSuite.fields.subtitle} field="subtitle" />
       </div>
 
       {suite.suite.description !== undefined && (
         <div className="mt-4">
-          <span className="mb-1 block text-[13px] font-bold text-ink">Description</span>
+          <span className="mb-1 block text-[13px] font-bold text-ink">{copy.tagSuite.fields.description}</span>
           {editing ? (
             <textarea
-              aria-label="Description"
+              aria-label={copy.tagSuite.fields.description}
               value={String(draft.description ?? "")}
               onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
               rows={4}
@@ -217,7 +218,9 @@ export function TagSuiteEditor({
       {suite.suite.contributors.length > 0 && (
         <div className="mt-4">
           <span className="mb-1.5 block text-[13px] font-bold text-ink">
-            {suite.suite.contributors.filter((c) => c.role === "narrator").length > 0 ? "Narrators" : "Contributors"}
+            {suite.suite.contributors.filter((c) => c.role === "narrator").length > 0
+              ? copy.tagSuite.narrators
+              : copy.tagSuite.contributors}
           </span>
           <ul className="flex flex-wrap gap-2">
             {suite.suite.contributors.map((contributor) => (
@@ -235,7 +238,7 @@ export function TagSuiteEditor({
 
       {genres.length > 0 && (
         <fieldset className="mt-4">
-          <legend className="mb-2 font-display text-[15px] font-semibold text-ink">Genres</legend>
+          <legend className="mb-2 font-display text-[15px] font-semibold text-ink">{copy.tagSuite.genres}</legend>
           <div className="flex flex-wrap gap-2">
             {genres.flatMap((parent) => [parent, ...(parent.children ?? [])]).map((genre) => {
               const selected = ((draft.genreIds as number[]) ?? []).includes(genre.id);
@@ -266,7 +269,7 @@ export function TagSuiteEditor({
 
       {tags.length > 0 && (
         <fieldset className="mt-4">
-          <legend className="mb-2 font-display text-[15px] font-semibold text-ink">Your tags</legend>
+          <legend className="mb-2 font-display text-[15px] font-semibold text-ink">{copy.tagSuite.yourTags}</legend>
           <div className="flex flex-wrap gap-2">
             {tags.map((tag) => {
               const selected = ((draft.tagIds as number[]) ?? []).includes(tag.id);

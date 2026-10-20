@@ -1,4 +1,5 @@
 import { SlidersHorizontal, X } from "lucide-react";
+import { copy } from "../copy";
 import {
   activeFilterCount,
   clearFacet,
@@ -24,11 +25,11 @@ import { cn } from "../ui/primitives";
  */
 
 const FACETS: { key: FacetKey; label: string }[] = [
-  { key: "genre", label: "Genre" },
-  { key: "author", label: "Author" },
-  { key: "narrator", label: "Narrator" },
-  { key: "series", label: "Series" },
-  { key: "tag", label: "Tags" },
+  { key: "genre", label: copy.filters.facets.genre },
+  { key: "author", label: copy.filters.facets.author },
+  { key: "narrator", label: copy.filters.facets.narrator },
+  { key: "series", label: copy.filters.facets.series },
+  { key: "tag", label: copy.filters.facets.tag },
 ];
 
 function Chip({
@@ -84,7 +85,7 @@ function FacetGroup({
             onClick={() => onClear(facet)}
             className="text-[12.5px] font-bold text-rasp-ink underline decoration-dotted underline-offset-4 hover:decoration-solid"
           >
-            clear
+            {copy.filters.clear}
           </button>
         )}
       </div>
@@ -93,7 +94,7 @@ function FacetGroup({
       <div
         className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible"
         role="group"
-        aria-label={`Filter by ${label.toLowerCase()}`}
+        aria-label={copy.filters.groupLabel(label)}
       >
         {options.map((option) => (
           <span key={option.value} className="snap-start">
@@ -138,7 +139,7 @@ export function FilterBar({
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 id="filter-bar" className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
           <SlidersHorizontal size={17} aria-hidden="true" className="text-rasp" />
-          Filter
+          {copy.filters.heading}
         </h2>
         {isFilterActive(filters) && (
           <button
@@ -146,7 +147,7 @@ export function FilterBar({
             onClick={() => onChange({})}
             className="btn btn--sm"
           >
-            <X size={14} aria-hidden="true" /> Clear {active}
+            <X size={14} aria-hidden="true" /> {copy.filters.clearCount(active)}
           </button>
         )}
       </div>

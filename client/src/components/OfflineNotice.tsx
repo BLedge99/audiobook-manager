@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CloudOff, RefreshCw, Wifi } from "lucide-react";
+import { copy } from "../copy";
 import { Btn, FullScreen, MachineMark, Wordmark } from "../ui/primitives";
 
 /**
@@ -36,24 +37,22 @@ export function OfflineNotice({
   return (
     <FullScreen>
       <div className="flex flex-col items-center text-center">
-        <Wordmark title="Audiobook Manager" subtitle="local-first listening" />
+        <Wordmark title={copy.brand.name} subtitle={copy.brand.tagline} />
 
         <div className="panel mt-8 w-full px-6 py-7">
           <span className="mx-auto grid size-16 -rotate-6 place-items-center rounded-[20px_16px_20px_16px/16px_20px_16px_20px] border-2 border-ink bg-sunk">
             <CloudOff size={28} aria-hidden="true" className="text-ink3" />
           </span>
 
-          <h1 className="mt-5 font-display text-2xl font-semibold text-ink">Can&rsquo;t reach the server</h1>
+          <h1 className="mt-5 font-display text-2xl font-semibold text-ink">{copy.offline.heading}</h1>
 
           <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-ink2">
-            {hasBooks
-              ? "Choose a profile to listen to the books already on this phone."
-              : "Nothing has been downloaded to this phone yet. Connect to the home WiFi, open the app and download a book — then it will play with no network at all."}
+            {hasBooks ? copy.offline.withBooks : copy.offline.withoutBooks}
           </p>
 
           <Btn variant="primary" onClick={retry} disabled={checking} className="mt-6 w-full sm:w-auto">
             {checking ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Wifi size={16} aria-hidden="true" />}
-            {checking ? "Checking…" : "Try again"}
+            {checking ? copy.offline.checking : copy.offline.tryAgain}
           </Btn>
         </div>
       </div>
@@ -75,7 +74,7 @@ export function Splash() {
             app opened and is working, which is the only question this screen is
             answering. */}
         <MachineMark className="dispense" />
-        <p className="mt-6 text-sm font-bold text-ink3">Connecting…</p>
+        <p className="mt-6 text-sm font-bold text-ink3">{copy.offline.connecting}</p>
       </div>
     </FullScreen>
   );

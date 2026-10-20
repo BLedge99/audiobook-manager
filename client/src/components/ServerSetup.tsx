@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Plug } from "lucide-react";
 import { setServerUrl } from "../lib/api";
+import { copy } from "../copy";
 import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
 
 /**
@@ -40,7 +41,7 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
       saved = window.localStorage.getItem("serverUrl") || "";
     } catch (error) {
       setStatus("failed");
-      setMessage(error instanceof Error ? error.message : "Enter a server address.");
+      setMessage(error instanceof Error ? error.message : copy.serverSetup.enterAddress);
       return;
     }
 
@@ -53,9 +54,10 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
     } catch (error) {
       setStatus("failed");
       setMessage(
-        `Could not reach ${saved}. Check the address, and that the phone is on the home WiFi. (${
-          error instanceof Error ? error.message : "network error"
-        })`,
+        copy.serverSetup.unreachable(
+          saved,
+          error instanceof Error ? error.message : copy.serverSetup.networkError,
+        ),
       );
     }
   };
@@ -63,30 +65,30 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
   return (
     <FullScreen>
       <div className="flex flex-col items-center">
-        <Wordmark title="Audiobook Manager" subtitle="local-first listening" />
+        <Wordmark title={copy.brand.name} subtitle={copy.brand.tagline} />
 
         <form onSubmit={submit} className="panel mt-8 w-full max-w-md px-6 py-7">
           <span className="grid size-14 -rotate-6 place-items-center rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink bg-cobalt">
             <Plug size={24} className="text-white" aria-hidden="true" />
           </span>
 
-          <h1 className="mt-4 font-display text-2xl font-semibold text-ink">Connect to your library</h1>
+          <h1 className="mt-4 font-display text-2xl font-semibold text-ink">{copy.serverSetup.heading}</h1>
+          <p className="mt-2 text-sm leading-relaxed text-ink2">{copy.serverSetup.intro}</p>
           <p className="mt-2 text-sm leading-relaxed text-ink2">
-            Enter the address of the server at home, for example{" "}
+            {copy.serverSetup.exampleLead}{" "}
             <code className="rounded bg-sunk px-1.5 py-0.5 font-bold text-cobalt-ink">
-              http://192.168.1.203:3000
+              {copy.serverExample}
             </code>
-            . You only do this once.
           </p>
 
           <Field
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            placeholder="192.168.1.203:3000"
+            placeholder={copy.serverSetup.addressPlaceholder}
             autoCapitalize="off"
             autoCorrect="off"
             inputMode="url"
-            aria-label="Server address"
+            aria-label={copy.serverAddressLabel}
             className="mt-5"
           />
 
@@ -97,7 +99,7 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
           )}
 
           <Btn type="submit" variant="primary" disabled={status === "checking"} className="mt-4 w-full">
-            {status === "checking" ? "Checking…" : "Connect"}
+            {status === "checking" ? copy.serverSetup.checking : copy.serverSetup.submit}
           </Btn>
         </form>
       </div>

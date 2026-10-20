@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { HardDriveDownload, LoaderCircle, Save, Server, WifiOff } from "lucide-react";
 import { getServerUrl, setServerUrl } from "../lib/api";
+import { copy } from "../copy";
 import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
 
 export interface SettingsProps {
@@ -56,7 +57,7 @@ export function Settings({
       saved = getServerUrl();
     } catch (error) {
       setStatus("failed");
-      setMessage(error instanceof Error ? error.message : "Enter a server address");
+      setMessage(error instanceof Error ? error.message : copy.settings.enterAddress);
       return;
     }
 
@@ -66,14 +67,15 @@ export function Settings({
       const response = await fetch(`${saved}/api/health`);
       if (!response.ok) throw new Error(`Server replied ${response.status}`);
       setStatus("ok");
-      setMessage("Connected.");
+      setMessage(copy.settings.connected);
       onSaved();
     } catch (error) {
       setStatus("failed");
       setMessage(
-        `Could not reach ${saved}. Check the address and that the phone is on the home WiFi. (${
-          error instanceof Error ? error.message : "network error"
-        })`,
+        copy.settings.unreachable(
+          saved,
+          error instanceof Error ? error.message : copy.settings.networkError,
+        ),
       );
     }
   };
@@ -85,43 +87,40 @@ export function Settings({
           <div className="flex min-w-0 items-center gap-3">
             <MachineMark />
             <h2 className="min-w-0 font-display text-[26px] font-semibold leading-tight text-ink">
-              Home server
+              {copy.settings.heading}
             </h2>
           </div>
           <Btn variant="quiet" size="sm" onClick={onClose} className="shrink-0">
-            Close
+            {copy.settings.close}
           </Btn>
         </div>
 
         <form onSubmit={test} className="panel grid gap-3 p-5">
           <label htmlFor="server-url" className="flex items-center gap-2 text-[14px] font-bold text-ink">
             <Server size={16} className="text-rasp" aria-hidden="true" />
-            Server address
+            {copy.serverAddressLabel}
           </label>
           <Field
             id="server-url"
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            placeholder="http://192.168.1.203:3000"
+            placeholder={copy.serverExample}
             inputMode="url"
             autoComplete="off"
             spellCheck={false}
             className="font-mono"
           />
-          <p className="text-[12.5px] text-ink3">
-            On the home WiFi. If the router gives the server a new address, change it here — no
-            reinstall needed.
-          </p>
+          <p className="text-[12.5px] text-ink3">{copy.settings.addressHelp}</p>
           <Btn type="submit" variant="primary" disabled={status === "checking"}>
             {status === "checking" ? (
               <>
                 <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
-                Checking...
+                {copy.settings.checking}
               </>
             ) : (
               <>
                 <Save size={16} aria-hidden="true" />
-                Save and test
+                {copy.settings.saveAndTest}
               </>
             )}
           </Btn>
@@ -134,7 +133,7 @@ export function Settings({
         <section className="panel mt-4 p-5">
           <h3 className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
             <HardDriveDownload size={17} className="text-rasp" aria-hidden="true" />
-            On this device
+            {copy.settings.deviceHeading}
           </h3>
           {/* The tube, not a dial: there is no meaningful maximum to fill
               against, so a proportional ring would be a lie. */}
@@ -142,12 +141,12 @@ export function Settings({
             {formatBytes(usedBytes)}
           </p>
           <p className="mt-1 text-[13.5px] text-ink2">
-            {downloadedCount} {downloadedCount === 1 ? "book" : "books"} downloaded
+            {copy.settings.booksDownloaded(downloadedCount)}
           </p>
           <Tube percent={downloadedCount > 0 ? 100 : 0} className="mt-3" />
           {offline && (
             <Notice tone="warn" role="status" icon={<WifiOff size={15} aria-hidden="true" />} className="mt-4">
-              The server is unreachable. Downloaded books still play.
+              {copy.settings.serverUnreachable}
             </Notice>
           )}
 
@@ -163,13 +162,19 @@ export function Settings({
           */}
           {typeof coverBytes === "number" && (
             <div className="mt-4 border-t-2 border-dashed border-ink/20 pt-4">
-              <p className="text-[13.5px] text-ink2">
-                <span className="font-bold text-ink tnum">{formatBytes(coverBytes)}</span> of cover art
-                cached, so covers still show with no connection.
+              {/*
+                The byte count used to be bolded inside the sentence. It is not
+                now: the panel's headline figure is the one bold number, and
+                `clarify` asks for whole sentences rather than a sentence split
+                around a styled run. `tnum` on the line keeps the figures
+                aligned.
+              */}
+              <p className="text-[13.5px] text-ink2 tnum">
+                {copy.settings.coversCached(formatBytes(coverBytes))}
               </p>
               {coversCleared ? (
                 <p role="status" className="mt-2 text-[13px] font-bold text-cobalt-ink">
-                  Cached covers cleared. They will come back as you browse.
+                  {copy.settings.coversCleared}
                 </p>
               ) : (
                 <Btn
@@ -181,7 +186,7 @@ export function Settings({
                   }}
                   className="mt-2"
                 >
-                  Clear cached covers
+                  {copy.settings.clearCovers}
                 </Btn>
               )}
             </div>

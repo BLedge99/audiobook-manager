@@ -9,6 +9,7 @@ import {
   timeLabel,
   totalDuration,
 } from "../lib/position";
+import { copy } from "../copy";
 import {
   CapsuleMarks,
   MachineHead,
@@ -113,7 +114,7 @@ function LibraryCard({
             point of the queue holding its mark. */}
         {needsReview && (
           <span className="mb-1.5 inline-flex rounded-full border-2 border-ink bg-rasp px-2 py-0.5 text-[10px] font-bold text-white">
-            Metadata updated
+            {copy.status.changed}
           </span>
         )}
         <span className="relative block">
@@ -133,12 +134,14 @@ function LibraryCard({
           <p className="mt-0.5 truncate text-[12.5px] text-ink2">{book.author}</p>
           {narrators.length > 0 && (
             <p className="mt-0.5 truncate text-[11.5px] text-ink3">
-              Narrated by {narrators.length === 1 ? narrators[0].name : `${narrators.length} narrators`}
+              {narrators.length === 1
+                ? copy.narratedBy(narrators[0].name)
+                : copy.narratedByCount(narrators.length)}
             </p>
           )}
           {book.tracks.length > 1 && (
             <p className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-cobalt">
-              <Headphones size={12} aria-hidden="true" /> {book.tracks.length} tracks
+              <Headphones size={12} aria-hidden="true" /> {copy.card.tracks(book.tracks.length)}
             </p>
           )}
         </span>
@@ -170,8 +173,8 @@ function LibraryCard({
             <button
               type="button"
               onClick={() => onFindSimilar(book)}
-              title="Find more like this"
-              aria-label={`Find more like ${book.title}`}
+              title={copy.findMoreLikeThis}
+              aria-label={copy.card.findMoreLike(book.title)}
               className="iconbtn bg-surface/90 backdrop-blur-sm"
             >
               <Compass size={16} aria-hidden="true" />
@@ -201,8 +204,8 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
     <section aria-labelledby="continue-listening" className="mb-9">
       <MachineHead
         id="continue-listening"
-        title="Continue listening"
-        count={`${books.length} ${books.length === 1 ? "book is" : "books are"} part-finished`}
+        title={copy.continueListening.heading}
+        count={copy.continueListening.count(books.length)}
       />
       <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
         {books.map((book, index) => {
@@ -244,7 +247,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
           );
         })}
       </div>
-      <span className="sr-only">{rest.length} more part-finished books scroll sideways.</span>
+      <span className="sr-only">{copy.continueListening.more(rest.length)}</span>
     </section>
   );
 }
@@ -267,7 +270,7 @@ export function AudiobookGrid({
   if (!books.length) {
     return (
       <div className="panel panel--sunk px-6 py-16 text-center text-ink2">
-        Your library is empty. Add a folder and run a scan to discover audiobooks.
+        {copy.library.empty}
       </div>
     );
   }

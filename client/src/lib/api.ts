@@ -32,6 +32,7 @@
  */
 
 import { isNativeShell } from "./platform";
+import { copy } from "../copy";
 
 export const SERVER_URL_KEY = "serverUrl";
 
@@ -140,7 +141,7 @@ export function getServerUrl(): string {
 /** Persist the server URL. Throws if `url` is not a usable URL. */
 export function setServerUrl(url: string): void {
   const normalised = normaliseServerUrl(url);
-  if (!normalised) throw new Error("Enter a server address, for example http://192.168.1.203:3000");
+  if (!normalised) throw new Error(copy.errors.serverAddress);
   if (typeof window === "undefined") return;
   window.localStorage.setItem(SERVER_URL_KEY, normalised);
 }
@@ -302,7 +303,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     } catch {
       /* not JSON; the raw body is the best message available */
     }
-    throw new Error(message || `Request failed (${response.status})`);
+    throw new Error(message || copy.errors.requestFailed(response.status));
   }
 
   return response.status === 204 ? (undefined as T) : response.json();

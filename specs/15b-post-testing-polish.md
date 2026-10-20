@@ -162,12 +162,40 @@ inconsistently.
   including the default labels inside the shared primitives. A text change
   becomes a one-line edit rather than a component hunt, and the review becomes
   auditable in one sitting.
+- **The table reaches further than the components.** The pure maths modules
+  speak too — `lib/position.ts` produces "2h 14m left" and "Chapter 4", and
+  `lib/browse.ts` produces "Book 2 of 5" — so they read `copy.ts` as well.
+  `copy.ts` has no dependencies of its own, so both modules stay pure.
 - One register, chosen and recorded: **warm, plain and brief**. Not corporate,
   not jokey. The capsule world is friendly; operator screens stay plain.
 - Existing commitments hold: status colour never travels alone, sentences are
   short, numbers are figures, and no exclamation marks.
 - The decision is recorded in `PRODUCT.md`, which currently lists voice as
   undecided.
+
+**What the review actually changed**, beyond the move:
+
+- **One ellipsis.** The app mixed `…` and `...` across files. It is `…`
+  everywhere now, and `copy.test.ts` fails the build if a `...` reappears.
+- **One word per concept.** "Use this" was "Use" in the book detail and "Use
+  this" in the review queue. "Find more like this", "Add to favourites" and
+  "In your favourites" each had two homes. They are one entry each now, at the
+  top level of the table, and a test fails if one is copied back into a
+  surface group.
+- **Errors say what to do next.** "Failed" became "Could not load the matches.
+  Try again." "Could not load profiles (HTTP 500)." became "Could not load the
+  profiles (HTTP 500). Try again in a moment." — the status code stays, but it
+  is no longer the whole message.
+- **A sentence where there was a fragment.** The review queue's "currently
+  shown as …" became a sentence, and the metadata lookup's "No matches found."
+  became "No matches found for this title."
+- **Regularity where the app had none.** "Sleep: off" became "Off" beside
+  "15 min" and "End of chapter"; "Series #" became "Series number"; the
+  lowercase "clear" link became "Clear"; "3 file(s)" became "3 files".
+
+**The one thing that did not change: the honesty rule.** Discover's "Book —
+not an audiobook yet" is still there, and so is every card's "not in your
+library yet". A copy pass is exactly the wrong moment to soften those.
 
 ## Acceptance criteria
 
@@ -217,9 +245,11 @@ inconsistently.
 
 **Copy**
 
-- [ ] `client/src/copy.ts` holds every user-facing string; components hold none
-      inline.
-- [ ] `PRODUCT.md` records the voice decision.
+- [x] `client/src/copy.ts` holds every user-facing string; components hold none
+      inline. **Verified** — including the strings the pure maths modules
+      produce (`lib/position.ts`, `lib/browse.ts`) and the errors that cross
+      module boundaries (the API layer, the device bridge, the data hooks).
+- [x] `PRODUCT.md` records the voice decision, with the rules it holds to.
 
 **Whole pass**
 
@@ -228,7 +258,9 @@ inconsistently.
       existing assertion weakened.
       **Re-verified after feature 3** (`cb28038`): server 416 (1 skipped),
       client 295, Playwright 46, `tsc` clean on both tiers, `capture-ui.js`
-      reports "layout guards pass". **Must be re-run after feature 7.**
+      reports "layout guards pass". **Re-verified again after feature 7**:
+      server 416 (1 skipped), client 309, Playwright 46, `tsc` clean on both
+      tiers, `capture-ui.js` "layout guards pass", and `vite build` clean.
 - [x] On device: covers survive airplane mode after a single online load.
       Done in feature 1 — Pixel 4a, Wi-Fi off, server unreachable, cold start
       from a force-stop: both downloaded books rendered with **2 covers from the

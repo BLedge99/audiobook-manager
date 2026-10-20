@@ -79,8 +79,15 @@ test.describe("library refresh", () => {
     await expect(page.getByRole("heading", { name: book.title, exact: true }).first()).toBeVisible();
 
     // The regression this file exists for: the empty state appearing at all.
-    await expect(page.getByText("Loading library...")).toHaveCount(0);
-    await expect(page.getByText("Your library is empty")).toHaveCount(0);
+    //
+    // Matched on a regex, not the full string, on purpose. The copy is owned
+    // by `client/src/copy.ts` and its wording changes; a literal here would
+    // quietly stop matching the moment the ellipsis changed, and
+    // `toHaveCount(0)` on a string that matches nothing is **vacuously true** --
+    // the assertion would pass while checking nothing. A regex keeps the check
+    // honest across wording changes.
+    await expect(page.getByText(/Loading library/)).toHaveCount(0);
+    await expect(page.getByText(/Your library is empty/)).toHaveCount(0);
   });
 
   test("picking a profile loads progress without leaving the app", async ({ page }) => {
@@ -94,7 +101,7 @@ test.describe("library refresh", () => {
     await expect(page.getByRole("heading", { name: "Who's listening?" })).toBeVisible();
     await pickAnyProfile(page);
     await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
-    await expect(page.getByText("Loading library...")).toHaveCount(0);
+    await expect(page.getByText(/Loading library/)).toHaveCount(0);
   });
 });
 

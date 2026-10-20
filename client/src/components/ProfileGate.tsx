@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Plus, UserRound } from "lucide-react";
+import { copy } from "../copy";
 import { Btn, Field, FullScreen, Wordmark, cn } from "../ui/primitives";
 
 interface Profile {
@@ -35,13 +36,15 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
         setProfiles(await res.json());
         setError("");
       } else if (res.status === 401) {
-        setError("Session expired. Reload the app to sign in again.");
+        setError(copy.profile.sessionExpired);
       } else {
-        setError(`Could not load profiles (HTTP ${res.status}).`);
+        setError(copy.profile.loadFailed(res.status));
       }
     } catch (loadError) {
       setError(
-        `Cannot reach the server. ${loadError instanceof Error ? loadError.message : "Check the server address in Settings."}`,
+        copy.profile.unreachable(
+          loadError instanceof Error ? loadError.message : copy.profile.checkAddress,
+        ),
       );
     }
   };
@@ -58,7 +61,7 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
     const name = newName.trim();
     if (!name) return;
     if (profiles.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      setError("A profile with that name already exists");
+      setError(copy.profile.duplicate);
       return;
     }
     setError("");
@@ -75,14 +78,16 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
         await load();
         select(profile.id);
       } else if (res.status === 409) {
-        setError("A profile with that name already exists");
+        setError(copy.profile.duplicate);
       } else {
-        setError(`Could not create profile (HTTP ${res.status}).`);
+        setError(copy.profile.createFailed(res.status));
       }
     } catch (addError) {
       // Without this the form simply stopped working on any network failure.
       setError(
-        `Could not create the profile. ${addError instanceof Error ? addError.message : "Check the server address in Settings."}`,
+        copy.profile.createUnreachable(
+          addError instanceof Error ? addError.message : copy.profile.checkAddress,
+        ),
       );
     }
   };
@@ -90,16 +95,14 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
   return (
     <FullScreen>
       <div className="flex flex-col items-center">
-        <Wordmark title="Audiobook Manager" subtitle="local-first listening" />
+        <Wordmark title={copy.brand.name} subtitle={copy.brand.tagline} />
 
         <div className="panel mt-8 w-full max-w-sm px-6 py-7">
           {/* The straight apostrophe is load-bearing: `e2e/helpers.ts` matches
               this heading by exact accessible name, and a typographic one makes
               the whole suite fail to pick a profile. */}
-          <h1 className="font-display text-2xl font-semibold text-ink">Who's listening?</h1>
-          <p className="mt-1.5 text-sm text-ink2">
-            Pick your profile so your progress is saved separately from the rest of the household.
-          </p>
+          <h1 className="font-display text-2xl font-semibold text-ink">{copy.profile.heading}</h1>
+          <p className="mt-1.5 text-sm text-ink2">{copy.profile.intro}</p>
 
           <div className="mt-5 grid gap-3">
             {profiles.map((profile, index) => (
@@ -126,7 +129,7 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
             ))}
             {!profiles.length && (
               <p className="panel panel--sunk px-4 py-5 text-center text-sm text-ink2">
-                No profiles yet — create one below.
+                {copy.profile.noneYet}
               </p>
             )}
           </div>
@@ -136,15 +139,15 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
               <Field
                 value={newName}
                 onChange={(event) => setNewName(event.target.value)}
-                placeholder="Name"
-                aria-label="New profile name"
+                placeholder={copy.profile.namePlaceholder}
+                aria-label={copy.profile.nameLabel}
                 className="min-w-0 flex-1"
               />
-              <Btn type="submit" className="shrink-0">Add</Btn>
+              <Btn type="submit" className="shrink-0">{copy.profile.addShort}</Btn>
             </form>
           ) : (
             <Btn variant="quiet" size="sm" onClick={() => setShowAdd(true)} className="mt-4">
-              <Plus size={16} aria-hidden="true" /> + Add profile
+              <Plus size={16} aria-hidden="true" /> {copy.profile.addProfile}
             </Btn>
           )}
 

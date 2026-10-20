@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
 import { seriesLabel, type Shelf } from "../lib/browse";
+import { copy } from "../copy";
 import { CapsuleMarks, MachineHead, ShellCover, cn } from "../ui/primitives";
 
 /**
@@ -141,7 +142,7 @@ export function Shelves({
   if (shelves.length === 0) {
     return (
       <div className="panel panel--sunk px-6 py-14 text-center text-ink2">
-        {emptyMessage ?? "No shelves yet. Run a scan and enrichment to populate genres."}
+        {emptyMessage ?? copy.browse.noShelves}
       </div>
     );
   }

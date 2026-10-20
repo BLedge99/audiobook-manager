@@ -82,8 +82,45 @@ manager that can diverge from the server.
 - Accessibility bar: **WCAG 2.2 AA**. This includes surviving Android WebView
   font boosting (the incident documented in `client/src/index.css`) without
   blocking pinch-zoom, and not regressing it for any reason.
-- Undecided: voice and tone of interface copy. Copy exists in the app but has
-  not been confirmed as a commitment.
+- Interface **voice is decided**: warm, plain and brief. See "Interface Voice"
+  below, and `client/src/copy.ts` for the strings themselves.
+
+## Interface Voice
+
+**Decided 2026-10-20** (spec 15b feature 7). **Warm, plain and brief.**
+
+- **Plain** means the listener never meets the filesystem. No paths, no
+  formats, no "syncing" (product principle 1). "Folder", never "directory" or
+  "library root". "Download", never "sync" or "fetch".
+- **Warm** means the app is a friendly machine, not a corporate portal. The
+  warmth is in the word choice, never a joke, and never at the cost of saying
+  what happened. The capsule world is friendly; operator screens stay plain
+  but not cold.
+- **Brief** means the shortest wording that still carries meaning, consequence
+  and recovery. Not "Invalid credentials" but "Incorrect password." Not
+  "Request failed (500)" but "Could not load the profiles (HTTP 500). Try
+  again in a moment."
+
+The rules the voice holds to:
+
+- One word per concept, everywhere. A saved title the person likes is a
+  **favourite**, not a "like" or a "star". A catalogue suggestion is a
+  **title**, not a "book" or an "item".
+- **Status colour never travels alone** (`DESIGN.md`). Every status colour is
+  paired with a written label.
+- One ellipsis character: `…`, never three dots.
+- No exclamation marks. A confirmation is a fact, not an event.
+- Complete, translatable sentences. Numbers and variables are passed as
+  values, not spliced into fragments, so a translator can reorder them.
+- An error says what failed, why when that is known, and how to recover. A
+  status code is never the whole message.
+
+**Where the strings live:** [`client/src/copy.ts`](client/src/copy.ts), keyed
+by surface, with a terminology glossary at the bottom. Every user-facing
+string is there, including the ones the pure maths modules produce
+(`lib/position.ts`, `lib/browse.ts`). Components hold no copy inline, so a
+wording change is a one-line edit and the whole voice can be reviewed in one
+sitting.
 
 ## Brand Commitments
 
@@ -96,7 +133,7 @@ manager that can diverge from the server.
   screens included, by explicit decision. The system is recorded in
   [`DESIGN.md`](DESIGN.md) and the contract in
   [`specs/15-gui-redesign.md`](specs/15-gui-redesign.md).
-- Interface **voice is still undecided**. The redesign set no copy voice.
+- Interface **voice is decided** — see "Interface Voice" below.
 - No logo exists. `client/public/favicon.svg` is now an authored capsule mark,
   and it matches the in-app mark drawn in `ui/primitives.tsx`.
 
@@ -162,7 +199,6 @@ these.
 
 ## Open Decisions
 
-- Interface voice and tone.
 - Whether other households become real operators, and what that forces into
   first-run setup.
 - The **rename itself** is still unscheduled, and it is the one outstanding piece

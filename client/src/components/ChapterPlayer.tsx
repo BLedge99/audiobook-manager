@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook, Track } from "../types";
 import { apiUrl, withSessionToken } from "../lib/api";
+import { copy } from "../copy";
 import { ProgressTimeline } from "./ProgressTimeline";
 import { Btn, Dome } from "../ui/primitives";
 import { publishPlaybackState, publishPosition, registerMediaSessionHandlers, setMediaMetadata } from "./mediaSession";
@@ -313,7 +314,7 @@ export function ChapterPlayer({
         }).catch(() => undefined);
       }
     };
-    const onError = () => { setPlaying(false); setShouldPlay(false); setError("This audio file could not be loaded."); };
+    const onError = () => { setPlaying(false); setShouldPlay(false); setError(copy.player.audioLoadFailed); };
     const applyPendingSeek = () => {
       if (pendingSeekRef.current === null) return;
       const target = pendingSeekRef.current;
@@ -390,7 +391,7 @@ export function ChapterPlayer({
     }
     // Clear on the next tick: the synthetic pause fires as part of load().
     window.setTimeout(() => { switchingSourceRef.current = false; }, 0);
-    if (shouldPlay) void audio.play().catch(() => { setShouldPlay(false); setError("Playback could not start. Try again."); });
+    if (shouldPlay) void audio.play().catch(() => { setShouldPlay(false); setError(copy.player.playbackCouldNotStart); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamUrl]);
 
@@ -440,13 +441,13 @@ export function ChapterPlayer({
       } else {
         audioRef.current.currentTime = 0;
       }
-      void audioRef.current.play().catch(() => setError("Playback could not start. Try again."));
+      void audioRef.current.play().catch(() => setError(copy.player.playbackCouldNotStart));
       return;
     }
     if (isChapterBook && audioRef.current) {
       setCurrentIndex(index);
       audioRef.current.currentTime = segments[index].offset;
-      void audioRef.current.play().catch(() => setError("Playback could not start. Try again."));
+      void audioRef.current.play().catch(() => setError(copy.player.playbackCouldNotStart));
       return;
     }
     setCurrentIndex(index);
@@ -458,7 +459,7 @@ export function ChapterPlayer({
     userInteractedRef.current = true;
     if (audio.paused) {
       setShouldPlay(true);
-      void audio.play().catch(() => setError("Playback could not start. Try again."));
+      void audio.play().catch(() => setError(copy.player.playbackCouldNotStart));
     } else {
       setShouldPlay(false);
       audio.pause();
@@ -584,7 +585,7 @@ export function ChapterPlayer({
        at a time, and the one surface where the eye should land first. */
     <section
       className="panel mt-8 p-4 sm:p-5"
-      aria-label="Audiobook player"
+      aria-label={copy.player.region}
       style={{ background: "color-mix(in srgb, var(--rasp) 7%, var(--surface))" }}
     >
       <audio ref={audioRef} preload="metadata" />
@@ -597,7 +598,7 @@ export function ChapterPlayer({
             lets the text truncate rather than push the row wider. */}
       <div className="flex flex-wrap items-center gap-3">
         <Dome
-          label={playing ? "Pause" : "Play"}
+          label={playing ? copy.player.pause : copy.player.play}
           onClick={togglePlayback}
           spin={playing}
           disabled={!profileId}
@@ -613,7 +614,7 @@ export function ChapterPlayer({
           <Btn
             variant="quiet"
             onClick={() => skip(-1)}
-            aria-label="Previous chapter"
+            aria-label={copy.player.previousChapter}
             disabled={currentIndex === 0}
             className="iconbtn"
           >
@@ -622,7 +623,7 @@ export function ChapterPlayer({
           <Btn
             variant="quiet"
             onClick={() => skip(1)}
-            aria-label="Next chapter"
+            aria-label={copy.player.nextChapter}
             disabled={currentIndex === segments.length - 1}
             className="iconbtn"
           >
@@ -632,7 +633,7 @@ export function ChapterPlayer({
             variant="quiet"
             size="sm"
             onClick={() => skipSeconds(-SKIP_SECONDS)}
-            aria-label={`Back ${SKIP_SECONDS} seconds`}
+            aria-label={copy.player.backSeconds(SKIP_SECONDS)}
             className="tnum"
           >
             −{SKIP_SECONDS}s
@@ -641,7 +642,7 @@ export function ChapterPlayer({
             variant="quiet"
             size="sm"
             onClick={() => skipSeconds(SKIP_SECONDS)}
-            aria-label={`Forward ${SKIP_SECONDS} seconds`}
+            aria-label={copy.player.forwardSeconds(SKIP_SECONDS)}
             className="tnum"
           >
             +{SKIP_SECONDS}s
@@ -649,7 +650,7 @@ export function ChapterPlayer({
         </div>
 
         <select
-          aria-label="Playback speed"
+          aria-label={copy.player.speed}
           value={speed}
           onChange={(event) => changeSpeed(Number(event.target.value))}
           className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[13px] font-bold text-ink"
@@ -657,21 +658,21 @@ export function ChapterPlayer({
           {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((rate) => <option key={rate} value={rate}>{rate}x</option>)}
         </select>
         <select
-          aria-label="Sleep timer"
+          aria-label={copy.player.sleepTimer}
           value={sleepMinutes ?? "off"}
           onChange={(event) => setSleepTimer(event.target.value === "off" ? null : Number(event.target.value))}
           className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[13px] font-bold text-ink"
         >
-          <option value="off">Sleep: off</option>
-          <option value="15">15 min</option>
-          <option value="30">30 min</option>
-          <option value="60">60 min</option>
-          <option value="-1">End of chapter</option>
+          <option value="off">{copy.player.sleepOff}</option>
+          <option value="15">{copy.player.sleepMinutes(15)}</option>
+          <option value="30">{copy.player.sleepMinutes(30)}</option>
+          <option value="60">{copy.player.sleepMinutes(60)}</option>
+          <option value="-1">{copy.player.sleepEndOfChapter}</option>
         </select>
 
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-[15px] font-semibold text-ink">
-            {current.title || `Track ${currentIndex + 1}`}
+            {current.title || copy.player.trackFallback(currentIndex + 1)}
           </p>
           <p className="text-[12px] text-ink3 tnum">
             {segments.length > 1 ? `${described.heading} of ${segments.length}` : described.heading}
@@ -681,7 +682,7 @@ export function ChapterPlayer({
 
       {!profileId && (
         <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[13px] font-bold text-tan-ink">
-          Select a profile to start listening — your position is saved per profile.
+          {copy.player.needsProfile}
         </p>
       )}
 
@@ -694,7 +695,7 @@ export function ChapterPlayer({
           {described.title && <span className="font-normal text-ink2"> — {described.title}</span>}
         </p>
         <p className="text-[12.5px] text-ink3 tnum" data-testid="chapter-readout">
-          {timeLabel(described.segmentElapsed)} into this {segmentKind === "tracks" ? "track" : "chapter"} · {Math.round(described.segmentPercent)}%
+          {timeLabel(described.segmentElapsed)} {copy.player.intoThis(segmentKind === "tracks" ? "track" : "chapter")} · {Math.round(described.segmentPercent)}%
         </p>
         <p className="text-[12.5px] text-ink3 tnum" data-testid="book-readout">
           {Math.round(described.bookPercent)}% of the book · {remainingLabel(described.bookRemaining)}

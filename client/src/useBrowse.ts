@@ -9,6 +9,7 @@ import type {
   TagSummary,
   WishlistItem,
 } from "./types";
+import { copy } from "./copy";
 
 /**
  * Spec 20 — data layer for the browse, Discover, favourites and tag surfaces.
@@ -139,7 +140,7 @@ export function useDiscover() {
     try {
       setResult(await request<DiscoverResult>("/api/discover/for-me?page=1"));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to load Discover");
+      setError(requestError instanceof Error ? requestError.message : copy.errors.loadDiscover);
     } finally {
       setLoading(false);
     }
@@ -152,7 +153,7 @@ export function useDiscover() {
     try {
       setResult(await request<DiscoverResult>(`/api/discover/similar/${bookId}?page=1`));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to find similar books");
+      setError(requestError instanceof Error ? requestError.message : copy.errors.loadSimilar);
     } finally {
       setLoading(false);
     }
@@ -185,7 +186,7 @@ export function useDiscover() {
           : next,
       );
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to load more suggestions");
+      setError(requestError instanceof Error ? requestError.message : copy.errors.loadMore);
     } finally {
       setLoadingMore(false);
     }
@@ -249,7 +250,7 @@ export function useTagSuite(bookId: number | undefined) {
       setSuite(await request<BookTagSuite>(`/api/audiobooks/${bookId}/tags`));
       setError(undefined);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to load tags");
+      setError(requestError instanceof Error ? requestError.message : copy.errors.loadTags);
     } finally {
       setLoading(false);
     }

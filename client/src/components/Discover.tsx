@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Compass, Plus, RefreshCw, Trash2, Check, LoaderCircle } from "lucide-react";
 import type { DiscoverResult, Recommendation, WishlistItem } from "../types";
 import type { useDiscover } from "../useBrowse";
+import { copy } from "../copy";
 import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
 import { CoverImage, urlCoverKey } from "../local/CoverImage";
 
@@ -46,10 +47,10 @@ function RecommendationCard({
       </span>
       <div className="min-w-0 flex-1">
         <h3 className="truncate font-display text-[15px] font-semibold text-ink">{recommendation.title}</h3>
-        <p className="truncate text-[12.5px] text-ink2">{recommendation.author ?? "Unknown author"}</p>
+        <p className="truncate text-[12.5px] text-ink2">{recommendation.author ?? copy.unknownAuthor}</p>
         {recommendation.narrators.length > 0 && (
           <p className="mt-0.5 truncate text-[11.5px] text-ink3">
-            Narrated by {recommendation.narrators.slice(0, 3).join(", ")}
+            {copy.narratedBy(recommendation.narrators.slice(0, 3).join(", "))}
           </p>
         )}
         {recommendation.description && (
@@ -63,7 +64,7 @@ function RecommendationCard({
           turns up as an audiobook.
         */}
         <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-ink3">
-          Book &mdash; not an audiobook yet
+          {copy.discover.notAnAudiobook}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-ink/25 bg-sunk px-2.5 py-0.5 text-[11px] font-bold text-ink2">
@@ -71,7 +72,7 @@ function RecommendationCard({
           </span>
           <Btn size="sm" variant={saved ? "quiet" : "plain"} onClick={onSave} disabled={saved}>
             {saved ? <Check size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
-            {saved ? "On your wishlist" : "Save to wishlist"}
+            {saved ? copy.discover.onYourWishlist : copy.discover.saveToWishlist}
           </Btn>
         </div>
       </div>
@@ -84,9 +85,9 @@ function WishlistRow({ item, onRemove, onMarkOwned }: { item: WishlistItem; onRe
     <article className="panel flex items-start gap-3 p-3">
       <div className="min-w-0 flex-1">
         <h3 className="truncate font-display text-[15px] font-semibold text-ink">{item.title}</h3>
-        <p className="truncate text-[12.5px] text-ink2">{item.author ?? "Unknown author"}</p>
+        <p className="truncate text-[12.5px] text-ink2">{item.author ?? copy.unknownAuthor}</p>
         {/* Wishlist books are metadata-only; there is deliberately no play control. */}
-        <p className="mt-1 text-[11.5px] text-ink3">Not in your library yet</p>
+        <p className="mt-1 text-[11.5px] text-ink3">{copy.discover.notInLibrary}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <Btn
@@ -94,13 +95,13 @@ function WishlistRow({ item, onRemove, onMarkOwned }: { item: WishlistItem; onRe
           variant="quiet"
           onClick={() => onMarkOwned(!item.owned)}
           aria-pressed={item.owned}
-          title={item.owned ? "Owned" : "Mark as owned"}
-          aria-label={`Mark ${item.title} as owned`}
+          title={item.owned ? copy.discover.owned : copy.discover.markAsOwned}
+          aria-label={copy.discover.markOwned(item.title)}
           className={item.owned ? "bg-mint text-white" : ""}
         >
           <Check size={15} aria-hidden="true" />
         </Btn>
-        <Btn size="sm" variant="quiet" onClick={onRemove} aria-label={`Remove ${item.title} from wishlist`} className="text-rasp-ink">
+        <Btn size="sm" variant="quiet" onClick={onRemove} aria-label={copy.discover.removeFromWishlist(item.title)} className="text-rasp-ink">
           <Trash2 size={15} aria-hidden="true" />
         </Btn>
       </div>
@@ -115,11 +116,11 @@ function WishlistRow({ item, onRemove, onMarkOwned }: { item: WishlistItem; onRe
 function statusMessage(result: DiscoverResult): { tone: "info" | "warn"; text: string } | null {
   switch (result.status) {
     case "offline":
-      return { tone: "warn", text: "You're offline. Discover needs a connection to suggest new titles — your library still works." };
+      return { tone: "warn", text: copy.discover.offline };
     case "insufficient-metadata":
-      return { tone: "info", text: result.message ?? "Not enough metadata yet." };
+      return { tone: "info", text: result.message ?? copy.discover.notEnoughMetadata };
     case "no-results":
-      return { tone: "info", text: result.message ?? "No new titles found yet." };
+      return { tone: "info", text: result.message ?? copy.discover.noNewTitles };
     default:
       return null;
   }
@@ -155,18 +156,16 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-[30px] leading-[1.05] sm:text-4xl">
-              <Compass size={26} className="text-rasp" aria-hidden="true" /> Discover
+              <Compass size={26} className="text-rasp" aria-hidden="true" /> {copy.discover.heading}
             </h2>
-            <p className="mt-2 text-ink2">
-              Titles you do not own yet, matched on the genres of the books you favourite.
-            </p>
+            <p className="mt-2 text-ink2">{copy.discover.intro}</p>
           </div>
           <Btn
             onClick={() => void discover.loadForMe()}
             disabled={loading || !hasFavourites}
             className="shrink-0"
           >
-            <RefreshCw size={15} className={loading ? "animate-spin" : ""} aria-hidden="true" /> Refresh
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} aria-hidden="true" /> {copy.discover.refresh}
           </Btn>
         </div>
 
@@ -180,7 +179,7 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
               <Compass size={24} className="text-ink3" aria-hidden="true" />
             </span>
             <p className="mx-auto mt-4 max-w-md text-[14px] leading-relaxed text-ink2">
-              Favourite a few books and Discover will use them to suggest titles you do not own yet.
+              {copy.discover.needsFavourites}
             </p>
           </div>
         )}
@@ -229,15 +228,15 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
                   {discover.loadingMore ? (
                     <>
                       <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
-                      Finding more&hellip;
+                      {copy.discover.findingMore}
                     </>
                   ) : (
-                    "Show 5 more"
+                    copy.discover.showMore
                   )}
                 </Btn>
                 {typeof result.total === "number" && (
                   <p className="text-[12px] text-ink3 tnum">
-                    Showing {result.recommendations.length} of {result.total}
+                    {copy.discover.showing(result.recommendations.length, result.total)}
                   </p>
                 )}
               </div>
@@ -247,10 +246,10 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
       </section>
 
       <section aria-labelledby="wishlist">
-        <MachineHead id="wishlist" title="Wishlist" count={`${wishlist.length}`} />
+        <MachineHead id="wishlist" title={copy.discover.wishlistHeading} count={`${wishlist.length}`} />
         {wishlist.length === 0 ? (
           <p className="panel panel--sunk px-4 py-6 text-center text-[13.5px] text-ink2">
-            Nothing saved yet. Save a suggestion above to keep track of it.
+            {copy.discover.wishlistEmpty}
           </p>
         ) : (
           <div className="grid gap-2">

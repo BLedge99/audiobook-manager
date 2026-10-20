@@ -1,5 +1,6 @@
 import type { Segment, SegmentKind } from "../lib/position";
 import { chapterTicks, sessionMarkerFraction, timeLabel } from "../lib/position";
+import { copy } from "../copy";
 
 /**
  * The seek control: a native range input with chapter ticks, a session-start
@@ -72,7 +73,7 @@ export function ProgressTimeline({
           )}
         </div>
         <input
-          aria-label="Audiobook progress"
+          aria-label={copy.player.progressRegion}
           type="range"
           min={0}
           max={total || 1}

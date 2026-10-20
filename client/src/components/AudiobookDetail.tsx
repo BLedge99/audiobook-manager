@@ -5,6 +5,7 @@ import { bookCoverKey, CoverImage } from "../local/CoverImage";
 import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
+import { copy } from "../copy";
 import { Btn, cn, durationLabel } from "../ui/primitives";
 
 interface Candidate {
@@ -49,14 +50,14 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   return (
     <div className="mt-6 border-t-2 border-dashed border-ink/20 pt-4">
       <Btn size="sm" onClick={() => void enrich()} disabled={state === "loading"}>
-        <Sparkles size={15} aria-hidden="true" /> {state === "loading" ? "Looking up…" : "Find metadata online"}
+        <Sparkles size={15} aria-hidden="true" /> {state === "loading" ? copy.detail.metadataLookingUp : copy.detail.metadataLookup}
       </Btn>
       {state === "error" && (
-        <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">Metadata lookup failed. Try again later.</p>
+        <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">{copy.detail.metadataFailed}</p>
       )}
       {state === "ready" && (
         <ul className="mt-3 grid gap-2">
-          {candidates.length === 0 && <li className="text-[13.5px] text-ink3">No matches found.</li>}
+          {candidates.length === 0 && <li className="text-[13.5px] text-ink3">{copy.detail.noMatches}</li>}
           {candidates.map((candidate) => (
             <li
               key={candidate.id}
@@ -66,7 +67,7 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
                 {candidate.title} {candidate.author && <span className="text-ink3">— {candidate.author}</span>}
                 <span className="ml-2 text-[11px] font-bold uppercase text-ink3">{candidate.source}</span>
               </span>
-              <Btn size="sm" variant="quiet" onClick={() => void apply(candidate.id)} className="shrink-0">Use</Btn>
+              <Btn size="sm" variant="quiet" onClick={() => void apply(candidate.id)} className="shrink-0">{copy.use}</Btn>
             </li>
           ))}
         </ul>
@@ -176,7 +177,7 @@ export function AudiobookDetail({
         onClick={(event) => event.stopPropagation()}
       >
         <button
-          aria-label="Close details"
+          aria-label={copy.detail.close}
           onClick={onClose}
           className="iconbtn absolute right-3 top-3 z-10 bg-surface/90 backdrop-blur-sm"
         >
@@ -234,7 +235,7 @@ export function AudiobookDetail({
           {book.subtitle && <p className="mt-1 text-[16px] italic text-ink2 md:text-lg">{book.subtitle}</p>}
           <p className="mt-2 text-[16px] font-semibold text-ink2 md:text-lg">{book.author}</p>
           {narrators.length > 0 && (
-            <p className="mt-1 text-[13.5px] text-ink3">Narrated by {narrators.map((entry) => entry.name).join(", ")}</p>
+            <p className="mt-1 text-[13.5px] text-ink3">{copy.narratedBy(narrators.map((entry) => entry.name).join(", "))}</p>
           )}
           {deviceAction && <div className="mt-5">{deviceAction}</div>}
 
@@ -251,12 +252,12 @@ export function AudiobookDetail({
                   variant={favourited ? "primary" : "plain"}
                 >
                   <Heart size={15} fill={favourited ? "currentColor" : "none"} aria-hidden="true" />
-                  {favourited ? "In your favourites" : "Add to favourites"}
+                  {favourited ? copy.favourite.inYours : copy.favourite.add}
                 </Btn>
               )}
               {onFindSimilar && (
                 <Btn onClick={() => onFindSimilar(book.id)} variant="quiet">
-                  <Compass size={15} aria-hidden="true" /> Find more like this
+                  <Compass size={15} aria-hidden="true" /> {copy.findMoreLikeThis}
                 </Btn>
               )}
             </div>
@@ -285,7 +286,7 @@ export function AudiobookDetail({
                 aria-hidden="true"
                 className={cn("transition-transform", detailsOpen && "rotate-180")}
               />
-              Book details
+              {copy.detail.bookDetails}
             </Btn>
 
             {detailsOpen && (

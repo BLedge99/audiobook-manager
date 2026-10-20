@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Search as SearchIcon, X } from "lucide-react";
+import { copy } from "../copy";
 import { describeSearch, parseSearchQuery } from "../lib/search";
 
 /**
@@ -12,7 +13,7 @@ import { describeSearch, parseSearchQuery } from "../lib/search";
  * in a `role="status"` is how the app tells you it heard you.
  */
 
-const EXAMPLES = ["author: rowling", "genre: thriller", "narrator: fry", "tag: bedtime"];
+const EXAMPLES = copy.search.examples;
 
 export function SearchBar({
   value,
@@ -52,7 +53,7 @@ export function SearchBar({
   return (
     <section className="mb-5" aria-labelledby="search-bar">
       <h2 id="search-bar" className="sr-only">
-        Search the library
+        {copy.search.heading}
       </h2>
 
       <div className="panel panel--flat flex items-center gap-2.5 rounded-[24px_20px_24px_20px/20px_24px_20px_24px] px-4 py-2.5 focus-within:border-cobalt">
@@ -68,8 +69,8 @@ export function SearchBar({
               onChange("");
             }
           }}
-          placeholder="Search your library"
-          aria-label="Search the library"
+          placeholder={copy.search.placeholder}
+          aria-label={copy.search.label}
           aria-describedby="search-help"
           className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink3"
         />
@@ -81,7 +82,7 @@ export function SearchBar({
               onChange("");
               inputRef.current?.focus();
             }}
-            aria-label="Clear search"
+            aria-label={copy.search.clear}
             className="grid size-8 shrink-0 place-items-center rounded-full border-2 border-ink/25 text-ink2 transition hover:border-ink hover:text-ink"
           >
             <X size={15} aria-hidden="true" />
@@ -92,12 +93,12 @@ export function SearchBar({
       <p id="search-help" className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-ink3">
         {active ? (
           <span role="status" className="font-bold text-ink2">
-            {resultCount} {resultCount === 1 ? "match" : "matches"} for{" "}
+            {copy.search.matches(resultCount)}{" "}
             <span className="text-cobalt-ink">{describeSearch(value)}</span>
           </span>
         ) : (
           <>
-            <span className="font-bold">Fields:</span>
+            <span className="font-bold">{copy.search.fields}</span>
             {EXAMPLES.map((example) => (
               <button
                 key={example}

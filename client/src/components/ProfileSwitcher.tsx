@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { copy } from "../copy";
 import { Btn, Field, cn } from "../ui/primitives";
 
 interface Profile {
@@ -33,7 +34,7 @@ export function ProfileSwitcher() {
     const name = newName.trim();
     if (!name) return;
     if (profiles.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      setError("A profile with that name already exists");
+      setError(copy.profile.duplicate);
       return;
     }
     setError("");
@@ -49,7 +50,7 @@ export function ProfileSwitcher() {
       await load();
       select(profile.id);
     } else if (res.status === 409) {
-      setError("A profile with that name already exists");
+      setError(copy.profile.duplicate);
     }
   };
 
@@ -78,7 +79,7 @@ export function ProfileSwitcher() {
           sideways on a phone. `min-w-0` and the width cap are load-bearing --
           `e2e/phone-layout` fails without them. */}
       <select
-        aria-label="Active profile"
+        aria-label={copy.profile.switcherLabel}
         value={currentId ?? ""}
         onChange={(event) => event.target.value && select(Number(event.target.value))}
         className={cn(
@@ -86,7 +87,7 @@ export function ProfileSwitcher() {
           "px-2.5 py-1.5 text-[13px] font-bold text-ink",
         )}
       >
-        <option value="" disabled>Select profile</option>
+        <option value="" disabled>{copy.profile.selectProfile}</option>
         {profiles.map((profile) => (
           <option key={profile.id} value={profile.id}>{profile.name}</option>
         ))}
@@ -97,7 +98,7 @@ export function ProfileSwitcher() {
           is enough to switch, and both actions remain reachable from the
           Settings sheet. The E2E suite drives them at desktop width. */}
       <Btn variant="quiet" size="sm" onClick={() => setShowAdd((v) => !v)} className="hidden sm:inline-flex">
-        + Profile
+        {copy.profile.addProfileCompact}
       </Btn>
 
       {currentId && (
@@ -105,7 +106,7 @@ export function ProfileSwitcher() {
           variant="quiet"
           size="sm"
           onClick={() => void remove(Number(currentId))}
-          aria-label="Delete active profile"
+          aria-label={copy.profile.deleteActive}
           className="hidden text-rasp-ink sm:inline-flex"
         >
           <Trash2 size={15} aria-hidden="true" />
@@ -117,11 +118,11 @@ export function ProfileSwitcher() {
           <Field
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Name"
-            aria-label="New profile name"
+            placeholder={copy.profile.namePlaceholder}
+            aria-label={copy.profile.nameLabel}
             className="w-28"
           />
-          <Btn type="submit" size="sm">Add</Btn>
+          <Btn type="submit" size="sm">{copy.profile.addShort}</Btn>
         </form>
       )}
 

@@ -33,6 +33,7 @@ import { profileHeaders } from "../lib/api";
 import { isNativeShell } from "../lib/platform";
 import { localDb } from "./db";
 import type { FileSystemPort } from "./replica";
+import { copy } from "../copy";
 
 type FilesystemPlugin = (typeof import("@capacitor/filesystem"))["Filesystem"];
 
@@ -71,7 +72,7 @@ function pluginRegistry(): Record<string, unknown> {
   const bridge = (globalThis as { Capacitor?: { Plugins?: Record<string, unknown> } }).Capacitor;
   const plugins = bridge?.Plugins;
   if (!plugins) {
-    throw new Error("The Capacitor bridge is not ready yet.");
+    throw new Error(copy.errors.bridgeNotReady);
   }
   return plugins;
 }
@@ -80,7 +81,7 @@ let filesystemPlugin: FilesystemPlugin | undefined;
 async function fs(): Promise<FilesystemPlugin> {
   if (!filesystemPlugin) {
     filesystemPlugin = pluginRegistry().Filesystem as FilesystemPlugin;
-    if (!filesystemPlugin) throw new Error("The Filesystem plugin is unavailable.");
+    if (!filesystemPlugin) throw new Error(copy.errors.filesystemUnavailable);
   }
   return filesystemPlugin;
 }
@@ -91,7 +92,7 @@ let fileTransferPlugin: FileTransferPlugin | undefined;
 async function fileTransfer(): Promise<FileTransferPlugin> {
   if (!fileTransferPlugin) {
     fileTransferPlugin = pluginRegistry().FileTransfer as FileTransferPlugin;
-    if (!fileTransferPlugin) throw new Error("The FileTransfer plugin is unavailable.");
+    if (!fileTransferPlugin) throw new Error(copy.errors.fileTransferUnavailable);
   }
   return fileTransferPlugin;
 }
@@ -108,12 +109,12 @@ export function describeTransferError(error: unknown): Error {
   const candidate = error as { code?: string; message?: string; data?: { httpStatus?: number; body?: string } };
   const httpStatus = candidate?.data?.httpStatus;
   if (httpStatus === 401 || httpStatus === 403) {
-    return new Error(`The server rejected the download (HTTP ${httpStatus}). Sign in again and retry.`);
+    return new Error(copy.errors.downloadRejected(httpStatus));
   }
   if (typeof httpStatus === "number") {
-    return new Error(`The server returned HTTP ${httpStatus} for this track.`);
+    return new Error(copy.errors.trackFailed(httpStatus));
   }
-  const message = candidate?.message || "The download failed.";
+  const message = candidate?.message || copy.errors.downloadFailed;
   return new Error(message);
 }
 
@@ -130,14 +131,14 @@ export function describeTransferError(error: unknown): Error {
  */
 export function validateDownloadedSize(bytes: number, expectedBytes: number): void {
   if (bytes <= 0) {
-    throw new Error("The download finished but wrote no data. The server may have refused the request.");
+    throw new Error(copy.errors.downloadNoData);
   }
   if (expectedBytes <= 0) return;
   // A small tolerance: some servers pad or the final chunk is reported early.
   const tolerance = Math.max(1024, Math.floor(expectedBytes * 0.01));
   if (Math.abs(bytes - expectedBytes) > tolerance) {
     throw new Error(
-      `The download is incomplete (${bytes} of ${expectedBytes} bytes). Retry to finish it.`,
+      copy.errors.downloadIncomplete(bytes, expectedBytes),
     );
   }
 }
@@ -158,7 +159,7 @@ const DEVICE_DIRECTORY = "DATA" as Directory;
 function convertFileSrc(fileUri: string): string {
   const bridge = (window as unknown as { Capacitor?: { convertFileSrc?: (uri: string) => string } }).Capacitor;
   if (typeof bridge?.convertFileSrc !== "function") {
-    throw new Error("The device bridge is not ready yet");
+    throw new Error(copy.errors.bridgeNotReady);
   }
   return bridge.convertFileSrc(fileUri);
 }

@@ -29,6 +29,7 @@ import {
   trackPath,
   type FileSystemPort,
 } from "./replica";
+import { copy } from "../copy";
 
 export interface DownloadProgress {
   bookId: number;
@@ -108,7 +109,7 @@ export async function downloadBook(
 ): Promise<void> {
   const tracks = book.tracks ?? [];
   if (tracks.length === 0) {
-    throw new Error(`"${book.title}" has no tracks to download`);
+    throw new Error(copy.errors.noTracks(book.title));
   }
 
   const { now, extension } = await trace.step(
@@ -210,7 +211,7 @@ async function sizeOf(
     return await trace.step(`${label}: stat file`, STEP_BUDGETS.stat, () => files.stat(path));
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Could not read the size of the downloaded file: ${detail}`);
+    throw new Error(copy.errors.sizeUnreadable(detail));
   }
 }
 

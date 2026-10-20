@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
+import { copy } from "./copy";
 
 /**
  * Library state, spec 15b feature 4.
@@ -131,7 +132,7 @@ export function useLibrary() {
         }
         setError(undefined);
       } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : "Unable to load library");
+        setError(requestError instanceof Error ? requestError.message : copy.errors.loadLibrary);
       } finally {
         setRefreshing(false);
         // Only a fetch that has never produced rows may show "loading". After

@@ -3,6 +3,7 @@ import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Sun, Moon, MonitorSmartphone } from "lucide-react";
 import { CoverImage, bookCoverKey } from "../local/CoverImage";
+import { copy } from "../copy";
 import { useLightEffects, useTheme, type ThemeChoice } from "./theme";
 
 export function cn(...inputs: ClassValue[]) {
@@ -15,12 +16,16 @@ export function cn(...inputs: ClassValue[]) {
  * Status colours. Every use is paired with a text label somewhere visible, so
  * colour is never the only carrier of meaning -- see the legend row under the
  * library heading.
+ *
+ * The labels come from `copy.ts`, because they are user-facing strings like
+ * any other and the whole point of feature 7 is that there is one place to
+ * change them.
  */
 export const STATUS = {
-  done: { label: "Finished", color: "var(--mint)" },
-  reading: { label: "In progress", color: "var(--tan)" },
-  fresh: { label: "Not started", color: "var(--cobalt)" },
-  changed: { label: "Metadata updated", color: "var(--rasp)" },
+  done: { label: copy.status.done, color: "var(--mint)" },
+  reading: { label: copy.status.reading, color: "var(--tan)" },
+  fresh: { label: copy.status.fresh, color: "var(--cobalt)" },
+  changed: { label: copy.status.changed, color: "var(--rasp)" },
 } as const;
 
 export type StatusKey = keyof typeof STATUS;
@@ -357,9 +362,9 @@ export function Specks() {
 }
 
 const THEME_OPTIONS: { value: ThemeChoice; label: string; Icon: typeof Sun }[] = [
-  { value: "light", label: "Switch to light theme", Icon: Sun },
-  { value: "dark", label: "Switch to dark theme", Icon: Moon },
-  { value: "auto", label: "Follow the device theme", Icon: MonitorSmartphone },
+  { value: "light", label: copy.theme.light, Icon: Sun },
+  { value: "dark", label: copy.theme.dark, Icon: Moon },
+  { value: "auto", label: copy.theme.auto, Icon: MonitorSmartphone },
 ];
 
 export function ThemeToggle() {

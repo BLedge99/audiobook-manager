@@ -1,11 +1,13 @@
 import type { Audiobook, Track } from "../types";
+import { copy } from "../copy";
 
 /**
  * All listening-position maths, kept out of the components so the GUI redesign
  * (spec 15) restyles the player without reimplementing any of this.
  *
  * Nothing in here touches the DOM, React or the network — every function is a
- * pure transform of (segments, position).
+ * pure transform of (segments, position). The one thing it does read is
+ * `copy.ts`, which is itself dependency-free, so the module stays pure.
  */
 
 export type Segment = {
@@ -75,7 +77,7 @@ export function parseSegments(book: Audiobook): { segments: Segment[]; kind: Seg
             : 0;
         return {
           key: String(index),
-          title: chapter.title || `Chapter ${index + 1}`,
+          title: chapter.title || copy.position.chapterTitle(index + 1),
           duration: Math.max(0, duration),
           offset: start,
         };
@@ -158,18 +160,21 @@ export function timeLabel(seconds: number): string {
 /** Coarse "1h 23m left" / "23m left" — for grids and cards, not the player clock. */
 export function remainingLabel(seconds: number): string {
   const total = Math.max(0, Math.ceil(safeSeconds(seconds)));
-  if (total < 60) return "under a minute left";
+  if (total < 60) return copy.position.underAMinuteLeft;
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
-  if (!hours) return `${minutes}m left`;
-  return minutes ? `${hours}h ${minutes}m left` : `${hours}h left`;
+  if (!hours) return copy.position.minutesLeft(minutes);
+  return minutes
+    ? copy.position.hoursMinutesLeft(hours, minutes)
+    : copy.position.hoursLeft(hours);
 }
 
 export function chapterHeading(index: number, kind: SegmentKind, total: number): string {
-  const noun = kind === "chapters" ? "Chapter" : kind === "tracks" ? "Track" : "Chapter";
+  const noun =
+    kind === "chapters" ? copy.position.chapterNoun : kind === "tracks" ? copy.position.trackNoun : copy.position.chapterNoun;
   // A single-segment book has no meaningful chapter number, so don't fake one.
   if (kind === "single" || total <= 1) return noun;
-  return `${noun} ${index + 1}`;
+  return copy.position.heading(noun, index + 1);
 }
 
 export type PositionDescription = {

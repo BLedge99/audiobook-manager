@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { KeyRound } from "lucide-react";
 import { setSessionToken } from "../lib/api";
+import { copy } from "../copy";
 import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
 
 export function LoginGate({ onSuccess }: { onSuccess: () => void }) {
@@ -19,7 +20,7 @@ export function LoginGate({ onSuccess }: { onSuccess: () => void }) {
         body: JSON.stringify({ password }),
       });
       if (!res.ok) {
-        setError("Incorrect password");
+        setError(copy.login.wrongPassword);
       } else {
         // The Android shell cannot rely on the session cookie (cross-scheme,
         // so SameSite=Lax is dropped), so the token comes back in the body and
@@ -30,7 +31,7 @@ export function LoginGate({ onSuccess }: { onSuccess: () => void }) {
         onSuccess();
       }
     } catch {
-      setError("Could not reach the server");
+      setError(copy.login.unreachable);
     } finally {
       setBusy(false);
     }
@@ -39,21 +40,21 @@ export function LoginGate({ onSuccess }: { onSuccess: () => void }) {
   return (
     <FullScreen>
       <div className="flex flex-col items-center">
-        <Wordmark title="Audiobook Manager" subtitle="local-first listening" />
+        <Wordmark title={copy.brand.name} subtitle={copy.brand.tagline} />
 
         <form onSubmit={submit} className="panel mt-8 w-full max-w-sm px-6 py-7">
-          <h1 className="font-display text-2xl font-semibold text-ink">Sign in</h1>
-          <p className="mt-1.5 text-sm text-ink2">Enter the household password to continue.</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">{copy.login.heading}</h1>
+          <p className="mt-1.5 text-sm text-ink2">{copy.login.intro}</p>
 
           <label htmlFor="household-password" className="sr-only">
-            Household password
+            {copy.login.passwordLabel}
           </label>
           <Field
             id="household-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Household password"
+            placeholder={copy.login.passwordPlaceholder}
             autoComplete="current-password"
             className="mt-5"
           />
@@ -68,7 +69,7 @@ export function LoginGate({ onSuccess }: { onSuccess: () => void }) {
 
           <Btn type="submit" variant="primary" disabled={busy} className="mt-4 w-full">
             <KeyRound size={17} aria-hidden="true" />
-            {busy ? "Checking…" : "Sign in"}
+            {busy ? copy.login.checking : copy.login.submit}
           </Btn>
         </form>
       </div>

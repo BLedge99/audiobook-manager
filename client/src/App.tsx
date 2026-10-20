@@ -31,16 +31,17 @@ import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
+import { copy } from "./copy";
 import { Specks, ThemeToggle, Notice, MachineHead, StatusLegend, Btn, IconBtn, cn } from "./ui/primitives";
 import type { Audiobook } from "./types";
 
 type Tab = "library" | "browse" | "discover" | "favourites";
 
 const TABS: { id: Tab; label: string; icon: typeof Library }[] = [
-  { id: "library", label: "Library", icon: Library },
-  { id: "browse", label: "Browse", icon: LayoutGrid },
-  { id: "discover", label: "Discover", icon: Compass },
-  { id: "favourites", label: "Favourites", icon: Heart },
+  { id: "library", label: copy.tabs.library, icon: Library },
+  { id: "browse", label: copy.tabs.browse, icon: LayoutGrid },
+  { id: "discover", label: copy.tabs.discover, icon: Compass },
+  { id: "favourites", label: copy.tabs.favourites, icon: Heart },
 ];
 
 /**
@@ -348,7 +349,7 @@ function App() {
       setLabel("");
       setShowRootForm(false);
     } catch (requestError) {
-      window.alert(requestError instanceof Error ? requestError.message : "Unable to add library root");
+      window.alert(requestError instanceof Error ? requestError.message : copy.library.addFolderFailed);
     } finally {
       setWorking(false);
     }
@@ -356,7 +357,7 @@ function App() {
 
   const runScan = async (rootId?: number) => {
     setWorking(true);
-    try { await scan(rootId); } catch (requestError) { window.alert(requestError instanceof Error ? requestError.message : "Unable to start scan"); } finally { setWorking(false); }
+    try { await scan(rootId); } catch (requestError) { window.alert(requestError instanceof Error ? requestError.message : copy.library.scanFailed); } finally { setWorking(false); }
   };
 
   return (
@@ -371,10 +372,9 @@ function App() {
                 the row blows past a 360px phone. `e2e/phone-layout` asserts the
                 document never exceeds the viewport. */}
             <div className="min-w-0 flex-1">
-              <h1 className="wordmark truncate">Audiobook Manager</h1>
+              <h1 className="wordmark truncate">{copy.brand.name}</h1>
               <p className="mt-0.5 truncate text-[12px] font-semibold text-ink3 tnum">
-                {libraryBooks.length} {libraryBooks.length === 1 ? "title" : "titles"}
-                {roots.length ? ` · ${roots.length} ${roots.length === 1 ? "folder" : "folders"}` : ""}
+                {copy.shell.libraryCount(libraryBooks.length, roots.length)}
               </p>
             </div>
           </div>
@@ -386,7 +386,7 @@ function App() {
               over border-radius and rendered a mismatched shape. */}
           <div className="flex items-center gap-2 sm:ml-auto">
             <ThemeToggle />
-            <IconBtn label="Settings" onClick={() => setShowSettings(true)}>
+            <IconBtn label={copy.shell.settings} onClick={() => setShowSettings(true)}>
               <BookOpen size={19} aria-hidden="true" />
             </IconBtn>
             {/*
@@ -396,7 +396,7 @@ function App() {
               reading the list.
             */}
             <IconBtn
-              label={refreshing ? "Refreshing library" : "Refresh library"}
+              label={refreshing ? copy.shell.refreshing : copy.shell.refresh}
               aria-busy={refreshing || undefined}
               onClick={() => void refresh()}
             >
@@ -412,7 +412,7 @@ function App() {
             this stays a single element -- two navs would make the E2E
             `getByRole("navigation", { name: "Sections" })` ambiguous. */}
         <nav
-          aria-label="Sections"
+          aria-label={copy.tabs.sections}
           className="rail fixed inset-x-0 bottom-0 z-40 pb-[max(10px,env(safe-area-inset-bottom))] sm:static sm:z-auto sm:border-t-0 sm:bg-transparent sm:backdrop-filter-none sm:pb-0"
         >
           <ul className="mx-auto flex w-full max-w-7xl gap-1.5 px-3 sm:justify-center sm:px-6">
@@ -459,7 +459,7 @@ function App() {
 
         {offline && (
           <Notice tone="warn" role="status" icon={<WifiOff size={16} aria-hidden="true" />} className="mb-6">
-            Offline — showing the {device.books.length} {device.books.length === 1 ? "book" : "books"} downloaded to this device.
+            {copy.shell.offlineBanner(device.books.length)}
           </Notice>
         )}
 
@@ -479,8 +479,12 @@ function App() {
             <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
             <section>
               <MachineHead
-                title="All audiobooks"
-                count={`${searchedBooks.length} ${searchedBooks.length === 1 ? "title" : "titles"}${search.trim() ? " matching your search" : " in your library"}`}
+                title={copy.library.heading}
+                count={
+                  search.trim()
+                    ? copy.library.countMatching(searchedBooks.length)
+                    : copy.library.countInLibrary(searchedBooks.length)
+                }
               >
                 {working ? <LoaderCircle className="animate-spin text-rasp" size={20} /> : null}
                 {/*
@@ -492,7 +496,7 @@ function App() {
                 {refreshing && (
                   <span role="status" className="flex items-center gap-1.5 text-[12.5px] font-bold text-ink3">
                     <RefreshCw size={13} className="animate-spin" aria-hidden="true" />
-                    Refreshing...
+                    {copy.shell.refreshingShort}
                   </span>
                 )}
               </MachineHead>
@@ -501,34 +505,32 @@ function App() {
                 /* Only reachable before the first response has ever arrived: the
                    hook latches `loading` false once anything has loaded, so a
                    refresh can never get here. */
-                <div className="panel panel--sunk px-6 py-20 text-center text-ink2">Loading library...</div>
+                <div className="panel panel--sunk px-6 py-20 text-center text-ink2">{copy.shell.loadingLibrary}</div>
               ) : (
                 <AudiobookGrid books={searchedBooks} {...gridProps} />
               )}
             </section>
 
             <section className="mt-12">
-              <MachineHead title="Library folders" />
-              <p className="text-[13.5px] text-ink2">
-                Scan local folders to bring your audiobook metadata and artwork into one calm shelf.
-              </p>
+              <MachineHead title={copy.library.foldersHeading} />
+              <p className="text-[13.5px] text-ink2">{copy.library.foldersIntro}</p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Btn
                   variant="primary"
                   onClick={() => void runScan()}
                   disabled={working || !roots.length}
                 >
-                  <ScanLine size={18} aria-hidden="true" /> Scan library
+                  <ScanLine size={18} aria-hidden="true" /> {copy.library.scanLibrary}
                 </Btn>
                 <Btn variant="quiet" size="sm" onClick={() => setShowRootForm((visible) => !visible)}>
-                  <FolderPlus size={17} aria-hidden="true" /> Add folder
+                  <FolderPlus size={17} aria-hidden="true" /> {copy.library.addFolder}
                 </Btn>
               </div>
               {showRootForm && (
                 <form onSubmit={submitRoot} className="panel mb-4 grid gap-3 p-4 sm:grid-cols-[1fr_180px_auto]">
-                  <input value={path} onChange={(event) => setPath(event.target.value)} placeholder="/data/audiobooks" required className="field" aria-label="Library folder path" />
-                  <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Label (optional)" className="field" aria-label="Library folder label" />
-                  <Btn type="submit" disabled={working}>Add folder</Btn>
+                  <input value={path} onChange={(event) => setPath(event.target.value)} placeholder={copy.library.folderPathPlaceholder} required className="field" aria-label={copy.library.folderPathLabel} />
+                  <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder={copy.library.folderLabelPlaceholder} className="field" aria-label={copy.library.folderLabelLabel} />
+                  <Btn type="submit" disabled={working}>{copy.library.addFolder}</Btn>
                 </form>
               )}
               {roots.length ? (
@@ -549,10 +551,10 @@ function App() {
                         {root.scanState?.message && <p className="mt-1 text-[12px] text-rasp-ink">{root.scanState.message}</p>}
                       </div>
                       <div className="ml-2 flex shrink-0 items-center gap-1">
-                        <IconBtn label={`Scan ${root.label || root.path}`} onClick={() => void runScan(root.id)} disabled={working}>
+                        <IconBtn label={copy.library.scanFolder(root.label || root.path)} onClick={() => void runScan(root.id)} disabled={working}>
                           <ScanLine size={16} aria-hidden="true" />
                         </IconBtn>
-                        <IconBtn label={`Remove ${root.label || root.path}`} onClick={() => void removeRoot(root.id)}>
+                        <IconBtn label={copy.library.removeFolder(root.label || root.path)} onClick={() => void removeRoot(root.id)}>
                           <Trash2 size={16} aria-hidden="true" />
                         </IconBtn>
                       </div>
@@ -560,15 +562,20 @@ function App() {
                   ))}
                 </div>
               ) : (
-                <p className="panel panel--sunk px-4 py-5 text-sm text-ink2">No folders configured yet.</p>
+                <p className="panel panel--sunk px-4 py-5 text-sm text-ink2">{copy.library.noFolders}</p>
               )}
             </section>
 
             <div className="mt-8">
               {browse.enrichment && browse.enrichment.status !== "idle" && (
                 <Notice className="mb-4">
-                  Enrichment {browse.enrichment.status}: {browse.enrichment.processed}/{browse.enrichment.queued} checked ·{" "}
-                  {browse.enrichment.applied} applied · {browse.enrichment.review} need review
+                  {copy.library.enrichment(
+                    browse.enrichment.status,
+                    browse.enrichment.processed,
+                    browse.enrichment.queued,
+                    browse.enrichment.applied,
+                    browse.enrichment.review,
+                  )}
                 </Notice>
               )}
 
@@ -580,10 +587,8 @@ function App() {
         {tab === "browse" && (
           <>
             <section className="mb-7">
-              <h2 className="text-[30px] leading-[1.05] sm:text-4xl">Browse</h2>
-              <p className="mt-2 max-w-xl text-ink2">
-                Grouped by genre and series, using the metadata your library was enriched with.
-              </p>
+              <h2 className="text-[30px] leading-[1.05] sm:text-4xl">{copy.browse.heading}</h2>
+              <p className="mt-2 max-w-xl text-ink2">{copy.browse.intro}</p>
             </section>
 
             <SearchBar value={search} onChange={onSearchChange} resultCount={filteredBooks.length} />
@@ -591,15 +596,15 @@ function App() {
 
             {isFilterActive(filters) || search.trim().length > 0 ? (
               <section>
-                <MachineHead title="Filtered results" count={`${filteredBooks.length} ${filteredBooks.length === 1 ? "title" : "titles"}`} />
+                <MachineHead title={copy.browse.filteredHeading} count={`${filteredBooks.length} ${filteredBooks.length === 1 ? "title" : "titles"}`} />
                 <AudiobookGrid books={filteredBooks} {...gridProps} />
               </section>
             ) : (
               <>
-                <Shelves shelves={genreShelves} onSelect={setSelectedBook} favouriteIds={favouriteIds} onToggleFavourite={toggleFavourite} emptyMessage="No genre shelves yet. Enrichment assigns genres from the curated taxonomy — check the review queue for books still unmatched." />
+                <Shelves shelves={genreShelves} onSelect={setSelectedBook} favouriteIds={favouriteIds} onToggleFavourite={toggleFavourite} emptyMessage={copy.browse.noGenreShelves} />
                 {seriesShelves.length > 0 && (
                   <section className="mt-4">
-                    <MachineHead title="Series" />
+                    <MachineHead title={copy.browse.seriesHeading} />
                     <Shelves shelves={seriesShelves} onSelect={setSelectedBook} favouriteIds={favouriteIds} onToggleFavourite={toggleFavourite} />
                   </section>
                 )}
@@ -616,11 +621,9 @@ function App() {
 
         {tab === "favourites" && (
           <section>
-            <h2 className="text-[30px] leading-[1.05] sm:text-4xl">Favourites</h2>
+            <h2 className="text-[30px] leading-[1.05] sm:text-4xl">{copy.favourites.heading}</h2>
             <p className="mb-6 mt-2 max-w-xl text-ink2">
-              {favouriteIds.size === 0
-                ? "Books you favourite are private to your profile and seed your Discover suggestions."
-                : `${favouriteIds.size} ${favouriteIds.size === 1 ? "book" : "books"}, for this profile only.`}
+              {favouriteIds.size === 0 ? copy.favourites.empty : copy.favourites.count(favouriteIds.size)}
             </p>
             <AudiobookGrid books={favouriteBooks} {...gridProps} />
           </section>
@@ -628,7 +631,7 @@ function App() {
       </main>
 
       <footer className="relative z-10 px-5 pb-28 pt-6 text-center text-[12px] text-ink3 sm:pb-10">
-        Audiobook Manager · local-first listening
+        {copy.brand.footer}
       </footer>
       {selectedBook && <AudiobookDetail
         book={selectedBook}

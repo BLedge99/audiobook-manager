@@ -301,9 +301,31 @@ Capacitor plugin config), `server/src/plugins` media routes,
 > review of all text, hints and other text instructors/labels in the app is
 > worthwhile, perhaps a skill exists to help with this."
 
-**Current state:** There is no single place that owns the app's voice. Copy is
-written inline across ~20 components and has never been reviewed as a whole.
-The redesign (spec 15) introduced a lot of new copy in one pass, and the
+**Status: FIXED 2026-10-20** (spec 15b feature 7). Every user-facing string
+now lives in `client/src/copy.ts`, keyed by surface — including the ones the
+pure maths modules produce and the errors that cross module boundaries. The
+voice is **warm, plain and brief**, and the decision is recorded in
+`PRODUCT.md`.
+
+What the review changed beyond the move: one ellipsis character everywhere
+(the app mixed `…` and `...`); one word per concept ("Use this" was "Use" in
+one place and "Use this" in another; "Find more like this" and "Add to
+favourites" each had two homes); errors that say what to do next ("Failed" →
+"Could not load the matches. Try again."); a sentence where there was a
+fragment; and regular labels where the app had none ("Sleep: off" → "Off",
+"Series #" → "Series number", "3 file(s)" → "3 files").
+
+**What did not change: the honesty rule.** Discover's "Book — not an audiobook
+yet" and every card's "not in your library yet" are untouched. A copy pass is
+exactly the wrong moment to soften those.
+
+**How it is kept honest:** `client/src/copy.test.ts` fails the build if an
+empty string, a `...`, an exclamation mark or a duplicated long phrase
+reappears, and if a shared phrase is copied back into a surface group.
+
+**Current state (was):** There is no single place that owns the app's voice.
+Copy is written inline across ~20 components and has never been reviewed as a
+whole. The redesign (spec 15) introduced a lot of new copy in one pass, and the
 tester is right that it reads inconsistently.
 
 **What a fix should do:**

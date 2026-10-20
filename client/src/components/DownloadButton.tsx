@@ -3,6 +3,7 @@ import { Check, Download, LoaderCircle, Trash2 } from "lucide-react";
 import type { Audiobook } from "../types";
 import type { DownloadProgress } from "../local/download";
 import { DownloadStalledError } from "../local/trace";
+import { copy } from "../copy";
 import { Btn, Notice } from "../ui/primitives";
 
 export interface DownloadButtonProps {
@@ -75,10 +76,10 @@ export function DownloadButton({
     try {
       const result = await onRemove(book.id);
       if (result.failed.length > 0) {
-        setError(`Removed from the library, but ${result.failed.length} file(s) could not be deleted.`);
+        setError(copy.download.removedWithErrors(result.failed.length));
       }
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Could not remove the book.");
+      setError(removeError instanceof Error ? removeError.message : copy.download.removeFailed);
     } finally {
       setBusy(false);
     }
@@ -93,11 +94,11 @@ export function DownloadButton({
           ) : (
             <Trash2 size={16} aria-hidden="true" />
           )}
-          Remove from device
+          {copy.download.removeFromDevice}
         </Btn>
         <p className="flex items-center gap-2 text-[12.5px] font-bold text-mint-ink">
           <Check size={14} aria-hidden="true" />
-          On this device · {formatBytes(bytes)}
+          {copy.download.onThisDevice(formatBytes(bytes))}
         </p>
         {error && <Notice tone="warn" role="status">{error}</Notice>}
         {trace && trace.length > 0 && (
@@ -119,7 +120,7 @@ export function DownloadButton({
         ) : (
           <Download size={16} aria-hidden="true" />
         )}
-        {busy ? `Downloading ${percent}%` : fraction > 0 ? "Resume download" : "Download"}
+        {busy ? copy.download.downloading(percent) : fraction > 0 ? copy.download.resume : copy.download.download}
       </Btn>
 
       {(busy || fraction > 0) && (
@@ -128,7 +129,7 @@ export function DownloadButton({
           aria-valuenow={percent}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label={`Download progress for ${book.title}`}
+          aria-label={copy.download.progressLabel(book.title)}
           className="tube"
         >
           <i style={{ width: `${percent}%` }} />

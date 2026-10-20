@@ -1,4 +1,5 @@
 import { Heart } from "lucide-react";
+import { copy } from "../copy";
 import { cn } from "../ui/primitives";
 
 /**
@@ -34,8 +35,8 @@ export function FavouriteButton({
         onToggle();
       }}
       aria-pressed={favourited}
-      aria-label={favourited ? `Remove ${label} from favourites` : `Add ${label} to favourites`}
-      title={favourited ? "In your favourites" : "Add to favourites"}
+      aria-label={favourited ? copy.favourite.remove(label) : copy.favourite.addNamed(label)}
+      title={favourited ? copy.favourite.inYours : copy.favourite.add}
       className={cn(
         "grid shrink-0 place-items-center rounded-full border-2 border-ink bg-surface/90 backdrop-blur-sm transition",
         "hover:-translate-y-0.5 hover:bg-rasp hover:text-white",
