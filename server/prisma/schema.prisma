@@ -59,6 +59,7 @@ model MediaItem {
   customTags        MediaItemTag[]
   favourites        Favourite[]
   wishlistSeeds     WishlistItem[]
+  libraryEntries    ProfileLibraryEntry[]
 
   series Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
@@ -204,6 +205,28 @@ model Favourite {
   @@index([mediaItemId])
 }
 
+// Spec 27: per-profile library membership.
+//
+// A membership row is the reason a book appears in one profile's library and
+// not another's. It is a *row*, not a copy: the audio file stays where it is
+// and two profiles can hold the same book.
+//
+// The same shape as Favourite, and for the same reason: the unique constraint
+// makes adding a book twice idempotent rather than an error.
+model ProfileLibraryEntry {
+  id          Int      @id @default(autoincrement())
+  profileId   Int
+  mediaItemId Int
+  createdAt   DateTime @default(now())
+
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, mediaItemId])
+  @@index([profileId])
+  @@index([mediaItemId])
+}
+
 // Spec 18: custom tags are a household-wide managed vocabulary, not free
 // text. Created once, assigned to many books.
 model Tag {
@@ -334,11 +357,24 @@ model Profile {
   color     String?
   createdAt DateTime @default(now())
 
+  // Spec 27: does this profile receive newly scanned books automatically?
+  //
+  // The existing-vs-new distinction from the spec, made explicit. Profiles
+  // that existed when the feature shipped are set to true, so shipping it
+  // changes nothing for a household that already has the app -- including
+  // books scanned later. A profile created afterwards starts false and stays
+  // empty until someone adds something to it.
+  //
+  // Removing a book does NOT clear this. "Archie should not have that one
+  // book" is not "Archie should stop getting new books".
+  followsServerLibrary Boolean @default(false)
+
   listeningHistory ListeningHistory[]
   playSessions     PlaySession[]
   favourites       Favourite[]
   createdTags      Tag[]
   wishlist         WishlistItem[]
+  libraryEntries   ProfileLibraryEntry[]
 }
 
 model PlaySession {

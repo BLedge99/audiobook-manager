@@ -21,7 +21,18 @@ services:
       context: .
       dockerfile: .devcontainer/Dockerfile.server
     working_dir: /app/server
-    command: sh -c "echo '[compose] starting prisma generate'; npx prisma generate; echo '[compose] prisma generate exited with code '$$?; echo '[compose] starting prisma db push'; npx prisma db push --accept-data-loss; echo '[compose] prisma db push exited with code '$$?; echo '[compose] starting Fastify'; npm run dev"
+    # `prisma migrate deploy`, NOT `prisma db push`.
+    #
+    # `db push` creates the schema but records no migration history and
+    # **cannot run a data migration** -- and spec 27's migration has to move
+    # data (every existing profile is given every book). Production has always
+    # used `migrate deploy` (Dockerfile.prod); using `db push` here meant dev
+    # and production disagreed about what the database contained, which is the
+    # worst possible place for that to show up.
+    #
+    # The exit code is echoed rather than checked, as before, so a failure is
+    # visible in the logs without taking the whole stack down.
+    command: sh -c "echo '[compose] starting prisma generate'; npx prisma generate; echo '[compose] prisma generate exited with code '$$?; echo '[compose] applying migrations'; npx prisma migrate deploy; echo '[compose] prisma migrate deploy exited with code '$$?; echo '[compose] starting Fastify'; npm run dev"
     volumes:
       - ./server:/app/server
       - server_node_modules:/app/server/node_modules

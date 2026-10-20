@@ -38,7 +38,10 @@ async function main() {
   const { seedGenres, seedGenreMappings } = await import("../metadata/taxonomy-service");
 
   console.log(`[verify] scratch db: ${dbFile}`);
-  execSync("npx prisma db push --skip-generate --accept-data-loss", {
+  // `migrate deploy`, not `db push`: the scratch database is built from the
+  // real migrations, so this script cannot pass against a schema the
+  // migrations would not produce.
+  execSync("npx prisma migrate deploy", {
     cwd: path.join(__dirname, "..", ".."),
     env: { ...process.env },
     stdio: "ignore",

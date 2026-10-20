@@ -7,6 +7,7 @@ import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
+import { addBookToProfile, libraryEntriesFor, removeBookFromProfile } from "./library-membership";
 import { LMStudioAdapter } from "./ai/llm";
 import { COVER_DIR } from "./enrichment";
 import { resolveInsideRoot } from "./safePath";
@@ -260,7 +261,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.get("/api/audiobooks", async (request, reply) => {
     // Spec 20: the browse UI needs genres, series and custom tags on the list
     // payload -- fetching them per-book would be an N+1 request per shelf.
+    const profileId = optionalProfileId(request);
+    // Spec 27: a profile sees its own library, not the whole server's.
+    //
+    // With no profile there is no caller to scope to, so the whole server
+    // library is returned -- the same answer the endpoint gave before spec 27,
+    // which keeps tooling and the unscoped API working. The client always
+    // sends the header once a profile is chosen.
     const items = await prisma.mediaItem.findMany({
+      where: profileId === null ? undefined : libraryEntriesFor(profileId),
       include: {
         tracks: true,
         series: true,
@@ -269,7 +278,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         contributors: { include: { contributor: true } },
       },
     });
-    const profileId = optionalProfileId(request);
     // One query for the whole library's progress rather than one per book.
     const history = profileId === null
       ? []
@@ -319,6 +327,105 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return sendConditional(request, reply, payload, {
       vary: ["x-profile-id", "x-house-session"],
     });
+  });
+
+  /**
+   * Spec 27: the whole server library, with each book marked for the caller.
+   *
+   * This is the other side of `/api/audiobooks`, which returns only the
+   * caller's membership. The "Server library" tab reads this: it needs to see
+   * every book on the server, including the ones the profile already has, so
+   * the household can add what is missing.
+   *
+   * The `inLibrary` flag is computed from the caller's membership rows, so
+   * the tab never has to join two lists itself.
+   */
+  app.get("/api/server-library", async (request, reply) => {
+    const profileId = optionalProfileId(request);
+    const items = await prisma.mediaItem.findMany({
+      orderBy: { title: "asc" },
+      include: {
+        tracks: true,
+        series: true,
+        genres: { include: { genre: true } },
+        customTags: { include: { tag: true } },
+        contributors: { include: { contributor: true } },
+      },
+    });
+    const held = profileId === null
+      ? new Set<number>()
+      : new Set(
+          (await prisma.profileLibraryEntry.findMany({
+            where: { profileId },
+            select: { mediaItemId: true },
+          })).map((row) => row.mediaItemId),
+        );
+
+    const payload = items.map((item) => ({
+      ...publicMediaItem({
+        ...item,
+        tracks: item.tracks.map(({ filePath: _trackPath, ...track }) => track),
+      }),
+      genres: item.genres.map((link) => ({
+        id: link.genre.id,
+        slug: link.genre.slug,
+        name: link.genre.name,
+        parentId: link.genre.parentId,
+        source: link.source,
+      })),
+      customTags: item.customTags.map((link) => ({
+        id: link.tag.id,
+        name: link.tag.name,
+      })),
+      contributors: item.contributors.map((link) => ({
+        id: link.contributor.id,
+        name: link.contributor.name,
+        role: link.contributor.role,
+      })),
+      /** Is this book in the calling profile's library? */
+      inLibrary: held.has(item.id),
+    }));
+
+    return sendConditional(request, reply, payload, {
+      vary: ["x-profile-id", "x-house-session"],
+    });
+  });
+
+  /**
+   * Spec 27: add a book to the calling profile's library.
+   *
+   * Idempotent: adding a book the profile already has is a 200 with
+   * `added: false`, not an error. The client sends an id, never a path.
+   */
+  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/library", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
+    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    const added = await addBookToProfile(prisma, profileId, id);
+    return { added, inLibrary: true };
+  });
+
+  /**
+   * Spec 27: remove a book from the calling profile's library.
+   *
+   * The book stays on the server. The server library is a property of the
+   * filesystem, so a book removed from every profile simply appears in nobody's
+   * shelf -- it is not deleted from disk.
+   */
+  app.delete<{ Params: { id: string } }>("/api/audiobooks/:id/library", {
+    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  }, async (request, reply) => {
+    const profileId = requireProfileId(request);
+    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    const removed = await removeBookFromProfile(prisma, profileId, id);
+    return { removed, inLibrary: false };
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id", async (request, reply) => {
@@ -1496,6 +1603,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!name) return reply.code(400).send({ message: "A profile name is required" });
     const existing = await prisma.profile.findUnique({ where: { name } });
     if (existing) return reply.code(409).send({ message: "A profile with that name already exists" });
+    // Spec 27: a new profile starts EMPTY and does not follow the server
+    // library. This is the one line the spec points at: flip `followsServerLibrary`
+    // to true and copy the books across to give new profiles the full library
+    // instead.
     const profile = await prisma.profile.create({ data: { name, color: request.body?.color?.trim() || null } });
     return reply.code(201).send(profile);
   });

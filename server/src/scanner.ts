@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import * as musicMetadata from "music-metadata";
 import { PrismaClient } from "@prisma/client";
 import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./scan-utils";
+import { addBookToFollowingProfiles } from "./library-membership";
 import { stripTrackNumberPrefix, parseTrackTitleOverrides, resolveTrackTitle } from "./metadata/chapters";
 import { resolveLocalNarrator } from "./narrator";
 
@@ -294,6 +295,11 @@ export function createScanManager(prisma: PrismaClient) {
         });
 
         await syncContributors(prisma, item.id, primary.author, primary.narrator, primary.narrators);
+
+        // Spec 27: a newly scanned book joins the library of every profile
+        // that follows the server library. A profile the household curated on
+        // purpose does not get it -- that is the whole point of the feature.
+        await addBookToFollowingProfiles(prisma, item.id);
 
         await prisma.track.deleteMany({ where: { mediaItemId: item.id } });
         if (group.length > 1) {

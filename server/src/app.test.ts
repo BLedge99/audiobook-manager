@@ -16,7 +16,7 @@ let app: Awaited<ReturnType<typeof buildApp>>;
 const prisma = new PrismaClient();
 
 beforeAll(async () => {
-  execSync("npx prisma db push --skip-generate", {
+  execSync("npx prisma migrate deploy", {
     cwd: path.join(__dirname, ".."),
     env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
     stdio: "ignore",
@@ -374,6 +374,17 @@ describe("conditional library GET", () => {
     const a = await prisma.profile.create({ data: { name: `Etag A ${Date.now()}` } });
     const b = await prisma.profile.create({ data: { name: `Etag B ${Date.now()}` } });
     await prisma.listeningHistory.create({ data: { mediaItemId: item.id, profileId: a.id, position: 120 } });
+    // Spec 27: the listing is scoped to the caller's membership, so both
+    // profiles have to hold the book for the tag comparison to mean anything.
+    // Without this the book would be missing from A's list rather than
+    // carrying a different position, and the test would pass for the wrong
+    // reason.
+    await prisma.profileLibraryEntry.createMany({
+      data: [
+        { profileId: a.id, mediaItemId: item.id },
+        { profileId: b.id, mediaItemId: item.id },
+      ],
+    });
 
     const forA = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "x-profile-id": String(a.id) } });
     expect(forA.json().find((book: { id: number }) => book.id === item.id).progress.position).toBe(120);

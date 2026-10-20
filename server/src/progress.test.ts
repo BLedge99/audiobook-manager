@@ -13,9 +13,12 @@ let app: Awaited<ReturnType<typeof buildApp>>;
 let cookie: string;
 let profileId: number;
 let bookId: number;
+// Spec 27: needed to put books into a profile's library, which is now what
+// makes a book visible in the library listing.
+let prisma: import("@prisma/client").PrismaClient;
 
 beforeAll(async () => {
-  execSync("npx prisma db push --skip-generate", {
+  execSync("npx prisma migrate deploy", {
     cwd: path.join(__dirname, ".."),
     env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
     stdio: "ignore",
@@ -27,12 +30,17 @@ beforeAll(async () => {
   profileId = profile.json().id;
 
   const { PrismaClient } = await import("@prisma/client");
-  const prisma = new PrismaClient();
+  prisma = new PrismaClient();
   const root = await prisma.libraryRoot.create({ data: { path: "/tmp/lib" } });
   const book = await prisma.mediaItem.create({
     data: { title: "Test Book", author: "Author", filePath: "/tmp/lib/book.m4b", fileFormat: "m4b", duration: 1000, libraryRootId: root.id },
   });
   bookId = book.id;
+  // Spec 27: the library listing is scoped to the caller's membership, so a
+  // profile has to actually hold the book for it to appear. These tests are
+  // about progress, not membership -- but the setup has to be honest about
+  // what a profile's library is.
+  await prisma.profileLibraryEntry.create({ data: { profileId, mediaItemId: book.id } });
 }, 120_000);
 
 afterAll(async () => {
@@ -145,14 +153,26 @@ describe("library progress listing", () => {
   it("never leaks another profile's position", async () => {
     const other = await app.inject({ method: "POST", url: "/api/profiles", payload: { name: "Riley" }, headers: { cookie } });
     const otherId = other.json().id;
+    // The other profile has to *hold* the book for the test to mean anything:
+    // spec 27 scopes the listing to the caller's membership, so a profile that
+    // does not hold the book cannot see its progress at all. Giving it the
+    // book keeps the leak test honest -- both profiles can see the book, and
+    // only one can see the position.
+    await prisma.profileLibraryEntry.create({ data: { profileId: otherId, mediaItemId: bookId } });
     const book = await listedBook({ cookie, "x-profile-id": String(otherId) });
     expect(book?.progress).toBeNull();
   });
 
   it("leaves books that have never been played at null", async () => {
     const fresh = await app.inject({ method: "POST", url: "/api/profiles", payload: { name: "NeverPlayed" }, headers: { cookie } });
-    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "x-profile-id": String(fresh.json().id) } });
-    expect((res.json() as { progress: unknown }[]).every((book) => book.progress === null)).toBe(true);
+    const freshId = fresh.json().id;
+    await prisma.profileLibraryEntry.create({ data: { profileId: freshId, mediaItemId: bookId } });
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "x-profile-id": String(freshId) } });
+    const books = res.json() as { progress: unknown }[];
+    // Not an empty list: a profile that holds no books would pass this
+    // vacuously.
+    expect(books.length).toBeGreaterThan(0);
+    expect(books.every((book) => book.progress === null)).toBe(true);
   });
 });
 

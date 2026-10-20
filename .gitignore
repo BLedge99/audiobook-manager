@@ -18,6 +18,10 @@ build/
 # Database
 *.db
 *.sqlite3
+# SQLite's rollback journal, left behind when a process dies mid-write.
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Prisma generated client
 server/prisma/client/

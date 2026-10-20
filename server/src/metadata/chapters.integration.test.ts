@@ -26,7 +26,7 @@ let libraryRootId = 0;
 let nextBook = 0;
 
 beforeAll(async () => {
-  execSync("npx prisma db push --skip-generate", {
+  execSync("npx prisma migrate deploy", {
     cwd: path.join(__dirname, "..", ".."),
     env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
     stdio: "ignore",
