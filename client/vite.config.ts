@@ -20,6 +20,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 // because the WebView survives an APK update it would persist until the app's
 // data was cleared.
 export default defineConfig(({ mode }) => ({
+  // The build's own timestamp, so the app can say which build is installed.
+  //
+  // `versionName` is 1.0 in every APK, so the phone cannot tell you whether
+  // it is running the build you just made or the one from last week -- and
+  // "did my change take?" is a question worth being able to answer on the
+  // device itself.
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     tailwindcss(),

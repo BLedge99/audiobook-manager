@@ -662,6 +662,7 @@ function App() {
             onRemove={library.removeFromLibrary}
             isDownloaded={isNativeShell() ? device.isDownloaded : undefined}
             onDeleteDownload={isNativeShell() ? device.remove : undefined}
+            onOpen={setSelectedBook}
           />
         )}
 

@@ -662,6 +662,8 @@ export const copy = {
       unreachable: (address: string, detail: string) =>
         `Could not reach ${address}. Check the address and that the phone is on the home WiFi. (${detail})`,
       deviceHeading: "On this device",
+    /** Which build is installed. Every APK says 1.0, so this is the only way to tell. */
+    build: "Build",
       booksDownloaded: (count: number) => `${plural(count, "book")} downloaded`,
       serverUnreachable: "The server is unreachable. Downloaded books still play.",
       coversCached: (bytes: string) => `${bytes} of cover art cached, so covers still show with no connection.`,

@@ -48,6 +48,8 @@ export function Settings({
   const [status, setStatus] = useState<"idle" | "checking" | "ok" | "failed">("idle");
   const [message, setMessage] = useState("");
   const [coversCleared, setCoversCleared] = useState(false);
+  /** When this build was made, so the phone can say which one it is running. */
+  const builtAt = new Date(__BUILD_TIME__).toLocaleString();
 
   const test = async (event: FormEvent) => {
     event.preventDefault();
@@ -135,6 +137,13 @@ export function Settings({
             <HardDriveDownload size={17} className="text-rasp" aria-hidden="true" />
             {copy.operator.settings.deviceHeading}
           </h3>
+
+          {/* Which build is this? Every APK reports versionName 1.0, so
+              without this the phone cannot answer "did my change take?". */}
+          <p className="mt-2 text-[12px] text-ink3 tnum">
+            {copy.operator.settings.build}: {builtAt}
+          </p>
+
           {/* The tube, not a dial: there is no meaningful maximum to fill
               against, so a proportional ring would be a lie. */}
           <p className="mt-2 font-display text-[32px] font-semibold leading-none text-ink tnum">

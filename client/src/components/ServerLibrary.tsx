@@ -30,6 +30,7 @@ export function ServerLibrary({
   onRemove,
   isDownloaded,
   onDeleteDownload,
+  onOpen,
 }: {
   /** Every book the server has, each marked with `inLibrary`. */
   books: Audiobook[];
@@ -48,6 +49,8 @@ export function ServerLibrary({
   isDownloaded?: (bookId: number) => boolean;
   /** Delete the device copy, freeing the space. */
   onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
+  /** Open the book, the way every other surface does. */
+  onOpen?: (book: Audiobook) => void;
 }) {
   const [pending, setPending] = useState<number>();
   const [failed, setFailed] = useState<string>();
@@ -112,6 +115,7 @@ export function ServerLibrary({
                   onRemove={onRemove}
                   isDownloaded={isDownloaded}
                   onDeleteDownload={onDeleteDownload}
+                  onOpen={onOpen}
                 />
               ))}
             </ul>
@@ -129,6 +133,7 @@ function ServerLibraryRow({
   onRemove,
   isDownloaded,
   onDeleteDownload,
+  onOpen,
 }: {
   book: Audiobook;
   pending: boolean;
@@ -136,6 +141,7 @@ function ServerLibraryRow({
   onRemove: (bookId: number) => Promise<void>;
   isDownloaded?: (bookId: number) => boolean;
   onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
+  onOpen?: (book: Audiobook) => void;
 }) {
   const inLibrary = Boolean(book.inLibrary);
   const downloaded = Boolean(isDownloaded?.(book.id));
@@ -171,9 +177,18 @@ function ServerLibraryRow({
           <ShellCover bookId={book.id} className="w-full" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-display text-[15px] font-semibold text-ink">
+          {/* The title is the button that opens the book, the way every other
+              surface does. A row you cannot tap is a dead end -- the
+              household tapped a book here and nothing happened. It is a button
+              in its own right rather than a button wrapping the row, because
+              the Remove button beside it must not be nested inside it. */}
+          <button
+            type="button"
+            onClick={() => onOpen?.(book)}
+            className="block w-full min-w-0 truncate text-left font-display text-[15px] font-semibold text-ink"
+          >
             {book.title}
-          </span>
+          </button>
           <span className="block truncate text-[12.5px] text-ink2">{book.author}</span>
         </span>
         {inLibrary ? (

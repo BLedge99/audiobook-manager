@@ -514,6 +514,11 @@ re-run of the security E2E suite. **Not started.**
   download is not**, so that is the one worth a question, and it is only asked
   when there is a download to ask about.
 
+- **Every APK says version 1.0, so the phone cannot tell you which build it
+  is running.** "Did my change take?" then becomes a question about memory
+  rather than about the device. Settings now shows the build's timestamp, which
+  Vite stamps in at build time.
+
 - **A layout guard that only looks at one screen is not a guard.** The
   phone-layout spec checked the Library tab and nothing else, so a 1573px-wide
   row in the new "All books" tab shipped: the app rendered four screen-phones

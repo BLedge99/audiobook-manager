@@ -1,8 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { ServerLibrary } from "./ServerLibrary";
 import type { Audiobook } from "../types";
+
+/**
+ * Every click in this file is `fireEvent`, never `userEvent`.
+ *
+ * `userEvent` plays a real pointer sequence, and its state lives on the
+ * `document`, so it is shared between tests. When a click removes the element
+ * it pressed -- which these do, because answering the question closes the
+ * panel -- `userEvent` waits for the detached element for ever and leaves the
+ * pointer state dirty, so every *later* click in the file hangs too. The
+ * symptom is a test that passes alone and times out in the suite, which is a
+ * hard thing to see.
+ *
+ * These assertions are about callbacks, not about pointer behaviour, so
+ * `fireEvent` is the right tool anyway.
+ */
 
 /**
  * Spec 27 — the "Server library" tab.
@@ -62,19 +76,27 @@ describe("the Server library tab", () => {
     expect(screen.getByRole("button", { name: "Add" })).toBeInTheDocument();
   });
 
+  it("opens the book when its title is tapped", async () => {
+    // The household tapped a book in this tab and nothing happened. A row you
+    // cannot open is a dead end, and this tab lists the same books as every
+    // other surface, so it should behave like them.
+    const onOpen = vi.fn();
+    renderTab({ onOpen });
+    fireEvent.click(screen.getByRole("button", { name: "Already mine" }));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 1, title: "Already mine" }));
+  });
+
   it("removes a book from the library", async () => {
-    const user = userEvent.setup();
     const { onRemove } = renderTab();
-    await user.click(screen.getByRole("button", { name: /remove from my library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remove from my library/i }));
     // No download, so nothing irreversible is at stake and it goes straight
     // out -- no question asked.
     await waitFor(() => expect(onRemove).toHaveBeenCalledWith(1));
   });
 
   it("asks about the download before removing a downloaded book", async () => {
-    const user = userEvent.setup();
     const { onRemove } = renderTab({ isDownloaded: () => true });
-    await user.click(screen.getByRole("button", { name: /remove from my library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remove from my library/i }));
 
     // The question names the consequence and offers both answers.
     expect(screen.getByText(/Delete the download as well/)).toBeInTheDocument();
@@ -94,10 +116,9 @@ describe("the Server library tab", () => {
   });
 
   it("deletes the download too when that is the answer", async () => {
-    const user = userEvent.setup();
     const onDeleteDownload = vi.fn(async () => ({ failed: [] }));
     const { onRemove } = renderTab({ isDownloaded: () => true, onDeleteDownload });
-    await user.click(screen.getByRole("button", { name: /remove from my library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remove from my library/i }));
     // `fireEvent`, not `user.click` -- see the note above: answering the
     // question removes the panel, and a `userEvent` click on a button that
     // removes itself never finishes.
