@@ -142,6 +142,62 @@ describe("useLibrary", () => {
       const deleted = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/1/library"));
       expect(deleted?.[1]?.method).toBe("DELETE");
     });
+
+    it("puts the book back when the removal does not reach the server", async () => {
+      // The household's report: books were taken out of the library and the
+      // library still had them. The cause was not the server -- the request
+      // never left the phone -- and the visible symptom was the optimistic
+      // change standing there on its own, with the library never agreeing.
+      //
+      // The shelf and the library are one fact seen twice. When the request
+      // fails, the local flag goes back, so the two cannot disagree.
+      const { result } = await mountWith([book(1, "One")]);
+      fetchMock.mockImplementation(async (url: string) => {
+        if (String(url).includes("/1/library")) {
+          throw new TypeError("Failed to fetch");
+        }
+        return url.includes("server-library")
+          ? fakeResponse([{ ...book(1, "One"), inLibrary: true }])
+          : url.includes("library-roots")
+            ? fakeResponse([])
+            : fakeResponse([book(1, "One")]);
+      });
+      await act(async () => {
+        await result.current.loadServerLibrary();
+      });
+      expect(result.current.serverLibrary[0].inLibrary).toBe(true);
+
+      await act(async () => {
+        await expect(result.current.removeFromLibrary(1)).rejects.toThrow();
+      });
+
+      // Back where the server says it is: still in the library.
+      expect(result.current.serverLibrary[0].inLibrary).toBe(true);
+    });
+
+    it("puts the book back when adding it does not reach the server", async () => {
+      const { result } = await mountWith([book(1, "One")]);
+      fetchMock.mockImplementation(async (url: string) => {
+        if (String(url).includes("/1/library")) {
+          throw new TypeError("Failed to fetch");
+        }
+        return url.includes("server-library")
+          ? fakeResponse([{ ...book(1, "One"), inLibrary: false }])
+          : url.includes("library-roots")
+            ? fakeResponse([])
+            : fakeResponse([book(1, "One")]);
+      });
+      await act(async () => {
+        await result.current.loadServerLibrary();
+      });
+      expect(result.current.serverLibrary[0].inLibrary).toBe(false);
+
+      await act(async () => {
+        await expect(result.current.addToLibrary(1)).rejects.toThrow();
+      });
+
+      expect(result.current.serverLibrary[0].inLibrary).toBe(false);
+    });
   });
 
   it("keeps the books on screen while a refresh is in flight", async () => {
@@ -238,6 +294,22 @@ describe("useLibrary", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.audiobooks).toHaveLength(0);
     expect(result.current.error).toBe("server unreachable");
+  });
+
+  it("says the server could not be reached, in words a person can act on", async () => {
+    // The browser's own answer -- "Failed to fetch" -- is what the household
+    // was shown, more than once, while the server was unreachable. It says
+    // nothing about what to do, and it names neither of the two causes.
+    const { result } = await mountWith([book(1, "One")]);
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.error).toBe(
+      "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
+    );
   });
 
   it("reports refreshing for the very first load too", async () => {

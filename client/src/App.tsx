@@ -1,10 +1,10 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Trash2, WifiOff, BookOpen, Server } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
 import { FilterBar } from "./components/FilterBar";
-import { needsServerUrl } from "./lib/api";
+import { needsServerUrl, onServerUnreachable } from "./lib/api";
 import { LoginGate } from "./components/LoginGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
 import { ProfileGate } from "./components/ProfileGate";
@@ -91,6 +91,8 @@ function App() {
    * was locked out of it by the very feature that let them download it.
    */
   const [serverReachable, setServerReachable] = useState<boolean>();
+  /** A probe in flight, so a failing probe cannot trigger another one. */
+  const probeInFlight = useRef(false);
   const [profileId, setProfileId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
   // Spec 20: both the tab and the filters live in the URL, so a shared or
   // bookmarked link restores the whole view. Persisting filters alone was not
@@ -118,15 +120,59 @@ function App() {
    * app on the splash for good.
    */
   const probeServer = useCallback(() => {
-    void probeServerRequest().then((probe) => {
-      setServerReachable(probe.reachable);
-      setAuthed(probe.authed);
-    });
+    // One probe at a time. The probe is itself a request, and a request that
+    // fails reports the server as unreachable -- so without this guard a
+    // failing probe would trigger another probe, for ever.
+    if (probeInFlight.current) return;
+    probeInFlight.current = true;
+    void probeServerRequest()
+      .then((probe) => {
+        setServerReachable(probe.reachable);
+        setAuthed(probe.authed);
+      })
+      .finally(() => {
+        probeInFlight.current = false;
+      });
   }, []);
 
   useEffect(() => {
     probeServer();
   }, [probeServer]);
+
+  /**
+   * The refresh button.
+   *
+   * When the server is believed to be unreachable, this also re-probes. The
+   * person tapping refresh is saying "try again", and the app's own belief
+   * about whether the server is there is exactly what is in doubt -- so the
+   * button is the one place that settles it.
+   */
+  const refreshEverything = useCallback(() => {
+    if (serverReachable === false) probeServer();
+    void refresh();
+  }, [serverReachable, probeServer, refresh]);
+
+  /**
+   * A request failed because the server could not be reached.
+   *
+   * The app used to learn this only from a probe, and the probe only ran at
+   * startup and when the window regained focus. A phone that lost the server
+   * -- unplugged, or pointed at the wrong address -- went on showing the
+   * shelf it had loaded, with buttons that looked alive and silently did
+   * nothing. The household's report was exactly that: books taken out of the
+   * library stayed in it, and pressing refresh did nothing.
+   *
+   * So a failed request re-probes. The **probe** decides, not the failure:
+   * one blip does not take the app offline, and a server that is really gone
+   * puts the app into the offline state it should have been in all along.
+   */
+  useEffect(
+    () =>
+      onServerUnreachable(() => {
+        probeServer();
+      }),
+    [probeServer],
+  );
 
   /** Write the current view (tab + filters + search) to the URL. */
   const syncUrl = useCallback((nextTab: Tab, nextFilters: Filters, nextSearch: string) => {
@@ -283,6 +329,27 @@ function App() {
     };
   }, [profileId, refresh]);
 
+  /**
+   * Coming back online has to fetch the library again.
+   *
+   * While the server was unreachable the app was showing the *device's* books,
+   * so the server's list is stale the moment the connection returns -- and
+   * nothing refetched it, because the only triggers were the profile changing
+   * and the window regaining focus. Without this, the app says "online" and
+   * shows the wrong list.
+   */
+  const wasOffline = useRef(false);
+  useEffect(() => {
+    if (serverReachable === false) {
+      wasOffline.current = true;
+      return;
+    }
+    if (serverReachable !== true) return;
+    if (!wasOffline.current) return;
+    wasOffline.current = false;
+    void refresh();
+  }, [serverReachable, refresh]);
+
   // Re-probe when the app comes back to the foreground. Without this, someone
   // who opened the app at home, left, and came back would stay stuck in the
   // offline branch until they force-quit and restart it.
@@ -408,7 +475,7 @@ function App() {
             <IconBtn
               label={refreshing ? copy.shell.refreshing : copy.shell.refresh}
               aria-busy={refreshing || undefined}
-              onClick={() => void refresh()}
+              onClick={refreshEverything}
             >
               <RefreshCw size={19} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
             </IconBtn>

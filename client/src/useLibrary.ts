@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
-import { boundedFetch, sessionHeaders } from "./lib/api";
+import { boundedFetch, describeFailure, sessionHeaders } from "./lib/api";
 import { copy } from "./copy";
 
 /**
@@ -143,7 +143,7 @@ export function useLibrary() {
         }
         setError(undefined);
       } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : copy.errors.loadLibrary);
+        setError(describeFailure(requestError, copy.errors.loadLibrary));
       } finally {
         setRefreshing(false);
         // Only a fetch that has never produced rows may show "loading". After
@@ -188,9 +188,7 @@ export function useLibrary() {
       setServerLibrary(await writeRequest<Audiobook[]>("/api/server-library", "GET"));
       setServerLibraryError(undefined);
     } catch (requestError) {
-      setServerLibraryError(
-        requestError instanceof Error ? requestError.message : copy.errors.loadAllBooks,
-      );
+      setServerLibraryError(describeFailure(requestError, copy.errors.loadAllBooks));
     } finally {
       setServerLibraryLoading(false);
     }
@@ -203,13 +201,25 @@ export function useLibrary() {
    * lists are refetched afterwards to reconcile. The refetch is what makes it
    * correct: the library listing is a different payload, and a book that has
    * just joined the profile is not in it until the server says so.
+   *
+   * If the request fails, the flag goes back. The shelf and the library are
+   * the same fact seen twice, and they must not disagree: a book that is
+   * still in the library has to look like it, in both places, even while the
+   * server is unreachable.
    */
   const addToLibrary = useCallback(
     async (bookId: number) => {
       setServerLibrary((current) =>
         current.map((book) => (book.id === bookId ? { ...book, inLibrary: true } : book)),
       );
-      await writeRequest(`/api/audiobooks/${bookId}/library`, "POST");
+      try {
+        await writeRequest(`/api/audiobooks/${bookId}/library`, "POST");
+      } catch (requestError) {
+        setServerLibrary((current) =>
+          current.map((book) => (book.id === bookId ? { ...book, inLibrary: false } : book)),
+        );
+        throw requestError;
+      }
       await refresh();
       await loadServerLibrary();
     },
@@ -220,13 +230,26 @@ export function useLibrary() {
    * Spec 27: remove a book from this profile's library.
    *
    * The book stays on the server. Only this profile stops seeing it.
+   *
+   * As with adding: the local flag is optimistic, and a failure puts it back.
+   * The household reported a removal that "did nothing" -- and the reason it
+   * looked like nothing is that the shelf said the book had gone while the
+   * library still had it, because the request never reached the server and
+   * the optimistic change was never taken back.
    */
   const removeFromLibrary = useCallback(
     async (bookId: number) => {
       setServerLibrary((current) =>
         current.map((book) => (book.id === bookId ? { ...book, inLibrary: false } : book)),
       );
-      await writeRequest(`/api/audiobooks/${bookId}/library`, "DELETE");
+      try {
+        await writeRequest(`/api/audiobooks/${bookId}/library`, "DELETE");
+      } catch (requestError) {
+        setServerLibrary((current) =>
+          current.map((book) => (book.id === bookId ? { ...book, inLibrary: true } : book)),
+        );
+        throw requestError;
+      }
       await refresh();
       await loadServerLibrary();
     },

@@ -56,6 +56,21 @@
     all (ping to the host is 100% lost). The household's own setting is
     `http://192.168.1.203:3000`, and it is the right one on the normal
     network.
+  - **Both phones cannot reach the LAN at all** (measured 2026-10-21). The
+    Cisco AP `toob-9F4CE1` hands out a normal lease on 192.168.1.0/24 and
+    then blackholes every packet to another device: the router and the host
+    both answer nothing, and a connection to the host's port 3000 *hangs*
+    rather than being refused. It is client isolation on the AP -- the host's
+    firewall allows inbound TCP 3000 from the local subnet. So
+    `http://192.168.1.203:3000` works for a laptop on the LAN and not for
+    either phone, and the only route from a phone to the server is the
+    `adb reverse` tunnel. **A household network problem, not an app
+    problem**: put the phones on the main SSID, or turn client isolation off
+    on that AP.
+  - **The Defy** is with the household user. Its server address is
+    `http://localhost:3000` (it needs the tunnel), and the app on it now says
+    so plainly: "Could not reach the server. Check the phone is on the home
+    network, and that the server address in Settings is right."
   - The **Defy** has the current build, and "The Christmas Pig" was downloaded
     **by the app itself** (16:58, 321,857,108 bytes in `files/books/120/`) and
     plays with the server cut off. Its server address is currently
@@ -112,9 +127,15 @@
   segment that cannot reach the home LAN -- so removing the tunnel leaves the
   phone blocked until the owner asks for it back. Ask them to turn on
   airplane mode instead. (The household's rule, 2026-10-21.) Where a test
-  needed offline behaviour without airplane mode, the page's own `fetch` was
-  made to fail over the DevTools protocol, which leaves the tunnel and the
-  device's network alone.
+  needed offline behaviour without airplane mode, the phone's network was cut
+  at the browser layer over the DevTools protocol
+  (`Network.emulateNetworkConditions`), which leaves the tunnel and the
+  device's network alone -- and, unlike overriding `window.fetch` by hand, it
+  exercises the app's own error handling, which is the thing under test.
+- **A phone's WebView throttles its timers when the screen is off.** A
+  `setTimeout` loop in a page that is not visible can be throttled to once a
+  minute, so a measurement that polls from the page can look like a hang.
+  `adb shell svc power stayon true` keeps the screen awake for device tests.
 
 ## Progress log
 

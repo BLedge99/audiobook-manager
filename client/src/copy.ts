@@ -528,17 +528,24 @@ export const copy = {
     bridgeNotReady: "The device bridge is not ready yet. Restart the app and try again.",
     filesystemUnavailable: "The Filesystem plugin is unavailable. Reinstall the app and try again.",
     fileTransferUnavailable: "The FileTransfer plugin is unavailable. Reinstall the app and try again.",
+    /**
+     * The server could not be reached.
+     *
+     * The one message for every failed request, because the browser's own
+     * answer -- "Failed to fetch" -- is a phrase nobody outside a browser
+     * console has ever heard, and it says nothing about what to do.
+     *
+     * The two causes have different fixes and the person cannot tell them
+     * apart: the server may be down, or the *phone* may not be able to reach
+     * it. The second is by far the more common, and the address in Settings is
+     * where it is fixed.
+     */
+    cannotReachServer:
+      "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
     downloadRejected: (status: number) =>
       `The server rejected the download (HTTP ${status}). Sign in again and retry.`,
     trackFailed: (status: number) => `The server returned HTTP ${status} for this track.`,
     downloadFailed: "The download failed.",
-    /**
-     * The plugin says "failed to connect to server", which is true but leaves
-     * the listener guessing: is the server down, or can the *phone* not reach
-     * it? Those have different fixes, and the person cannot tell which.
-     */
-    downloadCannotReach:
-      "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
     downloadNoData: "The download finished but wrote no data. The server may have refused the request.",
     downloadIncomplete: (bytes: number, expected: number) =>
       `The download is incomplete (${bytes} of ${expected} bytes). Retry to finish it.`,

@@ -173,6 +173,9 @@ Migrations stay additive. No column is removed or repurposed.
 - [x] Offline, the "All books" tab still lists the books on the device and can
       remove one; it offers no Add button, and it does not claim the household
       has no audiobooks.
+- [x] A removal that cannot reach the server leaves the book in the library,
+      says the server could not be reached, and does not leave the shelf
+      claiming the book has gone.
 
 **Verified on the live stack** (2026-10-21): an existing profile sees 12
 books, a brand-new profile sees 0, adding one makes it 1, removing it makes it
@@ -212,6 +215,31 @@ The three open questions above, answered:
    been using the app for years and for one that installed it this morning.
 
 ## One thing the implementation found that the spec did not ask about
+
+**The removal is a server call, and the app has to say so when it cannot be
+made.** The household took books out of their library on a phone that had lost
+the server, and the books stayed -- over and over, with refresh doing nothing.
+
+Three things were wrong, and none of them was the membership feature:
+
+1. The app learned the server was unreachable only from a **probe**, which
+   ran at startup and when the window regained focus. A phone that lost the
+   server in between went on showing the shelf it had loaded, with buttons
+   that looked alive and silently did nothing. Now **every failed request
+   re-probes**, and the probe decides: a single blip does not take the app
+   offline, and a server that is really gone puts the app into the offline
+   state it should have been in.
+2. The failure was reported in the browser's language -- `Failed to fetch` --
+   which names neither cause and no fix. It is now one sentence with a next
+   step, used by every failed request.
+3. The optimistic flag was not rolled back, so the shelf said "removed" while
+   the library said "still here". **The shelf and the library are one fact
+   seen twice**, and a failed removal now puts the flag back.
+
+**The membership model itself was correct throughout**: the server's log shows
+no `DELETE` to the membership endpoint ever arriving, and the profile still
+held every book. The feature did exactly what it was asked to do; the request
+never left the phone.
 
 **The migration files and `schema.prisma` had drifted, and `prisma db push` in
 dev had hidden it for the life of the project.** The schema says `ON DELETE

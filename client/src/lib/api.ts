@@ -211,6 +211,99 @@ export function resolveApiRequest(input: RequestInfo | URL): RequestInfo | URL {
 const INSTALL_FLAG = "__audiobookApiBaseInstalled";
 
 /**
+ * Did this failure mean the server could not be reached?
+ *
+ * Two shapes count, and they are the two the app actually sees:
+ *
+ *  - the browser's own "Failed to fetch" (a `TypeError`), which means the
+ *    request never got an answer at all;
+ *  - an `AbortError`, which is the app's own deadline firing. A request to an
+ *    unreachable host does not always fail -- it *hangs* (see
+ *    `lib/reachability.ts`), so the timeout is the same problem wearing a
+ *    different hat.
+ *
+ * Anything else is the server answering with an error, which is a different
+ * problem with a different fix and should keep the server's own message.
+ */
+const NETWORK_FAILURE_PHRASES = [
+  "failed to fetch",
+  "network error",
+  "networkerror",
+  "network request failed",
+  "load failed",
+];
+
+export function isNetworkFailure(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: string; message?: string };
+  // The app's own deadline. A request to an unreachable host does not always
+  // fail -- it hangs -- so the timeout is the same problem wearing a
+  // different hat.
+  if (candidate.name === "AbortError" || candidate.name === "NetworkError") return true;
+  if (typeof candidate.message !== "string") return false;
+  const message = candidate.message.toLowerCase();
+  return NETWORK_FAILURE_PHRASES.some((phrase) => message.includes(phrase));
+}
+
+/**
+ * The message a listener gets for a failed request.
+ *
+ * A network failure becomes a sentence with a next step. Everything else
+ * keeps the server's own message, which is the useful one when the server
+ * answered and said why.
+ *
+ * The browser's own answer -- "Failed to fetch" -- is not a message anybody
+ * outside a browser console has ever heard, and it says nothing about what to
+ * do. The household was shown it, more than once, and it told them nothing.
+ */
+export function describeFailure(error: unknown, fallback: string): string {
+  if (isNetworkFailure(error)) return copy.errors.cannotReachServer;
+  return error instanceof Error ? error.message : fallback;
+}
+
+/* -------------------------------------------------------------------------- */
+/* "The server stopped answering"                                             */
+/* -------------------------------------------------------------------------- */
+
+type UnreachableListener = () => void;
+
+const unreachableListeners = new Set<UnreachableListener>();
+
+/**
+ * Be told when a request fails because the server could not be reached.
+ *
+ * ## Why this exists
+ *
+ * The app knows the server is unreachable only because a **probe** said so,
+ * and the probe only ran at startup and when the window regained focus. So a
+ * phone that was unplugged from the network -- or pointed at the wrong address
+ * -- went on showing the shelf it had loaded, with buttons that looked alive
+ * and silently did nothing. The household's report was exactly this: they
+ * took books out of their library, the books stayed, and pressing refresh did
+ * nothing.
+ *
+ * A failed request is the same fact, noticed sooner. So every request that
+ * cannot be answered reports it here, and the app re-probes: the probe is
+ * authoritative, so a single blip does not take the app offline.
+ */
+export function onServerUnreachable(listener: UnreachableListener): () => void {
+  unreachableListeners.add(listener);
+  return () => {
+    unreachableListeners.delete(listener);
+  };
+}
+
+function reportServerUnreachable() {
+  for (const listener of unreachableListeners) {
+    try {
+      listener();
+    } catch {
+      // A listener must never break the request that reported the failure.
+    }
+  }
+}
+
+/**
  * Make every `fetch` in the app resolve `/api/...` against the configured
  * server.
  *
@@ -260,6 +353,11 @@ export function installApiBaseUrl(): void {
       // credentialed fetch can be guaranteed, because most call sites never go
       // through `apiFetch`.
       credentials: "include",
+    }).catch((requestError: unknown) => {
+      // The one place every request in the app passes through, and therefore
+      // the one place that can notice the server has stopped answering.
+      if (isNetworkFailure(requestError)) reportServerUnreachable();
+      throw requestError;
     });
   }) as typeof window.fetch;
 

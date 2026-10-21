@@ -120,7 +120,7 @@ export function describeTransferError(error: unknown): Error {
   // holding the phone, and they have different fixes -- so the message names
   // both.
   if (/connect|unreachable|refused|timeout/i.test(message)) {
-    return new Error(copy.errors.downloadCannotReach);
+    return new Error(copy.errors.cannotReachServer);
   }
   return new Error(message);
 }

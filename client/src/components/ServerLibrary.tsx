@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, Server, LoaderCircle, Trash2, HardDrive } from "lucide-react";
 import type { Audiobook } from "../types";
 import { copy } from "../copy";
+import { describeFailure } from "../lib/api";
 import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
 import { ShellCover } from "../ui/primitives";
 import { RemoveFromLibraryQuestion, useRemoveFromLibrary } from "./removeFromLibrary";
@@ -88,7 +89,7 @@ export function ServerLibrary({
     try {
       await onAdd(bookId);
     } catch (addError) {
-      setFailed(addError instanceof Error ? addError.message : copy.errors.addToLibrary);
+      setFailed(describeFailure(addError, copy.errors.addToLibrary));
     } finally {
       setPending(undefined);
     }

@@ -527,6 +527,66 @@ re-run of the security E2E suite. **Not started.**
   touches the button, whose first tap then goes to the opposite of what the
   device is showing.
 
+- **A failed request is a fact the app was not listening for.** The household
+  took books out of their library on the Defy and the library still had them,
+  over and over, and pressing refresh did nothing.
+
+  The cause was not the membership feature. It was three things at once:
+
+  1. **The phone could not reach the server.** The Defy was unplugged and its
+     server address was `http://localhost:3000` -- the *phone's own* port,
+     which only works with the `adb reverse` tunnel. The removal is a server
+     call, so it could not have worked. The server's log confirms it: no
+     `DELETE` to the membership endpoint has ever arrived, and the profile
+     still holds every book.
+  2. **The app never noticed.** It knew the server was unreachable only from a
+     **probe**, and the probe ran at startup and when the window regained
+     focus. Handing the phone over fired neither, so the app went on showing
+     the shelf it had loaded, with buttons that looked alive and silently did
+     nothing.
+  3. **The failure was in the browser's language.** A failed request throws
+     `TypeError: Failed to fetch`, and that string was what the household was
+     shown -- in the removal panel and in the refresh banner. It names neither
+     cause ("the server is down" or "the phone cannot reach it") and no fix.
+
+  Fixed in three places:
+
+  - **Every failed request now re-probes.** The fetch shim is the one choke
+    point every request in the app passes through, so it is the one place that
+    can notice the server has stopped answering. The app re-probes, and the
+    **probe decides**: one blip does not take the app offline, and a server
+    that is really gone puts the app into the offline state it should have
+    been in.
+  - **The message is a sentence with a next step.** "Could not reach the
+    server. Check the phone is on the home network, and that the server
+    address in Settings is right." -- one entry, used by the library refresh,
+    the shelf, the removal and the download.
+  - **The optimistic flag is rolled back.** The shelf and the library are one
+    fact seen twice; when the removal does not reach the server, the shelf
+    stops claiming the book has gone. Before this, the shelf said "removed"
+    and the library said "still here", and *that* is what made the removal
+    look like it had done nothing.
+
+- **The phones cannot reach the LAN at all.** Both are on the Cisco AP
+  `toob-9F4CE1`, with a normal DHCP lease (192.168.1.93, gateway 192.168.1.1)
+  and a link speed of 780 Mbps -- and every packet to another device on the
+  network is blackholed: the router and the host both answer nothing, and a
+  connection to the host's port 3000 *hangs* rather than being refused. That
+  is client isolation on the access point, not a firewall on the host (the
+  host has an inbound allow rule for TCP 3000 from the local subnet, and its
+  Ethernet profile is Private).
+
+  So the household's own server address, `http://192.168.1.203:3000`, works
+  for a laptop on the LAN and **not** for either phone: with the Pixel
+  pointed at it, the app showed the offline banner and the request never
+  completed. The only route from a phone to the server is the `adb reverse`
+  tunnel, which means the phone has to be plugged into the machine running
+  the server.
+
+  **This is a household network problem, not an app problem**, and it is the
+  reason the phones need the tunnel at all. Fixing it means putting the
+  phones on the main SSID, or turning off client isolation on that AP.
+
 - **A tab that cannot be reached offline is a tab that has failed.** The "All
   books" tab showed the fetch error and an empty list when the server was
   unreachable, so the one thing it exists for -- taking a book out of your

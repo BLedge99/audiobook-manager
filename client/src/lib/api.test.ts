@@ -4,7 +4,9 @@ import {
   apiFetch,
   apiUrl,
   clearServerUrl,
+  describeFailure,
   getServerUrl,
+  isNetworkFailure,
   needsServerUrl,
   normaliseServerUrl,
   SERVER_URL_KEY,
@@ -126,6 +128,49 @@ describe("needsServerUrl", () => {
   it("is false in a browser, which uses the dev-server proxy", () => {
     setNativeShell(false);
     expect(needsServerUrl()).toBe(false);
+  });
+});
+
+describe("isNetworkFailure", () => {
+  it("recognises the browser's own answer when the request never got one", () => {
+    // This is the string the household was shown, more than once, while the
+    // server was unreachable. It is a browser's internal phrase, not a
+    // sentence anybody can act on.
+    expect(isNetworkFailure(new TypeError("Failed to fetch"))).toBe(true);
+  });
+
+  it("recognises the app's own deadline", () => {
+    // A request to an unreachable host does not always fail, it hangs -- so
+    // the timeout is the same problem wearing a different hat.
+    const aborted = new DOMException("The user aborted a request.", "AbortError");
+    expect(isNetworkFailure(aborted)).toBe(true);
+  });
+
+  it("leaves the server's own errors alone", () => {
+    // The server answered, and said why. That message is the useful one.
+    expect(isNetworkFailure(new Error("Invalid range"))).toBe(false);
+    expect(isNetworkFailure(new Error("Could not remove the book."))).toBe(false);
+  });
+
+  it("is false for something that is not an error at all", () => {
+    expect(isNetworkFailure(undefined)).toBe(false);
+    expect(isNetworkFailure("Failed to fetch")).toBe(false);
+  });
+});
+
+describe("describeFailure", () => {
+  it("turns a network failure into a sentence with a next step", () => {
+    expect(describeFailure(new TypeError("Failed to fetch"), "fallback")).toBe(
+      "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
+    );
+  });
+
+  it("keeps the server's own message when the server answered", () => {
+    expect(describeFailure(new Error("Invalid range"), "fallback")).toBe("Invalid range");
+  });
+
+  it("falls back when there is no message to use", () => {
+    expect(describeFailure(undefined, "fallback")).toBe("fallback");
   });
 });
 

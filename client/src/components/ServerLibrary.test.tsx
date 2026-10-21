@@ -167,6 +167,19 @@ describe("the Server library tab", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("The server said no."));
   });
 
+  it("says the server could not be reached, in words a person can act on", async () => {
+    // "Failed to fetch" is a browser's internal phrase. It was shown to the
+    // household while the server was unreachable, and it told them nothing
+    // about either cause or either fix.
+    renderTab({ onAdd: vi.fn(async () => { throw new TypeError("Failed to fetch"); }) });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
+      ),
+    );
+  });
+
   it("does not claim the household has no books when the shelf could not be read", () => {
     // "No audiobooks have been added yet" is the empty shelf talking, and the
     // shelf was never read. Saying it after a failed fetch is a lie -- and it

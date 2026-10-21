@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Btn } from "../ui/primitives";
 import { copy } from "../copy";
+import { describeFailure } from "../lib/api";
 
 /**
  * Spec 27: taking a book out of your library.
@@ -110,9 +111,7 @@ export function useRemoveFromLibrary(options: RemoveFromLibraryOptions): RemoveF
       setAsking(false);
       options.onDone?.();
     } catch (removalFailure) {
-      setError(
-        removalFailure instanceof Error ? removalFailure.message : copy.errors.removeFromLibrary,
-      );
+      setError(describeFailure(removalFailure, copy.errors.removeFromLibrary));
     } finally {
       setBusy(false);
     }

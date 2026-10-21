@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installApiBaseUrl, resolveApiRequest, setServerUrl, setSessionToken } from "./api";
+import { installApiBaseUrl, onServerUnreachable, resolveApiRequest, setServerUrl, setSessionToken } from "./api";
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -143,6 +143,49 @@ describe("installApiBaseUrl", () => {
 
     const headers = inits[0]?.headers as Record<string, string>;
     expect(headers["x-house-session"]).toBe("explicit");
+  });
+
+  it("reports the server as unreachable when a request cannot be answered", async () => {
+    // The app used to learn the server was gone only from a probe, and the
+    // probe only ran at startup and on window focus. A phone that lost the
+    // server went on showing the shelf it had loaded, with buttons that
+    // looked alive and silently did nothing -- which is what the household
+    // reported. A failed request is the same fact, noticed sooner.
+    const original = window.fetch;
+    window.fetch = (() => Promise.reject(new TypeError("Failed to fetch"))) as typeof fetch;
+    let reported = 0;
+    const stop = onServerUnreachable(() => {
+      reported += 1;
+    });
+
+    try {
+      installApiBaseUrl();
+      await expect(fetch("/api/audiobooks")).rejects.toThrow();
+      expect(reported).toBe(1);
+    } finally {
+      stop();
+      window.fetch = original;
+    }
+  });
+
+  it("does not report it when the server answered with an error", async () => {
+    // A 500 is the server talking. It is a different problem with a different
+    // fix, and the app must not go offline because of it.
+    const original = window.fetch;
+    window.fetch = (() => Promise.resolve(new Response("{}", { status: 500 }))) as typeof fetch;
+    let reported = 0;
+    const stop = onServerUnreachable(() => {
+      reported += 1;
+    });
+
+    try {
+      installApiBaseUrl();
+      await fetch("/api/audiobooks");
+      expect(reported).toBe(0);
+    } finally {
+      stop();
+      window.fetch = original;
+    }
   });
 
   it("installs only once, so fetch is not wrapped twice", () => {
