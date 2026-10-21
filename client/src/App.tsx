@@ -511,10 +511,15 @@ function App() {
                 )}
               </MachineHead>
               <StatusLegend className="mb-4" />
-              {loading ? (
+              {loading && !libraryBooks.length ? (
                 /* Only reachable before the first response has ever arrived: the
                    hook latches `loading` false once anything has loaded, so a
-                   refresh can never get here. */
+                   refresh can never get here.
+
+                   The `!libraryBooks.length` matters offline. The banner above
+                   says "showing the 2 books downloaded to this device", and a
+                   "Loading library…" panel underneath it contradicts that --
+                   the books are *here*, the server is what is missing. */
                 <div className="panel panel--sunk px-6 py-20 text-center text-ink2">{copy.shell.loadingLibrary}</div>
               ) : (
                 <AudiobookGrid
