@@ -527,6 +527,42 @@ re-run of the security E2E suite. **Not started.**
   touches the button, whose first tap then goes to the opposite of what the
   device is showing.
 
+- **A tab that cannot be reached offline is a tab that has failed.** The "All
+  books" tab showed the fetch error and an empty list when the server was
+  unreachable, so the one thing it exists for -- taking a book out of your
+  library -- was unreachable exactly when the phone was away from home. It
+  also said *"No audiobooks have been added yet"*, which is the empty shelf
+  talking about a shelf that was never read.
+
+  Two fixes, and they are separate. The **lie** goes: a failed fetch no longer
+  produces the empty-shelf message. And the tab **falls back to the books on
+  this device** while the server is out of reach -- which is what the app's
+  library already *is* offline (the Library tab is showing the same list, and
+  the offline banner says so) -- with a Remove that deletes the download.
+  Removing a download is a local operation, so it is the one removal that
+  needs no server.
+
+  The boundary, stated plainly: **membership lives on the server**, so a
+  removal that only changes a profile's library cannot happen offline. What
+  happens offline is the removal the app can actually carry out. If the
+  household wants a removal made offline to reach the server later, that is a
+  change queue and needs its own spec.
+
+- **The `adb reverse` tunnel is the phone's only route to the server, and
+  taking it away is the household's call, not the agent's.** The phone sits on
+  a WiFi segment that cannot reach the home LAN at all, so the tunnel is what
+  makes the server reachable from the device. Removing it to force offline
+  mode leaves the phone blocked until someone asks for it to be put back.
+
+  **Never remove the tunnel to test offline behaviour.** Ask the user to turn
+  on airplane mode instead: it is a state they can see and undo.
+
+  For the 2026-10-21 pass there was a third way, used instead of airplane
+  mode: the page's own `fetch` was made to fail through the DevTools protocol
+  (`Page.addScriptToEvaluateOnNewDocument`), so the app believed the server
+  was gone while the tunnel stayed up and the device's network was untouched.
+  The override is per CDP session and does not outlive it.
+
 - **Every APK says version 1.0, so the phone cannot tell you which build it
   is running.** "Did my change take?" then becomes a question about memory
   rather than about the device. Settings now shows the build's timestamp, which

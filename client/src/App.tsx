@@ -663,6 +663,12 @@ function App() {
             isDownloaded={isNativeShell() ? device.isDownloaded : undefined}
             onDeleteDownload={isNativeShell() ? device.remove : undefined}
             onOpen={setSelectedBook}
+            /* Offline the shelf is out of reach, so the tab shows the books on
+               this device -- which is your library while the server is
+               unreachable -- and lets them be taken away. */
+            offline={offline}
+            offlineBooks={device.books}
+            onRemoveDevice={isNativeShell() ? device.remove : undefined}
           />
         )}
 

@@ -375,6 +375,22 @@ export const copy = {
     heldCount: (held: number, total: number) => `${held} of ${total} in your library`,
     add: "Add",
     inYourLibrary: "In your library",
+
+    /**
+     * The tab, offline.
+     *
+     * The shelf belongs to the server, so offline there is nothing to add --
+     * and the copy says so rather than pretending. What it also says is that
+     * the tab is still useful: the books on this device are your library while
+     * the server is out of reach, and they can still be taken away.
+     */
+    offlineHeading: "Books on this device",
+    offlineIntro:
+      "You're offline, so there's nothing new to add. You can still remove the ones you've downloaded.",
+    offlineEmpty: "There are no books downloaded to this device.",
+    onThisDevice: "On this device",
+    /** "3 books" */
+    offlineCount: (count: number) => plural(count, "book"),
   },
 
   download: {

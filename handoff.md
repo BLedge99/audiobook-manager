@@ -56,10 +56,19 @@
     all (ping to the host is 100% lost). The household's own setting is
     `http://192.168.1.203:3000`, and it is the right one on the normal
     network.
-  - The **Defy** has "The Christmas Pig" on it by hand — the file copied in and
-    the replica row written over the DevTools protocol — because its download
-    path was broken at the time. It is going away, so that was the quick way to
-    leave the book with the person.
+  - The **Defy** has the current build, and "The Christmas Pig" was downloaded
+    **by the app itself** (16:58, 321,857,108 bytes in `files/books/120/`) and
+    plays with the server cut off. Its server address is currently
+    `http://localhost:3000` with an `adb reverse` tunnel, for the same reason
+    as the Pixel. The household's own setting is `http://192.168.1.203:3000`.
+  - **The "All books" tab works offline now.** It used to show the fetch error
+    and an empty list, so the one thing the tab exists for -- taking a book
+    out of your library -- was unreachable exactly when the phone was away
+    from home, and it also claimed the household had no audiobooks. It now
+    falls back to the books on this device (which is what the app's library
+    already is offline) with a Remove that deletes the download. Membership
+    lives on the server, so a removal that only changes a profile's library
+    still cannot happen offline; a queue for that would need its own spec.
   - **`make device-tunnel`** brings the phone's tunnel back up. The tunnel dies
     with the adb connection and says nothing on the phone, so a download fails
     with "failed to connect to server" while the server is running fine. That
@@ -75,10 +84,10 @@
   only unmet acceptance criterion is the visible downloaded-books list with
   "Remove from device", which the household removed from the polish pass on
   2026-10-19. See `LIMITATIONS.md` §1.4 and §3.
-- Test counts as of 2026-10-21, after feature 7, item 27 and the offline
-  fix: **server 433** (1 skipped), **client 336**, **Playwright 48** (all green;
-  run E2E from WSL via `scripts/e2e-wsl.sh`). Re-run the suites rather than
-  trusting these counts after the next feature.
+- Test counts as of 2026-10-21, after feature 7, item 27, the offline tab
+  fix and the theme fix: **server 434** (1 skipped), **client 355**,
+  **Playwright 50** (all green; run E2E from WSL via `scripts/e2e-wsl.sh`).
+  Re-run the suites rather than trusting these counts after the next feature.
 - **Pushes are the owner's call.** Feature 3 (`cb28038`) was pushed from this
   session; the doc commits after it were left for the owner to push.
 
@@ -98,6 +107,14 @@
   a product decision is needed.
 - **Say what you are about to push to a phone.** Never rebuild or reinstall an
   APK while someone is mid-listen; it looks exactly like playback dying.
+- **Never take the phone offline to test offline behaviour.** The `adb reverse`
+  tunnel is the phone's only route to the server -- the device is on a WiFi
+  segment that cannot reach the home LAN -- so removing the tunnel leaves the
+  phone blocked until the owner asks for it back. Ask them to turn on
+  airplane mode instead. (The household's rule, 2026-10-21.) Where a test
+  needed offline behaviour without airplane mode, the page's own `fetch` was
+  made to fail over the DevTools protocol, which leaves the tunnel and the
+  device's network alone.
 
 ## Progress log
 

@@ -166,4 +166,72 @@ describe("the Server library tab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("The server said no."));
   });
+
+  it("does not claim the household has no books when the shelf could not be read", () => {
+    // "No audiobooks have been added yet" is the empty shelf talking, and the
+    // shelf was never read. Saying it after a failed fetch is a lie -- and it
+    // is the lie that made the tab look broken offline.
+    renderTab({ books: [], error: "Could not reach the server." });
+    expect(screen.queryByText(/No audiobooks have been added yet/)).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Could not reach the server.");
+  });
+});
+
+/**
+ * Spec 27, offline.
+ *
+ * The shelf belongs to the server, so offline there is nothing to add. But the
+ * tab does not have to be dead for that: while the server is out of reach the
+ * app's library *is* the books on this device, and taking one of those away
+ * needs no server at all. The household asked for exactly this.
+ */
+describe("the Server library tab, offline", () => {
+  const onDevice = [book(9, "Downloaded book", true)];
+
+  it("shows the books on this device rather than an error", () => {
+    renderTab({ offline: true, offlineBooks: onDevice, error: "Could not reach the server." });
+    expect(screen.getByText("Downloaded book")).toBeInTheDocument();
+    // The lie is gone: it does not say the household has no audiobooks.
+    expect(screen.queryByText(/No audiobooks have been added yet/)).not.toBeInTheDocument();
+  });
+
+  it("lets you take a book away, which needs no server", async () => {
+    const onRemoveDevice = vi.fn(async () => ({ failed: [] }));
+    renderTab({ offline: true, offlineBooks: onDevice, onRemoveDevice });
+    fireEvent.click(screen.getByRole("button", { name: /remove from device: downloaded book/i }));
+    await waitFor(() => expect(onRemoveDevice).toHaveBeenCalledWith(9));
+  });
+
+  it("does not offer to add anything, because the server is out of reach", () => {
+    renderTab({ offline: true, offlineBooks: onDevice });
+    expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
+  });
+
+  it("does not try to fetch a shelf it cannot reach", () => {
+    // A request that is known to fail is a request that should not be made.
+    const { onLoad } = renderTab({ offline: true, offlineBooks: onDevice });
+    expect(onLoad).not.toHaveBeenCalled();
+  });
+
+  it("says why there is nothing to add", () => {
+    renderTab({ offline: true, offlineBooks: onDevice });
+    expect(screen.getByText(/nothing new to add/i)).toBeInTheDocument();
+  });
+
+  it("still opens the book when its title is tapped", () => {
+    const onOpen = vi.fn();
+    renderTab({ offline: true, offlineBooks: onDevice, onOpen });
+    fireEvent.click(screen.getByRole("button", { name: "Downloaded book" }));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 9 }));
+  });
+
+  it("reports a failure to remove, rather than swallowing it", async () => {
+    renderTab({
+      offline: true,
+      offlineBooks: onDevice,
+      onRemoveDevice: vi.fn(async () => { throw new Error("The file is in use."); }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: /remove from device: downloaded book/i }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("The file is in use."));
+  });
 });

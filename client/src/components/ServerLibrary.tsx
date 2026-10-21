@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Server, LoaderCircle } from "lucide-react";
+import { Plus, Server, LoaderCircle, Trash2, HardDrive } from "lucide-react";
 import type { Audiobook } from "../types";
 import { copy } from "../copy";
 import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
@@ -31,6 +31,9 @@ export function ServerLibrary({
   isDownloaded,
   onDeleteDownload,
   onOpen,
+  offline,
+  offlineBooks = [],
+  onRemoveDevice,
 }: {
   /** Every book the server has, each marked with `inLibrary`. */
   books: Audiobook[];
@@ -51,15 +54,33 @@ export function ServerLibrary({
   onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
   /** Open the book, the way every other surface does. */
   onOpen?: (book: Audiobook) => void;
+  /**
+   * The server cannot be reached.
+   *
+   * The shelf is the server's, so offline there is nothing to add. But the tab
+   * is not dead: the books on this device *are* your library while the server
+   * is out of reach, and removing one of those needs no server at all.
+   */
+  offline?: boolean;
+  /** The books on this device, shown instead of the shelf while offline. */
+  offlineBooks?: Audiobook[];
+  /** Remove a book from this device. The only removal available offline. */
+  onRemoveDevice?: (bookId: number) => Promise<{ failed: string[] }>;
 }) {
   const [pending, setPending] = useState<number>();
   const [failed, setFailed] = useState<string>();
 
   // Fetched when the tab opens rather than with the rest of the library: it is
   // a second copy of the shelf, and nothing else needs it.
+  //
+  // Not while offline. A request that is known to fail is a request that
+  // should not be made, and the error it produced was the whole of what the
+  // tab had to say. `offline` is in the dependencies, so the shelf is fetched
+  // the moment the server comes back.
   useEffect(() => {
+    if (offline) return;
     onLoad();
-  }, [onLoad]);
+  }, [onLoad, offline]);
 
   const add = async (bookId: number) => {
     setPending(bookId);
@@ -72,6 +93,19 @@ export function ServerLibrary({
       setPending(undefined);
     }
   };
+
+  // Offline, the shelf is unreachable and the tab shows what is on the device
+  // instead. See `OfflineServerLibrary` for why that is the same list the
+  // Library tab is showing.
+  if (offline) {
+    return (
+      <OfflineServerLibrary
+        books={offlineBooks}
+        onRemove={onRemoveDevice}
+        onOpen={onOpen}
+      />
+    );
+  }
 
   const held = books.filter((book) => book.inLibrary).length;
 
@@ -95,6 +129,12 @@ export function ServerLibrary({
             <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
             {copy.serverLibrary.loading}
           </div>
+        ) : error && !books.length ? (
+          /* The fetch failed, so we do not know what the server has. Saying
+             "no audiobooks have been added yet" would be a lie -- it is the
+             empty shelf talking, and the shelf was never read. The error above
+             is the whole of what is known. */
+          null
         ) : books.length === 0 ? (
           <div className="panel panel--sunk px-6 py-14 text-center text-ink2">
             {copy.serverLibrary.empty}
@@ -117,6 +157,127 @@ export function ServerLibrary({
                   onDeleteDownload={onDeleteDownload}
                   onOpen={onOpen}
                 />
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/**
+ * The tab, offline.
+ *
+ * ## Why this shows the device's books
+ *
+ * The shelf belongs to the server, and offline it is out of reach -- there is
+ * genuinely nothing to add. But the tab does not have to be dead for that.
+ *
+ * While the server cannot be reached, the app's library *is* the books on this
+ * device: that is what the Library tab is showing, and what the offline banner
+ * says. So the "All books" tab falls back to the same list, and the one thing
+ * a person can still do with it -- take a book away -- is the one thing that
+ * needs no server. Removing a download is a local operation, and it is the
+ * removal the household asked for.
+ *
+ * ## What it does not do
+ *
+ * It does not pretend the removal happened on the server. Membership lives
+ * there, and a change to it needs a connection; what happens here is the
+ * removal the app can actually carry out.
+ */
+function OfflineServerLibrary({
+  books,
+  onRemove,
+  onOpen,
+}: {
+  books: Audiobook[];
+  onRemove?: (bookId: number) => Promise<{ failed: string[] }>;
+  onOpen?: (book: Audiobook) => void;
+}) {
+  const [busy, setBusy] = useState<number>();
+  const [failed, setFailed] = useState<string>();
+
+  const remove = async (bookId: number) => {
+    setBusy(bookId);
+    setFailed(undefined);
+    try {
+      const result = await onRemove?.(bookId);
+      if (result && result.failed.length > 0) {
+        setFailed(copy.download.removedWithErrors(result.failed.length));
+      }
+    } catch (removalError) {
+      setFailed(removalError instanceof Error ? removalError.message : copy.download.removeFailed);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  return (
+    <div className="space-y-7">
+      <section>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-[30px] leading-[1.05] sm:text-4xl">
+              <HardDrive size={26} className="text-rasp" aria-hidden="true" /> {copy.serverLibrary.offlineHeading}
+            </h2>
+            <p className="mt-2 text-ink2">{copy.serverLibrary.offlineIntro}</p>
+          </div>
+        </div>
+
+        {failed && <Notice tone="error" role="alert" className="mb-4">{failed}</Notice>}
+
+        {books.length === 0 ? (
+          <div className="panel panel--sunk px-6 py-14 text-center text-ink2">
+            {copy.serverLibrary.offlineEmpty}
+          </div>
+        ) : (
+          <>
+            <MachineHead
+              title={copy.serverLibrary.onThisDevice}
+              count={copy.serverLibrary.offlineCount(books.length)}
+            />
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {books.map((book) => (
+                <li key={book.id} className="min-w-0">
+                  <div className="panel flex min-w-0 items-center gap-3 p-2">
+                    <span className="w-12 shrink-0">
+                      <ShellCover bookId={book.id} className="w-full" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      {/* The title opens the book, the way it does everywhere
+                          else. A row you cannot tap is a dead end. */}
+                      <button
+                        type="button"
+                        onClick={() => onOpen?.(book)}
+                        className="block w-full min-w-0 truncate text-left font-display text-[15px] font-semibold text-ink"
+                      >
+                        {book.title}
+                      </button>
+                      <span className="block truncate text-[12.5px] text-ink2">{book.author}</span>
+                    </span>
+                    {/* The trash can, because this one really does delete: the
+                        file goes with it. The book page says the same thing in
+                        words ("Remove from device"), and the two mean the same
+                        thing here. */}
+                    <Btn
+                      size="sm"
+                      variant="quiet"
+                      className="shrink-0 text-rasp-ink"
+                      onClick={() => void remove(book.id)}
+                      disabled={busy === book.id}
+                      aria-label={`${copy.download.removeFromDevice}: ${book.title}`}
+                    >
+                      {busy === book.id ? (
+                        <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Trash2 size={13} aria-hidden="true" />
+                      )}
+                      {copy.removeBook.remove}
+                    </Btn>
+                  </div>
+                </li>
               ))}
             </ul>
           </>

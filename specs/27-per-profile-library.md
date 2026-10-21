@@ -79,6 +79,21 @@ harder to read to make the rare case (the full server) possible.
   server; they are looking for more books to add. That is the copy rule from
   `PRODUCT.md`, applied to the one surface this spec adds.
 
+- **Offline, the tab falls back to the books on this device.** The shelf
+  belongs to the server, so offline there is genuinely nothing to add — and
+  the tab says so rather than pretending otherwise. But the tab is not dead:
+  while the server cannot be reached, the app's library *is* the books on this
+  device (that is what the Library tab is showing, and what the offline banner
+  says), and taking one of those away is a local operation that needs no
+  server. So the tab lists them with a **Remove** that deletes the download,
+  and offers no Add button.
+
+  The boundary, stated plainly: **membership lives on the server**, so a
+  removal that only changes a profile's library cannot happen offline. What
+  happens offline is the removal the app can actually carry out. Making an
+  offline removal reach the server later is a change queue, and it would need
+  its own spec.
+
 ### Removing a book
 
 Removing a book from a profile offers to **delete its download too**, and the
@@ -155,10 +170,19 @@ Migrations stay additive. No column is removed or repurposed.
 - [x] Progress for a removed-then-restored book is intact for that profile.
 - [x] Server-side: no path from the client is ever resolved outside a
       configured library root.
+- [x] Offline, the "All books" tab still lists the books on the device and can
+      remove one; it offers no Add button, and it does not claim the household
+      has no audiobooks.
 
 **Verified on the live stack** (2026-10-21): an existing profile sees 12
 books, a brand-new profile sees 0, adding one makes it 1, removing it makes it
 0 again, and the server still has 12 throughout.
+
+**Verified on the device** (2026-10-21, Motorola Defy, Android 11): with the
+app believing the server was unreachable, the "All books" tab showed
+"Books on this device", the intro ("You're offline, so there's nothing new to
+add. You can still remove the ones you've downloaded."), the three books on the
+phone, and a Remove on each — with no Add button and no empty-shelf message.
 
 ## What the implementation settled that the spec left open
 
