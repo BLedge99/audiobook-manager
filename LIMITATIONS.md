@@ -477,6 +477,35 @@ re-run of the security E2E suite. **Not started.**
   so entering on `?tab=browse` times out inside the helper.
 - **PowerShell mangles nested quotes** in `wsl -e bash -lc "..."`. Write a
   script file and invoke it instead.
+- **A `fetch` to an unreachable host does not always fail — it hangs.** Found
+  2026-10-21, on the Pixel 4a, with the server genuinely unreachable.
+  A stale DHCP address on a network that blackholes packets never sends a RST,
+  so the request sits in CONNECT for tens of seconds.
+
+  The app's **reachability probe had no timeout**, so `serverReachable` stayed
+  `undefined` and the app sat on the splash showing "Connecting…" for good.
+  That is precisely the case the offline path exists to handle: the point of
+  downloading a book is to listen to it with no network, so a server that
+  cannot be reached must never be a screen the listener cannot leave.
+
+  Fixed with `client/src/lib/reachability.ts` (a bounded probe, 10s) and
+  `client/src/lib/api.ts` (`boundedFetch`, 30s by default, now used by the
+  library and browse hooks). **Every request in the app should eventually go
+  through `boundedFetch`** — the per-component `request` helpers in
+  `ReviewQueue`, `TagManager`, `AudiobookDetail` and the gates still use a raw
+  `fetch`, and each of them can still spin forever when the server is
+  unreachable.
+
+  A second, smaller race came with it: the app decided "offline" before the
+  **device library** had finished loading from IndexedDB, so a phone with
+  three downloaded books could be told it had nothing to play. The splash now
+  waits for the device library too.
+
+- **A promise that rejects while nothing is listening is an unhandled
+  rejection**, and Vitest reports those as errors that fail the whole run — so
+  attaching `expect(promise).rejects` *after* the thing has already rejected
+  turns a green suite red. The handler has to be attached first.
+
 - **A green suite that exits non-zero is a broken suite, not a flaky test.**
   Found 2026-10-19 while adding a test file to the server suite. Every
   assertion passed and `npm test` still exited 1, because a background

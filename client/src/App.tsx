@@ -26,6 +26,7 @@ import {
 } from "./lib/browse";
 import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { isNativeShell } from "./lib/platform";
+import { probeServer as probeServerRequest } from "./lib/reachability";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
 import { useDeviceLibrary } from "./local/useDeviceLibrary";
 import { Settings } from "./components/Settings";
@@ -111,16 +112,16 @@ function App() {
    *
    * Records two separate facts: did it answer at all, and did it accept us.
    * Re-run on focus so returning home recovers without a manual restart.
+   *
+   * The probe is **bounded** (see `lib/reachability.ts`): a host that is
+   * unreachable but silent never answers, and an unbounded request left the
+   * app on the splash for good.
    */
   const probeServer = useCallback(() => {
-    void fetch("/api/audiobooks")
-      .then((res) => {
-        setServerReachable(true);
-        setAuthed(res.status !== 401);
-      })
-      .catch(() => {
-        setServerReachable(false);
-      });
+    void probeServerRequest().then((probe) => {
+      setServerReachable(probe.reachable);
+      setAuthed(probe.authed);
+    });
   }, []);
 
   useEffect(() => {
@@ -304,7 +305,13 @@ function App() {
 
   // Still deciding whether the server is there. Rendering the login form now
   // would flash a password box at someone who is simply on a slow connection.
-  if (serverReachable === undefined) {
+  //
+  // The second condition matters as much as the first: if the server is *not*
+  // there, the next question is "does this device have anything to play?", and
+  // the answer lives in IndexedDB, which is read asynchronously. Deciding
+  // before the device library has loaded would show "nothing to listen to" to
+  // someone who has three books on the phone.
+  if (serverReachable === undefined || (serverReachable === false && device.loading)) {
     return <Splash />;
   }
 

@@ -274,6 +274,59 @@ export function profileHeaders(): Record<string, string> {
 }
 
 /**
+ * A fetch that always finishes.
+ *
+ * ## Why this exists
+ *
+ * A `fetch` to an unreachable host does not always fail — it **hangs**. A stale
+ * DHCP address on a network that blackholes packets never sends a RST, so the
+ * request sits in CONNECT for tens of seconds or more. Every request in the app
+ * that had no bound could therefore leave a spinner running forever, and the
+ * one that mattered most — the reachability probe — left the whole app on the
+ * "Connecting…" splash with no way out. That is precisely the case the
+ * offline path exists to handle: the point of downloading a book is to listen
+ * to it with no network.
+ *
+ * So every request gets a deadline, and a request that runs out of time
+ * fails like any other error — which the callers already know how to show.
+ *
+ * The default is generous, because a slow home server on a phone is still a
+ * working server. The reachability probe uses a shorter one; see
+ * `lib/reachability.ts`.
+ */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * `fetch`, with a deadline.
+ *
+ * The signal is composed rather than replaced, so a caller that already set
+ * one keeps it.
+ *
+ * **Not every call site uses this yet.** The per-component `request` helpers
+ * in `ReviewQueue`, `TagManager`, `AudiobookDetail` and the gates still use a
+ * raw `fetch`, and each of them can still spin forever when the server is
+ * unreachable. `LIMITATIONS.md` §5 records that as the remaining work.
+ */
+export async function boundedFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const outer = init.signal;
+  if (outer) {
+    if (outer.aborted) controller.abort();
+    else outer.addEventListener("abort", () => controller.abort());
+  }
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Fetch a JSON response from the API, with the profile header attached.
  *
  * Throws with the server's message where there is one, matching what the
@@ -283,7 +336,7 @@ export function profileHeaders(): Record<string, string> {
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...profileHeaders() };
   if (options?.body) headers["Content-Type"] = "application/json";
-  const response = await fetch(apiUrl(path), {
+  const response = await boundedFetch(apiUrl(path), {
     // The session cookie only crosses origins when the client opts in with
     // `credentials: "include"`. Without it every cross-origin call -- which is
     // every call from the Android shell's https://localhost WebView -- gets no

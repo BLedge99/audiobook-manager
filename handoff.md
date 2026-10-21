@@ -32,6 +32,17 @@
   listener tier (the top level) and an operator tier (`copy.operator`), and
   `copy.test.ts` fails the build if the listener tier contains the system's own
   vocabulary.
+- **The app now comes up offline instead of hanging.** Found on the Pixel 4a
+  on 2026-10-21: a `fetch` to an unreachable host does not always fail, it
+  **hangs** (a stale DHCP address on a network that blackholes packets never
+  sends a RST), and the reachability probe had no timeout — so the app sat on
+  the splash showing "Connecting…" for good. That is exactly the case the
+  offline path exists to handle. `client/src/lib/reachability.ts` bounds the
+  probe at 10s and `client/src/lib/api.ts` adds `boundedFetch` (30s) for the
+  library and browse hooks. **Verified on the device**: with the server
+  unreachable the app reaches the offline banner and the device library, with
+  the covers from the cache — screenshot at
+  `specs/evidence/offline-library-pixel4a-2026-10-21.png`.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
   `test/` now holds ~3.6 GB: the LibriVox set plus six **commercial**
@@ -42,10 +53,10 @@
   only unmet acceptance criterion is the visible downloaded-books list with
   "Remove from device", which the household removed from the polish pass on
   2026-10-19. See `LIMITATIONS.md` §1.4 and §3.
-- Test counts as of 2026-10-21, after feature 7 and item 27: **server 433**
-  (1 skipped), **client 325**, **Playwright 48** (all green; run E2E from WSL
-  via `scripts/e2e-wsl.sh`). Re-run the suites rather than trusting these
-  counts after the next feature.
+- Test counts as of 2026-10-21, after feature 7, item 27 and the offline
+  fix: **server 433** (1 skipped), **client 336**, **Playwright 48** (all green;
+  run E2E from WSL via `scripts/e2e-wsl.sh`). Re-run the suites rather than
+  trusting these counts after the next feature.
 - **Pushes are the owner's call.** Feature 3 (`cb28038`) was pushed from this
   session; the doc commits after it were left for the owner to push.
 

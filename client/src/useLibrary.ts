@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
-import { sessionHeaders } from "./lib/api";
+import { boundedFetch, sessionHeaders } from "./lib/api";
 import { copy } from "./copy";
 
 /**
@@ -36,7 +36,10 @@ async function conditionalRequest<T>(url: string, etag: string | null): Promise<
   const headers: Record<string, string> = { ...sessionHeaders() };
   if (etag) headers["If-None-Match"] = etag;
 
-  const response = await fetch(url, { headers });
+  // Bounded, because a request to an unreachable host can hang rather than
+  // fail -- and a library refresh that never settles leaves "Refreshing…"
+  // spinning for good.
+  const response = await boundedFetch(url, { headers });
   if (response.status === 304) return { changed: false };
   if (!response.ok) {
     const body = await response.text();
@@ -54,7 +57,7 @@ async function conditionalRequest<T>(url: string, etag: string | null): Promise<
 async function writeRequest<T>(url: string, method: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { ...sessionHeaders() };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(url, {
+  const response = await boundedFetch(url, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     headers,
