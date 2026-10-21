@@ -43,6 +43,23 @@
   unreachable the app reaches the offline banner and the device library, with
   the covers from the cache — screenshot at
   `specs/evidence/offline-library-pixel4a-2026-10-21.png`.
+- **A single-file book could be streamed but never downloaded.** The scanner
+  only created `Track` rows for books of more than one file, and everything
+  that *stores* audio is per track. Fixed, and **verified on the Pixel 4a**:
+  "The Christmas Pig" (an M4B, 70 chapters, 307 MB) downloads to the device at
+  the exact byte count and plays with the server cut off. The full account is
+  in `LIMITATIONS.md` §5.
+- **The devices' state after this session, so nobody is surprised:**
+  - The **Pixel 4a** has the new build and the three books, and its server
+    address is currently `http://localhost:3000` with an `adb reverse` tunnel,
+    because the phone is on a WiFi segment that cannot reach the home LAN at
+    all (ping to the host is 100% lost). The household's own setting is
+    `http://192.168.1.203:3000`, and it is the right one on the normal
+    network.
+  - The **Defy** has "The Christmas Pig" on it by hand — the file copied in and
+    the replica row written over the DevTools protocol — because its download
+    path was broken at the time. It is going away, so that was the quick way to
+    leave the book with the person.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
   `test/` now holds ~3.6 GB: the LibriVox set plus six **commercial**

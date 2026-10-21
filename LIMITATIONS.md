@@ -501,6 +501,30 @@ re-run of the security E2E suite. **Not started.**
   three downloaded books could be told it had nothing to play. The splash now
   waits for the device library too.
 
+- **A single-file book could be streamed but never downloaded.** Found
+  2026-10-21, on the Defy: "The Christmas Pig has no tracks to download" on a
+  book that played perfectly from the server. "The Ickabog" had the same fault
+  and nobody had noticed.
+
+  The cause: the scanner only created `Track` rows for books of **more than
+  one file**. A single-file book (an M4B) *was* its own file, and the client
+  knew to stream it from `/api/audiobooks/:id/stream`. But everything that
+  **stores** audio is per track — the download, the replica, "is this book on
+  the device?" — so such a book could be streamed and never downloaded. One
+  file is the normal shape of a commercial audiobook, not a corner case.
+
+  Fixed by making the scanner always create the track rows (one per file), and
+  by preferring a book's **chapters** over its tracks when the client flattens
+  a book into segments: a single-file book has both now, and the chapters are
+  the finer-grained view. Without that second change an M4B's seventy chapters
+  would collapse into one long track.
+
+  **Verified on the Pixel 4a**: the book downloads to the device at exactly
+  321,857,108 bytes, and it plays with the server cut off — the audio element's
+  `src` is `http://localhost/_capacitor_file_/...`, the media session reports
+  `state=3` (playing) with the position advancing, and the chapter list is
+  intact.
+
 - **A promise that rejects while nothing is listening is an unhandled
   rejection**, and Vitest reports those as errors that fail the whole run — so
   attaching `expect(promise).rejects` *after* the thing has already rejected
