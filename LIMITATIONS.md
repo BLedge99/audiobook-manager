@@ -514,6 +514,19 @@ re-run of the security E2E suite. **Not started.**
   download is not**, so that is the one worth a question, and it is only asked
   when there is a download to ask about.
 
+- **A toggle with three states is a toggle with two and a half.** The theme
+  button cycled light -> dark -> "follow the device" -> light, and showed the
+  *preference* rather than what was on screen. A fresh install follows the
+  device, so it showed a monitor icon, and clicking it appeared to do nothing
+  whenever the device happened to be in the theme it had already chosen. Its
+  accessible name was off by one too: in light mode it said "Switch to light
+  theme".
+
+  It is now **two states**. The icon is the theme you are in, the label names
+  the action, and "follow the device" is the *default* -- kept until someone
+  touches the button, whose first tap then goes to the opposite of what the
+  device is showing.
+
 - **Every APK says version 1.0, so the phone cannot tell you which build it
   is running.** "Did my change take?" then becomes a question about memory
   rather than about the device. Settings now shows the build's timestamp, which

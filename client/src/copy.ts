@@ -123,10 +123,17 @@ export const copy = {
     changed: "Details updated",
   },
 
+  /**
+   * The theme toggle's two labels.
+   *
+   * They name the **action**, not the state: in light mode the button says it
+   * will switch to dark. The toggle has two states -- light and dark -- and
+   * "follow the device" is the default it starts on rather than a third stop
+   * on the cycle.
+   */
   theme: {
     light: "Switch to light theme",
     dark: "Switch to dark theme",
-    auto: "Follow the device theme",
   },
 
   /**

@@ -1,10 +1,10 @@
 import { type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type CSSProperties } from "react";
 import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Sun, Moon, MonitorSmartphone } from "lucide-react";
+import { Sun, Moon } from "lucide-react";
 import { CoverImage, bookCoverKey } from "../local/CoverImage";
 import { copy } from "../copy";
-import { useLightEffects, useTheme, type ThemeChoice } from "./theme";
+import { useLightEffects, useTheme } from "./theme";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -361,24 +361,30 @@ export function Specks() {
   );
 }
 
-const THEME_OPTIONS: { value: ThemeChoice; label: string; Icon: typeof Sun }[] = [
-  { value: "light", label: copy.theme.light, Icon: Sun },
-  { value: "dark", label: copy.theme.dark, Icon: Moon },
-  { value: "auto", label: copy.theme.auto, Icon: MonitorSmartphone },
-];
-
+/**
+ * Light and dark. **Two states, not three.**
+ *
+ * The toggle used to cycle through light -> dark -> "follow the device" ->
+ * light, and show the *preference* rather than what you are looking at. So a
+ * fresh install -- which follows the device -- showed a monitor icon, and
+ * clicking it appeared to do nothing whenever the device happened to be in the
+ * theme it had already chosen. The household noticed, and was right to.
+ *
+ * Now the icon is the theme you are **in**, and one tap goes to the other
+ * one. "Follow the device" is not a stop on the cycle: it is the *default*,
+ * kept until someone touches the toggle, and the first tap then goes to the
+ * opposite of what the device is showing.
+ */
 export function ThemeToggle() {
-  const { choice, setChoice } = useTheme();
-  const current = THEME_OPTIONS.find((option) => option.value === choice) ?? THEME_OPTIONS[2];
-  const { Icon } = current;
+  const { resolved, setChoice } = useTheme();
+  const isDark = resolved === "dark";
+  const Icon = isDark ? Moon : Sun;
   return (
     <IconBtn
-      label={current.label}
-      onClick={() => {
-        // Light -> dark -> follow the device -> light.
-        const order: ThemeChoice[] = ["light", "dark", "auto"];
-        setChoice(order[(order.indexOf(choice) + 1) % order.length]);
-      }}
+      // The label names the *action*, not the state: in light mode the button
+      // says it will switch to dark.
+      label={isDark ? copy.theme.light : copy.theme.dark}
+      onClick={() => setChoice(isDark ? "light" : "dark")}
     >
       <Icon size={19} aria-hidden="true" />
     </IconBtn>
