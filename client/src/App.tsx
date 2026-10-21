@@ -469,7 +469,12 @@ function App() {
 
         {offline && (
           <Notice tone="warn" role="status" icon={<WifiOff size={16} aria-hidden="true" />} className="mb-6">
-            {copy.shell.offlineBanner(device.books.length)}
+            <p>{copy.shell.offlineBanner(device.books.length)}</p>
+            {/* Why it is offline, not just that it is. "Offline" is a symptom,
+                and the person cannot tell from it whether the server is down
+                or the *phone* cannot reach it -- which are the two things that
+                actually happen, and they have different fixes. */}
+            <p className="mt-1 text-[12.5px]">{copy.shell.offlineBannerHint}</p>
           </Notice>
         )}
 

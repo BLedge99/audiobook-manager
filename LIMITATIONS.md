@@ -501,6 +501,17 @@ re-run of the security E2E suite. **Not started.**
   three downloaded books could be told it had nothing to play. The splash now
   waits for the device library too.
 
+- **"Offline" is a symptom, and the banner was not enough.** The app said
+  "Offline — showing the 3 books downloaded to this device" and stopped. The
+  household could not tell from that whether the server was down, the *phone*
+  could not reach it, or the address in Settings was wrong — and the second of
+  those is by far the most common, with a completely different fix.
+
+  The banner now says so underneath: *"The server could not be reached. Check
+  the phone is on the home network, and that the server address in Settings is
+  right."* The same rule went onto the download error, which used to pass the
+  plugin's "failed to connect to server" straight through.
+
 - **`adb reverse` is the phone's way to the server, and it dies silently.**
   The tunnel lives on the adb connection, so it goes when the cable is
   unplugged or the phone reboots — and *nothing on the phone says so*. The app

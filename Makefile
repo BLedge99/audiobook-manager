@@ -1,4 +1,4 @@
-.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client test-e2e capture verify lan
+.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client test-e2e capture device-tunnel verify lan
 
 ## Expose the server on the LAN so a phone can reach it.
 # The whole stack runs inside WSL, and WSL's NAT mode only relays the server to
@@ -165,6 +165,18 @@ test-e2e:
 		sleep 1; \
 	done
 	npx playwright test $(ARGS)
+
+## Point the phone at the server over USB.
+# The phone can end up on a WiFi segment that cannot reach the home LAN, and
+# then every request fails with "failed to connect to server" while the server
+# is running perfectly. `adb reverse` tunnels over the USB cable and needs no
+# network at all.
+#
+# The tunnel lives on the adb connection, so it goes when the cable is
+# unplugged or the phone reboots -- and nothing on the phone says so. This is
+# the command that brings it back.
+device-tunnel:
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts/device-tunnel.ps1"
 
 ## Design-review screenshots against the running stack.
 # The same one-recipe rule as `test-e2e`: the compose-up, the health wait and

@@ -173,6 +173,16 @@ export const copy = {
       folders ? `${plural(books, "book")} · ${plural(folders, "folder")}` : plural(books, "book"),
     offlineBanner: (books: number) =>
       `Offline — showing the ${plural(books, "book")} downloaded to this device.`,
+    /**
+     * Why it is offline.
+     *
+     * The banner alone is a symptom. The person sees "Offline" and has no way
+     * to tell whether the server is down, the *phone* cannot reach it, or the
+     * address in Settings is wrong — and those have three different fixes. The
+     * most common one by far is the second.
+     */
+    offlineBannerHint:
+      "The server could not be reached. Check the phone is on the home network, and that the server address in Settings is right.",
   },
 
   library: {
@@ -477,7 +487,7 @@ export const copy = {
    */
   errors: {
     loadLibrary: "Unable to load the library. Try again.",
-    loadAllBooks: "Unable to read all the books. Try again.",
+    loadAllBooks: "Unable to read all the books from the server. Try again.",
     loadDiscover: "Unable to load Discover. Try again.",
     loadSimilar: "Unable to find similar books. Try again.",
     loadMore: "Unable to load more suggestions. Try again.",
