@@ -493,6 +493,13 @@ export const copy = {
       `The server rejected the download (HTTP ${status}). Sign in again and retry.`,
     trackFailed: (status: number) => `The server returned HTTP ${status} for this track.`,
     downloadFailed: "The download failed.",
+    /**
+     * The plugin says "failed to connect to server", which is true but leaves
+     * the listener guessing: is the server down, or can the *phone* not reach
+     * it? Those have different fixes, and the person cannot tell which.
+     */
+    downloadCannotReach:
+      "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
     downloadNoData: "The download finished but wrote no data. The server may have refused the request.",
     downloadIncomplete: (bytes: number, expected: number) =>
       `The download is incomplete (${bytes} of ${expected} bytes). Retry to finish it.`,

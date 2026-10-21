@@ -115,6 +115,13 @@ export function describeTransferError(error: unknown): Error {
     return new Error(copy.errors.trackFailed(httpStatus));
   }
   const message = candidate?.message || copy.errors.downloadFailed;
+  // A connection failure says nothing useful on its own. "The server is down"
+  // and "the phone cannot reach the server" look identical to the person
+  // holding the phone, and they have different fixes -- so the message names
+  // both.
+  if (/connect|unreachable|refused|timeout/i.test(message)) {
+    return new Error(copy.errors.downloadCannotReach);
+  }
   return new Error(message);
 }
 

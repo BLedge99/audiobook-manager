@@ -60,6 +60,11 @@
     the replica row written over the DevTools protocol — because its download
     path was broken at the time. It is going away, so that was the quick way to
     leave the book with the person.
+  - **`scripts/device-tunnel.ps1`** brings the phone's tunnel back up. The
+    tunnel dies with the adb connection and says nothing on the phone, so a
+    download fails with "failed to connect to server" while the server is
+    running fine. That is what happened on 2026-10-21, and it is now a script
+    rather than something to remember.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
   `test/` now holds ~3.6 GB: the LibriVox set plus six **commercial**

@@ -501,6 +501,28 @@ re-run of the security E2E suite. **Not started.**
   three downloaded books could be told it had nothing to play. The splash now
   waits for the device library too.
 
+- **`adb reverse` is the phone's way to the server, and it dies silently.**
+  The tunnel lives on the adb connection, so it goes when the cable is
+  unplugged or the phone reboots — and *nothing on the phone says so*. The app
+  just reports "failed to connect to server" for every request, including a
+  download, while the server is running perfectly and the front end on the
+  computer works fine.
+
+  That cost the household an hour on 2026-10-21, and it happened because
+  **the tunnel was removed on purpose** during a test and not put back.
+  `scripts/device-tunnel.ps1` brings it up and says which server address
+  matches it.
+
+  The phone's own setting is the server's address on the home network,
+  `http://192.168.1.203:3000`, and that is the right one. The phone only
+  needs the tunnel when it is on a WiFi segment that cannot reach the home LAN
+  at all — which is a real state for this household, not a theory: `ping` to
+  the host is 100% lost.
+
+- **"Failed to connect to server" is true and useless.** It reads as "the
+  server is down", when the far more common cause is that the *phone* cannot
+  reach it. The download error now says so and names the two things to check.
+
 - **A single-file book could be streamed but never downloaded.** Found
   2026-10-21, on the Defy: "The Christmas Pig has no tracks to download" on a
   book that played perfectly from the server. "The Ickabog" had the same fault

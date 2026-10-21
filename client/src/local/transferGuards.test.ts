@@ -57,8 +57,19 @@ describe("describeTransferError", () => {
   });
 
   it("falls back to the plugin message when there is no HTTP status", () => {
+    const error = describeTransferError({ code: "OS-PLUG-FLTR-0008", message: "The transfer was aborted." });
+    expect(error.message).toBe("The transfer was aborted.");
+  });
+
+  it("turns a connection failure into something the listener can act on", () => {
+    // The plugin says "failed to connect to server", and the household read it
+    // as "the server is down" -- while the server was fine and the *phone*
+    // could not reach it. Those have different fixes, so the message has to
+    // name both.
     const error = describeTransferError({ code: "OS-PLUG-FLTR-0008", message: "Failed to connect to server." });
-    expect(error.message).toBe("Failed to connect to server.");
+    expect(error.message).toMatch(/could not reach the server/i);
+    expect(error.message).toMatch(/home network/i);
+    expect(error.message).toMatch(/settings/i);
   });
 
   it("survives an error that is not an object", () => {
