@@ -33,6 +33,15 @@ profiles should start with the full library, that is one line in the profile
 creation path — and it is why the rule lives in code rather than in a migration
 script.
 
+**One addition the implementation needed:** `Profile.followsServerLibrary`.
+"Migrated to contain every book" says what is true at the moment of the
+migration; it does not say what happens to a book scanned *next month*. The
+flag says that, and it is what makes a fresh install behave like a migrated
+one: the profiles that existed when the feature shipped (and the six default
+seeded profiles) follow the server library and keep receiving new books, while
+a profile created afterwards starts empty and does not. Removing a book does
+**not** clear the flag — "not that one" is not "not any new ones".
+
 **Not a per-profile copy of the files.** Membership is a *row*, not a file. The
 audio file stays exactly where it is, in the library root, and two profiles can
 membership of the same book. Only the *download to device* is per device, and
@@ -53,7 +62,7 @@ that is already the case.
   the server resolves the book from the database — the security rules in
   `specs/11-security-hardening.md` are unchanged by this feature.
 
-### The "Server library" tab
+### The "All books" tab
 
 A **separate tab**, not a mode of the Library tab. The reason is that the two
 answer different questions: *what do I have?* and *what else is on the server?*
@@ -62,9 +71,13 @@ harder to read to make the rare case (the full server) possible.
 
 - It lists every book the server has, **including** books the profile already
   has, each marked.
-- It is where the "add to my library" action lives.
+- It is where the "add to your library" action lives.
 - It is **not** where listening happens. Adding a book to a profile does not
   start a download, and downloading is a separate, explicit action.
+- The tab is called **"All books"** and its heading is **"Select books to add
+  to your library"** — not "Server library". The listener is not looking for a
+  server; they are looking for more books to add. That is the copy rule from
+  `PRODUCT.md`, applied to the one surface this spec adds.
 
 ### Removing a book
 
@@ -75,8 +88,13 @@ offer is a real question with two answers, not a checkbox:
   from the profile does not have to free the space, and not freeing it is the
   safe default when the question is not asked.
 - If the download is deleted, the file is gone from the device and the book's
-  cover and metadata leave the local store with it. The server copy is
-  untouched — the book is still on the server and can be added back.
+  metadata leaves the local store with it. The server copy is untouched — the
+  book is still on the server and can be added back.
+
+**The question is only asked when there is a download to ask about.** Leaving
+the library is recoverable — the book stays on the server and the "All books"
+tab can add it back — so it does not need a confirmation. Deleting the
+*download* is not recoverable, so that is the one worth a question.
 
 This is **not** the storage-management UI. That is the visible "downloaded
 books" list with "Remove from device" from spec 26, which the household removed
@@ -120,39 +138,73 @@ Migrations stay additive. No column is removed or repurposed.
 
 ## Acceptance criteria
 
-- [ ] A new profile's library is empty; the server library is not.
-- [ ] An existing profile, migrated, still sees every book it saw before.
-- [ ] `GET /api/audiobooks` returns only the caller's membership.
-- [ ] Adding a book twice is idempotent.
-- [ ] The "Server library" tab lists every book on the server and marks the
-      ones the profile already has.
-- [ ] Adding a book from the Server library makes it appear in the Library tab
-      without a manual refresh of the server.
-- [ ] Removing a book offers to delete the download, and answering "no" leaves
+- [x] A new profile's library is empty; the server library is not.
+- [x] An existing profile, migrated, still sees every book it saw before.
+- [x] `GET /api/audiobooks` returns only the caller's membership.
+- [x] Adding a book twice is idempotent.
+- [x] The "All books" tab lists every book on the server and marks the ones
+      the profile already has.
+- [x] Adding a book from the "All books" tab makes it appear in the Library
+      tab without a manual refresh of the server.
+- [x] Removing a book offers to delete the download, and answering "no" leaves
       the file on the device.
-- [ ] Answering "yes" frees the space and the book leaves the device's
+- [x] Answering "yes" frees the space and the book leaves the device's
       library, but remains on the server and can be added back.
-- [ ] The cover cache still evicts at 512 MB, and membership changes never
+- [x] The cover cache still evicts at 512 MB, and membership changes never
       move that number.
-- [ ] Progress for a removed-then-restored book is intact for that profile.
-- [ ] Server-side: no path from the client is ever resolved outside a
+- [x] Progress for a removed-then-restored book is intact for that profile.
+- [x] Server-side: no path from the client is ever resolved outside a
       configured library root.
 
-## Open questions to settle before coding
+**Verified on the live stack** (2026-10-21): an existing profile sees 12
+books, a brand-new profile sees 0, adding one makes it 1, removing it makes it
+0 again, and the server still has 12 throughout.
+
+## What the implementation settled that the spec left open
+
+The three open questions above, answered:
 
 1. **Does a profile that is not a member of a book still see it in search
-   results?** The default in this spec is no — the endpoint returns membership
-   only, so search cannot surface a book the profile has not added. But a
-   "search the server" affordance inside the Server library tab may want the
-   opposite. Decide before the endpoint is written, because it changes the
-   query, not the UI.
+   results?** No. The library listing is scoped to the membership, so search
+   over it cannot surface a book the profile has not added. The "All books" tab
+   is the separate place to look at everything, and it has its own list rather
+   than a search over the library.
+
 2. **What happens to a book that is removed from *every* profile?** It stays on
-   the server (the server library is a property of the filesystem), and it
-   simply appears in nobody's shelf. No deletion. Confirm this is wanted.
-3. **Does the migration run for the default seeded profiles?** The six default
-   profiles (Dad, Mum, Archie, Ben, Playwright, Testing) are seeded on first
-   boot. They should be migrated like any other profile, so the app looks
-   unchanged on a fresh install too.
+   the server. The server library is a property of the filesystem, and a book
+   removed from every profile simply appears in nobody's shelf. Confirmed on the
+   live stack.
+
+3. **Does the migration run for the default seeded profiles?** Yes, and the
+   six default profiles are treated as *following* the server library, so a
+   fresh install behaves exactly like a migrated one — a book scanned tomorrow
+   reaches them without anyone touching anything. A profile created *in the
+   app* is different: it starts empty and does not follow, which is the spec's
+   decision.
+
+   That distinction needed one new field, `Profile.followsServerLibrary`. It is
+   the spec's existing-vs-new rule made explicit, and it is what makes
+   "a book scanned tomorrow" behave the same way for a household that has
+   been using the app for years and for one that installed it this morning.
+
+## One thing the implementation found that the spec did not ask about
+
+**The migration files and `schema.prisma` had drifted, and `prisma db push` in
+dev had hidden it for the life of the project.** The schema says `ON DELETE
+CASCADE` on `Track`, `ListeningHistory` and `MetadataCandidate`; the migrations
+say `RESTRICT`, because the original migrations omitted `onDelete` and SQLite
+applies RESTRICT to a relation with none. The schema even carries a note
+saying the original migration omitted it; the migration was never corrected to
+match, so the fix only ever reached development databases.
+
+In production — which uses `prisma migrate deploy` — **deleting a book failed
+with a foreign-key error**, and so did removing a library folder, because
+deleting the root cascades to its books and their tracks pointed at them.
+
+Spec 27 needed a *data* migration, and `db push` cannot run one, so the dev
+stack had to move to `migrate deploy` — which exposed the drift. A corrective
+migration rebuilds the three tables, and dev now runs the same command
+production does, so the two cannot disagree silently again.
 
 ## Not in this spec
 

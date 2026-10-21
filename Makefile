@@ -1,4 +1,4 @@
-.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client test-e2e verify lan
+.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client test-e2e capture verify lan
 
 ## Expose the server on the LAN so a phone can reach it.
 # The whole stack runs inside WSL, and WSL's NAT mode only relays the server to
@@ -165,6 +165,26 @@ test-e2e:
 		sleep 1; \
 	done
 	npx playwright test $(ARGS)
+
+## Design-review screenshots against the running stack.
+# The same one-recipe rule as `test-e2e`: the compose-up, the health wait and
+# the capture stay in ONE session, because WSL terminates the distribution when
+# idle and SIGTERMs the containers.
+#
+# If Docker is inside WSL, use `scripts/capture-ui-wsl.sh` instead: the capture
+# has to reach the client's published port, and from Windows that needs a
+# portproxy whose target address rots every time WSL restarts.
+capture:
+	docker compose up -d
+	@for i in $$(seq 1 90); do \
+		curl -sf http://localhost:3000/api/health > /dev/null 2>&1 && { echo "server healthy after $${i}s"; break; }; \
+		sleep 1; \
+	done
+	@for i in $$(seq 1 90); do \
+		curl -sf http://localhost:5173/ > /dev/null 2>&1 && { echo "client reachable after $${i}s"; break; }; \
+		sleep 1; \
+	done
+	node scripts/capture-ui.js
 
 ## Live enrichment check against a real library (default ./test).
 # Scans, runs the real provider APIs and reports what changed. Read-only with

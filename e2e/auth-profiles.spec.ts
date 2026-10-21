@@ -25,7 +25,7 @@ test("login gate blocks, then allows, profile creation", async ({ page }) => {
   await page.getByRole("button", { name: "Add", exact: true }).click();
   // "Audiobook Manager" is also the login gate's heading, so assert something
   // only the signed-in library renders.
-  await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
   await expect(page.getByLabel("Active profile").locator("option:checked")).toHaveText(name);
 
   // The profile really exists server-side, exactly once.

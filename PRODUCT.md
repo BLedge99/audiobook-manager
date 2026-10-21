@@ -103,9 +103,25 @@ manager that can diverge from the server.
 
 The rules the voice holds to:
 
+- **Write for the listener.** The app has two audiences: the **listener**, who
+  wants to find a book and press play, and the **operator**, who sets up the
+  server and fixes metadata. They read different screens and need different
+  words.
+  **A heading, an explanation or a hint must say why the listener is there and
+  what they can do, in their terms. It must not describe what the system is
+  doing.**
+  The failure mode is a heading like *"Home server library — select books to
+  add to user library"*. It is a perfectly good comment to a developer and
+  useless to a person: it names the system's structure, and the person already
+  knows why they opened a screen called "All books". Said to the listener:
+  **"Select books to add to your library."**
+  So the copy table is split in two — `copy.ts` holds the listener-facing
+  strings at the top level, and `copy.operator` holds the ones the person
+  maintaining the server reads. Those may say "metadata" and "enrichment",
+  because that is genuinely what those screens are about.
 - One word per concept, everywhere. A saved title the person likes is a
   **favourite**, not a "like" or a "star". A catalogue suggestion is a
-  **title**, not a "book" or an "item".
+  **book**, not a "title" or an "item".
 - **Status colour never travels alone** (`DESIGN.md`). Every status colour is
   paired with a written label.
 - One ellipsis character: `…`, never three dots.
@@ -121,6 +137,17 @@ string is there, including the ones the pure maths modules produce
 (`lib/position.ts`, `lib/browse.ts`). Components hold no copy inline, so a
 wording change is a one-line edit and the whole voice can be reviewed in one
 sitting.
+
+**How it is kept honest:** `client/src/copy.test.ts` fails the build if the
+listener-facing tier contains the system's own vocabulary — "metadata",
+"enrichment", "taxonomy", "seeded", "cache", "home server" and the rest — or if
+an empty string, a `...` or an exclamation mark appears, or if a shared phrase
+is written two different ways.
+
+The ban is on the **system's** words, not the **brand's**. "Shelf" is the
+app's own metaphor — the visual world is a capsule vending machine, and a
+vending machine has shelves — so a listener who sees one already knows what it
+means. Only the machinery's vocabulary is out of bounds.
 
 ## Brand Commitments
 

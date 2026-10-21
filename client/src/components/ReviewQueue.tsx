@@ -65,9 +65,9 @@ function decodeList(value: string | null | undefined): string[] {
  * a colour -- never a colour alone.
  */
 function confidenceVerdict(confidence: number) {
-  if (confidence >= 75) return { label: copy.review.strongMatch, color: "var(--mint)" };
-  if (confidence >= 50) return { label: copy.review.possibleMatch, color: "var(--tan)" };
-  return { label: copy.review.weakMatch, color: "var(--ink-3)" };
+  if (confidence >= 75) return { label: copy.operator.review.strongMatch, color: "var(--mint)" };
+  if (confidence >= 50) return { label: copy.operator.review.possibleMatch, color: "var(--tan)" };
+  return { label: copy.operator.review.weakMatch, color: "var(--ink-3)" };
 }
 
 function CandidateRow({
@@ -93,7 +93,7 @@ function CandidateRow({
       await action();
       done?.();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : copy.review.actionFailed);
+      setError(requestError instanceof Error ? requestError.message : copy.operator.review.actionFailed);
     } finally {
       setBusy(false);
     }
@@ -118,9 +118,9 @@ function CandidateRow({
           <span className="rounded-full border border-ink/25 bg-surface px-2 py-0.5 text-[11px] font-bold text-ink2">
             {candidate.source}
           </span>
-          <span title={copy.review.matchConfidence} className="inline-flex items-center gap-1.5 text-[11px] font-bold">
+          <span title={copy.operator.review.matchConfidence} className="inline-flex items-center gap-1.5 text-[11px] font-bold">
             <Swatch color={verdict.color} />
-            <span className="tnum">{copy.review.matchPercent(confidence)}</span>
+            <span className="tnum">{copy.operator.review.matchPercent(confidence)}</span>
             <span className="text-ink3">· {verdict.label}</span>
           </span>
         </div>
@@ -128,7 +128,7 @@ function CandidateRow({
         <p className="truncate text-[12.5px] text-ink2">{candidate.author ?? copy.unknownAuthor}</p>
         {narrators.length > 0 && <p className="mt-0.5 truncate text-[11.5px] text-ink3">{copy.narratedBy(narrators.slice(0, 3).join(", "))}</p>}
         {genres.length > 0 && <p className="mt-0.5 truncate text-[11.5px] text-ink3">{genres.join(", ")}</p>}
-        {candidate.seriesName && <p className="mt-0.5 text-[11.5px] text-ink3">{copy.review.series(candidate.seriesName)}</p>}
+        {candidate.seriesName && <p className="mt-0.5 text-[11.5px] text-ink3">{copy.operator.review.series(candidate.seriesName)}</p>}
 
         {error && <p role="alert" className="mt-1.5 text-[12px] font-bold text-rasp-ink">{error}</p>}
 
@@ -159,7 +159,7 @@ function CandidateRow({
               )
             }
           >
-            {copy.review.keepWhatIHave}
+            {copy.operator.review.keepWhatIHave}
           </Btn>
         </div>
       </div>
@@ -176,8 +176,8 @@ export function ReviewQueue({ books, onResolved }: { books: Audiobook[]; onResol
       aria-labelledby="review-queue"
       style={{ background: "color-mix(in srgb, var(--tan) 10%, var(--surface))" }}
     >
-      <MachineHead id="review-queue" title={copy.review.heading} />
-      <p className="text-[13.5px] text-ink2">{copy.review.intro(books.length)}</p>
+      <MachineHead id="review-queue" title={copy.operator.review.heading} />
+      <p className="text-[13.5px] text-ink2">{copy.operator.review.intro(books.length)}</p>
 
       <div className="mt-4 space-y-3">
         {books.map((book) => (
@@ -197,7 +197,7 @@ function ReviewRow({ book, onResolved }: { book: Audiobook; onResolved: () => vo
     setLoading(true);
     void request<Candidate[]>(`/api/audiobooks/${book.id}/candidates`)
       .then(setCandidates)
-      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : copy.review.loadFailed))
+      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : copy.operator.review.loadFailed))
       .finally(() => setLoading(false));
   };
 
@@ -207,14 +207,14 @@ function ReviewRow({ book, onResolved }: { book: Audiobook; onResolved: () => vo
     load();
   }, []);
 
-  if (loading) return <p className={cn("py-2 text-sm text-ink2")}>{copy.review.checking(book.title)}</p>;
+  if (loading) return <p className={cn("py-2 text-sm text-ink2")}>{copy.operator.review.checking(book.title)}</p>;
   if (error) return <p role="alert" className="py-2 text-sm font-bold text-rasp-ink">{error}</p>;
   if (!candidates || candidates.length === 0) return null;
 
   return (
     <div className={cn("rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink/25 bg-surface p-3")}>
       <h3 className="font-display text-[15px] font-semibold text-ink">{book.title}</h3>
-      <p className="mt-0.5 text-[12px] text-ink3">{copy.review.currentlyShownAs(book.title, book.author)}</p>
+      <p className="mt-0.5 text-[12px] text-ink3">{copy.operator.review.currentlyShownAs(book.title, book.author)}</p>
       {candidates.map((candidate) => (
         <CandidateRow
           key={candidate.id}

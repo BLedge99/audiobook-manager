@@ -100,7 +100,7 @@ test.describe("library refresh", () => {
     // With no profile stored, the gate must appear; picking one must not.
     await expect(page.getByRole("heading", { name: "Who's listening?" })).toBeVisible();
     await pickAnyProfile(page);
-    await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
     await expect(page.getByText(/Loading library/)).toHaveCount(0);
   });
 });
@@ -151,7 +151,7 @@ test.describe("cover art", () => {
     await page.route("**/cover*", (route) => route.abort());
     await page.reload();
     await login(page);
-    await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
 
     await expect
       .poll(
@@ -324,6 +324,74 @@ test.describe("browse", () => {
   });
 });
 
+test.describe("server library", () => {
+  test("lists every book on the server and marks the ones in the profile", async ({ page }) => {
+    // Spec 27. The tab answers a different question from the Library tab:
+    // "what else is there to listen to?"
+    await enterApp(page);
+    await tab(page, /^All books/).click();
+
+    // The heading says why the listener is here and what they can do, in their
+    // own terms -- not what the system is doing.
+    await expect(page.getByRole("heading", { name: "Select books to add to your library" })).toBeVisible();
+    await expect(page.getByText(/Every audiobook the household has/)).toBeVisible();
+
+    // The server's shelf and the profile's shelf are the same books here --
+    // the seeded profiles follow the server library -- so the count line is
+    // what proves the tab read the server, not the profile.
+    await expect(page.getByText(/\d+ of \d+ in your library/)).toBeVisible();
+    await expect(page.getByText("All audiobooks")).toBeVisible();
+  });
+
+  test("a book can be added to the profile from the server shelf", async ({ page }) => {
+    // The whole point of the tab. A profile that does not follow the server
+    // library starts empty, and this is how it gets something.
+    await enterApp(page);
+
+    // A fresh profile starts with an empty library, which is the state this
+    // test needs.
+    const created = await page.request.post("/api/profiles", {
+      data: { name: `E2E Membership ${Date.now().toString(36)}` },
+    });
+    const profile = await created.json();
+    const headers = { "x-profile-id": String(profile.id) };
+
+    const serverBooks = await (
+      await page.request.get("/api/server-library", { headers })
+    ).json();
+    expect(serverBooks.length).toBeGreaterThan(0);
+    expect(serverBooks.every((book: { inLibrary: boolean }) => book.inLibrary === false)).toBe(true);
+
+    // Put the profile in the app, so the tab reads it.
+    //
+    // Set directly rather than through the profile gate: the session is
+    // already authenticated by this point, so the gate is never shown and
+    // there would be no button to click.
+    await page.evaluate((id) => window.localStorage.setItem("profileId", id), String(profile.id));
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
+
+    await tab(page, /^All books/).click();
+    await expect(page.getByRole("heading", { name: "Select books to add to your library" })).toBeVisible();
+
+    // The first book is not in this profile's library, so it offers an Add.
+    const add = page.getByRole("button", { name: "Add" }).first();
+    await expect(add).toBeVisible();
+    await add.click();
+
+    // And the membership took: the server agrees.
+    await expect
+      .poll(async () => {
+        const after = await (await page.request.get("/api/server-library", { headers })).json();
+        return after.filter((book: { inLibrary: boolean }) => book.inLibrary).length;
+      }, { timeout: 15_000 })
+      .toBe(1);
+
+    // Clean up so the next run starts from a known state.
+    await page.request.delete(`/api/profiles/${profile.id}`);
+  });
+});
+
 test.describe("discover", () => {
   test("Discover renders and states its own limits instead of faking results", async ({ page }) => {
     await enterApp(page);
@@ -331,7 +399,7 @@ test.describe("discover", () => {
     await expect(page.getByRole("heading", { name: "Discover", exact: true })).toBeVisible();
     // Wishlist is always present, even when empty.
     await expect(page.getByRole("heading", { name: "Wishlist", exact: true })).toBeVisible();
-    await expect(page.getByText(/Titles you do not own yet/)).toBeVisible();
+    await expect(page.getByText(/Books you do not have yet/)).toBeVisible();
   });
 
   test("favouriting books actually produces suggestions", async ({ page }) => {

@@ -641,9 +641,9 @@ home, so the Android app became the top priority and displaced the GUI redesign.
 
 **Current order — the 15b polish pass, five features, one commit each:**
 
-> **Reconciled 2026-10-19, after feature 3 landed.** Four of the five are done.
-> What remains is the copy review, and then the per-profile library membership
-> that was planned alongside it.
+> **Reconciled 2026-10-21, after feature 7 landed.** All five are done. What
+> remains is the per-profile library membership that was planned alongside it,
+> and then the two findings that were deliberately left out.
 
 1. ~~**Refresh must never blank the library.**~~ **DONE** — `235aa28`. Close
    §1.7, plus coalescing and a `304` path. Small, and the most immediately
@@ -660,17 +660,22 @@ home, so the Android app became the top priority and displaced the GUI redesign.
    `cb28038`. Pagination *and* ranking together, with a provider pool cache and
    a request timeout. The pool is now ranked **once** and sliced, so page two
    continues page one.
-5. **Copy review into `client/src/copy.ts`,** with impeccable `clarify`. Last,
-   so it does not fight the layout moves. **This is the only 15b feature left.**
+5. ~~**Copy review into `client/src/copy.ts`,** with impeccable `clarify`.~~ **DONE.**
+   Every user-facing string is in one table, split into a **listener** tier and
+   an **operator** tier, with a build-failing guard against the system's own
+   vocabulary in the listener's copy. The rule it turned up is in
+   `PRODUCT.md`: *a heading, an explanation or a hint must say why the listener
+   is there and what they can do, in their terms — not what the system is
+   doing.*
 
 **Then:**
 
 6. **Per-profile library membership** — roadmap item 27,
    [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md).
    New profiles start empty; existing profiles are migrated to contain every
-   book, so nobody's library changes on upgrade. A separate "Server library"
-   tab; removing a book offers to delete its download too. The 512 MB cover
-   cache is deliberately untouched by it.
+   book, so nobody's library changes on upgrade. A separate "All books" tab;
+   removing a book offers to delete its download too. The 512 MB cover cache is
+   deliberately untouched by it.
 7. **Per-profile privacy (PIN, optional biometrics).** Finding 2. ADR first.
 8. **Lock-screen control latency.** Finding 6. Measure before fixing — §5 records
    two false diagnoses in this exact area.

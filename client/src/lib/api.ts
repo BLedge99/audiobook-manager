@@ -141,7 +141,7 @@ export function getServerUrl(): string {
 /** Persist the server URL. Throws if `url` is not a usable URL. */
 export function setServerUrl(url: string): void {
   const normalised = normaliseServerUrl(url);
-  if (!normalised) throw new Error(copy.errors.serverAddress);
+  if (!normalised) throw new Error(copy.operator.settings.enterAddress);
   if (typeof window === "undefined") return;
   window.localStorage.setItem(SERVER_URL_KEY, normalised);
 }

@@ -16,16 +16,22 @@
   **The current work is roadmap item 15b**, the post-testing polish pass:
   [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).
   Five features, one commit each, in the order **4 → 5 → 1 → 3 → 7** (refresh →
-  player-first → covers → Discover → copy). **Four are shipped; feature 7 (the
-  copy review) is the only one left.** Findings 2 (profile privacy) and 6
+  player-first → covers → Discover → copy). **All five are now written**; the
+  copy review (7) is the last to land. Findings 2 (profile privacy) and 6
   (lock-screen latency) are deliberately not being started: 2 needs an ADR
   before code, 6 needs measuring before fixing.
-- **After 15b closes: roadmap item 27, per-profile library membership**
-  ([`specs/27-per-profile-library.md`](specs/27-per-profile-library.md)). New
-  profiles start empty; existing profiles are migrated to contain every book,
-  so nobody's library changes on upgrade — and it is one line to flip. A
-  separate "Server library" tab; removing a book offers to delete its download
-  too. The 512 MB cover cache is deliberately untouched by it.
+- **Item 27, per-profile library membership, is built** (server and client).
+  New profiles start empty; existing profiles are migrated to contain every
+  book, so shipping it changes nothing for a household that already has the
+  app. A separate "All books" tab is where books are added from; removing a
+  book offers to delete its download too. The 512 MB cover cache is untouched
+  by it.
+- **The copy rule, and the thing to carry forward:** *a heading, an explanation
+  or a hint must say why the listener is there and what they can do, in their
+  terms — not what the system is doing.* `client/src/copy.ts` is split into a
+  listener tier (the top level) and an operator tier (`copy.operator`), and
+  `copy.test.ts` fails the build if the listener tier contains the system's own
+  vocabulary.
 - App today: Fastify + Prisma + SQLite server (`server/src/index.ts`), React
   client, docker-compose; test media in `test/` (gitignored, local only).
   `test/` now holds ~3.6 GB: the LibriVox set plus six **commercial**
@@ -36,10 +42,10 @@
   only unmet acceptance criterion is the visible downloaded-books list with
   "Remove from device", which the household removed from the polish pass on
   2026-10-19. See `LIMITATIONS.md` §1.4 and §3.
-- Test counts as of 2026-10-20, after feature 7: **server 416** (1 skipped),
-  **client 309**, **Playwright 46** (all green; run E2E from WSL via
-  `scripts/e2e-wsl.sh`). Re-run the suites rather than trusting these counts
-  after the next feature.
+- Test counts as of 2026-10-21, after feature 7 and item 27: **server 433**
+  (1 skipped), **client 325**, **Playwright 48** (all green; run E2E from WSL
+  via `scripts/e2e-wsl.sh`). Re-run the suites rather than trusting these
+  counts after the next feature.
 - **Pushes are the owner's call.** Feature 3 (`cb28038`) was pushed from this
   session; the doc commits after it were left for the owner to push.
 
@@ -88,7 +94,8 @@
 | 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint |
 | 24 | narrator-resolution | **done** | `narrator.ts` (pure, 22 tests): `composer` atom → `comment` (`Read By X`) → bracketed folder name (`{Stephen Fry}`). Full casts become one contributor per person. Person-name guard stops `{Unabridged}` being credited as a narrator. No guess when nothing matches. Makes the narrator work for commercial audiobooks, which no free online source can supply |
 | 25 | catalogue-enrichment | **done** | Genres/series/publisher/year/ISBN/description populated from both catalogues. Six root causes fixed: unrequested `fields=`, unread default fields, author polluting the query, study-guide spam, non-idempotent candidate storage, and a missing Google Books key. Auto-apply banded 0.7–0.9 with an author guard. **Note: enrichment is not deterministic run to run.** |
-| 15b | post-testing-polish | **4 of 5 done** | Spec `specs/15b-post-testing-polish.md`; evidence `user-testing-2026-10-18.md`. Shipped: **4** refresh never blanks the library (`235aa28`), **5** player-first book page (`35316d5`), **1** cover cache + tri-state cover (`4a7df3c`, on-device fix `fb19435`), **3** Discover 5-at-a-time + "Show 5 more" (`cb28038`). **Feature 7, the copy review, is the last one and is now in progress** — `client/src/copy.ts` written and wired; the voice decision is in `PRODUCT.md`. Findings 2 (per-profile privacy) and 6 (lock-screen latency) are deliberately out — 2 needs an ADR first, 6 needs measuring first. |
+| 15b | post-testing-polish | **4 of 5 done** | Spec `specs/15b-post-testing-polish.md`; evidence `user-testing-2026-10-18.md`. Shipped: **4** refresh never blanks the library (`235aa28`), **5** player-first book page (`35316d5`), **1** cover cache + tri-state cover (`4a7df3c`, on-device fix `fb19435`), **3** Discover 5-at-a-time + "Show 5 more" (`cb28038`). **Feature 7, the copy review, is written and in place** — `client/src/copy.ts` holds every string, split into a listener tier and an operator tier, with a build-failing jargon guard; the voice decision is in `PRODUCT.md`. Findings 2 (per-profile privacy) and 6 (lock-screen latency) are deliberately out — 2 needs an ADR first, 6 needs measuring first. |
+| 27 | per-profile-library | **server done, client done** | Spec `specs/27-per-profile-library.md`. `ProfileLibraryEntry` (a row per profile+book, unique), `Profile.followsServerLibrary` (the existing-vs-new distinction), `GET /api/audiobooks` scoped to the caller's membership, `GET /api/server-library` with an `inLibrary` flag, `POST`/`DELETE /api/audiobooks/:id/library`, and the scanner adding new books to every following profile. The data migration gives every existing profile every book, so shipping it changes nothing for a household that already has the app. Client: an "All books" tab (heading: "Select books to add to your library"), removal from the book detail that asks about the download only when there is one, and three distinct empty states. |
 | 26 | android-app | **Sprint 2 done** | Offline listening on Android. `specs/26-android-app.md` + ADR 012. Device is a **read replica + progress**, not a second library manager. **Verified on device: cross-origin auth (header token, cookie is dropped cross-scheme), cover art, download with real progress.** All 5 tracks of a book downloaded byte-for-byte identical to `Content-Length`. Stage tracing (`trace.ts`) makes every pipeline step time-boxed and visible. See "Downloads" in Current task for the four bugs behind this. **Next: server-URL gate, then offline playback with the network off** |
 | 27 | per-profile-library | **planned, not started** | Spec `specs/27-per-profile-library.md`. Each profile gets its own shelf of books, chosen from the server's library. **New profiles start empty; existing profiles are migrated to contain every book** (reversible, one line). A separate "Server library" tab; removing a book offers to delete its download too. Membership is a row, not a file — two profiles can hold the same book, the audio stays put. The 512 MB cover cache is untouched by it. Three open questions are listed in the spec and must be settled before the endpoint is written. |
 
@@ -155,24 +162,34 @@ commit each, in this order:
 | 5 | Player first on the book page | `client/src/components/AudiobookDetail.tsx` | **done** `35316d5` |
 | 1 | Cover cache + tri-state cover | `client/src/local/CoverImage.tsx`, `client/src/local/db.ts` | **done** `4a7df3c`, `fb19435` |
 | 3 | Discover: 5 ranked + "Show 5 more" | `server/src/metadata/recommend*.ts`, `enrichment.ts`, `client/src/components/Discover.tsx` | **done** `cb28038` |
-| 7 | Copy review into `client/src/copy.ts` | everything, with impeccable `clarify` | **NEXT** |
+| 7 | Copy review into `client/src/copy.ts` | everything, with impeccable `clarify` | **done** — in the commit after `cb28038` |
 
 Each ends at: unit tests → `npx tsc --noEmit` → `node scripts/capture-ui.js` →
 `npx playwright test` **in a single WSL session**. Feature 1 additionally got an
 on-device pass (airplane mode with a warm cache) — **done**, and the screenshot
 is committed at `specs/evidence/offline-covers-pixel4a-2026-10-19.png`.
 
-**Feature 7 is the last one.** The plan: move every user-facing string into
-`client/src/copy.ts`, keyed by surface, then run the impeccable `clarify` pass
-over it, then record the voice decision (warm, plain, brief) in `PRODUCT.md`,
-which currently lists voice as undecided. Acceptance criteria are the two
-unticked boxes at the bottom of the 15b spec's "Copy" section, plus the
-whole-pass checklist.
+**Feature 7 shipped**, and it turned up a rule worth more than the feature:
+**write for the listener.** The app has two audiences, and the copy review kept
+talking to the wrong one. "Home server library — select books to add to user
+library" is a good developer comment and a useless heading; the listener needs
+to know why they are there and what they can do.
 
-**After 15b: roadmap item 27, per-profile library membership.** Spec already
-written — [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md).
-It is deliberately sequenced *after* the copy review, because 27 adds a new tab
-and the copy review is what stops the new tab introducing a second voice.
+So `client/src/copy.ts` is now split in two — the top level is what a **listener**
+reads on an everyday screen, and `copy.operator` is what the person
+maintaining the server reads (server address, scans, metadata, tags, the review
+queue). `copy.test.ts` **fails the build** if the listener tier contains the
+system's own vocabulary — "metadata", "enrichment", "taxonomy", "seeded",
+"cache", "home server" and the rest. It caught two on its first run:
+"Metadata updated" on a book capsule, and a couple of others.
+
+The ban is on the **system's** words, not the **brand's**. "Shelf" is the app's
+own metaphor — the visual world is a capsule vending machine, and a vending
+machine has shelves — so it stayed.
+
+**Also shipped with it: roadmap item 27, per-profile library membership.**
+Spec — [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md) — and
+implementation, server and client.
 
 **Not being started, deliberately:** finding 2 (per-profile privacy) needs its
 own ADR before code; finding 6 (lock-screen latency) needs measuring before it

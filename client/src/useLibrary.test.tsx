@@ -70,6 +70,80 @@ async function mountWith(books: Audiobook[]) {
 }
 
 describe("useLibrary", () => {
+  /**
+   * Spec 27 — the server library and the membership actions.
+   *
+   * The property worth protecting is that the flag flips **immediately** on a
+   * tap, and that the lists are refetched afterwards so they end up true
+   * rather than merely fast. A UI that waits for the round trip before it
+   * responds feels broken on a home LAN; a UI that never refetches drifts.
+   */
+  describe("the server library", () => {
+    it("is not fetched until it is asked for", async () => {
+      const { result } = await mountWith([book(1, "One")]);
+      const urls = fetchMock.mock.calls.map(([url]) => String(url));
+      expect(urls.some((url) => url.includes("/api/server-library"))).toBe(false);
+
+      await act(async () => {
+        await result.current.loadServerLibrary();
+      });
+      const after = fetchMock.mock.calls.map(([url]) => String(url));
+      expect(after.some((url) => url.includes("/api/server-library"))).toBe(true);
+    });
+
+    it("marks the flag as soon as a book is added, before the request lands", async () => {
+      const { result } = await mountWith([book(1, "One")]);
+      // The server library says the book is not in the profile yet.
+      fetchMock.mockImplementation(async (url: string) =>
+        url.includes("server-library")
+          ? fakeResponse([{ ...book(1, "One"), inLibrary: false }])
+          : url.includes("library-roots")
+            ? fakeResponse([])
+            : fakeResponse([book(1, "One")]),
+      );
+      await act(async () => {
+        await result.current.loadServerLibrary();
+      });
+      expect(result.current.serverLibrary[0].inLibrary).toBe(false);
+
+      // The POST never answers, so the state can only be the optimistic one.
+      fetchMock.mockImplementation(async (url: string) => {
+        if (String(url).endsWith("/1/library")) {
+          return new Promise(() => undefined) as unknown as Response;
+        }
+        return url.includes("server-library")
+          ? fakeResponse([{ ...book(1, "One"), inLibrary: false }])
+          : url.includes("library-roots")
+            ? fakeResponse([])
+            : fakeResponse([book(1, "One")]);
+      });
+
+      act(() => {
+        void result.current.addToLibrary(1);
+      });
+
+      // The tap has already been answered, without waiting for the round trip.
+      await waitFor(() => expect(result.current.serverLibrary[0].inLibrary).toBe(true));
+    });
+
+    it("removes a book with a DELETE", async () => {
+      const { result } = await mountWith([book(1, "One")]);
+      fetchMock.mockImplementation(async (url: string) =>
+        url.includes("server-library")
+          ? fakeResponse([])
+          : url.includes("library-roots")
+            ? fakeResponse([])
+            : fakeResponse([]),
+      );
+
+      await act(async () => {
+        await result.current.removeFromLibrary(1);
+      });
+      const deleted = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/1/library"));
+      expect(deleted?.[1]?.method).toBe("DELETE");
+    });
+  });
+
   it("keeps the books on screen while a refresh is in flight", async () => {
     const { result } = await mountWith([book(1, "One"), book(2, "Two")]);
     expect(result.current.audiobooks).toHaveLength(2);

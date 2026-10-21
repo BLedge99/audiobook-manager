@@ -50,14 +50,14 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   return (
     <div className="mt-6 border-t-2 border-dashed border-ink/20 pt-4">
       <Btn size="sm" onClick={() => void enrich()} disabled={state === "loading"}>
-        <Sparkles size={15} aria-hidden="true" /> {state === "loading" ? copy.detail.metadataLookingUp : copy.detail.metadataLookup}
+        <Sparkles size={15} aria-hidden="true" /> {state === "loading" ? copy.operator.metadata.lookingUp : copy.operator.metadata.lookup}
       </Btn>
       {state === "error" && (
-        <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">{copy.detail.metadataFailed}</p>
+        <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">{copy.operator.metadata.failed}</p>
       )}
       {state === "ready" && (
         <ul className="mt-3 grid gap-2">
-          {candidates.length === 0 && <li className="text-[13.5px] text-ink3">{copy.detail.noMatches}</li>}
+          {candidates.length === 0 && <li className="text-[13.5px] text-ink3">{copy.operator.metadata.noMatches}</li>}
           {candidates.map((candidate) => (
             <li
               key={candidate.id}
@@ -126,6 +126,9 @@ export function AudiobookDetail({
   onToggleFavourite,
   onFindSimilar,
   onBookUpdated,
+  onRemoveFromLibrary,
+  isDownloaded,
+  onDeleteDownload,
   deviceAction,
   localUrlForTrack,
 }: {
@@ -138,6 +141,18 @@ export function AudiobookDetail({
   onToggleFavourite?: (bookId: number) => void;
   onFindSimilar?: (bookId: number) => void;
   onBookUpdated?: () => void;
+  /**
+   * Spec 27: remove this book from the calling profile's library.
+   *
+   * The book stays on the server, so this is recoverable -- the Server library
+   * tab can add it back. That is why the confirmation below is only about the
+   * *download*, which is not recoverable.
+   */
+  onRemoveFromLibrary?: (bookId: number) => Promise<void>;
+  /** Whether this book is downloaded to the device, which changes the question. */
+  isDownloaded?: boolean;
+  /** Delete the device copy, freeing the space. */
+  onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
   /**
    * Download / remove control for the device copy (spec 26, Sprint 2).
    *
@@ -162,6 +177,41 @@ export function AudiobookDetail({
    * `BookDetails` for why that hook moved.
    */
   const [detailsOpen, setDetailsOpen] = useState(false);
+
+  /**
+   * Spec 27: removing a book from the profile's library.
+   *
+   * The library part is recoverable -- the book stays on the server and the
+   * Server library tab can add it back -- so it is not worth a confirmation.
+   * The *download* is not recoverable, so that is the one thing worth asking
+   * about, and the question is only asked when there is a download to ask
+   * about.
+   */
+  const [askingAboutDownload, setAskingAboutDownload] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string>();
+
+  const removeFromLibrary = async (deleteDownload: boolean) => {
+    if (!onRemoveFromLibrary) return;
+    setRemoving(true);
+    setRemoveError(undefined);
+    try {
+      if (deleteDownload && onDeleteDownload) {
+        const result = await onDeleteDownload(book.id);
+        await onRemoveFromLibrary(book.id);
+        if (result.failed.length > 0) setRemoveError(copy.removeBook.deleteFailed);
+      } else {
+        await onRemoveFromLibrary(book.id);
+      }
+      setAskingAboutDownload(false);
+    } catch (removeFailure) {
+      setRemoveError(
+        removeFailure instanceof Error ? removeFailure.message : copy.errors.removeFromLibrary,
+      );
+    } finally {
+      setRemoving(false);
+    }
+  };
 
   return (
     /* `fixed inset-0` with the <article> as its direct child is load-bearing:
@@ -258,6 +308,87 @@ export function AudiobookDetail({
               {onFindSimilar && (
                 <Btn onClick={() => onFindSimilar(book.id)} variant="quiet">
                   <Compass size={15} aria-hidden="true" /> {copy.findMoreLikeThis}
+                </Btn>
+              )}
+            </div>
+          )}
+
+          {/*
+            Spec 27: removing a book from this profile's library.
+
+            It sits below the other actions rather than beside them, because it
+            is the one a listener rarely wants: the common case is a book they
+            keep, and the action belongs out of the way of the ones they use.
+          */}
+          {onRemoveFromLibrary && (
+            <div className="mt-4">
+              {askingAboutDownload ? (
+                <div className="panel panel--flat px-3 py-3" role="group" aria-label={copy.removeBook.question}>
+                  <p className="text-[13.5px] font-semibold text-ink">{copy.removeBook.question}</p>
+                  {isDownloaded && (
+                    <p className="mt-1 text-[13px] text-ink2">{copy.removeBook.alsoDelete}</p>
+                  )}
+                  {removeError && (
+                    <p role="alert" className="mt-1.5 text-[12.5px] font-bold text-rasp-ink">{removeError}</p>
+                  )}
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {isDownloaded ? (
+                      <>
+                        <Btn
+                          size="sm"
+                          variant="primary"
+                          disabled={removing}
+                          onClick={() => void removeFromLibrary(true)}
+                        >
+                          {copy.removeBook.deleteDownload}
+                        </Btn>
+                        <Btn
+                          size="sm"
+                          variant="quiet"
+                          disabled={removing}
+                          onClick={() => void removeFromLibrary(false)}
+                        >
+                          {copy.removeBook.keepDownload}
+                        </Btn>
+                      </>
+                    ) : (
+                      <Btn
+                        size="sm"
+                        variant="primary"
+                        disabled={removing}
+                        onClick={() => void removeFromLibrary(false)}
+                      >
+                        {copy.removeBook.action}
+                      </Btn>
+                    )}
+                    <Btn
+                      size="sm"
+                      variant="quiet"
+                      disabled={removing}
+                      onClick={() => setAskingAboutDownload(false)}
+                    >
+                      {copy.operator.tagSuite.cancel}
+                    </Btn>
+                  </div>
+                </div>
+              ) : (
+                <Btn
+                  size="sm"
+                  variant="quiet"
+                  disabled={removing}
+                  onClick={() => {
+                    setRemoveError(undefined);
+                    // A book with no download has nothing irreversible about
+                    // it, so it leaves the library straight away.
+                    if (isDownloaded) {
+                      setAskingAboutDownload(true);
+                    } else {
+                      void removeFromLibrary(false);
+                    }
+                  }}
+                  className="text-rasp-ink"
+                >
+                  {copy.removeBook.action}
                 </Btn>
               )}
             </div>

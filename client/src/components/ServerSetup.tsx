@@ -41,7 +41,7 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
       saved = window.localStorage.getItem("serverUrl") || "";
     } catch (error) {
       setStatus("failed");
-      setMessage(error instanceof Error ? error.message : copy.serverSetup.enterAddress);
+      setMessage(error instanceof Error ? error.message : copy.operator.serverSetup.enterAddress);
       return;
     }
 
@@ -54,9 +54,9 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
     } catch (error) {
       setStatus("failed");
       setMessage(
-        copy.serverSetup.unreachable(
+        copy.operator.serverSetup.unreachable(
           saved,
-          error instanceof Error ? error.message : copy.serverSetup.networkError,
+          error instanceof Error ? error.message : copy.operator.serverSetup.networkError,
         ),
       );
     }
@@ -72,23 +72,23 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
             <Plug size={24} className="text-white" aria-hidden="true" />
           </span>
 
-          <h1 className="mt-4 font-display text-2xl font-semibold text-ink">{copy.serverSetup.heading}</h1>
-          <p className="mt-2 text-sm leading-relaxed text-ink2">{copy.serverSetup.intro}</p>
+          <h1 className="mt-4 font-display text-2xl font-semibold text-ink">{copy.operator.serverSetup.heading}</h1>
+          <p className="mt-2 text-sm leading-relaxed text-ink2">{copy.operator.serverSetup.intro}</p>
           <p className="mt-2 text-sm leading-relaxed text-ink2">
-            {copy.serverSetup.exampleLead}{" "}
+            {copy.operator.serverSetup.exampleLead}{" "}
             <code className="rounded bg-sunk px-1.5 py-0.5 font-bold text-cobalt-ink">
-              {copy.serverExample}
+              {copy.operator.serverExample}
             </code>
           </p>
 
           <Field
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            placeholder={copy.serverSetup.addressPlaceholder}
+            placeholder={copy.operator.serverSetup.addressPlaceholder}
             autoCapitalize="off"
             autoCorrect="off"
             inputMode="url"
-            aria-label={copy.serverAddressLabel}
+            aria-label={copy.operator.serverAddressLabel}
             className="mt-5"
           />
 
@@ -99,7 +99,7 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
           )}
 
           <Btn type="submit" variant="primary" disabled={status === "checking"} className="mt-4 w-full">
-            {status === "checking" ? copy.serverSetup.checking : copy.serverSetup.submit}
+            {status === "checking" ? copy.operator.serverSetup.checking : copy.operator.serverSetup.submit}
           </Btn>
         </form>
       </div>

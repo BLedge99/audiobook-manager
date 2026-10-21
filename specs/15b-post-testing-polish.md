@@ -173,6 +173,33 @@ inconsistently.
 - The decision is recorded in `PRODUCT.md`, which currently lists voice as
   undecided.
 
+**The rule that matters more than any of them: write for the listener.**
+
+The app has two audiences. There is the **listener** — someone who wants to
+find a book and press play — and the **operator** — whoever sets up the server,
+scans folders and fixes metadata. They read different screens and need
+different words.
+
+**A heading, an explanation or a hint must say why the listener is there and
+what they can do, in their terms. It must not describe what the system is
+doing.**
+
+The failure mode is a heading like *"Home server library — select books to add
+to user library"*. It is a perfectly good comment to a developer and useless
+to a person: it names the system's structure, and the person already knows why
+they opened a screen called "All books". Said to the listener: **"Select
+books to add to your library."**
+
+So the table is split in two:
+
+| Tier | Where | May it say "metadata"? |
+|------|-------|------------------------|
+| Listener-facing | the top level of `copy.ts` | No |
+| Operator-facing | `copy.operator` | Yes — it is what those screens are about |
+
+And the rule is **enforced, not just documented**: `copy.test.ts` fails the
+build if the listener tier contains the system's own vocabulary.
+
 **What the review actually changed**, beyond the move:
 
 - **One ellipsis.** The app mixed `…` and `...` across files. It is `…`
@@ -182,6 +209,11 @@ inconsistently.
   "In your favourites" each had two homes. They are one entry each now, at the
   top level of the table, and a test fails if one is copied back into a
   surface group.
+- **The system stopped speaking to the listener.** "Metadata updated" on a
+  book capsule became "Details updated". "Enrichment assigns genres from the
+  curated taxonomy" became "Books get a genre once their details are filled
+  in". "Seed your Discover suggestions" became "they help Discover find books
+  for you".
 - **Errors say what to do next.** "Failed" became "Could not load the matches.
   Try again." "Could not load profiles (HTTP 500)." became "Could not load the
   profiles (HTTP 500). Try again in a moment." — the status code stays, but it
@@ -192,6 +224,9 @@ inconsistently.
 - **Regularity where the app had none.** "Sleep: off" became "Off" beside
   "15 min" and "End of chapter"; "Series #" became "Series number"; the
   lowercase "clear" link became "Clear"; "3 file(s)" became "3 files".
+- **Two shelves, so two words.** With spec 27 there is the listener's shelf and
+  the household's, and "All audiobooks" used to mean the whole server. The
+  Library tab is now "Your audiobooks" and the server shelf is "All audiobooks".
 
 **The one thing that did not change: the honesty rule.** Discover's "Book —
 not an audiobook yet" is still there, and so is every card's "not in your
@@ -259,13 +294,24 @@ library yet". A copy pass is exactly the wrong moment to soften those.
       **Re-verified after feature 3** (`cb28038`): server 416 (1 skipped),
       client 295, Playwright 46, `tsc` clean on both tiers, `capture-ui.js`
       reports "layout guards pass". **Re-verified again after feature 7**:
-      server 416 (1 skipped), client 309, Playwright 46, `tsc` clean on both
-      tiers, `capture-ui.js` "layout guards pass", and `vite build` clean.
+      server 433 (1 skipped), client 325, Playwright 48, `tsc` clean on both
+      tiers, `capture-ui.js` "layout guards pass".
 - [x] On device: covers survive airplane mode after a single online load.
       Done in feature 1 — Pixel 4a, Wi-Fi off, server unreachable, cold start
       from a force-stop: both downloaded books rendered with **2 covers from the
       device cache and 0 from the network**. Screenshot:
       [`evidence/offline-covers-pixel4a-2026-10-19.png`](evidence/offline-covers-pixel4a-2026-10-19.png).
+
+**The pass also left two things behind for whoever comes next:**
+
+- **`make capture` and `scripts/capture-ui-wsl.sh` now exist.** The design
+  capture runs from WSL, where the stack's published ports actually are,
+  because from Windows it needs a portproxy whose target address rots every
+  time WSL restarts. It shares one session with the compose-up, for the same
+  reason `test-e2e` does.
+- **`capture-ui.js` waits with a timeout.** A renamed heading used to turn the
+  capture into a silent hang instead of a failure that says what is wrong —
+  which is how a copy change went unnoticed for a while.
 
 ## Verification
 

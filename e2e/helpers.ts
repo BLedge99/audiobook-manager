@@ -58,16 +58,16 @@ export async function pickAnyProfile(page: Page): Promise<string> {
   if (await existing.isVisible().catch(() => false)) {
     const name = ((await existing.textContent()) ?? "").trim();
     await existing.click();
-    // "All audiobooks" is rendered only by the signed-in library view; the
+    // "Your audiobooks" is rendered only by the signed-in library view; the
     // heading "Audiobook Manager" also belongs to the login gate.
-    await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
     return name;
   }
   const name = `E2E Auto ${Date.now().toString(36)}`;
   await page.getByRole("button", { name: "+ Add profile" }).click();
   await page.getByPlaceholder("Name").fill(name);
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
   return name;
 }
 

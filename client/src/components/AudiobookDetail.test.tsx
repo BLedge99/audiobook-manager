@@ -167,6 +167,111 @@ describe("AudiobookDetail", () => {
     expect(precedes(player, favourite)).toBe(true);
   });
 
+  /**
+   * Spec 27: removing a book from the profile's library.
+   *
+   * The asymmetry is the point. Leaving the library is recoverable -- the book
+   * stays on the server and the Server library tab can add it back -- so it is
+   * not worth a question. Deleting the *download* is not recoverable, so that
+   * is the one worth asking about, and only when there is a download.
+   */
+  describe("removing a book from your library", () => {
+    it("offers the action when the book can be removed", () => {
+      render(
+        <AudiobookDetail book={book()} onClose={() => {}} onRemoveFromLibrary={async () => {}} />,
+      );
+      expect(screen.getByRole("button", { name: /remove from my library/i })).toBeInTheDocument();
+    });
+
+    it("offers nothing when the action is not available", () => {
+      render(<AudiobookDetail book={book()} onClose={() => {}} />);
+      expect(screen.queryByRole("button", { name: /remove from my library/i })).not.toBeInTheDocument();
+    });
+
+    it("removes straight away when there is no download to ask about", async () => {
+      const user = userEvent.setup();
+      const onRemoveFromLibrary = vi.fn(async () => undefined);
+      render(
+        <AudiobookDetail
+          book={book()}
+          onClose={() => {}}
+          onRemoveFromLibrary={onRemoveFromLibrary}
+          isDownloaded={false}
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: /remove from my library/i }));
+      await waitFor(() => expect(onRemoveFromLibrary).toHaveBeenCalledWith(7));
+      // No question was asked, because there was nothing irreversible to ask about.
+      expect(screen.queryByText(/Delete the download as well/)).not.toBeInTheDocument();
+    });
+
+    it("asks about the download before removing a downloaded book", async () => {
+      const user = userEvent.setup();
+      const onRemoveFromLibrary = vi.fn(async () => undefined);
+      render(
+        <AudiobookDetail
+          book={book()}
+          onClose={() => {}}
+          onRemoveFromLibrary={onRemoveFromLibrary}
+          isDownloaded={true}
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: /remove from my library/i }));
+
+      // The question names the consequence, and both answers are on screen.
+      expect(screen.getByText(/Delete the download as well/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /delete it/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /keep the download/i })).toBeInTheDocument();
+      // Nothing has been removed yet -- the question is still open.
+      expect(onRemoveFromLibrary).not.toHaveBeenCalled();
+    });
+
+    it("deletes the download too when that is the answer", async () => {
+      const user = userEvent.setup();
+      const onRemoveFromLibrary = vi.fn(async () => undefined);
+      const onDeleteDownload = vi.fn(async () => ({ failed: [] }));
+      render(
+        <AudiobookDetail
+          book={book()}
+          onClose={() => {}}
+          onRemoveFromLibrary={onRemoveFromLibrary}
+          onDeleteDownload={onDeleteDownload}
+          isDownloaded={true}
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: /remove from my library/i }));
+      await user.click(screen.getByRole("button", { name: /delete it/i }));
+
+      await waitFor(() => expect(onDeleteDownload).toHaveBeenCalledWith(7));
+      expect(onRemoveFromLibrary).toHaveBeenCalledWith(7);
+    });
+
+    it("keeps the download when that is the answer", async () => {
+      const user = userEvent.setup();
+      const onRemoveFromLibrary = vi.fn(async () => undefined);
+      const onDeleteDownload = vi.fn(async () => ({ failed: [] }));
+      render(
+        <AudiobookDetail
+          book={book()}
+          onClose={() => {}}
+          onRemoveFromLibrary={onRemoveFromLibrary}
+          onDeleteDownload={onDeleteDownload}
+          isDownloaded={true}
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: /remove from my library/i }));
+      await user.click(screen.getByRole("button", { name: /keep the download/i }));
+
+      await waitFor(() => expect(onRemoveFromLibrary).toHaveBeenCalledWith(7));
+      // The download was not touched.
+      expect(onDeleteDownload).not.toHaveBeenCalled();
+    });
+  });
+
   it("still renders the essentials the fold took over", async () => {
     render(
       <AudiobookDetail

@@ -72,6 +72,14 @@ export interface Audiobook {
   enrichmentStatus?: string | null;
   /** True when the current profile has favourited this book (spec 18). */
   favourited?: boolean;
+  /**
+   * Spec 27: is this book in the calling profile's library?
+   *
+   * Only the `/api/server-library` payload carries it. The library listing
+   * does not need it -- everything in that list is in the library by
+   * definition.
+   */
+  inLibrary?: boolean;
 }
 
 export interface LibraryRoot {

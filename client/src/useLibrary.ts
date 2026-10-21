@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
+import { sessionHeaders } from "./lib/api";
 import { copy } from "./copy";
 
 /**
@@ -32,9 +33,7 @@ type Conditional<T> = { changed: false } | { changed: true; data: T; etag: strin
  * one.
  */
 async function conditionalRequest<T>(url: string, etag: string | null): Promise<Conditional<T>> {
-  const profileId = typeof window !== "undefined" ? window.localStorage.getItem("profileId") : null;
-  const headers: Record<string, string> = {};
-  if (profileId) headers["x-profile-id"] = profileId;
+  const headers: Record<string, string> = { ...sessionHeaders() };
   if (etag) headers["If-None-Match"] = etag;
 
   const response = await fetch(url, { headers });
@@ -47,16 +46,14 @@ async function conditionalRequest<T>(url: string, etag: string | null): Promise<
     } catch {
       /* not json; the raw body is the best message available */
     }
-    throw new Error(message || `Request failed (${response.status})`);
+    throw new Error(message || copy.errors.requestFailed(response.status));
   }
   return { changed: true, data: (await response.json()) as T, etag: response.headers.get("etag") };
 }
 
 async function writeRequest<T>(url: string, method: string, body?: unknown): Promise<T> {
-  const profileId = typeof window !== "undefined" ? window.localStorage.getItem("profileId") : null;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...sessionHeaders() };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (profileId) headers["x-profile-id"] = profileId;
   const response = await fetch(url, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -70,7 +67,7 @@ async function writeRequest<T>(url: string, method: string, body?: unknown): Pro
     } catch {
       /* not json */
     }
-    throw new Error(message || `Request failed (${response.status})`);
+    throw new Error(message || copy.errors.requestFailed(response.status));
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
@@ -85,6 +82,17 @@ export function useLibrary() {
    */
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string>();
+
+  /**
+   * Spec 27: every book the server has, with a flag for the ones this
+   * profile holds.
+   *
+   * Fetched only when the Server library tab is opened. It is a second copy of
+   * the library, and the tab is the only thing that needs it.
+   */
+  const [serverLibrary, setServerLibrary] = useState<Audiobook[]>([]);
+  const [serverLibraryLoading, setServerLibraryLoading] = useState(false);
+  const [serverLibraryError, setServerLibraryError] = useState<string>();
 
   /**
    * The ETag of the last body we actually stored.
@@ -165,6 +173,63 @@ export function useLibrary() {
     await refresh();
   };
 
+  /**
+   * Spec 27: load the whole server library.
+   *
+   * Not conditional. The library listing already is, and this is a different
+   * question -- "what does the server have?" -- so the two never share a tag.
+   */
+  const loadServerLibrary = useCallback(async () => {
+    setServerLibraryLoading(true);
+    try {
+      setServerLibrary(await writeRequest<Audiobook[]>("/api/server-library", "GET"));
+      setServerLibraryError(undefined);
+    } catch (requestError) {
+      setServerLibraryError(
+        requestError instanceof Error ? requestError.message : copy.errors.loadAllBooks,
+      );
+    } finally {
+      setServerLibraryLoading(false);
+    }
+  }, []);
+
+  /**
+   * Spec 27: add a book to this profile's library.
+   *
+   * The flag flips locally first so the button responds to the tap, and the
+   * lists are refetched afterwards to reconcile. The refetch is what makes it
+   * correct: the library listing is a different payload, and a book that has
+   * just joined the profile is not in it until the server says so.
+   */
+  const addToLibrary = useCallback(
+    async (bookId: number) => {
+      setServerLibrary((current) =>
+        current.map((book) => (book.id === bookId ? { ...book, inLibrary: true } : book)),
+      );
+      await writeRequest(`/api/audiobooks/${bookId}/library`, "POST");
+      await refresh();
+      await loadServerLibrary();
+    },
+    [refresh, loadServerLibrary],
+  );
+
+  /**
+   * Spec 27: remove a book from this profile's library.
+   *
+   * The book stays on the server. Only this profile stops seeing it.
+   */
+  const removeFromLibrary = useCallback(
+    async (bookId: number) => {
+      setServerLibrary((current) =>
+        current.map((book) => (book.id === bookId ? { ...book, inLibrary: false } : book)),
+      );
+      await writeRequest(`/api/audiobooks/${bookId}/library`, "DELETE");
+      await refresh();
+      await loadServerLibrary();
+    },
+    [refresh, loadServerLibrary],
+  );
+
   useEffect(() => {
     if (!roots.some((root) => root.scanState?.status === "scanning")) return;
     const timer = window.setInterval(() => {
@@ -173,5 +238,21 @@ export function useLibrary() {
     return () => window.clearInterval(timer);
   }, [roots, refresh]);
 
-  return { audiobooks, roots, loading, refreshing, error, refresh, addRoot, removeRoot, scan };
+  return {
+    audiobooks,
+    roots,
+    loading,
+    refreshing,
+    error,
+    refresh,
+    addRoot,
+    removeRoot,
+    scan,
+    serverLibrary,
+    serverLibraryLoading,
+    serverLibraryError,
+    loadServerLibrary,
+    addToLibrary,
+    removeFromLibrary,
+  };
 }

@@ -239,7 +239,7 @@ test("closing the player updates the library without a manual refresh", async ({
 
     // And the refetch must not blank the shelf with the loading placeholder.
     await expect(page.getByText(/Loading library/)).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "All audiobooks" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
 
     // The server agrees with what the grid is now showing.
     const server = await page.request.get(`/api/audiobooks/${book.id}/progress`, { headers });

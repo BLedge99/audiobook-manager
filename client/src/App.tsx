@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Trash2, WifiOff, BookOpen } from "lucide-react";
+import { Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Trash2, WifiOff, BookOpen, Server } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
@@ -12,6 +12,7 @@ import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
 import { ReviewQueue } from "./components/ReviewQueue";
 import { SearchBar } from "./components/SearchBar";
+import { ServerLibrary } from "./components/ServerLibrary";
 import { Shelves } from "./components/Shelves";
 import { TagManager } from "./components/TagManager";
 import {
@@ -35,13 +36,14 @@ import { copy } from "./copy";
 import { Specks, ThemeToggle, Notice, MachineHead, StatusLegend, Btn, IconBtn, cn } from "./ui/primitives";
 import type { Audiobook } from "./types";
 
-type Tab = "library" | "browse" | "discover" | "favourites";
+type Tab = "library" | "browse" | "discover" | "favourites" | "server-library";
 
 const TABS: { id: Tab; label: string; icon: typeof Library }[] = [
   { id: "library", label: copy.tabs.library, icon: Library },
   { id: "browse", label: copy.tabs.browse, icon: LayoutGrid },
   { id: "discover", label: copy.tabs.discover, icon: Compass },
   { id: "favourites", label: copy.tabs.favourites, icon: Heart },
+  { id: "server-library", label: copy.tabs.serverLibrary, icon: Server },
 ];
 
 /**
@@ -60,7 +62,8 @@ function Mark() {
 }
 
 function App() {
-  const { audiobooks, roots, loading, refreshing, error, refresh, addRoot, removeRoot, scan } = useLibrary();
+  const library = useLibrary();
+  const { audiobooks, roots, loading, refreshing, error, refresh, addRoot, removeRoot, scan } = library;
   const device = useDeviceLibrary(isNativeShell());
   const browse = useBrowse();
   const discover = useDiscover();
@@ -349,7 +352,7 @@ function App() {
       setLabel("");
       setShowRootForm(false);
     } catch (requestError) {
-      window.alert(requestError instanceof Error ? requestError.message : copy.library.addFolderFailed);
+      window.alert(requestError instanceof Error ? requestError.message : copy.operator.libraryFolders.addFolderFailed);
     } finally {
       setWorking(false);
     }
@@ -357,7 +360,7 @@ function App() {
 
   const runScan = async (rootId?: number) => {
     setWorking(true);
-    try { await scan(rootId); } catch (requestError) { window.alert(requestError instanceof Error ? requestError.message : copy.library.scanFailed); } finally { setWorking(false); }
+    try { await scan(rootId); } catch (requestError) { window.alert(requestError instanceof Error ? requestError.message : copy.operator.libraryFolders.scanFailed); } finally { setWorking(false); }
   };
 
   return (
@@ -507,30 +510,39 @@ function App() {
                    refresh can never get here. */
                 <div className="panel panel--sunk px-6 py-20 text-center text-ink2">{copy.shell.loadingLibrary}</div>
               ) : (
-                <AudiobookGrid books={searchedBooks} {...gridProps} />
+                <AudiobookGrid
+                  books={searchedBooks}
+                  emptyMessage={copy.library.empty}
+                  emptyAction={
+                    <Btn variant="quiet" size="sm" onClick={() => openTab("server-library")}>
+                      <Server size={15} aria-hidden="true" /> {copy.library.chooseBooks}
+                    </Btn>
+                  }
+                  {...gridProps}
+                />
               )}
             </section>
 
             <section className="mt-12">
-              <MachineHead title={copy.library.foldersHeading} />
-              <p className="text-[13.5px] text-ink2">{copy.library.foldersIntro}</p>
+              <MachineHead title={copy.operator.libraryFolders.heading} />
+              <p className="text-[13.5px] text-ink2">{copy.operator.libraryFolders.intro}</p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Btn
                   variant="primary"
                   onClick={() => void runScan()}
                   disabled={working || !roots.length}
                 >
-                  <ScanLine size={18} aria-hidden="true" /> {copy.library.scanLibrary}
+                  <ScanLine size={18} aria-hidden="true" /> {copy.operator.libraryFolders.scanLibrary}
                 </Btn>
                 <Btn variant="quiet" size="sm" onClick={() => setShowRootForm((visible) => !visible)}>
-                  <FolderPlus size={17} aria-hidden="true" /> {copy.library.addFolder}
+                  <FolderPlus size={17} aria-hidden="true" /> {copy.operator.libraryFolders.addFolder}
                 </Btn>
               </div>
               {showRootForm && (
                 <form onSubmit={submitRoot} className="panel mb-4 grid gap-3 p-4 sm:grid-cols-[1fr_180px_auto]">
-                  <input value={path} onChange={(event) => setPath(event.target.value)} placeholder={copy.library.folderPathPlaceholder} required className="field" aria-label={copy.library.folderPathLabel} />
-                  <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder={copy.library.folderLabelPlaceholder} className="field" aria-label={copy.library.folderLabelLabel} />
-                  <Btn type="submit" disabled={working}>{copy.library.addFolder}</Btn>
+                  <input value={path} onChange={(event) => setPath(event.target.value)} placeholder={copy.operator.libraryFolders.folderPathPlaceholder} required className="field" aria-label={copy.operator.libraryFolders.folderPathLabel} />
+                  <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder={copy.operator.libraryFolders.folderLabelPlaceholder} className="field" aria-label={copy.operator.libraryFolders.folderLabelLabel} />
+                  <Btn type="submit" disabled={working}>{copy.operator.libraryFolders.addFolder}</Btn>
                 </form>
               )}
               {roots.length ? (
@@ -551,10 +563,10 @@ function App() {
                         {root.scanState?.message && <p className="mt-1 text-[12px] text-rasp-ink">{root.scanState.message}</p>}
                       </div>
                       <div className="ml-2 flex shrink-0 items-center gap-1">
-                        <IconBtn label={copy.library.scanFolder(root.label || root.path)} onClick={() => void runScan(root.id)} disabled={working}>
+                        <IconBtn label={copy.operator.libraryFolders.scanFolder(root.label || root.path)} onClick={() => void runScan(root.id)} disabled={working}>
                           <ScanLine size={16} aria-hidden="true" />
                         </IconBtn>
-                        <IconBtn label={copy.library.removeFolder(root.label || root.path)} onClick={() => void removeRoot(root.id)}>
+                        <IconBtn label={copy.operator.libraryFolders.removeFolder(root.label || root.path)} onClick={() => void removeRoot(root.id)}>
                           <Trash2 size={16} aria-hidden="true" />
                         </IconBtn>
                       </div>
@@ -562,14 +574,14 @@ function App() {
                   ))}
                 </div>
               ) : (
-                <p className="panel panel--sunk px-4 py-5 text-sm text-ink2">{copy.library.noFolders}</p>
+                <p className="panel panel--sunk px-4 py-5 text-sm text-ink2">{copy.operator.libraryFolders.noFolders}</p>
               )}
             </section>
 
             <div className="mt-8">
               {browse.enrichment && browse.enrichment.status !== "idle" && (
                 <Notice className="mb-4">
-                  {copy.library.enrichment(
+                  {copy.operator.enrichment.notice(
                     browse.enrichment.status,
                     browse.enrichment.processed,
                     browse.enrichment.queued,
@@ -597,7 +609,11 @@ function App() {
             {isFilterActive(filters) || search.trim().length > 0 ? (
               <section>
                 <MachineHead title={copy.browse.filteredHeading} count={`${filteredBooks.length} ${filteredBooks.length === 1 ? "title" : "titles"}`} />
-                <AudiobookGrid books={filteredBooks} {...gridProps} />
+                <AudiobookGrid
+                  books={filteredBooks}
+                  emptyMessage={copy.library.noMatches}
+                  {...gridProps}
+                />
               </section>
             ) : (
               <>
@@ -619,13 +635,27 @@ function App() {
 
         {tab === "discover" && <Discover discover={discover} hasFavourites={favouriteIds.size > 0} />}
 
+        {tab === "server-library" && (
+          <ServerLibrary
+            books={library.serverLibrary}
+            loading={library.serverLibraryLoading}
+            error={library.serverLibraryError}
+            onLoad={library.loadServerLibrary}
+            onAdd={library.addToLibrary}
+          />
+        )}
+
         {tab === "favourites" && (
           <section>
             <h2 className="text-[30px] leading-[1.05] sm:text-4xl">{copy.favourites.heading}</h2>
             <p className="mb-6 mt-2 max-w-xl text-ink2">
               {favouriteIds.size === 0 ? copy.favourites.empty : copy.favourites.count(favouriteIds.size)}
             </p>
-            <AudiobookGrid books={favouriteBooks} {...gridProps} />
+            <AudiobookGrid
+              books={favouriteBooks}
+              emptyMessage={copy.library.noFavourites}
+              {...gridProps}
+            />
           </section>
         )}
       </main>
@@ -643,6 +673,10 @@ function App() {
         onToggleFavourite={toggleFavourite}
         onFindSimilar={findSimilar}
         onBookUpdated={() => { void refresh(); void browse.refresh(); }}
+        /* Spec 27: removing a book from this profile's library. */
+        onRemoveFromLibrary={library.removeFromLibrary}
+        isDownloaded={isNativeShell() ? device.isDownloaded(selectedBook.id) : false}
+        onDeleteDownload={isNativeShell() ? device.remove : undefined}
         deviceAction={
           isNativeShell() ? (
             <DownloadButton

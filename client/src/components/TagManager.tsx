@@ -48,7 +48,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
       await action();
       onChanged();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : copy.tags.somethingWentWrong);
+      setError(actionError instanceof Error ? actionError.message : copy.operator.tags.somethingWentWrong);
     }
   };
 
@@ -67,22 +67,22 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
 
   return (
     <section aria-labelledby="tag-manager" className="panel p-4 sm:p-5">
-      <MachineHead id="tag-manager" title={copy.tags.heading} count={`${tags.length}`}>
+      <MachineHead id="tag-manager" title={copy.operator.tags.heading} count={`${tags.length}`}>
         <TagIcon size={20} className="shrink-0 text-rasp" aria-hidden="true" />
       </MachineHead>
-      <p className="text-[13.5px] text-ink2">{copy.tags.intro}</p>
+      <p className="text-[13.5px] text-ink2">{copy.operator.tags.intro}</p>
 
       <form onSubmit={create} className="mt-4 flex flex-wrap gap-2">
         <Field
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder={copy.tags.newTagPlaceholder}
-          aria-label={copy.tags.newTagLabel}
+          placeholder={copy.operator.tags.newTagPlaceholder}
+          aria-label={copy.operator.tags.newTagLabel}
           maxLength={40}
           className="min-w-0 flex-1"
         />
         <Btn type="submit" variant="primary">
-          <Plus size={15} aria-hidden="true" /> {copy.tags.add}
+          <Plus size={15} aria-hidden="true" /> {copy.operator.tags.add}
         </Btn>
       </form>
 
@@ -90,7 +90,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
       {message && <Notice tone="info" role="status" className="mt-3">{message}</Notice>}
 
       {tags.length === 0 ? (
-        <p className="panel panel--sunk mt-4 px-4 py-5 text-center text-[13.5px] text-ink2">{copy.tags.none}</p>
+        <p className="panel panel--sunk mt-4 px-4 py-5 text-center text-[13.5px] text-ink2">{copy.operator.tags.none}</p>
       ) : (
         <ul className="mt-4 grid gap-2">
           {tags.map((tag, index) => (
@@ -106,7 +106,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                 <Field
                   value={renameValue}
                   onChange={(event) => setRenameValue(event.target.value)}
-                  aria-label={copy.tags.renameLabel(tag.name)}
+                  aria-label={copy.operator.tags.renameLabel(tag.name)}
                   className="min-w-0 flex-1"
                 />
               ) : (
@@ -127,10 +127,10 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                       })
                     }
                   >
-                    {copy.tags.save}
+                    {copy.operator.tags.save}
                   </Btn>
                   <Btn size="sm" variant="quiet" onClick={() => setRenamingId(undefined)}>
-                    {copy.tags.cancel}
+                    {copy.operator.tags.cancel}
                   </Btn>
                 </>
               ) : (
@@ -140,12 +140,12 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                     variant="quiet"
                     onClick={() => { setRenamingId(tag.id); setRenameValue(tag.name); }}
                   >
-                    {copy.tags.rename}
+                    {copy.operator.tags.rename}
                   </Btn>
                   <Btn
                     size="sm"
                     variant="quiet"
-                    aria-label={copy.tags.deleteLabel(tag.name)}
+                    aria-label={copy.operator.tags.deleteLabel(tag.name)}
                     className="text-rasp-ink"
                     onClick={() => void run(async () => { await request(`/api/tags/${tag.id}`, { method: "DELETE" }); })}
                   >
@@ -160,30 +160,30 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
 
       {tags.length > 1 && (
         <div className="mt-5 border-t-2 border-dashed border-ink/20 pt-4">
-          <p className="font-display text-[16px] font-semibold text-ink">{copy.tags.mergeHeading}</p>
-          <p className="mt-1 text-[12.5px] text-ink3">{copy.tags.mergeIntro}</p>
+          <p className="font-display text-[16px] font-semibold text-ink">{copy.operator.tags.mergeHeading}</p>
+          <p className="mt-1 text-[12.5px] text-ink3">{copy.operator.tags.mergeIntro}</p>
           <div className="mt-3 flex flex-wrap items-end gap-2">
             <label className="min-w-0 text-[12px] font-bold text-ink3">
-              <span className="mb-1 block">{copy.tags.mergeFrom}</span>
+              <span className="mb-1 block">{copy.operator.tags.mergeFrom}</span>
               <select
-                aria-label={copy.tags.mergeLabel}
+                aria-label={copy.operator.tags.mergeLabel}
                 value={mergingId ?? ""}
                 onChange={(event) => setMergingId(event.target.value ? Number(event.target.value) : undefined)}
                 className={selectClass}
               >
-                <option value="">{copy.tags.chooseTag}</option>
+                <option value="">{copy.operator.tags.chooseTag}</option>
                 {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
               </select>
             </label>
             <label className="min-w-0 text-[12px] font-bold text-ink3">
-              <span className="mb-1 block">{copy.tags.mergeInto}</span>
+              <span className="mb-1 block">{copy.operator.tags.mergeInto}</span>
               <select
-                aria-label={copy.tags.mergeIntoLabel}
+                aria-label={copy.operator.tags.mergeIntoLabel}
                 value={mergeTarget}
                 onChange={(event) => setMergeTarget(event.target.value ? Number(event.target.value) : "")}
                 className={selectClass}
               >
-                <option value="">{copy.tags.chooseTag}</option>
+                <option value="">{copy.operator.tags.chooseTag}</option>
                 {tags
                   .filter((tag) => tag.id !== mergingId)
                   .map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
@@ -199,7 +199,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                     body: JSON.stringify({ targetTagId: mergeTarget }),
                   });
                   setMessage(
-                    copy.tags.merged(
+                    copy.operator.tags.merged(
                       tags.find((t) => t.id === mergingId)?.name ?? "",
                       tags.find((t) => t.id === mergeTarget)?.name ?? "",
                       moved.moved,
@@ -210,7 +210,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                 })
               }
             >
-              <GitMerge size={15} aria-hidden="true" /> {copy.tags.merge}
+              <GitMerge size={15} aria-hidden="true" /> {copy.operator.tags.merge}
             </Btn>
           </div>
         </div>

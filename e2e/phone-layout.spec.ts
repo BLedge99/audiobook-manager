@@ -67,7 +67,7 @@ test.describe("phone layout", () => {
       await page.goto("/");
       await login(page);
       await pickAnyProfile(page);
-      await expect(page.getByRole("heading", { name: /all audiobooks/i }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: /your audiobooks/i }).first()).toBeVisible();
 
       const result = await findOverflow(page);
       expect(
@@ -91,7 +91,7 @@ test.describe("phone layout", () => {
     await page.goto("/");
     await login(page);
     await pickAnyProfile(page);
-    await expect(page.getByRole("heading", { name: /all audiobooks/i }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /your audiobooks/i }).first()).toBeVisible();
 
     await page.locator("[data-book-id], article, button").filter({ hasText: /tracks/i }).first().click();
     const dialog = page.locator("div.fixed.inset-0 > article").first();
@@ -116,7 +116,7 @@ test.describe("phone layout", () => {
     await page.goto("/");
     await login(page);
       await pickAnyProfile(page);
-    await expect(page.getByRole("heading", { name: /all audiobooks/i }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /your audiobooks/i }).first()).toBeVisible();
 
     const firstCard = page.locator("[data-book-id], article, button").filter({ hasText: /tracks/i }).first();
     await firstCard.click();

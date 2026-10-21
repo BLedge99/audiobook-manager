@@ -3,44 +3,56 @@
  *
  * Spec 15b feature 7. The redesign introduced most of the interface copy in one
  * pass and it was never reviewed as a whole, so the same idea had three
- * different words depending on which file you were in. This file is the one
- * place that decides what the app says.
- *
- * ## Why a table and not a translation layer
- *
- * A localisation system would be the wrong tool here. The app is served to one
- * household, in one language, and what was actually wrong was not that strings
- * were scattered -- it was that nobody could read them all at once to judge
- * them. A single table makes the review possible, and it makes a wording
- * change a one-line edit instead of a component hunt.
+ * different words depending on which file you were in.
  *
  * ## The voice
  *
  * **Warm, plain and brief.** Recorded in `PRODUCT.md`.
  *
- * - Plain means the listener never meets the filesystem. No paths, no formats,
- *   no "syncing" (product principle 1).
- * - Warm means the app is a friendly machine, not a corporate portal. But the
- *   warmth is in the *word choice*, never in a joke and never at the cost of
- *   saying what happened.
- * - Brief means the shortest wording that still carries meaning, consequence
- *   and recovery. `clarify`'s rule: an error says what failed, why when that
- *   is known, and how to recover.
+ * ## The rule that matters most: write for the listener
  *
- * ## Rules this file holds to
+ * The app has two audiences. There is the **listener** -- someone who wants to
+ * find a book and press play -- and there is the **operator** -- whoever sets
+ * up the server, scans folders and fixes metadata. They read different
+ * screens, and they need different words.
  *
- * - **One noun, one verb, per concept.** "Favourite" is always "favourite"
- *   and never "like" or "starred". "Folder" is always "folder" and never
- *   "directory" or "library root" in front of a person.
- * - **Status colour never travels alone** (`DESIGN.md`). Every status word
- *   here pairs with a colour, never replaces one.
- * - **One ellipsis.** `…` (U+2026), never three dots. It was `…` in some
- *   files and `...` in others, which is invisible until two adjacent buttons
- *   disagree.
- * - **Complete, translatable sentences.** Interpolation is done with whole
- *   phrases and named parameters, so a translator can reorder them; no
- *   concatenated fragments.
+ * **A heading, an explanation or a hint must say why the listener is there
+ * and what they can do, in their terms. It must not describe what the system
+ * is doing.**
+ *
+ * The failure mode is a heading like *"Home server library — select books to
+ * add to user library"*. It is a perfectly good comment to a developer and
+ * useless to a person: it names the system's structure, and the person
+ * already knows why they opened a screen called "All books".
+ *
+ * The same screen, said to the listener: **"Select books to add to your
+ * library."**
+ *
+ * So this file is split in two:
+ *
+ * - **The top level is listener-facing.** Every string in it is something a
+ *   listener reads on an everyday screen. `copy.test.ts` checks these for
+ *   system jargon, and it fails the build when one appears.
+ * - **`copy.operator` is operator-facing.** The server address, the scans, the
+ *   metadata, the tags, the review queue. These screens are read by whoever
+ *   maintains the household's server, and they may say "metadata" and
+ *   "enrichment" because that is genuinely what those screens are about.
+ *
+ * A string that is read by both goes in the listener tier, and is written so
+ * that it works for someone who does not know the word.
+ *
+ * ## Other rules this file holds to
+ *
+ * - **One word per concept, everywhere.** A saved title the person likes is a
+ *   **favourite**, not a "like" or a "star".
+ * - **Status colour never travels alone** (`DESIGN.md`). Every status colour is
+ *   paired with a written label.
+ * - **One ellipsis character:** `…`, never three dots.
  * - **No exclamation marks.** A confirmation is a fact, not an event.
+ * - **Complete, translatable sentences.** Numbers and variables are passed as
+ *   values, not spliced into fragments, so a translator can reorder them.
+ * - **An error says what failed, why when that is known, and how to recover.**
+ *   A status code is never the whole message.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -48,7 +60,7 @@
 /* -------------------------------------------------------------------------- */
 
 /**
- * Count first, then the noun: "1 title", "12 titles".
+ * Count first, then the noun: "1 book", "12 books".
  *
  * In one place so pluralisation is consistent everywhere, and so it can be
  * replaced wholesale if the app ever speaks another language. The irregular
@@ -77,7 +89,7 @@ export function verbFor(count: number, one: string, many: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/* brand                                                                       */
+/* listener-facing copy                                                        */
 /* -------------------------------------------------------------------------- */
 
 export const copy = {
@@ -93,10 +105,6 @@ export const copy = {
     footer: "Audiobook Manager · local-first listening",
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* shared vocabulary                                                       */
-  /* ---------------------------------------------------------------------- */
-
   /**
    * The status words, and only these. Every use of a status colour in the app
    * is paired with one of these, which is what stops colour from having to
@@ -106,7 +114,13 @@ export const copy = {
     done: "Finished",
     reading: "In progress",
     fresh: "Not started",
-    changed: "Metadata updated",
+    /**
+     * The badge on a book whose details were changed and want a look.
+     *
+     * "Details updated", not "Metadata updated": this badge sits on the
+     * listener's own bookshelf, and "metadata" is the system's word for it.
+     */
+    changed: "Details updated",
   },
 
   theme: {
@@ -114,9 +128,6 @@ export const copy = {
     dark: "Switch to dark theme",
     auto: "Follow the device theme",
   },
-
-  /** The one word for the shelf, used everywhere a shelf is offered. */
-  shelf: "shelf",
 
   /**
    * Phrases that more than one surface uses.
@@ -133,20 +144,22 @@ export const copy = {
   /** The action on a candidate row. The same word in the review queue and in
    *  the book detail's metadata lookup. */
   use: "Use this",
-  /**
-   * The example home-server address.
-   *
-   * One entry, because it is shown twice -- on the first-run screen and as
-   * the Settings field's placeholder -- and the two must not drift apart into
-   * two different "example" addresses.
-   */
-  serverExample: "http://192.168.1.203:3000",
-  /** The label for the server-address field, in both places it appears. */
-  serverAddressLabel: "Server address",
 
-  /* ---------------------------------------------------------------------- */
-  /* shell: header, navigation, tabs                                         */
-  /* ---------------------------------------------------------------------- */
+  tabs: {
+    library: "Library",
+    browse: "Browse",
+    discover: "Discover",
+    favourites: "Favourites",
+    /**
+     * Spec 27: the tab that lists everything the household has.
+     *
+     * "All books", not "Server": the listener is not looking for a server,
+     * they are looking for more books to add.
+     */
+    serverLibrary: "All books",
+    /** The nav's accessible name. One nav, two placements, one name. */
+    sections: "Sections",
+  },
 
   shell: {
     settings: "Settings",
@@ -155,48 +168,35 @@ export const copy = {
     /** The short form, shown beside the spinning icon while a refresh runs. */
     refreshingShort: "Refreshing…",
     loadingLibrary: "Loading library…",
-    /** Under the wordmark: "12 titles · 2 folders". */
-    libraryCount: (titles: number, folders: number) =>
-      folders ? `${plural(titles, "title")} · ${plural(folders, "folder")}` : plural(titles, "title"),
+    /** Under the wordmark: "12 books · 2 folders". */
+    libraryCount: (books: number, folders: number) =>
+      folders ? `${plural(books, "book")} · ${plural(folders, "folder")}` : plural(books, "book"),
     offlineBanner: (books: number) =>
       `Offline — showing the ${plural(books, "book")} downloaded to this device.`,
   },
 
-  tabs: {
-    library: "Library",
-    browse: "Browse",
-    discover: "Discover",
-    favourites: "Favourites",
-    /** The nav's accessible name. One nav, two placements, one name. */
-    sections: "Sections",
-  },
-
-  /* ---------------------------------------------------------------------- */
-  /* library tab                                                             */
-  /* ---------------------------------------------------------------------- */
-
   library: {
-    heading: "All audiobooks",
-    countInLibrary: (count: number) => `${plural(count, "title")} in your library`,
-    countMatching: (count: number) => `${plural(count, "title")} matching your search`,
-    empty: "Your library is empty. Add a folder and run a scan to discover audiobooks.",
-
-    foldersHeading: "Library folders",
-    foldersIntro: "Scan local folders to bring your audiobook metadata and artwork into one calm shelf.",
-    scanLibrary: "Scan library",
-    addFolder: "Add folder",
-    folderPathLabel: "Library folder path",
-    folderPathPlaceholder: "/data/audiobooks",
-    folderLabelLabel: "Library folder label",
-    folderLabelPlaceholder: "Label (optional)",
-    noFolders: "No folders configured yet.",
-    scanFolder: (name: string) => `Scan ${name}`,
-    removeFolder: (name: string) => `Remove ${name}`,
-
-    addFolderFailed: "Unable to add the folder.",
-    scanFailed: "Unable to start the scan.",
-    enrichment: (status: string, processed: number, queued: number, applied: number, review: number) =>
-      `Enrichment ${status}: ${processed}/${queued} checked · ${applied} applied · ${review} need review`,
+    /**
+     * "Your audiobooks", not "All audiobooks".
+     *
+     * There are two shelves now -- the listener's and the household's -- and
+     * "all" is exactly the word that used to mean the whole server.
+     */
+    heading: "Your audiobooks",
+    countInLibrary: (count: number) => `${plural(count, "book")} in your library`,
+    countMatching: (count: number) => `${plural(count, "book")} matching your search`,
+    /**
+     * Spec 27: an empty profile library has two possible causes -- the
+     * household has no audiobooks yet, or this profile has not picked any --
+     * and the message names both, because the next action differs.
+     */
+    empty:
+      "Your library is empty. Add some of the books the household already has, or add a folder of audiobooks and scan it.",
+    chooseBooks: "Choose books",
+    /** The Favourites tab is empty, but the library is not. */
+    noFavourites: "No favourites yet. Tap the heart on a book to keep it here.",
+    /** The Browse tab has no matches, but the library is not empty. */
+    noMatches: "Nothing matches those filters. Try clearing one.",
   },
 
   continueListening: {
@@ -218,18 +218,23 @@ export const copy = {
     inYours: "In your favourites",
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* browse tab                                                              */
-  /* ---------------------------------------------------------------------- */
-
   browse: {
     heading: "Browse",
-    intro: "Grouped by genre and series, using the metadata your library was enriched with.",
+    intro: "Grouped by genre and series, from the details your books already have.",
     filteredHeading: "Filtered results",
     seriesHeading: "Series",
+    /**
+     * "Shelves" is the app's own metaphor -- the visual world is a capsule
+     * vending machine, and a vending machine has shelves -- so a listener who
+     * sees one already knows what it means. What is *not* listener-facing is
+     * the mechanism: "enrichment assigns genres from the curated taxonomy" is
+     * a description of what the server does, not of what the person is looking
+     * at.
+     */
     noGenreShelves:
-      "No genre shelves yet. Enrichment assigns genres from the curated taxonomy — check the review queue for books still unmatched.",
-    noShelves: "No shelves yet. Run a scan and enrichment to populate genres.",
+      "No genre shelves yet. Books get a genre once their details are filled in — check the review queue for the ones still waiting.",
+    noShelves:
+      "No shelves yet. Add a folder of audiobooks and scan it, and they fill in as the details arrive.",
   },
 
   filters: {
@@ -261,16 +266,16 @@ export const copy = {
     matches: (count: number) => `${plural(count, "match", "matches")} for`,
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* discover tab                                                            */
-  /* ---------------------------------------------------------------------- */
-
   discover: {
     heading: "Discover",
-    intro: "Titles you do not own yet, matched on the genres of the books you favourite.",
+    /**
+     * "Picked from the ones you favourite", not "matched on the genres of".
+     * The listener wants to know the suggestions came from their own taste,
+     * not how the matching works.
+     */
+    intro: "Books you do not have yet, picked from the ones you favourite.",
     refresh: "Refresh",
-    needsFavourites:
-      "Favourite a few books and Discover will use them to suggest titles you do not own yet.",
+    needsFavourites: "Favourite a few books and Discover will suggest books you do not have yet.",
     showMore: "Show 5 more",
     findingMore: "Finding more…",
     showing: (shown: number, total: number) => `Showing ${shown} of ${total}`,
@@ -291,125 +296,75 @@ export const copy = {
      */
     notAnAudiobook: "Book — not an audiobook yet",
     offline: "You're offline. Discover needs a connection to suggest new titles — your library still works.",
-    notEnoughMetadata: "Not enough metadata yet.",
+    notEnoughMetadata: "Not enough details about your books yet.",
     noNewTitles: "No new titles found yet.",
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* favourites tab                                                          */
-  /* ---------------------------------------------------------------------- */
-
   favourites: {
     heading: "Favourites",
-    empty: "Books you favourite are private to your profile and seed your Discover suggestions.",
+    /**
+     * "They help Discover find books for you", not "seed your Discover
+     * suggestions". "Seed" is what the system does; the listener wants to
+     * know what their favourites are good for.
+     */
+    empty: "Favourites are private to your profile, and they help Discover find books for you.",
     /** "3 books, for this profile only." */
     count: (count: number) => `${plural(count, "book")}, for this profile only.`,
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* book detail                                                             */
-  /* ---------------------------------------------------------------------- */
-
   detail: {
     close: "Close details",
     bookDetails: "Book details",
-
-    metadataLookup: "Find metadata online",
-    metadataLookingUp: "Looking up…",
-    metadataFailed: "Metadata lookup failed. Try again later.",
-    noMatches: "No matches found for this title.",
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* tag suite (the "Book details" fold)                                     */
-  /* ---------------------------------------------------------------------- */
-
-  tagSuite: {
-    heading: "Details",
-    edit: "Edit",
-    save: "Save",
-    cancel: "Cancel",
-    reset: "Reset",
-    resetHelp: "Clear your overrides so enrichment and embedded tags can update these again",
-    nothingChanged: "Nothing changed.",
-    saved: "Saved. These values now win over anything the providers suggest.",
-    saveFailed: "Could not save the details. Try again.",
-    yours: "Yours",
-    /** Where a value came from, when the provider did not say. */
-    embedded: "embedded",
-    fields: {
-      title: "Title",
-      author: "Author",
-      publisher: "Publisher",
-      year: "Year",
-      series: "Series",
-      seriesPosition: "Series number",
-      language: "Language",
-      subtitle: "Subtitle",
-      description: "Description",
-    },
-    seriesPlaceholder: "e.g. The Expanse",
-    seriesPositionPlaceholder: "e.g. 2 or 2.5",
-    narrators: "Narrators",
-    contributors: "Contributors",
-    genres: "Genres",
-    yourTags: "Your tags",
+  /**
+   * Spec 27: removing a book from the profile's library.
+   *
+   * The library part is recoverable -- the book stays on the server and the
+   * "All books" tab can add it back -- so it is not worth a confirmation. The
+   * *download* is not recoverable, so that is the one thing worth asking
+   * about, and the question is only asked when there is a download to ask
+   * about.
+   */
+  removeBook: {
+    action: "Remove from my library",
+    question: "Remove this book from your library?",
+    alsoDelete: "It is downloaded to this device. Delete the download as well?",
+    keepDownload: "Keep the download",
+    deleteDownload: "Delete it",
+    deleteFailed: "The book left your library, but the download could not be deleted.",
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* review queue                                                            */
-  /* ---------------------------------------------------------------------- */
-
-  review: {
-    heading: "Needs your review",
-    intro: (count: number) =>
-      `${plural(count, "book")} ${verbFor(count, "has", "have")} a possible match that was not confident enough to apply.`,
-    checking: (title: string) => `Checking ${title}…`,
-    keepWhatIHave: "Keep what I have",
-    matchConfidence: "Match confidence",
-    matchPercent: (percent: number) => `${percent}% match`,
-    strongMatch: "Strong match",
-    possibleMatch: "Possible match",
-    weakMatch: "Weak match",
-    currentlyShownAs: (title: string, author: string) => `Currently shown as “${title}” by ${author}.`,
-    failed: "Something went wrong. Try again.",
-    actionFailed: "Could not complete that. Try again.",
-    loadFailed: "Could not load the matches. Try again.",
-    series: (name: string) => `Series: ${name}`,
-  },
-
-  /* ---------------------------------------------------------------------- */
-  /* tag manager                                                             */
-  /* ---------------------------------------------------------------------- */
-
-  tags: {
-    heading: "Tags",
-    intro: "Your own labels, shared across the household. Assign them to any book from its detail page.",
-    newTagPlaceholder: "New tag, e.g. bedtime",
-    newTagLabel: "New tag name",
+  /**
+   * Spec 27 — the tab that answers "what else is there to listen to?".
+   *
+   * The heading is the rule in action: not "Server library", which describes
+   * the system's structure, but "Select books to add to your library", which
+   * tells the listener what they are here to do.
+   */
+  serverLibrary: {
+    heading: "Select books to add to your library",
+    intro: "Every audiobook the household has. Add the ones you want.",
+    loading: "Finding the books…",
+    empty: "No audiobooks have been added yet. Add a folder of audiobooks and scan it to fill the library.",
+    allAudiobooks: "All audiobooks",
+    /** "3 of 12 in your library" */
+    heldCount: (held: number, total: number) => `${held} of ${total} in your library`,
     add: "Add",
-    none: "No tags yet.",
-    save: "Save",
-    cancel: "Cancel",
-    rename: "Rename",
-    renameLabel: (name: string) => `Rename ${name}`,
-    deleteLabel: (name: string) => `Delete ${name}`,
-    mergeHeading: "Merge tags",
-    mergeIntro: "Combine two tags into one. Every book carrying the source tag moves to the target.",
-    mergeFrom: "Merge",
-    mergeInto: "Into",
-    chooseTag: "Choose a tag",
-    mergeLabel: "Tag to merge",
-    mergeIntoLabel: "Merge into tag",
-    merge: "Merge",
-    merged: (from: string, to: string, moved: number) =>
-      `Merged ${from} into ${to} — ${plural(moved, "book")} moved.`,
-    somethingWentWrong: "Something went wrong.",
+    inYourLibrary: "In your library",
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* player                                                                  */
-  /* ---------------------------------------------------------------------- */
+  download: {
+    download: "Download",
+    resume: "Resume download",
+    downloading: (percent: number) => `Downloading ${percent}%`,
+    removeFromDevice: "Remove from device",
+    onThisDevice: (bytes: string) => `On this device · ${bytes}`,
+    progressLabel: (title: string) => `Download progress for ${title}`,
+    removedWithErrors: (count: number) =>
+      `Removed from the library, but ${plural(count, "file")} could not be deleted.`,
+    removeFailed: "Could not remove the book.",
+  },
 
   player: {
     region: "Audiobook player",
@@ -432,26 +387,6 @@ export const copy = {
     playbackCouldNotStart: "Playback could not start. Try again.",
     intoThis: (kind: "track" | "chapter") => `into this ${kind}`,
   },
-
-  /* ---------------------------------------------------------------------- */
-  /* download / device                                                       */
-  /* ---------------------------------------------------------------------- */
-
-  download: {
-    download: "Download",
-    resume: "Resume download",
-    downloading: (percent: number) => `Downloading ${percent}%`,
-    removeFromDevice: "Remove from device",
-    onThisDevice: (bytes: string) => `On this device · ${bytes}`,
-    progressLabel: (title: string) => `Download progress for ${title}`,
-    removedWithErrors: (count: number) =>
-      `Removed from the library, but ${plural(count, "file")} could not be deleted.`,
-    removeFailed: "Could not remove the book.",
-  },
-
-  /* ---------------------------------------------------------------------- */
-  /* gates                                                                   */
-  /* ---------------------------------------------------------------------- */
 
   login: {
     heading: "Sign in",
@@ -482,6 +417,10 @@ export const copy = {
     addProfileCompact: "+ Profile",
     addShort: "Add",
     duplicate: "A profile with that name already exists.",
+    /**
+     * The status code is in parentheses, not in front: the listener needs to
+     * know what to do next, and an operator can read the code in the logs.
+     */
     loadFailed: (status: number) => `Could not load the profiles (HTTP ${status}). Try again in a moment.`,
     createFailed: (status: number) => `Could not create the profile (HTTP ${status}). Try again in a moment.`,
     createUnreachable: (detail: string) => `Could not create the profile. ${detail}`,
@@ -493,25 +432,6 @@ export const copy = {
     deleteActive: "Delete active profile",
   },
 
-  serverSetup: {
-    heading: "Connect to your library",
-    intro: "Enter the address of the server at home. You only do this once.",
-    /**
-     * The example is separate so the address can be set in a `<code>` without
-     * splitting a sentence into two fragments -- `clarify` asks for complete
-     * translatable messages, and a sentence broken around a styled run is
-     * exactly the kind of thing a translator cannot reorder.
-     */
-    exampleLead: "For example",
-    addressPlaceholder: "192.168.1.203:3000",
-    submit: "Connect",
-    checking: "Checking…",
-    enterAddress: "Enter a server address.",
-    unreachable: (address: string, detail: string) =>
-      `Could not reach ${address}. Check the address, and that the phone is on the home WiFi. (${detail})`,
-    networkError: "network error",
-  },
-
   offline: {
     heading: "Can't reach the server",
     withBooks: "Choose a profile to listen to the books already on this phone.",
@@ -521,71 +441,6 @@ export const copy = {
     checking: "Checking…",
     connecting: "Connecting…",
   },
-
-  /* ---------------------------------------------------------------------- */
-  /* settings                                                                */
-  /* ---------------------------------------------------------------------- */
-
-  settings: {
-    heading: "Home server",
-    close: "Close",
-    addressHelp:
-      "On the home WiFi. If the router gives the server a new address, change it here — no reinstall needed.",
-    saveAndTest: "Save and test",
-    checking: "Checking…",
-    connected: "Connected.",
-    enterAddress: "Enter a server address.",
-    unreachable: (address: string, detail: string) =>
-      `Could not reach ${address}. Check the address and that the phone is on the home WiFi. (${detail})`,
-    networkError: "network error",
-
-    deviceHeading: "On this device",
-    booksDownloaded: (count: number) => `${plural(count, "book")} downloaded`,
-    serverUnreachable: "The server is unreachable. Downloaded books still play.",
-    coversCached: (bytes: string) => `${bytes} of cover art cached, so covers still show with no connection.`,
-    clearCovers: "Clear cached covers",
-    coversCleared: "Cached covers cleared. They will come back as you browse.",
-  },
-
-  /* ---------------------------------------------------------------------- */
-  /* errors that cross module boundaries                                     */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * Messages thrown from the API layer, the device bridge and the data hooks.
-   *
-   * They are here because they **reach the screen**: the download button
-   * shows the thrown message verbatim, and the hooks' fallbacks are rendered
-   * in a `Notice`. A message that is only ever logged can stay where it is;
-   * one a person reads cannot.
-   */
-  errors: {
-    loadLibrary: "Unable to load the library. Try again.",
-    loadDiscover: "Unable to load Discover. Try again.",
-    loadSimilar: "Unable to find similar books. Try again.",
-    loadMore: "Unable to load more suggestions. Try again.",
-    loadTags: "Unable to load the tags. Try again.",
-    requestFailed: (status: number) =>
-      `The server could not complete that request (HTTP ${status}). Try again.`,
-    serverAddress: "Enter a server address, for example http://192.168.1.203:3000",
-
-    bridgeNotReady: "The device bridge is not ready yet. Restart the app and try again.",
-    filesystemUnavailable: "The Filesystem plugin is unavailable. Reinstall the app and try again.",
-    fileTransferUnavailable: "The FileTransfer plugin is unavailable. Reinstall the app and try again.",
-    downloadRejected: (status: number) =>
-      `The server rejected the download (HTTP ${status}). Sign in again and retry.`,
-    trackFailed: (status: number) => `The server returned HTTP ${status} for this track.`,
-    downloadFailed: "The download failed.",
-    downloadNoData: "The download finished but wrote no data. The server may have refused the request.",
-    downloadIncomplete: (bytes: number, expected: number) =>
-      `The download is incomplete (${bytes} of ${expected} bytes). Retry to finish it.`,
-    noTracks: (title: string) => `"${title}" has no tracks to download.`,
-    sizeUnreadable: (detail: string) => `Could not read the size of the downloaded file: ${detail}`,
-  },
-
-  /* ---------------------------------------------------------------------- */
-  /* position and series: the maths modules speak too                       */
-  /* ---------------------------------------------------------------------- */
 
   /**
    * The strings `lib/position.ts` produces.
@@ -610,6 +465,206 @@ export const copy = {
   series: {
     /** "Book 2 of 5". */
     positionInSeries: (position: number, total: number) => `Book ${position} of ${total}`,
+  },
+
+  /**
+   * Messages that reach the screen.
+   *
+   * They are here because the download button shows the thrown message
+   * verbatim, and the hooks' fallbacks are rendered in a `Notice`. A message
+   * that is only ever logged can stay in the operator tier; one a person reads
+   * cannot.
+   */
+  errors: {
+    loadLibrary: "Unable to load the library. Try again.",
+    loadAllBooks: "Unable to read all the books. Try again.",
+    loadDiscover: "Unable to load Discover. Try again.",
+    loadSimilar: "Unable to find similar books. Try again.",
+    loadMore: "Unable to load more suggestions. Try again.",
+    loadTags: "Unable to load the tags. Try again.",
+    /** The status code is secondary, never the whole message. */
+    requestFailed: (status: number) => `Something went wrong (HTTP ${status}). Try again.`,
+    addToLibrary: "Could not add the book to your library. Try again.",
+    removeFromLibrary: "Could not remove the book from your library. Try again.",
+    bridgeNotReady: "The device bridge is not ready yet. Restart the app and try again.",
+    filesystemUnavailable: "The Filesystem plugin is unavailable. Reinstall the app and try again.",
+    fileTransferUnavailable: "The FileTransfer plugin is unavailable. Reinstall the app and try again.",
+    downloadRejected: (status: number) =>
+      `The server rejected the download (HTTP ${status}). Sign in again and retry.`,
+    trackFailed: (status: number) => `The server returned HTTP ${status} for this track.`,
+    downloadFailed: "The download failed.",
+    downloadNoData: "The download finished but wrote no data. The server may have refused the request.",
+    downloadIncomplete: (bytes: number, expected: number) =>
+      `The download is incomplete (${bytes} of ${expected} bytes). Retry to finish it.`,
+    noTracks: (title: string) => `"${title}" has no tracks to download.`,
+    sizeUnreadable: (detail: string) => `Could not read the size of the downloaded file: ${detail}`,
+  },
+
+  /* ---------------------------------------------------------------------- */
+  /* operator-facing copy                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The screens the person who maintains the household's server reads.
+   *
+   * These may say "metadata", "enrichment" and "scan", because that is
+   * genuinely what those screens are about -- the operator is the one person
+   * who needs those words. The listener tier above is where the rule is
+   * enforced.
+   */
+  operator: {
+    /**
+     * The example home-server address.
+     *
+     * One entry, because it is shown twice -- on the first-run screen and as
+     * the Settings field's placeholder -- and the two must not drift apart
+     * into two different "example" addresses.
+     */
+    serverExample: "http://192.168.1.203:3000",
+    /** The label for the server-address field, in both places it appears. */
+    serverAddressLabel: "Server address",
+
+    libraryFolders: {
+      heading: "Library folders",
+      intro: "Add a folder of audiobooks and the library fills in with the details and cover art.",      scanLibrary: "Scan library",
+      addFolder: "Add folder",
+      folderPathLabel: "Library folder path",
+      folderPathPlaceholder: "/data/audiobooks",
+      folderLabelLabel: "Library folder label",
+      folderLabelPlaceholder: "Label (optional)",
+      noFolders: "No folders configured yet.",
+      scanFolder: (name: string) => `Scan ${name}`,
+      removeFolder: (name: string) => `Remove ${name}`,
+      addFolderFailed: "Unable to add the folder.",
+      scanFailed: "Unable to start the scan.",
+    },
+
+    enrichment: {
+      notice: (status: string, processed: number, queued: number, applied: number, review: number) =>
+        `Enrichment ${status}: ${processed}/${queued} checked · ${applied} applied · ${review} need review`,
+    },
+
+    metadata: {
+      lookup: "Find metadata online",
+      lookingUp: "Looking up…",
+      failed: "Metadata lookup failed. Try again later.",
+      noMatches: "No matches found for this title.",
+    },
+
+    tagSuite: {
+      heading: "Details",
+      edit: "Edit",
+      save: "Save",
+      cancel: "Cancel",
+      reset: "Reset",
+      resetHelp: "Clear your overrides so enrichment and embedded tags can update these again",
+      nothingChanged: "Nothing changed.",
+      saved: "Saved. These values now win over anything the providers suggest.",
+      saveFailed: "Could not save the details. Try again.",
+      yours: "Yours",
+      /** Where a value came from, when the provider did not say. */
+      embedded: "embedded",
+      fields: {
+        title: "Title",
+        author: "Author",
+        publisher: "Publisher",
+        year: "Year",
+        series: "Series",
+        seriesPosition: "Series number",
+        language: "Language",
+        subtitle: "Subtitle",
+        description: "Description",
+      },
+      seriesPlaceholder: "e.g. The Expanse",
+      seriesPositionPlaceholder: "e.g. 2 or 2.5",
+      narrators: "Narrators",
+      contributors: "Contributors",
+      genres: "Genres",
+      yourTags: "Your tags",
+    },
+
+    review: {
+      heading: "Needs your review",
+      intro: (count: number) =>
+        `${plural(count, "book")} ${verbFor(count, "has", "have")} a possible match that was not confident enough to apply.`,
+      checking: (title: string) => `Checking ${title}…`,
+      keepWhatIHave: "Keep what I have",
+      matchConfidence: "Match confidence",
+      matchPercent: (percent: number) => `${percent}% match`,
+      strongMatch: "Strong match",
+      possibleMatch: "Possible match",
+      weakMatch: "Weak match",
+      currentlyShownAs: (title: string, author: string) => `Currently shown as “${title}” by ${author}.`,
+      failed: "Something went wrong. Try again.",
+      actionFailed: "Could not complete that. Try again.",
+      loadFailed: "Could not load the matches. Try again.",
+      series: (name: string) => `Series: ${name}`,
+    },
+
+    tags: {
+      heading: "Tags",
+      intro: "Your own labels, shared across the household. Assign them to any book from its detail page.",
+      newTagPlaceholder: "New tag, e.g. bedtime",
+      newTagLabel: "New tag name",
+      add: "Add",
+      none: "No tags yet.",
+      save: "Save",
+      cancel: "Cancel",
+      rename: "Rename",
+      renameLabel: (name: string) => `Rename ${name}`,
+      deleteLabel: (name: string) => `Delete ${name}`,
+      mergeHeading: "Merge tags",
+      mergeIntro: "Combine two tags into one. Every book carrying the source tag moves to the target.",
+      mergeFrom: "Merge",
+      mergeInto: "Into",
+      chooseTag: "Choose a tag",
+      mergeLabel: "Tag to merge",
+      mergeIntoLabel: "Merge into tag",
+      merge: "Merge",
+      merged: (from: string, to: string, moved: number) =>
+        `Merged ${from} into ${to} — ${plural(moved, "book")} moved.`,
+      somethingWentWrong: "Something went wrong. Try again.",
+    },
+
+    settings: {
+      heading: "Home server",
+      close: "Close",
+      addressHelp:
+        "On the home WiFi. If the router gives the server a new address, change it here — no reinstall needed.",
+      saveAndTest: "Save and test",
+      checking: "Checking…",
+      connected: "Connected.",
+      enterAddress: "Enter a server address.",
+      networkError: "network error",
+      unreachable: (address: string, detail: string) =>
+        `Could not reach ${address}. Check the address and that the phone is on the home WiFi. (${detail})`,
+      deviceHeading: "On this device",
+      booksDownloaded: (count: number) => `${plural(count, "book")} downloaded`,
+      serverUnreachable: "The server is unreachable. Downloaded books still play.",
+      coversCached: (bytes: string) => `${bytes} of cover art cached, so covers still show with no connection.`,
+      clearCovers: "Clear cached covers",
+      coversCleared: "Cached covers cleared. They will come back as you browse.",
+    },
+
+    serverSetup: {
+      heading: "Connect to your library",
+      intro: "Enter the address of the server at home. You only do this once.",
+      /**
+       * The example is separate so the address can be set in a `<code>` without
+       * splitting a sentence into two fragments -- `clarify` asks for complete
+       * translatable messages, and a sentence broken around a styled run is
+       * exactly the kind of thing a translator cannot reorder.
+       */
+      exampleLead: "For example",
+      addressLabel: "Server address",
+      addressPlaceholder: "192.168.1.203:3000",
+      submit: "Connect",
+      checking: "Checking…",
+      enterAddress: "Enter a server address.",
+      networkError: "network error",
+      unreachable: (address: string, detail: string) =>
+        `Could not reach ${address}. Check the address, and that the phone is on the home WiFi. (${detail})`,
+    },
   },
 } as const;
 
@@ -646,14 +701,14 @@ export const primitiveCopy = {
  * |------------|-----------------|------------------------------|
  * | a saved title the person likes | favourite | like, starred, bookmarked |
  * | a directory of audiobooks      | folder    | directory, path, root      |
- * | a suggestion from a catalogue  | title     | book, item, record         |
+ * | a suggestion from a catalogue  | book      | title, item, record        |
  * | a thing to download            | download  | sync, fetch, copy          |
  * | a person in the household      | profile   | user, account, member      |
  */
 export const glossary = {
   favourite: "favourite",
   folder: "folder",
-  title: "title",
+  book: "book",
   download: "download",
   profile: "profile",
 } as const;

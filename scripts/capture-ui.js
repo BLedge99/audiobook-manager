@@ -120,7 +120,13 @@ async function signIn(page) {
   // Reloading with the profile already stored is what happens when a listener
   // comes back to the app.
   await page.reload();
-  await page.getByRole("heading", { name: /all audiobooks/i }).first().waitFor();
+  // The library tab's heading, not "All audiobooks" -- that is the *server*
+  // shelf's list heading now that there are two shelves (spec 27).
+  //
+  // The timeout is deliberate. `waitFor()` with no timeout waits forever, so a
+  // renamed heading turns the capture into a silent hang instead of a failure
+  // that says what is wrong.
+  await page.getByRole("heading", { name: /your audiobooks/i }).first().waitFor({ timeout: 30_000 });
   await page.waitForTimeout(1400); // let the dispense entrance settle
   step("signed in");
 }

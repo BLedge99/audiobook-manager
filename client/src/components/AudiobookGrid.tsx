@@ -1,4 +1,5 @@
 import { Compass, Headphones, Clock3 } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
 import {
@@ -259,6 +260,8 @@ export function AudiobookGrid({
   onToggleFavourite,
   onFindSimilar,
   changedIds,
+  emptyMessage,
+  emptyAction,
 }: {
   books: Audiobook[];
   onSelect: (book: Audiobook) => void;
@@ -266,11 +269,22 @@ export function AudiobookGrid({
   onToggleFavourite?: (bookId: number) => void;
   onFindSimilar?: (book: Audiobook) => void;
   changedIds?: Set<number>;
+  /**
+   * What to say when there is nothing to show.
+   *
+   * The default is about an empty *library*, which is right on the Library tab
+   * and wrong everywhere else -- an empty Favourites tab is not an empty
+   * library. `Shelves` has the same prop, for the same reason.
+   */
+  emptyMessage?: string;
+  /** The next useful action, offered alongside the message. */
+  emptyAction?: ReactNode;
 }) {
   if (!books.length) {
     return (
       <div className="panel panel--sunk px-6 py-16 text-center text-ink2">
-        {copy.library.empty}
+        <p>{emptyMessage ?? copy.library.empty}</p>
+        {emptyAction ? <div className="mt-4 flex justify-center">{emptyAction}</div> : null}
       </div>
     );
   }
