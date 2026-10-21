@@ -659,6 +659,9 @@ function App() {
             error={library.serverLibraryError}
             onLoad={library.loadServerLibrary}
             onAdd={library.addToLibrary}
+            onRemove={library.removeFromLibrary}
+            isDownloaded={isNativeShell() ? device.isDownloaded : undefined}
+            onDeleteDownload={isNativeShell() ? device.remove : undefined}
           />
         )}
 

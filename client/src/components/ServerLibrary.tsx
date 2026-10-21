@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Check, Plus, Server, LoaderCircle } from "lucide-react";
+import { Plus, Server, LoaderCircle } from "lucide-react";
 import type { Audiobook } from "../types";
 import { copy } from "../copy";
 import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
 import { ShellCover } from "../ui/primitives";
+import { RemoveFromLibraryQuestion, useRemoveFromLibrary } from "./removeFromLibrary";
 
 /**
  * Spec 27 — the "Server library" tab.
@@ -26,6 +27,9 @@ export function ServerLibrary({
   error,
   onLoad,
   onAdd,
+  onRemove,
+  isDownloaded,
+  onDeleteDownload,
 }: {
   /** Every book the server has, each marked with `inLibrary`. */
   books: Audiobook[];
@@ -35,6 +39,15 @@ export function ServerLibrary({
   onLoad: () => void;
   /** Add a book to this profile's library. */
   onAdd: (bookId: number) => Promise<void>;
+  /** Take a book out of this profile's library. */
+  onRemove: (bookId: number) => Promise<void>;
+  /**
+   * Whether a book is downloaded to this device, which decides whether the
+   * removal asks about deleting it.
+   */
+  isDownloaded?: (bookId: number) => boolean;
+  /** Delete the device copy, freeing the space. */
+  onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
 }) {
   const [pending, setPending] = useState<number>();
   const [failed, setFailed] = useState<string>();
@@ -96,6 +109,9 @@ export function ServerLibrary({
                   book={book}
                   pending={pending === book.id}
                   onAdd={() => void add(book.id)}
+                  onRemove={onRemove}
+                  isDownloaded={isDownloaded}
+                  onDeleteDownload={onDeleteDownload}
                 />
               ))}
             </ul>
@@ -110,53 +126,89 @@ function ServerLibraryRow({
   book,
   pending,
   onAdd,
+  onRemove,
+  isDownloaded,
+  onDeleteDownload,
 }: {
   book: Audiobook;
   pending: boolean;
   onAdd: () => void;
+  onRemove: (bookId: number) => Promise<void>;
+  isDownloaded?: (bookId: number) => boolean;
+  onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
 }) {
   const inLibrary = Boolean(book.inLibrary);
+  const downloaded = Boolean(isDownloaded?.(book.id));
+
+  // The same removal question the book page asks, from the same code. A list
+  // that shows which books you have has to let you change that, or it is a
+  // dead end.
+  const removal = useRemoveFromLibrary({
+    bookId: book.id,
+    isDownloaded: downloaded,
+    onRemove,
+    onDeleteDownload,
+  });
 
   return (
-    <li
-      className={cn(
-        // `min-w-0` is load-bearing. A grid item defaults to `min-width: auto`,
-        // so the min-content width of the widest thing inside sets the item's
-        // minimum -- and `truncate` means the title and the author are one
-        // unbreakable line each. The author's name here is over 150 characters,
-        // which made every row 1573px wide in a 392px viewport and sent the
-        // whole page sideways.
-        //
-        // `min-w-0` on the inner flex child is not enough on its own: it
-        // lowers the child's minimum, not the grid track's.
-        "panel flex min-w-0 items-center gap-3 p-2",
-        inLibrary && "ring-2 ring-mint",
-      )}
-    >
-      <span className="w-12 shrink-0">
-        <ShellCover bookId={book.id} className="w-full" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-display text-[15px] font-semibold text-ink">
-          {book.title}
+    <li className="min-w-0">
+      <div
+        className={cn(
+          // `min-w-0` is load-bearing. A grid item defaults to `min-width: auto`,
+          // so the min-content width of the widest thing inside sets the item's
+          // minimum -- and `truncate` means the title and the author are one
+          // unbreakable line each. The author's name here is over 150
+          // characters, which made every row 1573px wide in a 392px viewport
+          // and sent the whole page sideways.
+          //
+          // `min-w-0` on the inner flex child is not enough on its own: it
+          // lowers the child's minimum, not the grid track's.
+          "panel flex min-w-0 items-center gap-3 p-2",
+          inLibrary && "ring-2 ring-mint",
+        )}
+      >
+        <span className="w-12 shrink-0">
+          <ShellCover bookId={book.id} className="w-full" />
         </span>
-        <span className="block truncate text-[12.5px] text-ink2">{book.author}</span>
-      </span>
-      {inLibrary ? (
-        <span className="flex shrink-0 items-center gap-1.5 text-[12px] font-bold text-mint-ink">
-          <Check size={14} aria-hidden="true" />
-          {copy.serverLibrary.inYourLibrary}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-display text-[15px] font-semibold text-ink">
+            {book.title}
+          </span>
+          <span className="block truncate text-[12.5px] text-ink2">{book.author}</span>
         </span>
-      ) : (
-        <Btn size="sm" variant="primary" onClick={onAdd} disabled={pending} className="shrink-0">
-          {pending ? (
-            <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
-          ) : (
-            <Plus size={13} aria-hidden="true" />
-          )}
-          {copy.serverLibrary.add}
-        </Btn>
-      )}
+        {inLibrary ? (
+          <Btn
+            size="sm"
+            variant="quiet"
+            className="shrink-0 text-rasp-ink"
+            onClick={() => removal.start()}
+            aria-label={`${copy.removeBook.action}: ${book.title}`}
+          >
+            {copy.removeBook.remove}
+          </Btn>
+        ) : (
+          <Btn size="sm" variant="primary" onClick={onAdd} disabled={pending} className="shrink-0">
+            {pending ? (
+              <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Plus size={13} aria-hidden="true" />
+            )}
+            {copy.serverLibrary.add}
+          </Btn>
+        )}
+      </div>
+
+      {/* The question goes below the row: a 360px phone has no width for a
+          two-answer question beside a title. */}
+      <RemoveFromLibraryQuestion
+        asking={removal.asking}
+        busy={removal.busy}
+        error={removal.error}
+        hasDownload={downloaded}
+        onKeepDownload={() => void removal.confirm(false)}
+        onDeleteDownload={() => void removal.confirm(true)}
+        onCancel={removal.cancel}
+      />
     </li>
   );
 }

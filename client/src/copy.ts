@@ -141,6 +141,10 @@ export const copy = {
   narratedByCount: (count: number) => `Narrated by ${plural(count, "narrator")}`,
   unknownAuthor: "Unknown author",
   findMoreLikeThis: "Find more like this",
+  /** Shared words that are not tied to one surface. */
+  common: {
+    cancel: "Cancel",
+  },
   /** The action on a candidate row. The same word in the review queue and in
    *  the book detail's metadata lookup. */
   use: "Use this",
@@ -338,6 +342,8 @@ export const copy = {
    */
   removeBook: {
     action: "Remove from my library",
+    /** The short button label, where there is no room for the whole thing. */
+    remove: "Remove",
     question: "Remove this book from your library?",
     alsoDelete: "It is downloaded to this device. Delete the download as well?",
     keepDownload: "Keep the download",

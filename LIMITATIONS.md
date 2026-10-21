@@ -501,6 +501,19 @@ re-run of the security E2E suite. **Not started.**
   three downloaded books could be told it had nothing to play. The splash now
   waits for the device library too.
 
+- **A list that shows which books you have has to let you change that.** The
+  "All books" tab listed every book on the server and marked the ones in the
+  profile's library, but there was no way to take one *out* from there -- the
+  household asked for exactly that, and the tab was a dead end for exactly the
+  books you might want to remove.
+
+  The removal now lives in one place, `components/removeFromLibrary.tsx`, used
+  by both the book page and the tab, so the two cannot drift. The rule it
+  encodes: **leaving the library is recoverable** (the book stays on the server
+  and the tab can add it back), so it happens in one tap; **deleting the
+  download is not**, so that is the one worth a question, and it is only asked
+  when there is a download to ask about.
+
 - **A layout guard that only looks at one screen is not a guard.** The
   phone-layout spec checked the Library tab and nothing else, so a 1573px-wide
   row in the new "All books" tab shipped: the app rendered four screen-phones

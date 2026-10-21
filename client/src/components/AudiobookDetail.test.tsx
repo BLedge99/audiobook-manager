@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AudiobookDetail } from "./AudiobookDetail";
 import type { Audiobook } from "../types";
@@ -243,7 +243,11 @@ describe("AudiobookDetail", () => {
       );
 
       await user.click(screen.getByRole("button", { name: /remove from my library/i }));
-      await user.click(screen.getByRole("button", { name: /delete it/i }));
+      // `fireEvent`, not `user.click`: answering removes the panel, so the
+      // button that was clicked leaves the DOM mid-click. `userEvent` does not
+      // recover from that -- it waits for the detached element for ever, and
+      // leaves the document's pointer state dirty for every later click.
+      fireEvent.click(screen.getByRole("button", { name: /delete it/i }));
 
       await waitFor(() => expect(onDeleteDownload).toHaveBeenCalledWith(7));
       expect(onRemoveFromLibrary).toHaveBeenCalledWith(7);
@@ -264,7 +268,8 @@ describe("AudiobookDetail", () => {
       );
 
       await user.click(screen.getByRole("button", { name: /remove from my library/i }));
-      await user.click(screen.getByRole("button", { name: /keep the download/i }));
+      // `fireEvent`, not `user.click` -- see the note above.
+      fireEvent.click(screen.getByRole("button", { name: /keep the download/i }));
 
       await waitFor(() => expect(onRemoveFromLibrary).toHaveBeenCalledWith(7));
       // The download was not touched.

@@ -7,6 +7,7 @@ import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
 import { copy } from "../copy";
 import { Btn, cn, durationLabel } from "../ui/primitives";
+import { RemoveFromLibraryQuestion, useRemoveFromLibrary } from "./removeFromLibrary";
 
 interface Candidate {
   id: number;
@@ -187,31 +188,12 @@ export function AudiobookDetail({
    * about, and the question is only asked when there is a download to ask
    * about.
    */
-  const [askingAboutDownload, setAskingAboutDownload] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const [removeError, setRemoveError] = useState<string>();
-
-  const removeFromLibrary = async (deleteDownload: boolean) => {
-    if (!onRemoveFromLibrary) return;
-    setRemoving(true);
-    setRemoveError(undefined);
-    try {
-      if (deleteDownload && onDeleteDownload) {
-        const result = await onDeleteDownload(book.id);
-        await onRemoveFromLibrary(book.id);
-        if (result.failed.length > 0) setRemoveError(copy.removeBook.deleteFailed);
-      } else {
-        await onRemoveFromLibrary(book.id);
-      }
-      setAskingAboutDownload(false);
-    } catch (removeFailure) {
-      setRemoveError(
-        removeFailure instanceof Error ? removeFailure.message : copy.errors.removeFromLibrary,
-      );
-    } finally {
-      setRemoving(false);
-    }
-  };
+  const removal = useRemoveFromLibrary({
+    bookId: book.id,
+    isDownloaded: Boolean(isDownloaded),
+    onRemove: onRemoveFromLibrary ?? (async () => undefined),
+    onDeleteDownload,
+  });
 
   return (
     /* `fixed inset-0` with the <article> as its direct child is load-bearing:
@@ -322,75 +304,26 @@ export function AudiobookDetail({
           */}
           {onRemoveFromLibrary && (
             <div className="mt-4">
-              {askingAboutDownload ? (
-                <div className="panel panel--flat px-3 py-3" role="group" aria-label={copy.removeBook.question}>
-                  <p className="text-[13.5px] font-semibold text-ink">{copy.removeBook.question}</p>
-                  {isDownloaded && (
-                    <p className="mt-1 text-[13px] text-ink2">{copy.removeBook.alsoDelete}</p>
-                  )}
-                  {removeError && (
-                    <p role="alert" className="mt-1.5 text-[12.5px] font-bold text-rasp-ink">{removeError}</p>
-                  )}
-                  <div className="mt-2.5 flex flex-wrap gap-2">
-                    {isDownloaded ? (
-                      <>
-                        <Btn
-                          size="sm"
-                          variant="primary"
-                          disabled={removing}
-                          onClick={() => void removeFromLibrary(true)}
-                        >
-                          {copy.removeBook.deleteDownload}
-                        </Btn>
-                        <Btn
-                          size="sm"
-                          variant="quiet"
-                          disabled={removing}
-                          onClick={() => void removeFromLibrary(false)}
-                        >
-                          {copy.removeBook.keepDownload}
-                        </Btn>
-                      </>
-                    ) : (
-                      <Btn
-                        size="sm"
-                        variant="primary"
-                        disabled={removing}
-                        onClick={() => void removeFromLibrary(false)}
-                      >
-                        {copy.removeBook.action}
-                      </Btn>
-                    )}
-                    <Btn
-                      size="sm"
-                      variant="quiet"
-                      disabled={removing}
-                      onClick={() => setAskingAboutDownload(false)}
-                    >
-                      {copy.operator.tagSuite.cancel}
-                    </Btn>
-                  </div>
-                </div>
-              ) : (
+              {!removal.asking && (
                 <Btn
                   size="sm"
                   variant="quiet"
-                  disabled={removing}
-                  onClick={() => {
-                    setRemoveError(undefined);
-                    // A book with no download has nothing irreversible about
-                    // it, so it leaves the library straight away.
-                    if (isDownloaded) {
-                      setAskingAboutDownload(true);
-                    } else {
-                      void removeFromLibrary(false);
-                    }
-                  }}
+                  disabled={removal.busy}
+                  onClick={() => removal.start()}
                   className="text-rasp-ink"
                 >
                   {copy.removeBook.action}
                 </Btn>
               )}
+              <RemoveFromLibraryQuestion
+                asking={removal.asking}
+                busy={removal.busy}
+                error={removal.error}
+                hasDownload={Boolean(isDownloaded)}
+                onKeepDownload={() => void removal.confirm(false)}
+                onDeleteDownload={() => void removal.confirm(true)}
+                onCancel={removal.cancel}
+              />
             </div>
           )}
 

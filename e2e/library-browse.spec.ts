@@ -343,6 +343,51 @@ test.describe("server library", () => {
     await expect(page.getByText("All audiobooks")).toBeVisible();
   });
 
+  test("a book can be added to and removed from the profile in the tab", async ({ page }) => {
+    // The whole membership flow, in the surface it lives in: a fresh profile
+    // starts with nothing, adds a book from the server shelf, and takes it
+    // back out again -- which is the half that was missing. A list that shows
+    // which books you have has to let you change that, or it is a dead end.
+    await enterApp(page);
+
+    const created = await page.request.post("/api/profiles", {
+      data: { name: `E2E Membership ${Date.now().toString(36)}` },
+    });
+    const profile = await created.json();
+
+    // Put the fresh profile in the app. A fresh profile starts with an empty
+    // library, which is the state this test needs.
+    await page.evaluate((id) => window.localStorage.setItem("profileId", id), String(profile.id));
+    await page.reload();
+    await expect(page.getByRole("heading", { name: /your audiobooks/i }).first()).toBeVisible();
+
+    await tab(page, /^All books/).click();
+    await expect(page.getByText(/\d+ of \d+ in your library/)).toBeVisible({ timeout: 30_000 });
+
+    // Nothing is in this profile's library yet, so the first row offers Add.
+    const add = page.getByRole("button", { name: "Add" }).first();
+    await expect(add).toBeVisible();
+    const row = page.locator("li").filter({ has: add }).first();
+    const title = (await row.locator("span").first().textContent())?.trim() ?? "";
+
+    await add.click();
+    // Now it is in the library, and the row offers to take it back out.
+    await expect(page.getByRole("button", { name: /remove from my library/i }).first()).toBeVisible();
+
+    // And it is in the Library tab too.
+    await tab(page, /^Library/).click();
+    await expect(page.getByText(title).first()).toBeVisible({ timeout: 30_000 });
+
+    // Back to the server shelf, and take it out again.
+    await tab(page, /^All books/).click();
+    await expect(page.getByText(/\d+ of \d+ in your library/)).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: /remove from my library/i }).first().click();
+    await expect(page.getByRole("button", { name: "Add" }).first()).toBeVisible({ timeout: 30_000 });
+
+    // Clean up so the next run starts from a known state.
+    await page.request.delete(`/api/profiles/${profile.id}`);
+  });
+
   test("a book can be added to the profile from the server shelf", async ({ page }) => {
     // The whole point of the tab. A profile that does not follow the server
     // library starts empty, and this is how it gets something.
