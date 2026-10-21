@@ -146,3 +146,37 @@ describe("scanner reconciliation", () => {
     expect(state?.status).toBe("complete");
   });
 });
+
+/**
+ * A book that is **one file** used to get no Track rows at all: the book was
+ * its own file, and the client knew to stream it from
+ * /api/audiobooks/:id/stream.
+ *
+ * But everything that *stores* audio is per track -- the download, the
+ * replica, "is this book on the device?" -- so such a book could be streamed
+ * and never downloaded. The symptom was a button that said "The Christmas Pig
+ * has no tracks to download" on a book that played perfectly from the server.
+ *
+ * One file is the normal shape of a commercial audiobook, not a corner case.
+ */
+describe("scanner: a single-file book", () => {
+  it.skipIf(!HAS_FIXTURES)("still gets a track, so it can be downloaded", async () => {
+    const source = sampleLibrary();
+    const singleRoot = path.join(dir, "single-root");
+    const bookFolder = path.join(singleRoot, "OneBook");
+    mkdirSync(bookFolder, { recursive: true });
+    const file = readdirSync(source!).find((entry) => entry.toLowerCase().endsWith(".mp3"));
+    cpSync(path.join(source!, file!), path.join(bookFolder, file!));
+
+    const root = await prisma.libraryRoot.create({ data: { path: singleRoot, label: "Single file" } });
+    await createScanManager(prisma).scanRoot(root.id);
+
+    const item = await prisma.mediaItem.findFirstOrThrow({ where: { libraryRootId: root.id } });
+    const tracks = await prisma.track.findMany({ where: { mediaItemId: item.id } });
+
+    // Exactly one track, pointing at the book's own file.
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].filePath).toBe(item.filePath);
+    expect(tracks[0].trackNumber).toBe(1);
+  });
+});

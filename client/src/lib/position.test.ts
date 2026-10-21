@@ -69,6 +69,39 @@ describe("parseSegments", () => {
     expect(segments.map((segment) => segment.duration)).toEqual([700, 700, 400]);
   });
 
+  it("prefers a book's chapters over its single whole-file track", () => {
+    // A single-file book (an M4B) has one track -- the file itself -- *and*
+    // its embedded chapters. The chapters are the finer-grained view, and they
+    // are what the listener navigates by, so they must win.
+    //
+    // Getting this wrong collapses an M4B's seventy chapters into one long
+    // track and takes the chapter list with it.
+    const { segments, kind } = parseSegments({
+      ...chapterBook,
+      tracks: [{ id: 9, trackNumber: 1, duration: 1800 }],
+    } as Audiobook);
+    expect(kind).toBe("chapters");
+    expect(segments).toHaveLength(3);
+    expect(segments.map((segment) => segment.title)).toEqual([
+      "The Arrival",
+      "The Overthrow",
+      "Departures",
+    ]);
+  });
+
+  it("still uses the track for a book whose chapters are unusable", () => {
+    // Broken chapter data must not cost the listener the whole book: the one
+    // track is the file, and it plays.
+    const { segments, kind } = parseSegments({
+      ...book({ duration: 600 }),
+      tracks: [{ id: 9, trackNumber: 1, duration: 600 }],
+      chapters: "{not json",
+    } as Audiobook);
+    expect(kind).toBe("tracks");
+    expect(segments).toHaveLength(1);
+    expect(segments[0].trackId).toBe(9);
+  });
+
   it("falls back to the next chapter's start when a chapter has no usable end", () => {
     const { segments } = parseSegments(book({
       duration: 1000,

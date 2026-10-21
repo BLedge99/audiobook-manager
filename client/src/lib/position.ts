@@ -40,27 +40,23 @@ export function parseChapters(book: Audiobook): { start: number; end: number; ti
  * from ffprobe are absolute file times, so they are used verbatim; track
  * offsets have to be accumulated.
  *
- * A book with exactly one track is still a "tracks" book and streams through
- * the track endpoint — the `> 0` checks are deliberate, not an off-by-one.
+ * **Chapters are preferred over tracks.** A single-file book (an M4B) now has
+ * both: one track, which is the file, and its embedded chapters, which are the
+ * finer-grained view of it. The chapters win, so the book still plays as its
+ * chapters rather than as one long track -- and the track is what makes it
+ * downloadable.
  */
 export function parseSegments(book: Audiobook): { segments: Segment[]; kind: SegmentKind } {
-  const tracks: Track[] = book.tracks.length ? [...book.tracks].sort((a, b) => a.trackNumber - b.trackNumber) : [];
-  if (tracks.length > 0) {
-    let offset = 0;
-    const segments = tracks.map((track) => {
-      const segment: Segment = {
-        key: String(track.id),
-        title: track.title,
-        duration: Math.max(0, track.duration || 0),
-        offset,
-        trackId: track.id,
-      };
-      offset += segment.duration;
-      return segment;
-    });
-    return { segments, kind: "tracks" };
-  }
-
+  // **Chapters first.**
+  //
+  // Only a single-file book has embedded chapters -- the scanner only records
+  // them for one file -- and a single-file book has exactly one track, the
+  // file itself. The chapters are the finer-grained view of that one file, so
+  // they are the better segments: an M4B with seventy chapters should play as
+  // seventy chapters, seeking within the one file, and not as one track.
+  //
+  // Checking tracks first would collapse it to a single segment and lose the
+  // chapter list entirely.
   const chapters = parseChapters(book);
   if (chapters.length > 0) {
     const segments = chapters
@@ -84,6 +80,23 @@ export function parseSegments(book: Audiobook): { segments: Segment[]; kind: Seg
       })
       .sort((a, b) => a.offset - b.offset);
     return { segments, kind: "chapters" };
+  }
+
+  const tracks: Track[] = book.tracks.length ? [...book.tracks].sort((a, b) => a.trackNumber - b.trackNumber) : [];
+  if (tracks.length > 0) {
+    let offset = 0;
+    const segments = tracks.map((track) => {
+      const segment: Segment = {
+        key: String(track.id),
+        title: track.title,
+        duration: Math.max(0, track.duration || 0),
+        offset,
+        trackId: track.id,
+      };
+      offset += segment.duration;
+      return segment;
+    });
+    return { segments, kind: "tracks" };
   }
 
   return {

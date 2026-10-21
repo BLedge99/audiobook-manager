@@ -302,7 +302,20 @@ export function createScanManager(prisma: PrismaClient) {
         await addBookToFollowingProfiles(prisma, item.id);
 
         await prisma.track.deleteMany({ where: { mediaItemId: item.id } });
-        if (group.length > 1) {
+        // Always create the track rows, **even for a book that is one file**.
+        //
+        // A single-file book (an M4B) used to get no Track rows at all: the
+        // book was its own file, and the client knew to stream it from
+        // /api/audiobooks/:id/stream. But everything that *stores* audio is per
+        // track -- the download, the replica, "is this book on the device?" --
+        // so a single-file book could be streamed and never downloaded. That
+        // is not a corner case: one file is the normal shape of a commercial
+        // audiobook.
+        //
+        // One row per file makes the list of playable files uniform. The
+        // chapter list is unaffected, because only a single-file book has
+        // embedded chapters and the client prefers those over the track.
+        {
           // Spec 21: a hand-set track title outranks the embedded tag. Read
           // before the delete so the override survives the recreation -- this
           // is the only place a user's chapter name can be resurrected, since

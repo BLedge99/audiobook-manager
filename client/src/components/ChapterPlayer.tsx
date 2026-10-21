@@ -60,7 +60,14 @@ export function ChapterPlayer({
     ? [...book.tracks].sort((a, b) => a.trackNumber - b.trackNumber)
     : [], [book]);
   const chapters = useMemo(() => parseChapters(book), [book]);
-  const isChapterBook = tracks.length === 0 && chapters.length > 0;
+  /**
+   * A book with embedded chapters is a chapter book, whatever its tracks say.
+   *
+   * A single-file book (an M4B) has one track -- the file itself -- *and* its
+   * chapters, and the chapters are what the listener navigates by. So the test
+   * is the chapters, not the absence of tracks.
+   */
+  const isChapterBook = chapters.length > 0;
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentIndexRef = useRef(currentIndex);
@@ -116,8 +123,12 @@ export function ChapterPlayer({
     let cancelled = false;
     setLocalSrc(undefined);
 
-    if (!localUrlForTrack || isChapterBook || tracks.length === 0) return;
-    const trackId = segments[currentIndex]?.trackId;
+    if (!localUrlForTrack || tracks.length === 0) return;
+    // For a chapter book the segments are the chapters, which carry no track
+    // id -- the whole book is one file, and that file is the book's single
+    // track. Resolving it is what makes a downloaded M4B play on a plane
+    // instead of streaming a file it already has.
+    const trackId = segments[currentIndex]?.trackId ?? (isChapterBook ? tracks[0]?.id : undefined);
     if (trackId === undefined) return;
 
     void localUrlForTrack(book.id, trackId).then((url) => {
@@ -127,7 +138,7 @@ export function ChapterPlayer({
     return () => {
       cancelled = true;
     };
-  }, [localUrlForTrack, book.id, isChapterBook, tracks.length, segments, currentIndex]);
+  }, [localUrlForTrack, book.id, isChapterBook, tracks, segments, currentIndex]);
 
   // `withSessionToken` because this URL is set on `<audio src>`: a media element
   // request is issued by the browser, so it cannot carry the session header and
