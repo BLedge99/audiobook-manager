@@ -20,6 +20,35 @@ import { login, pickAnyProfile } from "./helpers";
 /** Common phone widths, narrowest first. */
 const PHONE_WIDTHS = [320, 360, 390, 412];
 
+/**
+ * Every tab, with something that proves its **contents** have rendered.
+ *
+ * The guard used to visit the Library tab only, and that is how a 1573px-wide
+ * row survived in the "All books" tab: the app rendered four screen-phones
+ * wide and every test was green. **A layout guard that only looks at one
+ * screen is not a guard.**
+ *
+ * The `ready` pattern matters as much as the list, and it has to be something
+ * that only appears once the *content* is there. A tab that has not loaded
+ * anything has nothing to overflow, so a check that fires early passes
+ * *vacuously* -- the same trap as asserting that a thing is absent when it
+ * never happened. Waiting for the tab's heading is not enough: the heading
+ * renders the instant the tab opens, long before the list does.
+ *
+ * So each one waits for a line that only exists once the tab has its data.
+ */
+const TABS: { name: string; ready: RegExp }[] = [
+  // The count next to the heading, which is computed from the loaded books.
+  // It reads differently with a search on, so both are matched.
+  { name: "Library", ready: /\d+ books? (in your library|matching your search)/i },
+  { name: "Browse", ready: /grouped by genre and series/i },
+  { name: "Discover", ready: /books you do not have yet/i },
+  // The Favourites intro reads differently once the profile has favourites.
+  { name: "Favourites", ready: /favourites are private to your profile|\d+ books?, for this profile only/i },
+  // "13 of 13 in your library" only renders once the server's list is in.
+  { name: "All books", ready: /\d+ of \d+ in your library/ },
+];
+
 /** Walk the DOM and report anything that makes the document scroll sideways. */
 async function findOverflow(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
@@ -77,6 +106,36 @@ test.describe("phone layout", () => {
       ).toBeLessThanOrEqual(result.viewport + 1);
     });
   }
+
+  test("no tab scrolls sideways at 360px", async ({ page }) => {
+    // The gap that let a four-screen-wide row through: the guard above
+    // visited the Library tab and nothing else, so a new tab had to be
+    // remembered to be checked.
+    //
+    // This walks every tab, at a phone width, and checks each one. It is the
+    // test that would have caught the "All books" rows -- a grid item with
+    // `min-width: auto` and a truncated 150-character author name, which
+    // pushed the document to 1588px inside a 392px viewport.
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.goto("/");
+    await login(page);
+    await pickAnyProfile(page);
+    await expect(page.getByRole("heading", { name: /your audiobooks/i }).first()).toBeVisible();
+
+    for (const { name, ready } of TABS) {
+      await page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name }).click();
+      // Wait for the tab to have rendered its contents. A tab that loaded
+      // nothing would pass the overflow check vacuously.
+      await expect(page.getByText(ready).first()).toBeVisible({ timeout: 30_000 });
+
+      const result = await findOverflow(page);
+      expect(
+        result.scrollWidth,
+        `the ${name} tab overflows at 360px: document is ${result.scrollWidth}px wide. ` +
+          `Widest offenders: ${JSON.stringify(result.offenders, null, 2)}`,
+      ).toBeLessThanOrEqual(result.viewport + 1);
+    }
+  });
 
   test("opening a book shows the player without scrolling", async ({ page }) => {
     // Spec 15b feature 5. The tester asked for this directly: "the player for

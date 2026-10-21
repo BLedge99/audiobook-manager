@@ -501,6 +501,26 @@ re-run of the security E2E suite. **Not started.**
   three downloaded books could be told it had nothing to play. The splash now
   waits for the device library too.
 
+- **A layout guard that only looks at one screen is not a guard.** The
+  phone-layout spec checked the Library tab and nothing else, so a 1573px-wide
+  row in the new "All books" tab shipped: the app rendered four screen-phones
+  wide and every test was green.
+
+  The cause was the trap the repo already documents — a grid item defaults to
+  `min-width: auto`, so the min-content width of the widest thing inside sets
+  the item's minimum, and `truncate` means a title and an author are one
+  unbreakable line each. The author name on one of the test books is over 150
+  characters. `min-w-0` on the row fixed it; `min-w-0` on the inner flex child
+  would not have, because it lowers the child's minimum and not the track's.
+
+  The spec now walks **every** tab. And each tab waits for a line that only
+  appears once its *contents* have loaded — waiting for the heading is not
+  enough, because the heading renders the instant the tab opens, long before
+  the list does, so the check would pass vacuously. The test was verified in
+  both directions: with the bug in place it fails naming the defect ("the All
+  books tab overflows at 360px: document is 1595px wide"), and with the fix it
+  passes.
+
 - **"Offline" is a symptom, and the banner was not enough.** The app said
   "Offline — showing the 3 books downloaded to this device" and stopped. The
   household could not tell from that whether the server was down, the *phone*

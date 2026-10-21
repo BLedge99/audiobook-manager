@@ -120,7 +120,16 @@ function ServerLibraryRow({
   return (
     <li
       className={cn(
-        "panel flex items-center gap-3 p-2",
+        // `min-w-0` is load-bearing. A grid item defaults to `min-width: auto`,
+        // so the min-content width of the widest thing inside sets the item's
+        // minimum -- and `truncate` means the title and the author are one
+        // unbreakable line each. The author's name here is over 150 characters,
+        // which made every row 1573px wide in a 392px viewport and sent the
+        // whole page sideways.
+        //
+        // `min-w-0` on the inner flex child is not enough on its own: it
+        // lowers the child's minimum, not the grid track's.
+        "panel flex min-w-0 items-center gap-3 p-2",
         inLibrary && "ring-2 ring-mint",
       )}
     >
