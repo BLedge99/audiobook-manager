@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
 import { boundedFetch, sessionHeaders } from "./lib/api";
+import { responseErrorText } from "./lib/apiError";
 import { copy } from "./copy";
 
 /**
@@ -42,14 +43,7 @@ async function conditionalRequest<T>(url: string, etag: string | null): Promise<
   const response = await boundedFetch(url, { headers });
   if (response.status === 304) return { changed: false };
   if (!response.ok) {
-    const body = await response.text();
-    let message = body;
-    try {
-      message = JSON.parse(body).message || body;
-    } catch {
-      /* not json; the raw body is the best message available */
-    }
-    throw new Error(message || copy.errors.requestFailed(response.status));
+    throw new Error(await responseErrorText(response));
   }
   return { changed: true, data: (await response.json()) as T, etag: response.headers.get("etag") };
 }
@@ -63,14 +57,7 @@ async function writeRequest<T>(url: string, method: string, body?: unknown): Pro
     headers,
   });
   if (!response.ok) {
-    const text = await response.text();
-    let message = text;
-    try {
-      message = JSON.parse(text).message || text;
-    } catch {
-      /* not json */
-    }
-    throw new Error(message || copy.errors.requestFailed(response.status));
+    throw new Error(await responseErrorText(response));
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

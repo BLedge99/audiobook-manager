@@ -40,11 +40,14 @@ describe("auth gate", () => {
   it("rejects unauthenticated requests", async () => {
     const res = await app.inject({ method: "GET", url: "/api/audiobooks" });
     expect(res.statusCode).toBe(401);
+    // A code, not prose: the client owns the sentence (ADR 015).
+    expect(res.json()).toEqual({ code: "auth_required" });
   });
 
   it("rejects a wrong password", async () => {
     const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "nope" } });
     expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ code: "incorrect_password" });
   });
 
   it("accepts the household password and issues a session cookie", async () => {
@@ -594,5 +597,35 @@ describe("track title override", () => {
     // chapter in again, so the row must be gone rather than blank.
     const rows = await prisma.fieldOverride.findMany({ where: { mediaItemId: bookId, field: "trackTitle:1" } });
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("the API error contract", () => {
+  async function authed() {
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    return login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  }
+
+  it("sends a code, not prose", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/audiobooks/1/library",
+      headers: { cookie: await authed() },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ code: "profile_required" });
+  });
+
+  it("carries the values a sentence needs as params", async () => {
+    // A reserved name is rejected by the tag validator. The reason travels as
+    // data so the client can say it in its own words.
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/tags",
+      headers: { cookie: await authed() },
+      payload: { name: "discover" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ code: "tag_name_rejected", params: { reason: "reserved" } });
   });
 });

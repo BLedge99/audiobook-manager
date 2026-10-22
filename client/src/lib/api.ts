@@ -33,6 +33,7 @@
 
 import { isNativeShell } from "./platform";
 import { copy } from "../copy";
+import { responseErrorText } from "./apiError";
 
 export const SERVER_URL_KEY = "serverUrl";
 
@@ -329,9 +330,9 @@ export async function boundedFetch(
 /**
  * Fetch a JSON response from the API, with the profile header attached.
  *
- * Throws with the server's message where there is one, matching what the
- * per-hook `request` helpers have always done, so error text shown to the user
- * does not change shape when this replaces them.
+ * Throws with the reviewed sentence for the server's error code, so the text a
+ * person reads always comes from the catalog (`specs/15b` feature 7b) rather
+ * than from whatever prose the server happened to send.
  */
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...profileHeaders() };
@@ -349,14 +350,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    let message = body;
-    try {
-      message = JSON.parse(body).message || body;
-    } catch {
-      /* not JSON; the raw body is the best message available */
-    }
-    throw new Error(message || copy.errors.requestFailed(response.status));
+    throw new Error(await responseErrorText(response));
   }
 
   return response.status === 204 ? (undefined as T) : response.json();

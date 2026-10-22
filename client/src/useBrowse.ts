@@ -10,6 +10,7 @@ import type {
   WishlistItem,
 } from "./types";
 import { boundedFetch } from "./lib/api";
+import { responseErrorText } from "./lib/apiError";
 import { copy } from "./copy";
 
 /**
@@ -29,14 +30,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) },
   });
   if (!response.ok) {
-    const body = await response.text();
-    let message = body;
-    try {
-      message = JSON.parse(body).message || body;
-    } catch {
-      /* not json */
-    }
-    throw new Error(message || `Request failed (${response.status})`);
+    throw new Error(await responseErrorText(response));
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

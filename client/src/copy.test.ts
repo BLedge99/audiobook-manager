@@ -152,6 +152,8 @@ function functionPaths(value: unknown, path: string, out: string[] = []): string
  * deleting its line here.
  */
 const ICU_PENDING = [
+  "copy.apiErrors.tagMergeFailed",
+  "copy.apiErrors.tagNameRejected",
   "copy.narratedBy",
   "copy.narratedByCount",
   "copy.shell.libraryCount",

@@ -272,8 +272,9 @@ follows, and — the constraint that matters — **changes no visible string**.
 
 1. **The server stops writing English.** API responses return stable codes and
    values; the client renders the words. A message written on the server is a
-   second catalogue, and none of the rules above can reach it. *(Decided, not
-   yet implemented — the server still sends `{ message }` prose.)*
+   second catalogue, and none of the rules above can reach it. *(Implemented:
+   see `decisions/015-api-error-codes.md`. The server now sends `{ code, params }`
+   and the client resolves it through `copy.apiErrors`.)*
 2. **The listener never meets the operator's job.** No listener-facing string
    names a folder, a scan or a review queue. Those are things the person who
    runs the server does, and naming them teaches the listener a job they do not
@@ -293,8 +294,12 @@ follows, and — the constraint that matters — **changes no visible string**.
   JSX expressions and template literals, which today sit in `App.tsx`,
   `Shelves.tsx`, `ui/primitives.tsx`, `useBrowse.ts`, `TagManager.tsx`,
   `ReviewQueue.tsx`, `Settings.tsx` and `ServerSetup.tsx`.
-- Replace the server's `{ message }` prose with codes the client renders, and
-  stop leaking `error.message` in `server/src/app.ts`.
+- Move Discover's success-payload prose (`Recommendation.reason`, and the
+  `message` explainer on a non-`ok` result) onto codes the client renders. It is
+  listener copy, not an error, so it belongs with the wording pass rather than
+  with the error contract.
+- ~~Replace the server's `{ message }` prose with codes the client renders, and
+  stop leaking `error.message` in `server/src/app.ts`.~~ Done — ADR 015.
 - Then turn on `--fail-on-scan`, fold `check-copy` into `make test`, and add the
   CI workflow (the repository has none today).
 

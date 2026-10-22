@@ -564,6 +564,59 @@ export const copy = {
     sizeUnreadable: (detail: string) => `Could not read the size of the downloaded file: ${detail}`,
   },
 
+  /**
+   * The sentence for each stable API error code (ADR 015).
+   *
+   * The server used to send these sentences itself. They lived outside this
+   * file, so no copy rule could see them, and the response echoed
+   * `error.message` on 4xx -- which included filesystem paths and Prisma
+   * wording. The server now sends a code plus the values the sentence needs
+   * (`params`), and this table is where the words live. Two codes reuse an
+   * entry that already existed -- the password line and the duplicate-profile
+   * line -- so those sentences still have exactly one home.
+   *
+   * **These are the server's old sentences, kept verbatim on purpose.** This
+   * pass moves where the text lives, it does not rewrite it; Step 3 of the copy
+   * review rewrites it (spec 15b §7b). Most of these will then collapse into
+   * `copy.errors.requestFailed`, because a sentence that cannot say what failed
+   * and how to recover is not worth a bespoke entry.
+   *
+   * `request_invalid` is deliberately absent. It replaced the echoed framework
+   * message on a 4xx, and the client's generic sentence is the better answer:
+   * `Request failed (400)` with a way out beats `body/name must be string`.
+   */
+  apiErrors: {
+    authRequired: "Authentication required",
+    passwordMustBeString: "Password must be a string",
+    notFound: "Not found",
+    profileRequired: "A profile is required",
+    profileNameRequired: "A profile name is required",
+    invalidId: "Invalid ID",
+    audiobookNotFound: "Audiobook not found",
+    libraryPathRequired: "A library path is required",
+    libraryPathInaccessible: "Library path is not accessible",
+    libraryRootRequired: "Add a library root before scanning",
+    coverNotFound: "Cover not found",
+    forbidden: "Forbidden",
+    audioFileNotFound: "Audio file not found",
+    invalidTrackId: "Invalid track ID",
+    invalidTrackNumber: "Invalid track number",
+    trackNotFound: "Track not found",
+    candidateNotFound: "Candidate not found for this book",
+    genreSlugTaken: "A genre with that slug already exists",
+    parentGenreNotFound: "Parent genre not found",
+    genreNotFound: "Genre not found",
+    catchAllGenreUndeletable: "The catch-all genre cannot be deleted",
+    unknownGenreId: "Unknown genre id",
+    unknownTagId: "Unknown tag id",
+    tagNameRejected: (reason: string) => `Tag name rejected: ${reason}`,
+    tagMergeFailed: (reason: string) => `Merge failed: ${reason}`,
+    tagNotFound: "Tag not found",
+    wishlistItemNotFound: "Wishlist item not found",
+    positionsRequired: "fromPosition and toPosition are required",
+    internalError: "Internal server error",
+  },
+
   /* ---------------------------------------------------------------------- */
   /* operator-facing copy                                                    */
   /* ---------------------------------------------------------------------- */
