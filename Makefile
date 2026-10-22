@@ -1,4 +1,4 @@
-.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client test-e2e capture device-tunnel verify lan
+.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client check-copy test-e2e capture device-tunnel verify lan
 
 ## Expose the server on the LAN so a phone can reach it.
 # The whole stack runs inside WSL, and WSL's NAT mode only relays the server to
@@ -147,6 +147,21 @@ test-server:
 
 test-client:
 	cd client && npm test
+
+## Check the interface copy against the ui-copy rules (spec 15b feature 7).
+# The catalog check is the gate: a banned word in a listener-facing string
+# fails. The source scan is advisory until feature 7's rewrite pulls the
+# remaining inline literals into the catalog (then add `--fail-on-scan`).
+#
+# `scripts/copy.config.json` records the product's own banned words and, in
+# `ignoreKeys`, the keys that still contain them. That list is the burn-down
+# worklist, and it should only ever shrink -- never add a key to silence a
+# new string.
+#
+# Deliberately NOT part of `make test` yet: the worklist is still open. It
+# joins `make test`, and CI, when the list is empty.
+check-copy:
+	cd client && npm run check:copy
 
 ## Full E2E suite against the running stack.
 # The compose-up, the health wait and the test run stay in ONE recipe on

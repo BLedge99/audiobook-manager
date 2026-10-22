@@ -5,7 +5,8 @@
     "test:e2e": "playwright test",
     "test:e2e:security": "playwright test --project=security",
     "test:server": "npm --prefix server test",
-    "test:client": "npm --prefix client test"
+    "test:client": "npm --prefix client test",
+    "check:copy": "npm --prefix client run check:copy"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0"

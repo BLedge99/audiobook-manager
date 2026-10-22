@@ -63,6 +63,7 @@ make logs
 make restart    # recreate containers, so changed server code is picked up
 make scan       # trigger a library scan (authenticates, waits for completion)
 make test       # server + client unit suites
+make check-copy # interface copy rules (spec 15b feature 7b)
 make test-e2e   # Playwright suite against the running stack
 make verify     # live enrichment check against ./test
 make reset      # tear down and rebuild

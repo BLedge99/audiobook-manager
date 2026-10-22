@@ -53,6 +53,24 @@
  *   values, not spliced into fragments, so a translator can reorder them.
  * - **An error says what failed, why when that is known, and how to recover.**
  *   A status code is never the whole message.
+ *
+ * ## How this file is checked
+ *
+ * `scripts/check-copy.mjs` (vendored from the ui-copy skill) reads this file
+ * against the `consumer-plain` profile, and `copy.operator` against
+ * `professional-b2b`. `npm run check:copy` runs it; `scripts/copy.config.json`
+ * records the product's own banned words and the keys still to be rewritten.
+ * `copy.test.ts` checks the *mechanics* -- no empty strings, one ellipsis, no
+ * exclamation marks, no repeated phrases, and the dynamic entries below.
+ *
+ * ## Messages with values: pending ICU
+ *
+ * An entry whose value is a function is a message with placeholders. Those are
+ * written as template literals today, which reads fine in English but cannot be
+ * reordered by a translator. They become ICU MessageFormat (or an equivalent)
+ * when the app is internationalised. Until then `copy.test.ts` keeps an
+ * explicit `ICU_PENDING` list of every such entry, so adding one is a
+ * deliberate act and the list doubles as the migration checklist.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -572,7 +590,8 @@ export const copy = {
 
     libraryFolders: {
       heading: "Library folders",
-      intro: "Add a folder of audiobooks and the library fills in with the details and cover art.",      scanLibrary: "Scan library",
+      intro: "Add a folder of audiobooks and the library fills in with the details and cover art.",
+      scanLibrary: "Scan library",
       addFolder: "Add folder",
       folderPathLabel: "Library folder path",
       folderPathPlaceholder: "/data/audiobooks",
@@ -685,8 +704,8 @@ export const copy = {
       unreachable: (address: string, detail: string) =>
         `Could not reach ${address}. Check the address and that the phone is on the home WiFi. (${detail})`,
       deviceHeading: "On this device",
-    /** Which build is installed. Every APK says 1.0, so this is the only way to tell. */
-    build: "Build",
+      /** Which build is installed. Every APK says 1.0, so this is the only way to tell. */
+      build: "Build",
       booksDownloaded: (count: number) => `${plural(count, "book")} downloaded`,
       serverUnreachable: "The server is unreachable. Downloaded books still play.",
       coversCached: (bytes: string) => `${bytes} of cover art cached, so covers still show with no connection.`,
@@ -717,25 +736,6 @@ export const copy = {
 } as const;
 
 /* -------------------------------------------------------------------------- */
-/* shared component defaults                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * The labels the shared primitives own.
- *
- * They live here because they are user-facing strings like any other, and
- * because a primitive is the one place a string is invisible to anyone reading
- * a component -- `IconBtn` in particular has a `label` prop that is the
- * control's *only* accessible name.
- */
-export const primitiveCopy = {
-  /** The default accessible name for an icon button with no label. */
-  iconButton: "Button",
-  /** The default accessible name for the empty state. */
-  emptyState: "Nothing here yet.",
-} as const;
-
-/* -------------------------------------------------------------------------- */
 /* terminology glossary                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -745,18 +745,25 @@ export const primitiveCopy = {
  * `clarify` asks for a short glossary when inconsistency spans the product.
  * This is that list, and it is the thing to check before adding a new term.
  *
- * | Concept    | The word        | Never                        |
- * |------------|-----------------|------------------------------|
- * | a saved title the person likes | favourite | like, starred, bookmarked |
- * | a directory of audiobooks      | folder    | directory, path, root      |
- * | a suggestion from a catalogue  | book      | title, item, record        |
- * | a thing to download            | download  | sync, fetch, copy          |
- * | a person in the household      | profile   | user, account, member      |
+ * The `{ term, avoid }` shape is not decoration: `scripts/check-copy.mjs`
+ * reads it and warns when a string uses an `avoid` word, so the glossary is
+ * enforced rather than merely documented. `avoid` stays conservative -- it
+ * lists the plain synonyms that are always wrong, not every word that could be
+ * misread. ("like" is absent on purpose: "find more like this" is a comparison,
+ * not a synonym for a favourite.)
+ *
+ * | Concept                        | The word  | Never (machine-checked)   |
+ * |--------------------------------|-----------|---------------------------|
+ * | a saved book the person likes  | favourite | star, bookmark            |
+ * | a directory of audiobooks      | folder    | directory, root           |
+ * | a book, in any state           | book      | item, record, volume      |
+ * | a thing pulled to the device   | download  | sync, fetch               |
+ * | a person in the household      | profile   | user, account, member     |
  */
 export const glossary = {
-  favourite: "favourite",
-  folder: "folder",
-  book: "book",
-  download: "download",
-  profile: "profile",
+  favourite: { term: "favourite", avoid: ["star", "bookmark"] },
+  folder: { term: "folder", avoid: ["directory", "root"] },
+  book: { term: "book", avoid: ["item", "record", "volume"] },
+  download: { term: "download", avoid: ["sync", "fetch"] },
+  profile: { term: "profile", avoid: ["user", "account", "member"] },
 } as const;

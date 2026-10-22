@@ -100,3 +100,6 @@ ordering above. It is a polish pass on the shipped app rather than new
 capability, so it runs alongside 16–26 instead of before them. Its five
 features each land as their own commit against the acceptance criteria in
 [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).
+Feature 7's follow-up (§7b) lands after them: it wires the copy checker and its
+config into `make check-copy`, records the four decisions for the copy second
+pass, and changes no visible string.

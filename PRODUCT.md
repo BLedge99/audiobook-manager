@@ -97,9 +97,9 @@ manager that can diverge from the server.
   what happened. The capsule world is friendly; operator screens stay plain
   but not cold.
 - **Brief** means the shortest wording that still carries meaning, consequence
-  and recovery. Not "Invalid credentials" but "Incorrect password." Not
-  "Request failed (500)" but "Could not load the profiles (HTTP 500). Try
-  again in a moment."
+  and recovery. Not "Invalid credentials" but "That password doesn't match.
+  Try again." Not "Request failed (500)" but "Could not load the profiles
+  (HTTP 500). Try again in a moment."
 
 The rules the voice holds to:
 
@@ -138,16 +138,39 @@ string is there, including the ones the pure maths modules produce
 wording change is a one-line edit and the whole voice can be reviewed in one
 sitting.
 
-**How it is kept honest:** `client/src/copy.test.ts` fails the build if the
-listener-facing tier contains the system's own vocabulary — "metadata",
-"enrichment", "taxonomy", "seeded", "cache", "home server" and the rest — or if
-an empty string, a `...` or an exclamation mark appears, or if a shared phrase
-is written two different ways.
+**How it is kept honest:** two layers, and neither changes a visible string.
+
+- `client/src/copy.test.ts` fails the build if the listener tier contains the
+  system's own vocabulary — "metadata", "enrichment", "taxonomy", "seeded",
+  "cache", "home server" and the rest — or if an empty string, a `...` or an
+  exclamation mark appears, if a shared phrase is written two different ways, or
+  if a placeholder message is added without being named in `ICU_PENDING`.
+- `scripts/check-copy.mjs` (the `ui-copy` skill's checker, vendored verbatim)
+  reads the table against the `consumer-plain` profile, with `copy.operator`
+  read as `professional-b2b`. `make check-copy` runs it. The words this product
+  bans live in `scripts/copy.config.json`, alongside the keys still using one —
+  the burn-down worklist for the next copy pass.
 
 The ban is on the **system's** words, not the **brand's**. "Shelf" is the
 app's own metaphor — the visual world is a capsule vending machine, and a
 vending machine has shelves — so a listener who sees one already knows what it
 means. Only the machinery's vocabulary is out of bounds.
+
+**And the listener never meets the operator's job.** No listener-facing string
+names a folder, a scan or a review queue: those are things the person who runs
+the server does, and naming them teaches the listener a job they do not have.
+
+**The server does not write English.** API responses return stable codes and
+values and the client renders every word. A message written on the server is a
+second catalogue, and no rule above can reach it. *(Committed; the server still
+sends `message` prose today, so the rewrite is the open work in
+`specs/15b-post-testing-polish.md` §7b.)*
+
+**Translations are deferred, and labelled.** The messages that carry a number or
+a name are template literals today, which is not a shape a translator can
+reorder. They are named one by one in `copy.test.ts`'s `ICU_PENDING` list, which
+is the migration checklist for ICU MessageFormat — not a promise that translation
+is imminent.
 
 ## Brand Commitments
 
