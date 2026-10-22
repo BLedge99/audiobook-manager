@@ -119,8 +119,8 @@ export const copy = {
    */
   brand: {
     name: "Audiobook Manager",
-    tagline: "local-first listening",
-    footer: "Audiobook Manager · local-first listening",
+    tagline: "your books, at home",
+    footer: "Audiobook Manager · your books, at home",
   },
 
   /**
@@ -230,7 +230,7 @@ export const copy = {
      * and the message names both, because the next action differs.
      */
     empty:
-      "Your library is empty. Add some of the books the household already has, or add a folder of audiobooks and scan it.",
+      "Your library is empty. Choose books from All books, or check back once the household adds more.",
     chooseBooks: "Choose books",
     /** The Favourites tab is empty, but the library is not. */
     noFavourites: "No favourites yet. Tap the heart on a book to keep it here.",
@@ -270,10 +270,11 @@ export const copy = {
      * a description of what the server does, not of what the person is looking
      * at.
      */
-    noGenreShelves:
-      "No genre shelves yet. Books get a genre once their details are filled in — check the review queue for the ones still waiting.",
-    noShelves:
-      "No shelves yet. Add a folder of audiobooks and scan it, and they fill in as the details arrive.",
+    noGenreShelves: "No genre shelves yet. Books get a genre once their details are filled in.",
+    noShelves: "No shelves yet. They fill in as books are added.",
+    /** The accessible names of the two arrow buttons on a shelf. */
+    scrollLeft: (shelf: string) => `Scroll ${shelf} left`,
+    scrollRight: (shelf: string) => `Scroll ${shelf} right`,
   },
 
   filters: {
@@ -334,9 +335,22 @@ export const copy = {
      * imply otherwise.
      */
     notAnAudiobook: "Book — not an audiobook yet",
-    offline: "You're offline. Discover needs a connection to suggest new titles — your library still works.",
+    offline: "You're offline. Discover needs a connection to suggest new books — your library still works.",
     notEnoughMetadata: "Not enough details about your books yet.",
-    noNewTitles: "No new titles found yet.",
+    seedNeedsDetails: "This book needs a bit more detail before we can suggest similar books.",
+    favouritesNeedDetail: "Your favourites need a bit more detail before we can suggest anything.",
+    noNewBooks: "No new books found yet.",
+    noSimilarBooks: "No similar books found yet.",
+    /**
+     * Why a suggestion was offered. The server sends the code and the value the
+     * sentence needs, so these words live in the catalog like every other.
+     */
+    reason: {
+      sharedGenre: (genre: string) => `Because it shares the genre ${genre}`,
+      favouriteAuthor: (author: string) => `Because you like ${author}`,
+      series: (series: string) => `Because it is in the ${series} series`,
+      related: "Related to books you enjoy",
+    },
   },
 
   favourites: {
@@ -387,7 +401,7 @@ export const copy = {
     heading: "Select books to add to your library",
     intro: "Every audiobook the household has. Add the ones you want.",
     loading: "Finding the books…",
-    empty: "No audiobooks have been added yet. Add a folder of audiobooks and scan it to fill the library.",
+    empty: "No audiobooks have been added yet. Books appear here once the household adds them.",
     allAudiobooks: "All audiobooks",
     /** "3 of 12 in your library" */
     heldCount: (held: number, total: number) => `${held} of ${total} in your library`,
@@ -452,7 +466,7 @@ export const copy = {
     passwordPlaceholder: "Household password",
     submit: "Sign in",
     checking: "Checking…",
-    wrongPassword: "Incorrect password.",
+    wrongPassword: "That password doesn't match. Try again.",
     unreachable: "Could not reach the server.",
   },
 
@@ -481,7 +495,7 @@ export const copy = {
     loadFailed: (status: number) => `Could not load the profiles (HTTP ${status}). Try again in a moment.`,
     createFailed: (status: number) => `Could not create the profile (HTTP ${status}). Try again in a moment.`,
     createUnreachable: (detail: string) => `Could not create the profile. ${detail}`,
-    sessionExpired: "Session expired. Reload the app to sign in again.",
+    sessionExpired: "You've been signed out. Reload the app to sign in again.",
     unreachable: (detail: string) => `Cannot reach the server. ${detail}`,
     checkAddress: "Check the server address in Settings.",
     switcherLabel: "Active profile",
@@ -519,6 +533,12 @@ export const copy = {
     hoursLeft: (hours: number) => `${hours}h left`,
   },
 
+  /** A bare length, with no "left" -- e.g. a book's total runtime. */
+  duration: {
+    hoursMinutes: (hours: number, minutes: number) => `${hours}h ${minutes}m`,
+    minutes: (minutes: number) => `${minutes}m`,
+  },
+
   series: {
     /** "Book 2 of 5". */
     positionInSeries: (position: number, total: number) => `Book ${position} of ${total}`,
@@ -533,23 +553,24 @@ export const copy = {
    * cannot.
    */
   errors: {
-    loadLibrary: "Unable to load the library. Try again.",
-    loadAllBooks: "Unable to read all the books from the server. Try again.",
-    loadDiscover: "Unable to load Discover. Try again.",
-    loadSimilar: "Unable to find similar books. Try again.",
-    loadMore: "Unable to load more suggestions. Try again.",
-    loadTags: "Unable to load the tags. Try again.",
+    loadLibrary: "Could not load the library. Try again.",
+    loadAllBooks: "Could not read all the books from the server. Try again.",
+    loadDiscover: "Could not load Discover. Try again.",
+    loadSimilar: "Could not find similar books. Try again.",
+    loadMore: "Could not load more suggestions. Try again.",
+    loadTags: "Could not load the tags. Try again.",
     /** The status code is secondary, never the whole message. */
-    requestFailed: (status: number) => `Something went wrong (HTTP ${status}). Try again.`,
+    requestFailed: (status: number) =>
+      `The server did not answer as expected (HTTP ${status}). Try again in a moment.`,
     addToLibrary: "Could not add the book to your library. Try again.",
     removeFromLibrary: "Could not remove the book from your library. Try again.",
-    bridgeNotReady: "The device bridge is not ready yet. Restart the app and try again.",
-    filesystemUnavailable: "The Filesystem plugin is unavailable. Reinstall the app and try again.",
-    fileTransferUnavailable: "The FileTransfer plugin is unavailable. Reinstall the app and try again.",
+    bridgeNotReady: "The app isn't ready yet. Restart it and try again.",
+    filesystemUnavailable: "The app can't save files on this phone. Reinstall it and try again.",
+    fileTransferUnavailable: "Downloads aren't working. Reinstall the app and try again.",
     downloadRejected: (status: number) =>
-      `The server rejected the download (HTTP ${status}). Sign in again and retry.`,
-    trackFailed: (status: number) => `The server returned HTTP ${status} for this track.`,
-    downloadFailed: "The download failed.",
+      `The server refused the download (HTTP ${status}). Sign in again to continue.`,
+    trackFailed: (status: number) => `Could not load this track (HTTP ${status}). Try again.`,
+    downloadFailed: "Could not download this book. Try again.",
     /**
      * The plugin says "failed to connect to server", which is true but leaves
      * the listener guessing: is the server down, or can the *phone* not reach
@@ -557,64 +578,41 @@ export const copy = {
      */
     downloadCannotReach:
       "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
-    downloadNoData: "The download finished but wrote no data. The server may have refused the request.",
+    downloadNoData: "The download finished but saved nothing. The server may have refused it.",
     downloadIncomplete: (bytes: number, expected: number) =>
-      `The download is incomplete (${bytes} of ${expected} bytes). Retry to finish it.`,
+      `The download stopped partway (${bytes} of ${expected} bytes). Download it again.`,
     noTracks: (title: string) => `"${title}" has no tracks to download.`,
     sizeUnreadable: (detail: string) => `Could not read the size of the downloaded file: ${detail}`,
   },
 
   /**
-   * The sentence for each stable API error code (ADR 015).
+   * The sentence for each stable API error code that a **listener** can meet
+   * (ADR 015).
    *
-   * The server used to send these sentences itself. They lived outside this
-   * file, so no copy rule could see them, and the response echoed
-   * `error.message` on 4xx -- which included filesystem paths and Prisma
-   * wording. The server now sends a code plus the values the sentence needs
-   * (`params`), and this table is where the words live. Two codes reuse an
-   * entry that already existed -- the password line and the duplicate-profile
-   * line -- so those sentences still have exactly one home.
+   * The server sends a code plus the values the sentence needs (`params`), and
+   * the words live here. This map is deliberately short: a sentence that
+   * cannot say what failed and how to recover better than the generic
+   * `copy.errors.requestFailed` does not earn an entry. A code that names
+   * folders, scans or tags belongs to `copy.operator.apiErrors`, because those
+   * are screens the operator reads, and this tier must not use those words.
    *
-   * **These are the server's old sentences, kept verbatim on purpose.** This
-   * pass moves where the text lives, it does not rewrite it; Step 3 of the copy
-   * review rewrites it (spec 15b §7b). Most of these will then collapse into
-   * `copy.errors.requestFailed`, because a sentence that cannot say what failed
-   * and how to recover is not worth a bespoke entry.
+   * Two codes reuse an entry that already exists -- the password line and the
+   * duplicate-profile line -- through the aliases in `lib/apiError.ts`, so
+   * those sentences still have exactly one home.
    *
    * `request_invalid` is deliberately absent. It replaced the echoed framework
-   * message on a 4xx, and the client's generic sentence is the better answer:
-   * `Request failed (400)` with a way out beats `body/name must be string`.
+   * message on a 4xx, and a generic sentence with a way out beats
+   * `body/name must be string`.
    */
   apiErrors: {
-    authRequired: "Authentication required",
-    passwordMustBeString: "Password must be a string",
-    notFound: "Not found",
-    profileRequired: "A profile is required",
-    profileNameRequired: "A profile name is required",
-    invalidId: "Invalid ID",
-    audiobookNotFound: "Audiobook not found",
-    libraryPathRequired: "A library path is required",
-    libraryPathInaccessible: "Library path is not accessible",
-    libraryRootRequired: "Add a library root before scanning",
-    coverNotFound: "Cover not found",
-    forbidden: "Forbidden",
-    audioFileNotFound: "Audio file not found",
-    invalidTrackId: "Invalid track ID",
-    invalidTrackNumber: "Invalid track number",
-    trackNotFound: "Track not found",
-    candidateNotFound: "Candidate not found for this book",
-    genreSlugTaken: "A genre with that slug already exists",
-    parentGenreNotFound: "Parent genre not found",
-    genreNotFound: "Genre not found",
-    catchAllGenreUndeletable: "The catch-all genre cannot be deleted",
-    unknownGenreId: "Unknown genre id",
-    unknownTagId: "Unknown tag id",
-    tagNameRejected: (reason: string) => `Tag name rejected: ${reason}`,
-    tagMergeFailed: (reason: string) => `Merge failed: ${reason}`,
-    tagNotFound: "Tag not found",
-    wishlistItemNotFound: "Wishlist item not found",
-    positionsRequired: "fromPosition and toPosition are required",
-    internalError: "Internal server error",
+    profileRequired: "Choose a profile first.",
+    profileNameRequired: "Enter a name.",
+    audiobookNotFound: "That book isn't in the library any more.",
+    coverNotFound: "That cover isn't available.",
+    forbidden: "You don't have access to that book.",
+    audioFileNotFound: "This book's audio can't be found.",
+    trackNotFound: "That chapter can't be found.",
+    wishlistItemNotFound: "That book isn't on your wishlist any more.",
   },
 
   /* ---------------------------------------------------------------------- */
@@ -640,6 +638,12 @@ export const copy = {
     serverExample: "http://192.168.1.203:3000",
     /** The label for the server-address field, in both places it appears. */
     serverAddressLabel: "Server address",
+    /**
+     * A failed health check's status, shown as the detail of the "could not
+     * reach" sentence in Settings and ServerSetup. One entry, because both
+     * screens answer the same question the same way.
+     */
+    serverReplied: (status: number) => `HTTP ${status} from the server.`,
 
     libraryFolders: {
       heading: "Library folders",
@@ -713,7 +717,7 @@ export const copy = {
       possibleMatch: "Possible match",
       weakMatch: "Weak match",
       currentlyShownAs: (title: string, author: string) => `Currently shown as “${title}” by ${author}.`,
-      failed: "Something went wrong. Try again.",
+      failed: "That decision wasn't saved. Try again.",
       actionFailed: "Could not complete that. Try again.",
       loadFailed: "Could not load the matches. Try again.",
       series: (name: string) => `Series: ${name}`,
@@ -741,7 +745,7 @@ export const copy = {
       merge: "Merge",
       merged: (from: string, to: string, moved: number) =>
         `Merged ${from} into ${to} — ${plural(moved, "book")} moved.`,
-      somethingWentWrong: "Something went wrong. Try again.",
+      somethingWentWrong: "That change wasn't saved. Try again.",
     },
 
     settings: {
@@ -784,6 +788,47 @@ export const copy = {
       networkError: "network error",
       unreachable: (address: string, detail: string) =>
         `Could not reach ${address}. Check the address, and that the phone is on the home WiFi. (${detail})`,
+    },
+
+    /**
+     * API errors only an operator screen can raise: adding a folder, scanning,
+     * editing genres and tags, and the review queue.
+     *
+     * They live here, not in `copy.apiErrors`, because they name folders,
+     * scans and tags -- the words the listener tier must not use.
+     * `lib/apiError.ts` checks the listener map first, then this one, so a code
+     * is written once, for the audience that can actually meet it.
+     *
+     * `tagNameRejected` and `tagMergeFailed` are keyed by the reason the server
+     * sends (`too-long`, `same-tag`, ...). The `...Fallback` entries cover a
+     * reason this client does not know, so an older client still says
+     * something useful against a newer server instead of showing a raw code.
+     */
+    apiErrors: {
+      libraryPathRequired: "Enter a folder path.",
+      libraryPathInaccessible: "That folder can't be read. Check the path and try again.",
+      libraryRootRequired: "Add a folder before starting a scan.",
+      candidateNotFound: "That match is no longer available.",
+      genreSlugTaken: "A genre with that name already exists.",
+      parentGenreNotFound: "That parent genre no longer exists.",
+      genreNotFound: "That genre no longer exists.",
+      catchAllGenreUndeletable: "The catch-all genre can't be deleted.",
+      unknownGenreId: "One of those genres no longer exists.",
+      unknownTagId: "One of those tags no longer exists.",
+      tagNotFound: "That tag no longer exists.",
+      tagNameRejected: {
+        empty: "Enter a tag name.",
+        tooLong: "That tag name is too long.",
+        reserved: "That name is used by the app. Choose another.",
+        collidesWithGenre: "A genre already uses that name.",
+        invalidCharacters: "That tag name can't contain < > { } [ ] \\ or /.",
+      },
+      tagNameRejectedFallback: "That tag name can't be used. Choose another.",
+      tagMergeFailed: {
+        notFound: "Could not find one of those tags. Refresh and try again.",
+        sameTag: "Choose two different tags.",
+      },
+      tagMergeFailedFallback: "Could not merge those tags. Try again.",
     },
   },
 } as const;

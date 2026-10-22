@@ -67,7 +67,7 @@ export function Settings({
     setMessage("");
     try {
       const response = await fetch(`${saved}/api/health`);
-      if (!response.ok) throw new Error(`Server replied ${response.status}`);
+      if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
       setStatus("ok");
       setMessage(copy.operator.settings.connected);
       onSaved();

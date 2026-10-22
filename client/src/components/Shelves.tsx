@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
 import { seriesLabel, type Shelf } from "../lib/browse";
-import { copy } from "../copy";
+import { copy, plural } from "../copy";
 import { CapsuleMarks, MachineHead, ShellCover, cn } from "../ui/primitives";
 
 /**
@@ -76,13 +76,13 @@ export function ShelfRow({
       <MachineHead
         id={`shelf-${shelf.key}`}
         title={shelf.title}
-        count={`${shelf.books.length} ${shelf.books.length === 1 ? "book" : "books"}`}
+        count={plural(shelf.books.length, "book")}
       >
         <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
           <button
             type="button"
             onClick={() => scrollBy(-400)}
-            aria-label={`Scroll ${shelf.title} left`}
+            aria-label={copy.browse.scrollLeft(shelf.title)}
             className="iconbtn size-9"
           >
             <ChevronLeft size={16} aria-hidden="true" />
@@ -90,7 +90,7 @@ export function ShelfRow({
           <button
             type="button"
             onClick={() => scrollBy(400)}
-            aria-label={`Scroll ${shelf.title} right`}
+            aria-label={copy.browse.scrollRight(shelf.title)}
             className="iconbtn size-9"
           >
             <ChevronRight size={16} aria-hidden="true" />

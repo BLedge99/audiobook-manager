@@ -33,7 +33,7 @@ import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
-import { copy } from "./copy";
+import { copy, plural } from "./copy";
 import { Specks, ThemeToggle, Notice, MachineHead, StatusLegend, Btn, IconBtn, cn } from "./ui/primitives";
 import type { Audiobook } from "./types";
 
@@ -625,7 +625,7 @@ function App() {
 
             {isFilterActive(filters) || search.trim().length > 0 ? (
               <section>
-                <MachineHead title={copy.browse.filteredHeading} count={`${filteredBooks.length} ${filteredBooks.length === 1 ? "title" : "titles"}`} />
+                <MachineHead title={copy.browse.filteredHeading} count={plural(filteredBooks.length, "book")} />
                 <AudiobookGrid
                   books={filteredBooks}
                   emptyMessage={copy.library.noMatches}

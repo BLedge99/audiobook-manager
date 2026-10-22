@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { copy } from "../copy";
 import {
   apiAssetUrl,
   apiFetch,
@@ -177,7 +178,7 @@ describe("apiFetch", () => {
       Promise.resolve(new Response(JSON.stringify({ code: "audiobook_not_found" }), { status: 404 }))) as typeof fetch;
 
     try {
-      await expect(apiFetch("/api/audiobooks/1")).rejects.toThrow("Audiobook not found");
+      await expect(apiFetch("/api/audiobooks/1")).rejects.toThrow(copy.apiErrors.audiobookNotFound);
     } finally {
       globalThis.fetch = original;
     }
@@ -188,7 +189,7 @@ describe("apiFetch", () => {
     globalThis.fetch = (() => Promise.resolve(new Response("<html>oops</html>", { status: 502 }))) as typeof fetch;
 
     try {
-      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("Something went wrong (HTTP 502). Try again.");
+      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("The server did not answer as expected (HTTP 502). Try again in a moment.");
     } finally {
       globalThis.fetch = original;
     }
@@ -200,7 +201,7 @@ describe("apiFetch", () => {
       Promise.resolve(new Response(JSON.stringify({ code: "a_code_from_a_newer_server" }), { status: 409 }))) as typeof fetch;
 
     try {
-      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("Something went wrong (HTTP 409). Try again.");
+      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("The server did not answer as expected (HTTP 409). Try again in a moment.");
     } finally {
       globalThis.fetch = original;
     }

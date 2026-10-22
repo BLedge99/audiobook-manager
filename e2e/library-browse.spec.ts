@@ -269,7 +269,7 @@ test.describe("custom tags", () => {
     await page.getByLabel("New tag name").fill("discover");
     await page.getByRole("button", { name: "Add", exact: true }).click();
 
-    await expect(page.getByText(/Tag name rejected/)).toBeVisible();
+    await expect(page.getByText(/That name is used by the app/)).toBeVisible();
   });
 });
 

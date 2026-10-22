@@ -15,27 +15,5 @@
       ]
     }
   },
-  "ignoreKeys": [
-    "copy.brand.tagline",
-    "copy.brand.footer",
-    "copy.login.wrongPassword",
-    "copy.library.empty",
-    "copy.browse.noShelves",
-    "copy.browse.noGenreShelves",
-    "copy.serverLibrary.empty",
-    "copy.discover.offline",
-    "copy.discover.noNewTitles",
-    "copy.profile.sessionExpired",
-    "copy.errors.bridgeNotReady",
-    "copy.errors.filesystemUnavailable",
-    "copy.errors.fileTransferUnavailable",
-    "copy.errors.loadLibrary",
-    "copy.errors.loadAllBooks",
-    "copy.errors.loadDiscover",
-    "copy.errors.loadSimilar",
-    "copy.errors.loadMore",
-    "copy.errors.loadTags",
-    "copy.errors.downloadRejected",
-    "copy.errors.downloadIncomplete"
-  ]
+  "ignoreKeys": []
 }

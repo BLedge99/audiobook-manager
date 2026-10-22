@@ -147,9 +147,10 @@ sitting.
   if a placeholder message is added without being named in `ICU_PENDING`.
 - `scripts/check-copy.mjs` (the `ui-copy` skill's checker, vendored verbatim)
   reads the table against the `consumer-plain` profile, with `copy.operator`
-  read as `professional-b2b`. `make check-copy` runs it. The words this product
-  bans live in `scripts/copy.config.json`, alongside the keys still using one —
-  the burn-down worklist for the next copy pass.
+  read as `professional-b2b`. `make check-copy` runs it, and it is part of
+  `make test` and CI. The words this product bans live in
+  `scripts/copy.config.json`; its `ignoreKeys` list is empty, and the rule is
+  that the list may shrink but never grow.
 
 The ban is on the **system's** words, not the **brand's**. "Shelf" is the
 app's own metaphor — the visual world is a capsule vending machine, and a
@@ -160,11 +161,11 @@ means. Only the machinery's vocabulary is out of bounds.
 names a folder, a scan or a review queue: those are things the person who runs
 the server does, and naming them teaches the listener a job they do not have.
 
-**The server does not write English.** API responses return stable codes and
-values and the client renders every word. A message written on the server is a
-second catalogue, and no rule above can reach it. *(Committed; the server still
-sends `message` prose today, so the rewrite is the open work in
-`specs/15b-post-testing-polish.md` §7b.)*
+**The server does not write English.** API responses — errors and Discover's
+success payload — return stable codes and values, and the client renders every
+word. A message written on the server is a second catalogue, and no rule above
+can reach it. (ADR 015; `Recommendation.reason` and `DiscoverResult.message`
+use the same shape.)
 
 **Translations are deferred, and labelled.** The messages that carry a number or
 a name are template literals today, which is not a shape a translator can

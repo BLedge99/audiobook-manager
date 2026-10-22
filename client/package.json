@@ -9,7 +9,7 @@
     "build:android": "tsc -b && vite build --mode android",
     "preview": "vite preview",
     "test": "vitest run",
-    "check:copy": "node ../scripts/check-copy.mjs src/copy.ts --profile consumer-plain --operator-profile professional-b2b --scan src --config ../scripts/copy.config.json"
+    "check:copy": "node ../scripts/check-copy.mjs src/copy.ts --profile consumer-plain --operator-profile professional-b2b --scan src --fail-on-scan --config ../scripts/copy.config.json"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

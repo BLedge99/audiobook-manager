@@ -27,11 +27,11 @@ describe("validateDownloadedSize", () => {
 
   it("rejects an empty file", () => {
     // The 401-body case can also produce nothing at all.
-    expect(() => validateDownloadedSize(0, 0)).toThrow(/wrote no data/i);
+    expect(() => validateDownloadedSize(0, 0)).toThrow(/saved nothing/i);
   });
 
   it("rejects a truncated file", () => {
-    expect(() => validateDownloadedSize(29, 7_558_385)).toThrow(/incomplete/i);
+    expect(() => validateDownloadedSize(29, 7_558_385)).toThrow(/stopped partway/i);
   });
 
   it("tolerates a small mismatch, so a padded final chunk is not a failure", () => {

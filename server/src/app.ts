@@ -1469,7 +1469,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
     const item = await recommendations.saveToWishlist(
       profileId,
-      { ...body, narrators: body.narrators ?? [], genres: body.genres ?? [], score: 0, reason: "" },
+      { ...body, narrators: body.narrators ?? [], genres: body.genres ?? [], score: 0, reason: { code: "related" } },
       body.seedMediaItemId,
     );
     return reply.code(201).send(publicWishlistItem(item));

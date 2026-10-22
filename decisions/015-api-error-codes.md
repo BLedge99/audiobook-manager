@@ -112,9 +112,10 @@ the interface.
   tested on status and code rather than on prose. `app.test.ts` now asserts the
   shape for `auth_required`, `incorrect_password`, `profile_required` and a
   parameterised `tag_name_rejected`.
-- **Discover is not covered yet.** `Recommendation.reason` and the non-`ok`
-  `message` are success-payload prose, not errors. They are on the remaining
-  worklist in §7b and move with the wording pass.
+- **Discover is not covered by this ADR.** `Recommendation.reason` and the
+  non-`ok` `message` are success-payload prose, not errors. They are on the
+  remaining worklist in §7b and move with the wording pass. *(Done in the
+  follow-up below.)*
 
 ## Verification
 
@@ -126,3 +127,12 @@ the interface.
 - `npm run check:copy`: 0 errors, 5 warnings (three pre-existing, two glossary
   warnings on the preserved server sentences).
 - `npx tsc -b` (client): clean.
+
+## Follow-up (spec 15b §7b second pass)
+
+The wording pass has since split this map. `copy.apiErrors` now holds only the
+codes a listener can meet; operator-only codes live in
+`copy.operator.apiErrors`, and most of the old entries collapsed into
+`copy.errors.requestFailed`. Discover's success payload uses codes too
+(`Recommendation.reason`, `DiscoverResult.message`). The contract above is
+unchanged: the client owns every word.

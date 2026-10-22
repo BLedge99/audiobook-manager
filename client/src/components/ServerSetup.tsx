@@ -49,7 +49,7 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
     setMessage("");
     try {
       const response = await fetch(`${saved}/api/health`);
-      if (!response.ok) throw new Error(`the server replied ${response.status}`);
+      if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
       onDone();
     } catch (error) {
       setStatus("failed");

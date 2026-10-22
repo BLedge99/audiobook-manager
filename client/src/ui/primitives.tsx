@@ -57,7 +57,7 @@ export function StatusTag({ status, className }: { status: StatusKey; className?
 export function durationLabel(seconds: number) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+  return hours ? copy.duration.hoursMinutes(hours, minutes) : copy.duration.minutes(minutes);
 }
 
 /* --------------------------------------------------------------- surfaces */

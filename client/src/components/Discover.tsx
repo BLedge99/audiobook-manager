@@ -68,7 +68,7 @@ function RecommendationCard({
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-ink/25 bg-sunk px-2.5 py-0.5 text-[11px] font-bold text-ink2">
-            {recommendation.reason}
+            {reasonText(recommendation.reason)}
           </span>
           <Btn size="sm" variant={saved ? "quiet" : "plain"} onClick={onSave} disabled={saved}>
             {saved ? <Check size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
@@ -110,6 +110,24 @@ function WishlistRow({ item, onRemove, onMarkOwned }: { item: WishlistItem; onRe
 }
 
 /**
+ * The server sends a reason code; the words live in the catalog. An unknown
+ * code from a newer server falls back to the neutral sentence rather than
+ * rendering a code.
+ */
+function reasonText(reason: Recommendation["reason"]): string {
+  switch (reason?.code) {
+    case "shared-genre":
+      return copy.discover.reason.sharedGenre(reason.genre);
+    case "favourite-author":
+      return copy.discover.reason.favouriteAuthor(reason.author);
+    case "series":
+      return copy.discover.reason.series(reason.series);
+    default:
+      return copy.discover.reason.related;
+  }
+}
+
+/**
  * Maps a Discover status to an honest message. Returning noise dressed as
  * insight is worse than saying "not yet", so the empty states are explicit.
  */
@@ -118,11 +136,32 @@ function statusMessage(result: DiscoverResult): { tone: "info" | "warn"; text: s
     case "offline":
       return { tone: "warn", text: copy.discover.offline };
     case "insufficient-metadata":
-      return { tone: "info", text: result.message ?? copy.discover.notEnoughMetadata };
+      return {
+        tone: "info",
+        text: messageText(result.message) ?? copy.discover.notEnoughMetadata,
+      };
     case "no-results":
-      return { tone: "info", text: result.message ?? copy.discover.noNewTitles };
+      return { tone: "info", text: messageText(result.message) ?? copy.discover.noNewBooks };
     default:
       return null;
+  }
+}
+
+/** A non-ok status's reason code, in the catalog's words. Unknown codes fall through. */
+function messageText(message: DiscoverResult["message"]): string | undefined {
+  switch (message?.code) {
+    case "seed-needs-details":
+      return copy.discover.seedNeedsDetails;
+    case "favourites-need-details":
+      return copy.discover.needsFavourites;
+    case "favourites-not-enough-metadata":
+      return copy.discover.favouritesNeedDetail;
+    case "no-similar-books":
+      return copy.discover.noSimilarBooks;
+    case "no-new-books":
+      return copy.discover.noNewBooks;
+    default:
+      return undefined;
   }
 }
 

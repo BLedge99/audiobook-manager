@@ -93,6 +93,18 @@ const BANNED_WORDS = [
   "normalise",
   "user library",
   "home server",
+  // The product's own additions, mirroring `bannedAdd` in
+  // `scripts/copy.config.json`, so `copy.test.ts` and `check-copy` agree.
+  "bridge",
+  "plugin",
+  "session",
+  "scan",
+  "review queue",
+  "local-first",
+  "title",
+  "retry",
+  "unable",
+  "incorrect",
 ];
 
 /**
@@ -152,8 +164,13 @@ function functionPaths(value: unknown, path: string, out: string[] = []): string
  * deleting its line here.
  */
 const ICU_PENDING = [
-  "copy.apiErrors.tagMergeFailed",
-  "copy.apiErrors.tagNameRejected",
+  "copy.browse.scrollLeft",
+  "copy.browse.scrollRight",
+  "copy.discover.reason.favouriteAuthor",
+  "copy.discover.reason.series",
+  "copy.discover.reason.sharedGenre",
+  "copy.duration.hoursMinutes",
+  "copy.duration.minutes",
   "copy.narratedBy",
   "copy.narratedByCount",
   "copy.shell.libraryCount",
@@ -214,6 +231,7 @@ const ICU_PENDING = [
   "copy.operator.settings.unreachable",
   "copy.operator.settings.booksDownloaded",
   "copy.operator.settings.coversCached",
+  "copy.operator.serverReplied",
   "copy.operator.serverSetup.unreachable",
 ].sort();
 

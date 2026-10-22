@@ -7,7 +7,7 @@ test("login gate blocks, then allows, profile creation", async ({ page }) => {
 
   await page.getByPlaceholder("Household password").fill("wrong");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("Incorrect password")).toBeVisible();
+  await expect(page.getByText("That password doesn't match. Try again.")).toBeVisible();
 
   await login(page);
 

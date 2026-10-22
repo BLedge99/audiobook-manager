@@ -140,7 +140,7 @@ client:
 server:
 	cd server && npm run dev
 
-test: test-server test-client
+test: check-copy test-server test-client
 
 test-server:
 	cd server && npm test
@@ -150,16 +150,17 @@ test-client:
 
 ## Check the interface copy against the ui-copy rules (spec 15b feature 7).
 # The catalog check is the gate: a banned word in a listener-facing string
-# fails. The source scan is advisory until feature 7's rewrite pulls the
-# remaining inline literals into the catalog (then add `--fail-on-scan`).
+# fails. `--fail-on-scan` makes the source scan a gate too, so a literal that
+# never made it into the catalog fails the build instead of only being printed.
+# The scan is line-based, so `copy.test.ts` and the review still catch the
+# shapes it cannot see (JSX expressions and template literals).
 #
-# `scripts/copy.config.json` records the product's own banned words and, in
-# `ignoreKeys`, the keys that still contain them. That list is the burn-down
-# worklist, and it should only ever shrink -- never add a key to silence a
+# `scripts/copy.config.json` records the product's own banned words. Its
+# `ignoreKeys` list is empty: the burn-down finished in feature 7b's second
+# pass, and the list may only shrink from here -- never add a key to silence a
 # new string.
 #
-# Deliberately NOT part of `make test` yet: the worklist is still open. It
-# joins `make test`, and CI, when the list is empty.
+# Part of `make test`, and of CI.
 check-copy:
 	cd client && npm run check:copy
 
