@@ -37,6 +37,7 @@ has a matching spec in `specs/`.
 | 25 | Catalogue enrichment | Genres, series, publisher, year, ISBN and description populated from Open Library and Google Books; study-guide spam rejected; auto-apply banded so a lowered floor cannot apply the wrong author |
 | 26 | Android app with offline listening | Sideloaded APK plays downloaded books with no network; metadata readable offline; progress syncs without ever silently regressing; "remove from device" frees space; server URL configurable in-app. Narrows item 09. **In progress:** auth, download, covers, first-run server-URL setup and offline playback are verified; **the visible list of downloaded books and "Remove from device" remain** — the user removed it from the 15b polish pass on 2026-10-19, and it is recorded as an unmet criterion in `LIMITATIONS` |
 | 27 | Per-profile library membership | Each profile has its own shelf of books, chosen from the server's library. **New profiles start empty; existing profiles are migrated to contain every book**, so nobody's library changes on upgrade — and it is one line to flip. `Profile.followsServerLibrary` says what happens to a book scanned *tomorrow*: the profiles that existed when the feature shipped follow the server library, a profile created afterwards does not. A separate "All books" tab is where books are added from; removing a book offers to delete its download too. Membership is a row, not a file — two profiles can hold the same book, the audio stays put. The 512 MB cover cache is untouched by it. **Offline the tab falls back to the books on this device** — which is what the app's library already is while the server is unreachable — so it can still remove one, and it never claims the household has no books. **Built 2026-10-21**; spec: [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md) |
+| 28 | Accounts, passkeys and device unlock | A profile is an account: its own 8+ character password, a database-backed session the server derives the profile from, and an `admin`/`member` role. Members read and write only their own progress, favourites, wishlist and library; `x-profile-id` stops being trusted for a profile session. `APP_PASSWORD` becomes break-glass/recovery only — normal users, including the admin, enter one password. Windows Hello passkeys are additive and web-only; Android uses native fingerprint/face through a biometric Vault, never WebAuthn. Offline mode requires the profile password and encrypts the private cache with a password-wrapped DEK, while shared catalogue metadata, covers and audio stay plaintext. Production web uses Caddy with `tls internal` at `books.home.arpa`; localhost remains valid for development and Playwright. Migration preserves every profile and its history. Spec: [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) |
 
 ## Notes
 
@@ -53,6 +54,12 @@ has a matching spec in `specs/`.
   `AGENTS.md`. `specs/15-gui-redesign.md` records that at the top rather than
   pretending otherwise.
 - Remote/internet access is intentionally absent; see `decisions/006-remote-access.md`.
+- **28 follows 27.** Per-profile libraries made the privacy gap sharper: a
+  member's shelf is only private if the server knows which member is asking.
+  ADR 016 moves that identity from the trusted `x-profile-id` header into the
+  session, and adds the web passkey and Android biometric paths. It also fixes
+  the auth gate so static client assets and the SPA fallback load before a
+  session exists.
 
 ## Build order after 14
 
@@ -66,6 +73,12 @@ is what stops the new tab introducing a second voice. The two ended up
 shipping together for exactly that reason: the "All books" tab was written
 against the reviewed copy table, so it says "Select books to add to your
 library" rather than describing the server.
+
+**28 follows 27.** The privacy finding is only actionable once a profile has an
+account: the server has to know which profile is calling before it can keep one
+profile's shelf, progress and wishlist away from another's. It lands before the
+GUI redesign (15), because the account picker, lock screen and security settings
+are surfaces the redesign would otherwise have to restyle twice.
 
 Each of 16–19 is a data-layer feature with no new UI, so they are
 independently shippable and testable. 20 adds the browse and Discover surfaces

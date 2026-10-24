@@ -3,6 +3,9 @@ import { deleteProfiles, ensureAuthed, login, pickAnyProfile } from "./helpers";
 
 test("login gate blocks, then allows, profile creation", async ({ page }) => {
   await page.goto("/");
+  // The normal gate is the profile picker; the household key is the recovery
+  // mode these setup tests use.
+  await page.getByRole("button", { name: "Use the household password" }).click();
   await expect(page.getByPlaceholder("Household password")).toBeVisible();
 
   await page.getByPlaceholder("Household password").fill("wrong");

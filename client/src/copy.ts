@@ -468,6 +468,67 @@ export const copy = {
     checking: "Checking…",
     wrongPassword: "That password doesn't match. Try again.",
     unreachable: "Could not reach the server.",
+    locked: (seconds: number) =>
+      `Too many tries. Wait ${seconds} ${seconds === 1 ? "second" : "seconds"} and try again.`,
+    passwordTooShort: (minLength: number) => `Use at least ${minLength} characters.`,
+    passwordTooLong: (maxLength: number) => `Use no more than ${maxLength} characters.`,
+    passwordCommon: "Choose a password that isn't easy to guess.",
+    passwordIsName: "Choose a password that isn't the profile's name.",
+    profileUnclaimed: "This profile hasn't been set up yet. Ask the admin to set a password.",
+    accountDisabled: "This profile is switched off. Ask the admin.",
+    claimUnavailable: "This profile already has a password. Sign in instead.",
+    passkeyUnavailable: "Passkeys aren't set up on this server. Use your password.",
+    passkeyFailed: "Windows Hello didn't confirm. Try again, or use your password.",
+    passkeyGone: "That passkey isn't saved any more. Use your password.",
+    deviceGone: "That device isn't signed in any more. Use your password.",
+    deviceFailed: "Fingerprint or face unlock didn't work. Use your password.",
+  },
+
+  /**
+   * The profile sign-in surface (spec 28). The heading is reused from
+   * `copy.profile` so the account picker and the break-glass profile gate say
+   * the same thing.
+   */
+  account: {
+    intro: "Choose your profile, then enter its password.",
+    passwordLabel: (name: string) => `${name}'s password`,
+    passwordPlaceholder: "Profile password",
+    setupHeading: (name: string) => `Set up ${name}`,
+    setupIntro: "Use the household password once to choose a password for this profile.",
+    newPasswordLabel: "New password",
+    confirmPasswordLabel: "Confirm new password",
+    setupSubmit: "Set up profile",
+    mismatch: "The two passwords don't match.",
+    needsSetup: "Needs setup",
+    disabled: "Switched off",
+    noProfiles: "No profiles yet. Use the household password to set one up.",
+    loadFailed: (status: number) => `Could not load the profiles (HTTP ${status}).`,
+    unclaimedHint: "This profile doesn't have a password yet.",
+    useHousehold: "Use the household password",
+    householdHeading: "Household password",
+    householdIntro:
+      "The household password is for setup and recovery. It does not sign you in as a profile.",
+    back: "Choose another profile",
+    lock: "Lock this profile",
+  },
+
+  /**
+   * The passkey surface (spec 28, phase 6). Windows Hello is the only passkey
+   * a household member will meet; the neutral word "passkey" covers the rest.
+   */
+  security: {
+    heading: "Passkeys",
+    intro: "Use Windows Hello instead of typing your password on this computer.",
+    add: "Add Windows Hello",
+    adding: "Waiting for Windows Hello…",
+    empty: "No passkeys on this computer yet.",
+    added: "Windows Hello is ready for this profile.",
+    removed: "Passkey removed.",
+    remove: "Remove",
+    lastUsed: (when: string) => `Last used ${when}`,
+    neverUsed: "Not used yet",
+    signIn: "Sign in with Windows Hello",
+    failed: "Windows Hello didn't finish. Try again, or use your password.",
   },
 
   profile: {
@@ -511,6 +572,13 @@ export const copy = {
     tryAgain: "Try again",
     checking: "Checking…",
     connecting: "Connecting…",
+    // Spec 28, phase 4. Offline is a password check against the local
+    // encrypted cache, not against a server that cannot answer.
+    unlockHeading: "Open your downloads",
+    unlockIntro: "Enter your profile password to open the books on this device.",
+    noCache:
+      "This device has downloads but no protected profile data yet. Connect to the home WiFi and sign in once to set it up.",
+    unlockFailed: "Could not open your saved profile data. Try again.",
   },
 
   /**

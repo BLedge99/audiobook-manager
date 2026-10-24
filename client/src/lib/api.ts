@@ -37,11 +37,35 @@ import { responseErrorText } from "./apiError";
 
 export const SERVER_URL_KEY = "serverUrl";
 
+import { lockOfflineCache } from "../local/privateCache";
+
 /** Storage key for the household session token sent as a header. */
 export const SESSION_TOKEN_KEY = "houseSessionToken";
 
+/** Storage key for the profile chosen in the break-glass flow. */
+export const PROFILE_ID_KEY = "profileId";
+
 /** The header the server accepts the session token in (see server `app.ts`). */
 export const SESSION_HEADER = "x-house-session";
+
+export interface SessionProfile {
+  id: number;
+  name: string;
+  color?: string | null;
+  role: "admin" | "member";
+}
+
+export interface SessionInfo {
+  authDisabled: boolean;
+  profile: SessionProfile | null;
+  role: "admin" | "member";
+  via: "profile" | "household" | "device";
+  expiresAt: string | null;
+  capabilities: {
+    passkeys: boolean;
+    devices: boolean;
+  };
+}
 
 /**
  * Persist the session token returned by `/api/auth/login`.
@@ -68,6 +92,62 @@ export function setSessionToken(token: string | undefined | null): void {
   } catch {
     // Private mode / storage disabled. The cookie path may still work.
   }
+}
+
+/** The profile id stored for the break-glass flow (and offline fallback). */
+export function getActiveProfileId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(PROFILE_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveProfileId(id: string | number | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (id === null) window.localStorage.removeItem(PROFILE_ID_KEY);
+    else window.localStorage.setItem(PROFILE_ID_KEY, String(id));
+  } catch {
+    // Private mode / storage disabled.
+  }
+}
+
+/**
+ * Ask the server who this session is (spec 28).
+ *
+ * Returns `null` for a 401 or a network failure rather than throwing: the boot
+ * path uses this to decide between the account picker, the break-glass profile
+ * gate and the signed-in app, and a throw there means a blank screen.
+ */
+export async function fetchSession(): Promise<SessionInfo | null> {
+  try {
+    const res = await fetch("/api/auth/session");
+    if (!res.ok) return null;
+    return (await res.json()) as SessionInfo;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Revoke the current session and forget the local token.
+ *
+ * Used by "Lock" and by profile switching. The server revoke is best-effort:
+ * an offline browser still has to drop the token locally, and the stale cookie
+ * is revoked on the next contact.
+ */
+export async function lockSession(): Promise<void> {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+  } catch {
+    // Offline: local lock is still authoritative.
+  }
+  setSessionToken(null);
+  // A lock also clears the in-memory DEK. Without this, hiding the account
+  // picker over the still-rendered app would leave decrypted rows in reach.
+  lockOfflineCache();
 }
 
 function readSessionToken(): string {
@@ -269,8 +349,7 @@ export function installApiBaseUrl(): void {
 
 /** The profile header the server scopes progress and favourites by. */
 export function profileHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const profileId = window.localStorage.getItem("profileId");
+  const profileId = getActiveProfileId();
   return profileId ? { "x-profile-id": profileId } : {};
 }
 
@@ -363,7 +442,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
  */
 export function sessionHeaders(): Record<string, string> {
   const token = readSessionToken();
-  const profileId = typeof window === "undefined" ? null : window.localStorage.getItem("profileId");
+  const profileId = getActiveProfileId();
   return {
     ...(token ? { [SESSION_HEADER]: token } : {}),
     ...(profileId ? { "x-profile-id": profileId } : {}),

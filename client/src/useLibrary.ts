@@ -3,6 +3,7 @@ import type { Audiobook, LibraryRoot } from "./types";
 import { boundedFetch, sessionHeaders } from "./lib/api";
 import { responseErrorText } from "./lib/apiError";
 import { copy } from "./copy";
+import { cacheLibraryPrivateState } from "./local/privateCache";
 
 /**
  * Library state, spec 15b feature 4.
@@ -123,6 +124,9 @@ export function useLibrary() {
         if (books.changed) {
           setAudiobooks(books.data);
           booksEtagRef.current = books.etag;
+          // Keep the encrypted offline copy in step with the last successful
+          // online view. No-op until the profile key is unlocked.
+          void cacheLibraryPrivateState(books.data);
         }
         if (libraryRoots.changed) {
           setRoots(libraryRoots.data);

@@ -3,6 +3,7 @@ import { HardDriveDownload, LoaderCircle, Save, Server, WifiOff } from "lucide-r
 import { getServerUrl, setServerUrl } from "../lib/api";
 import { copy } from "../copy";
 import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
+import { PasskeySettings } from "./PasskeySettings";
 
 export interface SettingsProps {
   /** Bytes held on the device, for the storage line. */
@@ -201,6 +202,8 @@ export function Settings({
             </div>
           )}
         </section>
+
+        <PasskeySettings />
       </div>
     </div>
   );

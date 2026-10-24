@@ -4,9 +4,11 @@ import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
 import { FilterBar } from "./components/FilterBar";
-import { needsServerUrl } from "./lib/api";
-import { LoginGate } from "./components/LoginGate";
+import { needsServerUrl, fetchSession, getActiveProfileId, setActiveProfileId, setSessionToken, type SessionInfo } from "./lib/api";
+import { AccountGate } from "./components/AccountGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
+import { OfflineUnlock } from "./components/OfflineUnlock";
+import { activeCacheProfileId, hasProfileCache } from "./local/privateCache";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
@@ -82,6 +84,8 @@ function App() {
   const [showRootForm, setShowRootForm] = useState(false);
   const [working, setWorking] = useState(false);
   const [authed, setAuthed] = useState<boolean>();
+  /** The server-derived identity (spec 28); null until the probe resolves. */
+  const [session, setSession] = useState<SessionInfo | null>(null);
   /**
    * Whether the server answered at all, as distinct from whether it said 401.
    *
@@ -91,7 +95,19 @@ function App() {
    * was locked out of it by the very feature that let them download it.
    */
   const [serverReachable, setServerReachable] = useState<boolean>();
-  const [profileId, setProfileId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
+  const [profileId, setProfileId] = useState<string | null>(() => getActiveProfileId());
+  /** The session profile is authoritative; localStorage is the break-glass hint. */
+  const activeProfileId = session?.profile ? String(session.profile.id) : profileId;
+  /**
+   * Offline cache state (spec 28). `undefined` means "still checking"; `false`
+   * means this device has downloads but no envelope, which is a different
+   * explanation from "nothing downloaded".
+   */
+  const [offlineCacheExists, setOfflineCacheExists] = useState<boolean>();
+  const [offlineUnlocked, setOfflineUnlocked] = useState<boolean>(() => {
+    const id = Number(window.localStorage.getItem("profileId"));
+    return Number.isInteger(id) && id > 0 && activeCacheProfileId() === id;
+  });
   // Spec 20: both the tab and the filters live in the URL, so a shared or
   // bookmarked link restores the whole view. Persisting filters alone was not
   // enough -- reloading a filtered link landed on the Library tab and looked
@@ -118,9 +134,40 @@ function App() {
    * app on the splash for good.
    */
   const probeServer = useCallback(() => {
-    void probeServerRequest().then((probe) => {
+    void probeServerRequest().then(async (probe) => {
       setServerReachable(probe.reachable);
-      setAuthed(probe.authed);
+      if (!probe.reachable) {
+        setAuthed(false);
+        return;
+      }
+      if (!probe.authed) {
+        setAuthed(false);
+        setSession(null);
+        setSessionToken(null);
+        setActiveProfileId(null);
+        setProfileId(null);
+        return;
+      }
+
+      // `authed` only says the API answered. The profile comes from the
+      // session, never from localStorage: a stored id is a hint for the
+      // break-glass flow, not an identity.
+      const info = await fetchSession();
+      if (!info) {
+        setAuthed(false);
+        setSession(null);
+        setSessionToken(null);
+        return;
+      }
+      setSession(info);
+      setAuthed(true);
+      if (info.profile) {
+        const id = String(info.profile.id);
+        setProfileId(id);
+        setActiveProfileId(id);
+      } else if (info.via === "household") {
+        setProfileId(getActiveProfileId());
+      }
     });
   }, []);
 
@@ -299,6 +346,39 @@ function App() {
     };
   }, [serverReachable, probeServer]);
 
+  /**
+   * Decide whether offline can be opened at all.
+   *
+   * Downloads without an envelope are not private data we can show. The app
+   * says so instead of falling through on a stale localStorage profile.
+   */
+  useEffect(() => {
+    if (serverReachable !== false || !activeProfileId) {
+      setOfflineCacheExists(undefined);
+      return;
+    }
+    const id = Number(activeProfileId);
+    if (!Number.isInteger(id) || id < 1) {
+      setOfflineCacheExists(false);
+      return;
+    }
+    if (activeCacheProfileId() === id) {
+      setOfflineCacheExists(true);
+      setOfflineUnlocked(true);
+      return;
+    }
+
+    let alive = true;
+    void hasProfileCache(id).then((exists) => {
+      if (!alive) return;
+      setOfflineCacheExists(exists);
+      setOfflineUnlocked(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [serverReachable, activeProfileId]);
+
   if (needsServerUrl()) {
     return <ServerSetup onDone={() => window.location.reload()} />;
   }
@@ -328,9 +408,7 @@ function App() {
    * last choice is the right one anyway.
    */
   if (!serverReachable) {
-    if (device.books.length > 0 && profileId) {
-      // Fall through to the app below.
-    } else {
+    if (device.books.length === 0 || !activeProfileId) {
       return (
         <OfflineNotice
           hasBooks={device.books.length > 0}
@@ -338,16 +416,52 @@ function App() {
         />
       );
     }
+    if (offlineCacheExists === undefined) return <Splash />;
+    if (!offlineCacheExists) {
+      return (
+        <OfflineNotice
+          hasBooks
+          noCache
+          onRetry={probeServer}
+        />
+      );
+    }
+    if (!offlineUnlocked) {
+      return (
+        <OfflineUnlock
+          onUnlocked={() => {
+            setOfflineUnlocked(true);
+            // Re-read the replica now that the key is in memory, so cached
+            // progress appears on the shelf immediately.
+            void device.refresh();
+            void browse.refresh();
+          }}
+        />
+      );
+    }
   }
 
   if (serverReachable && authed === false) {
-    return <LoginGate onSuccess={() => { setAuthed(true); void refresh(); }} />;
+    return (
+      <AccountGate
+        onSuccess={() => {
+          void (async () => {
+            await refresh();
+            probeServer();
+          })();
+        }}
+      />
+    );
   }
 
+  if (serverReachable && authed && !session) return <Splash />;
+
   // Progress is profile-scoped: no profile selected means nothing can be
-  // saved or restored, so pick (or create) one before browsing.
-  if (serverReachable && authed && !profileId) {
-    return <ProfileGate onSuccess={() => setProfileId(window.localStorage.getItem("profileId"))} />;
+  // saved or restored, so pick (or create) one before browsing. A normal
+  // profile session always has one; this is the break-glass household path
+  // during the migration.
+  if (serverReachable && authed && !activeProfileId) {
+    return <ProfileGate onSuccess={() => setProfileId(getActiveProfileId())} />;
   }
 
   const submitRoot = async (event: FormEvent) => {
@@ -693,7 +807,12 @@ function App() {
       {selectedBook && <AudiobookDetail
         book={selectedBook}
         onClose={() => setSelectedBook(undefined)}
-        onProgressSaved={() => setLibraryTick((tick) => tick + 1)}
+        onProgressSaved={() => {
+          setLibraryTick((tick) => tick + 1);
+          // Offline the server refetch fails, so the replica's cached progress
+          // is what refreshes the shelf.
+          void device.refresh();
+        }}
         genres={browse.genres}
         tags={browse.tags}
         favourited={favouriteIds.has(selectedBook.id)}

@@ -51,6 +51,35 @@ describe("apiErrorText", () => {
     expect(apiErrorText(401, { code: "auth_required" })).toBe(copy.profile.sessionExpired);
   });
 
+  it("renders the spec 28 password and lockout sentences", () => {
+    expect(apiErrorText(429, { code: "account_locked", params: { retryAfterSeconds: 30 } })).toBe(
+      copy.login.locked(30),
+    );
+    expect(apiErrorText(400, { code: "password_too_short", params: { minLength: 8 } })).toBe(
+      copy.login.passwordTooShort(8),
+    );
+    expect(apiErrorText(400, { code: "password_too_long", params: { maxLength: 128 } })).toBe(
+      copy.login.passwordTooLong(128),
+    );
+    expect(apiErrorText(400, { code: "password_too_weak", params: { reason: "profile-name" } })).toBe(
+      copy.login.passwordIsName,
+    );
+    expect(apiErrorText(400, { code: "password_too_weak", params: { reason: "common" } })).toBe(
+      copy.login.passwordCommon,
+    );
+  });
+
+  it("renders the spec 28 account, passkey and device sentences", () => {
+    expect(apiErrorText(409, { code: "profile_unclaimed" })).toBe(copy.login.profileUnclaimed);
+    expect(apiErrorText(403, { code: "account_disabled" })).toBe(copy.login.accountDisabled);
+    expect(apiErrorText(409, { code: "claim_unavailable" })).toBe(copy.login.claimUnavailable);
+    expect(apiErrorText(503, { code: "passkey_not_configured" })).toBe(copy.login.passkeyUnavailable);
+    expect(apiErrorText(401, { code: "passkey_failed" })).toBe(copy.login.passkeyFailed);
+    expect(apiErrorText(404, { code: "passkey_not_found" })).toBe(copy.login.passkeyGone);
+    expect(apiErrorText(404, { code: "device_not_found" })).toBe(copy.login.deviceGone);
+    expect(apiErrorText(401, { code: "device_auth_failed" })).toBe(copy.login.deviceFailed);
+  });
+
   it("falls back to the generic sentence for an unknown code", () => {
     expect(apiErrorText(418, { code: "not_a_shipped_code" })).toBe(copy.errors.requestFailed(418));
   });

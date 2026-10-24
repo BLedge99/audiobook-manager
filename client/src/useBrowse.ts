@@ -12,6 +12,12 @@ import type {
 import { boundedFetch } from "./lib/api";
 import { responseErrorText } from "./lib/apiError";
 import { copy } from "./copy";
+import {
+  cacheFavourites,
+  cacheWishlist,
+  readFavourites,
+  readWishlist,
+} from "./local/privateCache";
 
 /**
  * Spec 20 — data layer for the browse, Discover, favourites and tag surfaces.
@@ -57,8 +63,13 @@ export function useBrowse() {
       setFavourites(favIds);
       setEnrichment(status);
       setReviewQueue(review);
+      void cacheFavourites(favIds);
     } catch {
-      // Browse degrades to the plain library rather than an error screen.
+      // Browse degrades to the plain library rather than an error screen. If
+      // the profile key is unlocked (offline sign-in), show the last encrypted
+      // favourites instead of an empty heart set.
+      const cached = await readFavourites();
+      if (cached) setFavourites(cached);
     } finally {
       setLoaded(true);
     }
@@ -78,10 +89,14 @@ export function useBrowse() {
   const toggleFavourite = useCallback(
     async (bookId: number) => {
       const favourited = favourites.includes(bookId);
+      const next = favourited
+        ? favourites.filter((id) => id !== bookId)
+        : [...favourites, bookId];
       // Optimistic: a heart that lags a tap feels broken.
       setFavourite(bookId, !favourited);
       try {
         await request(`/api/audiobooks/${bookId}/favourite`, { method: favourited ? "DELETE" : "PUT" });
+        void cacheFavourites(next);
       } catch (error) {
         setFavourite(bookId, favourited); // roll back
         throw error;
@@ -189,9 +204,15 @@ export function useDiscover() {
 
   const loadWishlist = useCallback(async () => {
     try {
-      setWishlist(await request<WishlistItem[]>("/api/wishlist"));
+      const items = await request<WishlistItem[]>("/api/wishlist");
+      setWishlist(items);
+      void cacheWishlist(items);
     } catch {
-      /* surfaced as an empty list */
+      // Offline: the wishlist is private, so it only appears when the profile
+      // key is unlocked. With no key the list stays empty rather than pretending
+      // the household has an empty wishlist.
+      const cached = await readWishlist();
+      if (cached) setWishlist(cached);
     }
   }, []);
 
@@ -218,16 +239,20 @@ export function useDiscover() {
 
   const remove = useCallback(async (id: number) => {
     await request(`/api/wishlist/${id}`, { method: "DELETE" });
-    setWishlist((current) => current.filter((item) => item.id !== id));
-  }, []);
+    const next = wishlist.filter((item) => item.id !== id);
+    setWishlist(next);
+    void cacheWishlist(next);
+  }, [wishlist]);
 
   const markOwned = useCallback(async (id: number, owned: boolean) => {
     const updated = await request<WishlistItem>(`/api/wishlist/${id}/owned`, {
       method: "PUT",
       body: JSON.stringify({ owned }),
     });
-    setWishlist((current) => current.map((item) => (item.id === id ? updated : item)));
-  }, []);
+    const next = wishlist.map((item) => (item.id === id ? updated : item));
+    setWishlist(next);
+    void cacheWishlist(next);
+  }, [wishlist]);
 
   return { result, wishlist, loading, loadingMore, error, loadForMe, loadSimilar, loadMore, loadWishlist, save, remove, markOwned };
 }

@@ -29,6 +29,39 @@ export function apiErrorText(status: number, body: unknown): string {
   const alias = ALIASES[code];
   if (alias) return alias();
 
+  // Codes whose sentence needs a value or a reason (spec 28). Keeping them here
+  // rather than in `copy.apiErrors` is deliberate: that table is a flat
+  // code-to-string map, while these sentences are functions.
+  switch (code) {
+    case "account_locked":
+      return copy.login.locked(numberParam(params, "retryAfterSeconds") ?? 60);
+    case "password_too_short":
+      return copy.login.passwordTooShort(numberParam(params, "minLength") ?? 8);
+    case "password_too_long":
+      return copy.login.passwordTooLong(numberParam(params, "maxLength") ?? 128);
+    case "password_too_weak":
+      return stringParam(params, "reason") === "profile-name"
+        ? copy.login.passwordIsName
+        : copy.login.passwordCommon;
+    case "profile_unclaimed":
+      return copy.login.profileUnclaimed;
+    case "account_disabled":
+      return copy.login.accountDisabled;
+    case "claim_unavailable":
+      return copy.login.claimUnavailable;
+    case "passkey_not_configured":
+      return copy.login.passkeyUnavailable;
+    case "passkey_failed":
+      return copy.login.passkeyFailed;
+    case "passkey_not_found":
+      return copy.login.passkeyGone;
+    case "session_not_found":
+    case "device_not_found":
+      return copy.login.deviceGone;
+    case "device_auth_failed":
+      return copy.login.deviceFailed;
+  }
+
   const key = catalogKey(code);
   const listener = (copy.apiErrors as Record<string, unknown>)[key];
   if (typeof listener === "string") return listener;
@@ -74,6 +107,16 @@ function reasonEntry(table: Record<string, string>, params: unknown): string | u
   const reason = (params as { reason?: unknown } | undefined)?.reason;
   if (typeof reason !== "string") return undefined;
   return table[catalogKey(reason)];
+}
+
+function numberParam(params: unknown, key: string): number | undefined {
+  const value = (params as Record<string, unknown> | undefined)?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function stringParam(params: unknown, key: string): string | undefined {
+  const value = (params as Record<string, unknown> | undefined)?.[key];
+  return typeof value === "string" ? value : undefined;
 }
 
 /**

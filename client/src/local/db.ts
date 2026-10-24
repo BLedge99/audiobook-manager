@@ -73,6 +73,40 @@ export interface ReplicaBook {
  * more memory, and this is the one place in the app where bytes are large enough
  * for that to matter.
  */
+/**
+ * The password-wrapped profile key (spec 28, phase 4).
+ *
+ * Only the wrapped DEK is stored. The KEK is derived from the password on
+ * unlock and is never persisted, so reading this row gives an attacker a
+ * scrypt problem rather than a key.
+ */
+export interface KeyEnvelopeRecord {
+  profileId: number;
+  version: 1;
+  /** Base64 16-byte scrypt salt. */
+  salt: string;
+  /** Base64 12-byte AES-GCM nonce used to wrap the DEK. */
+  iv: string;
+  /** Base64 AES-256-GCM ciphertext plus tag. */
+  wrappedKey: string;
+  createdAt: string;
+}
+
+/** One encrypted private row. The row key is plaintext; the value is not. */
+export interface PrivateRowRecord {
+  /** `${profileId}:${table}:${rowKey}`. */
+  id: string;
+  profileId: number;
+  table: string;
+  rowKey: string;
+  version: 1;
+  /** Base64 12-byte AES-GCM nonce. */
+  iv: string;
+  /** Base64 ciphertext plus tag. */
+  ciphertext: string;
+  updatedAt: string;
+}
+
 export interface CoverRecord {
   /**
    * `book:<id>` for a book's own cover, `url:<href>` for a provider URL.
@@ -93,6 +127,8 @@ export interface CoverRecord {
 export class LocalLibraryDatabase extends Dexie {
   books!: Table<ReplicaBook, number>;
   covers!: Table<CoverRecord, string>;
+  keyEnvelopes!: Table<KeyEnvelopeRecord, number>;
+  privateRows!: Table<PrivateRowRecord, string>;
 
   constructor(name = "audiobooks") {
     super(name);
@@ -105,6 +141,15 @@ export class LocalLibraryDatabase extends Dexie {
     // upgrade. Covers are re-fetchable, which is the whole point of caching
     // them, so there is nothing here worth migrating.
     this.version(2).stores({ books: "id", covers: "&key" });
+    // Spec 28, phase 4. Additive again: the downloaded-book rows and covers
+    // survive. `privateRows` is indexed by profile and table so a lock or an
+    // admin reset can delete one profile's cache without touching shared data.
+    this.version(3).stores({
+      books: "id",
+      covers: "&key",
+      keyEnvelopes: "&profileId",
+      privateRows: "&id, [profileId+table]",
+    });
   }
 }
 

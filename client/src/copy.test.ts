@@ -164,6 +164,9 @@ function functionPaths(value: unknown, path: string, out: string[] = []): string
  * deleting its line here.
  */
 const ICU_PENDING = [
+  "copy.account.loadFailed",
+  "copy.account.passwordLabel",
+  "copy.account.setupHeading",
   "copy.browse.scrollLeft",
   "copy.browse.scrollRight",
   "copy.discover.reason.favouriteAuthor",
@@ -177,6 +180,9 @@ const ICU_PENDING = [
   "copy.shell.offlineBanner",
   "copy.library.countInLibrary",
   "copy.library.countMatching",
+  "copy.login.locked",
+  "copy.login.passwordTooLong",
+  "copy.login.passwordTooShort",
   "copy.continueListening.count",
   "copy.continueListening.more",
   "copy.card.tracks",
@@ -186,6 +192,7 @@ const ICU_PENDING = [
   "copy.filters.clearCount",
   "copy.filters.groupLabel",
   "copy.search.matches",
+  "copy.security.lastUsed",
   "copy.discover.showing",
   "copy.discover.removeFromWishlist",
   "copy.discover.markOwned",

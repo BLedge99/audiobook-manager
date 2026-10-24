@@ -23,6 +23,19 @@ export type ApiErrorCode =
   | "auth_required"
   | "password_must_be_string"
   | "incorrect_password"
+  | "profile_unclaimed"
+  | "account_locked"
+  | "account_disabled"
+  | "password_too_short"
+  | "password_too_long"
+  | "password_too_weak"
+  | "claim_unavailable"
+  | "session_not_found"
+  | "passkey_not_configured"
+  | "passkey_failed"
+  | "passkey_not_found"
+  | "device_not_found"
+  | "device_auth_failed"
   | "not_found"
   | "profile_required"
   | "profile_name_required"
@@ -58,10 +71,14 @@ export type ApiErrorCode =
  *
  * `reason` is the tag validator's own short code (`"too-long"`,
  * `"same-tag"`, ...), not prose. It travels as data so the client decides how
- * to say it.
+ * to say it. `minLength`, `maxLength` and `retryAfterSeconds` are the password
+ * policy and lockout values from spec 28; they are numbers, never sentences.
  */
 export interface ApiErrorParams {
   reason?: string;
+  minLength?: number;
+  maxLength?: number;
+  retryAfterSeconds?: number;
 }
 
 export interface ApiErrorBody {

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook, Track } from "../types";
-import { apiUrl, withSessionToken } from "../lib/api";
+import { apiUrl, profileHeaders, withSessionToken } from "../lib/api";
+import { cacheProgress, readProgress } from "../local/privateCache";
 import { copy } from "../copy";
 import { ProgressTimeline } from "./ProgressTimeline";
 import { Btn, Dome } from "../ui/primitives";
@@ -146,11 +147,6 @@ export function ChapterPlayer({
   // playback fails with "playback could not start".
   const streamUrl = localSrc ?? withSessionToken(apiUrl(remoteUrl));
 
-  const profileHeaders = (): Record<string, string> => {
-    const profileId = window.localStorage.getItem("profileId");
-    return profileId ? { "x-profile-id": profileId } : {};
-  };
-
   const sessionRef = useRef<{ fromPosition: number; startedAt: string } | null>(null);
   // Mirror of sessionRef's start position in state, so the timeline can draw
   // the "you started here" marker. A ref alone would not re-render.
@@ -176,65 +172,92 @@ export function ChapterPlayer({
     }).catch(() => undefined);
   };
 
-  const saveProgress = (position: number, onSettled?: () => void) => {
+  const saveProgress = (position: number, onSettled?: () => void, completed = false) => {
     // `onSettled` lets the shell refetch the library once the *final* save has
     // actually landed. Without it the library would be refetched on a guessed
     // delay and race this fire-and-forget keepalive request.
+    //
+    // The encrypted copy is written whether or not the request lands: offline
+    // listening is the point, and a failed write must not lose the position.
+    const progress = {
+      position,
+      completed,
+      lastPlayed: new Date().toISOString(),
+    };
     void fetch(`/api/audiobooks/${book.id}/progress`, {
       method: "PUT",
       keepalive: true,
       headers: { "Content-Type": "application/json", ...profileHeaders() },
-      body: JSON.stringify({ position }),
-    }).catch(() => undefined).then(() => onSettled?.());
+      body: JSON.stringify({ position, ...(completed ? { completed: true } : {}) }),
+    })
+      .catch(() => undefined)
+      .then(() => cacheProgress(book.id, progress))
+      .catch(() => undefined)
+      .then(() => onSettled?.());
   };
 
   // Restore saved resume position once per book.
   useEffect(() => {
     let cancelled = false;
-    void fetch(`/api/audiobooks/${book.id}/progress`, { headers: profileHeaders() })
-      .then((res) => (res.ok ? res.json() : { position: 0 }))
-      .then(({ position }: { position: number }) => {
-        if (cancelled || !position || position <= 0) return;
-        // The user may have already started playing or picked a chapter
-        // while this request was in flight. Their choice wins.
-        if (userInteractedRef.current) return;
-        let remaining = position;
-        let index = 0;
-        if (isChapterBook) {
-          // Chapter offsets are absolute file times from ffprobe, not a
-          // cumulative sum, so a position must be located by range. Subtracting
-          // durations and re-adding the offset would overshoot by the offset
-          // itself and could seek past the end of the file.
-          const found = segments.findIndex((segment) => position >= segment.offset && position < segment.offset + segment.duration);
-          index = found === -1 ? segments.length - 1 : found;
-          remaining = position;
+    const applyResume = (position: number) => {
+      if (cancelled || !position || position <= 0) return;
+      // The user may have already started playing or picked a chapter
+      // while this request was in flight. Their choice wins.
+      if (userInteractedRef.current) return;
+      let remaining = position;
+      let index = 0;
+      if (isChapterBook) {
+        // Chapter offsets are absolute file times from ffprobe, not a
+        // cumulative sum, so a position must be located by range. Subtracting
+        // durations and re-adding the offset would overshoot by the offset
+        // itself and could seek past the end of the file.
+        const found = segments.findIndex((segment) => position >= segment.offset && position < segment.offset + segment.duration);
+        index = found === -1 ? segments.length - 1 : found;
+        remaining = position;
+      } else {
+        while (index < segments.length - 1 && remaining >= segments[index].duration) {
+          remaining -= segments[index].duration;
+          index += 1;
+        }
+      }
+      const seekTarget = isChapterBook ? position : remaining;
+      pendingSeekRef.current = seekTarget;
+      desiredTimeRef.current = seekTarget;
+      // Lock until the seek lands, so a stray timeupdate from the outgoing
+      // track cannot overwrite the target with a near-zero value.
+      desiredTimeLockedRef.current = true;
+      const trackChanged = index !== currentIndexRef.current;
+      setCurrentIndex(index);
+      // Apply immediately only when the current source is already the
+      // requested segment. On a track change, streamUrl still points at
+      // the old source until React commits the new index; seeking it now
+      // would be discarded by the following audio.load().
+      const audio = audioRef.current;
+      if (audio && !trackChanged && audio.readyState >= 1) {
+        audio.currentTime = seekTarget;
+        setCurrentTime(seekTarget);
+        pendingSeekRef.current = null;
+      }
+      // else: `loadedmetadata` (or the post-load resume) applies it.
+    };
+
+    void (async () => {
+      let position = 0;
+      try {
+        const res = await fetch(`/api/audiobooks/${book.id}/progress`, { headers: profileHeaders() });
+        if (res.ok) {
+          const body = (await res.json()) as { position?: number };
+          position = body.position ?? 0;
         } else {
-          while (index < segments.length - 1 && remaining >= segments[index].duration) {
-            remaining -= segments[index].duration;
-            index += 1;
-          }
+          // Offline or unauthorised: the encrypted row is the last position
+          // this profile saw. It only exists while the profile key is unlocked.
+          position = (await readProgress(book.id))?.position ?? 0;
         }
-        const seekTarget = isChapterBook ? position : remaining;
-        pendingSeekRef.current = seekTarget;
-        desiredTimeRef.current = seekTarget;
-        // Lock until the seek lands, so a stray timeupdate from the outgoing
-        // track cannot overwrite the target with a near-zero value.
-        desiredTimeLockedRef.current = true;
-        const trackChanged = index !== currentIndexRef.current;
-        setCurrentIndex(index);
-        // Apply immediately only when the current source is already the
-        // requested segment. On a track change, streamUrl still points at
-        // the old source until React commits the new index; seeking it now
-        // would be discarded by the following audio.load().
-        const audio = audioRef.current;
-        if (audio && !trackChanged && audio.readyState >= 1) {
-          audio.currentTime = seekTarget;
-          setCurrentTime(seekTarget);
-          pendingSeekRef.current = null;
-        }
-        // else: `loadedmetadata` (or the post-load resume) applies it.
-      })
-      .catch(() => undefined);
+      } catch {
+        position = (await readProgress(book.id))?.position ?? 0;
+      }
+      applyResume(position);
+    })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book.id]);
@@ -318,11 +341,7 @@ export function ChapterPlayer({
       } else {
         setShouldPlay(false);
         setPlaying(false);
-        void fetch(`/api/audiobooks/${book.id}/progress`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", ...profileHeaders() },
-          body: JSON.stringify({ position: totalDuration, completed: true }),
-        }).catch(() => undefined);
+        saveProgress(totalDuration, undefined, true);
       }
     };
     const onError = () => { setPlaying(false); setShouldPlay(false); setError(copy.player.audioLoadFailed); };

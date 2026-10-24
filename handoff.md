@@ -12,14 +12,55 @@
 
 - Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
   (also reachable at `/mnt/c/...` from WSL, which is where Docker runs).
-- Branch: master. Specs `01..15, 15b, 16..27` and decisions `001..014` exist.
-  **The current work is roadmap item 15b**, the post-testing polish pass:
-  [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md).
-  Five features, one commit each, in the order **4 → 5 → 1 → 3 → 7** (refresh →
-  player-first → covers → Discover → copy). **All five are now written**; the
-  copy review (7) is the last to land. Findings 2 (profile privacy) and 6
-  (lock-screen latency) are deliberately not being started: 2 needs an ADR
-  before code, 6 needs measuring before fixing.
+- Branch: master. Specs `01..15, 15b, 16..28` and decisions `001..016` exist.
+  **The current work is roadmap item 28 — accounts, passkeys and biometrics:**
+  [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md)
+  and [`decisions/016-profiles-are-accounts.md`](decisions/016-profiles-are-accounts.md).
+  Phases 1–4 are written (schema/migration, server auth, client accounts,
+  encrypted offline cache). **Phase 6, web passkeys, is the next code to
+  write**; then 5 (Android biometrics), 7 (Caddy/HTTPS) and 8 (hardening).
+  All of it is uncommitted in the working tree — the owner stages, commits and
+  pushes.
+- **Spec 28 in one sentence:** a profile is now an account with its own
+  password, sessions live in SQLite, admin gates the operator surfaces,
+  `APP_PASSWORD` is break-glass only, and private offline data is encrypted
+  under a key derived from the profile password. Android uses the native
+  fingerprint/face sensor; **passkeys are web-only, for Windows Hello.**
+- **Phase status:**
+  - **1 — docs, schema, migration: done.** `Profile.passwordHash` and
+    `Profile.role`, plus `Session`, `DeviceCredential`, `WebAuthnCredential`
+    and `WebAuthnChallenge`;
+    `server/prisma/migrations/20261023120000_spec28_accounts/` renames
+    `Playwright` → `test` and `Testing` → `admin-test`, keeps `Archie` if
+    present, and inserts `admin` only when profiles already exist (a truly
+    empty database is left to `seedDefaultProfiles`). Rehearsed with
+    `prisma migrate deploy` on a temp database.
+  - **2 — server auth foundation: done.** `server/src/auth/`:
+    `password.ts` (built-in `node:crypto.scrypt`), `policy.ts` (8–128
+    characters, weak list), `session.ts` (stores only a SHA-256 token hash;
+    30-day sliding, 90-day cap), `service.ts` (login, claim, change, reset,
+    unlock, exponential lockout, `createProfileSession`), `routes.ts`. Admin
+    role gates and an auth hook live in `app.ts`. Identity is derived from
+    the session: a member's forged `x-profile-id` is ignored.
+    `server/src/auth.test.ts` has 14 passing tests.
+  - **3 — client accounts: done.** `AccountGate` replaced `LoginGate`
+    (deleted): account picker, password sign-in, claim, household break-glass
+    recovery, lock, and password-required profile switching.
+    `OfflineNotice`, `ProfileSwitcher`, `useLibrary` and `useBrowse` were
+    adjusted for it.
+  - **4 — encrypted offline cache: done.** `client/src/local/privateCache.ts`
+    wraps a random DEK with a scrypt-derived KEK (N=32768, r=8, p=1;
+    AES-256-GCM; AAD binds profile/table/row). Dexie v3 adds `keyEnvelopes`
+    and `privateRows`; the replica strips `progress`, `favourited` and
+    `inLibrary`; `OfflineUnlock` restores them only with the profile
+    password. `privateCache.test.ts` (5) and `OfflineUnlock.test.tsx` (3)
+    pass; `lockSession` clears the in-memory DEK.
+  - **6 — web passkeys: not started.** No `server/src/auth/passkeys.ts`, no
+    passkey routes registered, no `@simplewebauthn/browser` in the client.
+    `@simplewebauthn/server` v14 is installed and
+    `auth.createProfileSession` exists for the assertion path.
+  - **5, 7, 8 — not started:** Android biometrics, Caddy with
+    `books.home.arpa`, and hardening.
 - **Item 27, per-profile library membership, is built** (server and client).
   New profiles start empty; existing profiles are migrated to contain every
   book, so shipping it changes nothing for a household that already has the
@@ -84,18 +125,23 @@
   only unmet acceptance criterion is the visible downloaded-books list with
   "Remove from device", which the household removed from the polish pass on
   2026-10-19. See `LIMITATIONS.md` §1.4 and §3.
-- Test counts as of 2026-10-21, after feature 7, item 27, the offline tab
-  fix and the theme fix: **server 434** (1 skipped), **client 355**,
-  **Playwright 50** (all green; run E2E from WSL via `scripts/e2e-wsl.sh`).
-  Re-run the suites rather than trusting these counts after the next feature.
+- Test counts as of 2026-10-24, after the spec 28 cache and account work:
+  **server 446 pass, 5 skipped** (14 of them auth), **client 374 pass** —
+  but the full client suite has not been rerun since `LoginGate` was deleted,
+  and the new cache tests were run individually. `npx tsc -b` in `client/` is
+  clean. Playwright has **not** been rerun since the account gate, lock and
+  offline-unlock changes; run it from WSL via `scripts/e2e-wsl.sh`.
+  `make check-copy` had two banned-word hits for "cache"; the wording was
+  changed and the check has not been rerun.
+  Re-run the suites rather than trusting these counts after the next phase.
 - **Pushes are the owner's call.** Feature 3 (`cb28038`) was pushed from this
   session; the doc commits after it were left for the owner to push.
 
 ## Working agreement
 
 - Implement roadmap features in order. 01–25 are done except **13 (deferred,
-  stretch)**; **15 (GUI redesign) is done and landed 2026-10-18**; **15b is the
-  current session**. See "Build order after 14" in `roadmap.md`.
+  stretch)**; **15 (GUI redesign) landed 2026-10-18**; **15b is done**; **28 is
+  the current session**. See "Build order after 14" in `roadmap.md`.
 - Each feature claims a spec; when done, update its checklist in the spec file
   and mark it done in this handoff.
 - **An unchecked acceptance criterion is not evidence.** Spec 21 shipped a
@@ -144,10 +190,10 @@
 | 23 | cover-fallback | **done** | `selectCoverSource` (pure): when the winning candidate has no `coverUrl`, the highest-confidence candidate that does supplies the image. Borrows **only** the cover, never other fields. Fixes the LibriVox case — its feed has no cover-art field, so the provider that best identifies the book was the least able to illustrate it. No new provider, no guessed endpoint |
 | 24 | narrator-resolution | **done** | `narrator.ts` (pure, 22 tests): `composer` atom → `comment` (`Read By X`) → bracketed folder name (`{Stephen Fry}`). Full casts become one contributor per person. Person-name guard stops `{Unabridged}` being credited as a narrator. No guess when nothing matches. Makes the narrator work for commercial audiobooks, which no free online source can supply |
 | 25 | catalogue-enrichment | **done** | Genres/series/publisher/year/ISBN/description populated from both catalogues. Six root causes fixed: unrequested `fields=`, unread default fields, author polluting the query, study-guide spam, non-idempotent candidate storage, and a missing Google Books key. Auto-apply banded 0.7–0.9 with an author guard. **Note: enrichment is not deterministic run to run.** |
-| 15b | post-testing-polish | **4 of 5 done** | Spec `specs/15b-post-testing-polish.md`; evidence `user-testing-2026-10-18.md`. Shipped: **4** refresh never blanks the library (`235aa28`), **5** player-first book page (`35316d5`), **1** cover cache + tri-state cover (`4a7df3c`, on-device fix `fb19435`), **3** Discover 5-at-a-time + "Show 5 more" (`cb28038`). **Feature 7, the copy review, is written and in place** — `client/src/copy.ts` holds every string, split into a listener tier and an operator tier, with a build-failing jargon guard; the voice decision is in `PRODUCT.md`. Findings 2 (per-profile privacy) and 6 (lock-screen latency) are deliberately out — 2 needs an ADR first, 6 needs measuring first. |
+| 15b | post-testing-polish | **done** | Spec `specs/15b-post-testing-polish.md`; evidence `user-testing-2026-10-18.md`. Shipped: **4** refresh never blanks the library (`235aa28`), **5** player-first book page (`35316d5`), **1** cover cache + tri-state cover (`4a7df3c`, on-device fix `fb19435`), **3** Discover 5-at-a-time + "Show 5 more" (`cb28038`), and **7** the copy review. `client/src/copy.ts` holds every string, split into a listener tier and an operator tier, with a build-failing jargon guard; the voice decision is in `PRODUCT.md`. Findings 2 and 6 were deliberately out; 2 became ADR 016. |
 | 27 | per-profile-library | **server done, client done** | Spec `specs/27-per-profile-library.md`. `ProfileLibraryEntry` (a row per profile+book, unique), `Profile.followsServerLibrary` (the existing-vs-new distinction), `GET /api/audiobooks` scoped to the caller's membership, `GET /api/server-library` with an `inLibrary` flag, `POST`/`DELETE /api/audiobooks/:id/library`, and the scanner adding new books to every following profile. The data migration gives every existing profile every book, so shipping it changes nothing for a household that already has the app. Client: an "All books" tab (heading: "Select books to add to your library"), removal from the book detail that asks about the download only when there is one, and three distinct empty states. |
 | 26 | android-app | **Sprint 2 done** | Offline listening on Android. `specs/26-android-app.md` + ADR 012. Device is a **read replica + progress**, not a second library manager. **Verified on device: cross-origin auth (header token, cookie is dropped cross-scheme), cover art, download with real progress.** All 5 tracks of a book downloaded byte-for-byte identical to `Content-Length`. Stage tracing (`trace.ts`) makes every pipeline step time-boxed and visible. See "Downloads" in Current task for the four bugs behind this. **Next: server-URL gate, then offline playback with the network off** |
-| 27 | per-profile-library | **planned, not started** | Spec `specs/27-per-profile-library.md`. Each profile gets its own shelf of books, chosen from the server's library. **New profiles start empty; existing profiles are migrated to contain every book** (reversible, one line). A separate "Server library" tab; removing a book offers to delete its download too. Membership is a row, not a file — two profiles can hold the same book, the audio stays put. The 512 MB cover cache is untouched by it. Three open questions are listed in the spec and must be settled before the endpoint is written. |
+| 28 | accounts-passkeys-biometrics | **phases 1–4 done; 6 next** | Spec `specs/28-accounts-passkeys-biometrics.md`, ADR 016. `Profile` is the account (`passwordHash`, `role`); sessions live in SQLite and store only a token hash; admin gates scan/enrichment/taxonomy/library roots/profiles; `APP_PASSWORD` is break-glass only; login/claim/change/reset/unlock with exponential lockout. Encrypted offline cache: random DEK wrapped by a scrypt KEK, AES-GCM private rows, `AccountGate` + `OfflineUnlock`. Migration renames `Playwright`→`test`, `Testing`→`admin-test`, keeps `Archie`. **Remaining: web passkeys (6), Android biometrics (5), Caddy `books.home.arpa` (7), hardening (8).** |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -193,61 +239,138 @@ genres, 3 correctly held in the review queue.
 `specs/21-`; ADRs 008/009/010 cover the provider chain, field-level precedence,
 and the recommendation engine, and ADR 011 supersedes part of 008. Item 15
 (GUI redesign) moved to last so the redesign styles the final browse surfaces
-instead of rebuilding them — and it still has no spec file. Item 13 (media
-tools) stays out of scope - media is a read-only mount by design.
+instead of rebuilding them. Item 13 (media tools) stays out of scope - media is
+a read-only mount by design. **After 15: 26 (Android offline), 27 (per-profile
+library) and 28 (accounts/passkeys/biometrics), which is the current work.**
 
 ## Current task
 
 ### Next action — read this first
 
-**Roadmap item 15b, the post-testing polish pass, is the current work.** Its
-contract is [`specs/15b-post-testing-polish.md`](specs/15b-post-testing-polish.md);
-its evidence is
-[`user-testing-2026-10-18.md`](user-testing-2026-10-18.md). Five features, one
-commit each, in this order:
+**Roadmap item 28 is the current work.** Contract:
+[`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md);
+decisions: [`decisions/016-profiles-are-accounts.md`](decisions/016-profiles-are-accounts.md).
+Phases run in order; see the snapshot above for what each one contains.
 
-| # | Feature | Primary files | Status |
-|---|---------|---------------|--------|
-| 4 | A refresh never blanks the library | `client/src/useLibrary.ts`, `App.tsx`, server `app.ts` | **done** `235aa28` |
-| 5 | Player first on the book page | `client/src/components/AudiobookDetail.tsx` | **done** `35316d5` |
-| 1 | Cover cache + tri-state cover | `client/src/local/CoverImage.tsx`, `client/src/local/db.ts` | **done** `4a7df3c`, `fb19435` |
-| 3 | Discover: 5 ranked + "Show 5 more" | `server/src/metadata/recommend*.ts`, `enrichment.ts`, `client/src/components/Discover.tsx` | **done** `cb28038` |
-| 7 | Copy review into `client/src/copy.ts` | everything, with impeccable `clarify` | **done** — in the commit after `cb28038` |
+| Phase | What | Status |
+|---|---|---|
+| 1 | Docs, schema, additive migration | **done** |
+| 2 | Server auth foundation + role gates | **done** |
+| 3 | Client accounts, lock, break-glass | **done** |
+| 4 | Encrypted offline cache | **done** |
+| 6 | Web passkeys (Windows Hello) | **next** |
+| 5 | Android biometrics | after 6 |
+| 7 | Caddy + `books.home.arpa` + local CA | after 5 |
+| 8 | Hardening, session/device UI, audit, rehearsal | last |
 
-Each ends at: unit tests → `npx tsc --noEmit` → `node scripts/capture-ui.js` →
-`npx playwright test` **in a single WSL session**. Feature 1 additionally got an
-on-device pass (airplane mode with a warm cache) — **done**, and the screenshot
-is committed at `specs/evidence/offline-covers-pixel4a-2026-10-19.png`.
+**Phase 6 — web passkeys, the concrete plan.**
 
-**Feature 7 shipped**, and it turned up a rule worth more than the feature:
-**write for the listener.** The app has two audiences, and the copy review kept
-talking to the wrong one. "Home server library — select books to add to user
-library" is a good developer comment and a useless heading; the listener needs
-to know why they are there and what they can do.
+1. `server/src/auth/passkeys.ts` with `@simplewebauthn/server`:
+   `generateRegistrationOptions` / `verifyRegistrationResponse`,
+   `generateAuthenticationOptions` / `verifyAuthenticationResponse`, challenge
+   rows in `WebAuthnChallenge` (single use, short expiry, bound to the profile
+   and the ceremony), credential listing/removal, and counter-regression
+   rejection.
+2. Routes in `server/src/auth/routes.ts`, following its style:
+   `/api/auth/passkeys/register/options|verify`,
+   `/api/auth/passkeys/login/options|verify`, `GET`/`DELETE
+   /api/auth/passkeys`. Gate every route on `WEBAUTHN_RP_ID` and
+   `WEBAUTHN_ORIGIN` and answer `passkey_not_configured` when either is unset.
+   The login paths are already public in `isPublicApiPath`.
+3. On a successful assertion call
+   `auth.createProfileSession(profile.id, "profile", meta)` — a passkey is a
+   sign-in method, never a second factor beside a password.
+4. Server tests: a virtual authenticator registers and signs in, a replayed
+   challenge fails, a counter regression is rejected, and the unset-env path
+   answers `passkey_not_configured`.
+5. Client: `@simplewebauthn/browser`, "Sign in with Windows Hello" on
+   `AccountGate`, and add/remove passkeys in Settings. Hide the controls when
+   `window.isSecureContext` is false or the server says passkeys are
+   unconfigured. New strings go in `copy.ts` (`copy.security`).
+6. Playwright: a CDP virtual authenticator
+   (`WebAuthn.enable` + `WebAuthn.addVirtualAuthenticator`) registers and
+   signs in; a mismatched origin must fail. Run via `scripts/e2e-wsl.sh`.
 
-So `client/src/copy.ts` is now split in two — the top level is what a **listener**
-reads on an everyday screen, and `copy.operator` is what the person
-maintaining the server reads (server address, scans, metadata, tags, the review
-queue). `copy.test.ts` **fails the build** if the listener tier contains the
-system's own vocabulary — "metadata", "enrichment", "taxonomy", "seeded",
-"cache", "home server" and the rest. It caught two on its first run:
-"Metadata updated" on a book capsule, and a couple of others.
+**Then, in order:**
 
-The ban is on the **system's** words, not the **brand's**. "Shelf" is the app's
-own metaphor — the visual world is a capsule vending machine, and a vending
-machine has shelves — so it stayed.
+- **Phase 5 — Android biometrics.** `@capacitor/biometrics` plus Vault: enroll
+  a device secret after a password sign-in, exchange it for a session with
+  `via = "device"`, lock after a background timeout, and fall back to the
+  password on cancel or failure. A revoked device credential must fail the
+  exchange with `device_auth_failed`. The DEK lives in the Vault too, so
+  forgetting the password offline requires an online admin reset and re-sync.
+- **Phase 7 — HTTPS.** Caddy with `tls internal` serving
+  `https://books.home.arpa` and proxying to the API; install the local CA on
+  the Windows machines; set `WEBAUTHN_RP_ID=books.home.arpa` and
+  `WEBAUTHN_ORIGIN=https://books.home.arpa`. Keep `localhost` valid for dev
+  and Playwright (it is also a secure context). Document that
+  `http://192.168.1.203:3000` cannot support passkeys — WebAuthn needs a
+  hostname, not an IP.
+- **Phase 8 — hardening.** Short-lived media tokens (an `<audio>` `src`
+  cannot carry a header), signed-in-devices UI, the password-change re-wrap
+  UI, `npm audit` (the passkey/noble installs changed both lockfiles), the
+  migration rehearsal against a copy of the live database, the manual checks
+  in spec 28, and a copy review.
 
-**Also shipped with it: roadmap item 27, per-profile library membership.**
-Spec — [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md) — and
-implementation, server and client.
+**Verification before calling a phase done:**
 
-**Not being started, deliberately:** finding 2 (per-profile privacy) needs its
-own ADR before code; finding 6 (lock-screen latency) needs measuring before it
-is fixed — `LIMITATIONS.md` §5 records two false diagnoses there.
+```bash
+cd server && npx tsc --noEmit && npm test
+cd client && npx tsc -b && npm test
+make check-copy
+scripts/e2e-wsl.sh        # from WSL, where Docker lives
+```
 
-**The Android offline path is functional.** Downloads work end to end and are
-verified byte-for-byte (commit `6c2fbf1`). The historical record below is kept
-because getting there took four wrong turns and the reasons are the useful part.
+Sync the counts into the snapshot above. **A green Vitest run is not a
+typecheck** — run `tsc` separately (see the 15b note below).
+
+### Traps from the spec 28 work so far
+
+- **`x-profile-id` is not identity any more.** The server derives the profile
+  from the session. A member's forged header is ignored. Only a household
+  break-glass session (`profileId = null`) may still pass a profile id, which
+  is why the older tests keep passing; do not "simplify" that while the
+  migration is in flight.
+- **A session bootstrap cannot unlock the cache.** `rememberProfileKey` runs
+  on password login/claim only. Reloading with a cookie re-authenticates but
+  leaves the DEK unset, which is why `OfflineUnlock` exists.
+- **A failed unwrap deletes the old envelope.** That is deliberate — it is
+  what covers an admin password reset. Do not turn it into a silent retry.
+- **`check:copy` bans the system's own vocabulary in the listener tier**,
+  including "cache". Say "saved profile data" / "protected profile data".
+- **The passkey E2E needs Docker** and therefore WSL. CI seeds the
+  `test`/`admin-test` passwords; production never does (`seed.ts`).
+- **Passkeys need HTTPS or localhost.** Windows Hello will not appear on a
+  plain-HTTP LAN address; phase 7 is what makes the household URL work.
+
+### Historical record — 15b and earlier
+
+The rest of this file is the record of earlier sessions. It is kept because
+the reasons are the useful part; the plan above supersedes it.
+
+**The 15b copy rule still applies, and is the thing to carry forward:** *a
+heading, an explanation or a hint must say why the listener is there and what
+they can do, in their terms — not what the system is doing.*
+`client/src/copy.ts` is split into a listener tier (the top level) and an
+operator tier (`copy.operator`), and `copy.test.ts` fails the build if the
+listener tier contains the system's own vocabulary.
+
+**15b's five features shipped:** refresh never blanks the library
+(`235aa28`), player-first book page (`35316d5`), cover cache + tri-state
+cover (`4a7df3c`, on-device fix `fb19435`), Discover 5-at-a-time
+(`cb28038`), and the copy review. Findings 2 (per-profile privacy) and 6
+(lockscreen latency) were deliberately left out; 2 needed an ADR (which is
+now ADR 016) and 6 needs measuring.
+
+**Also shipped with 15b: roadmap item 27, per-profile library membership.**
+Spec [`specs/27-per-profile-library.md`](specs/27-per-profile-library.md),
+server and client. New profiles start empty; existing profiles were migrated
+to contain every book, so shipping it changed nothing for the household.
+
+**The Android offline path is functional.** Downloads work end to end and
+were verified byte-for-byte (commit `6c2fbf1`). The historical record below is
+kept because getting there took four wrong turns and the reasons are the
+useful part.
 
 ### Feature 3 (Discover) — what shipped, and the three bugs under it
 
@@ -1380,27 +1503,40 @@ Remaining follow-ups:
 
 ## Open questions / blockers
 
-- None blocking. Decisions deferred to the user: Android APK build (spec 09),
-  M4B verification environment, media tools (spec 13).
+- **Passkey sign-in does not unlock the offline cache.** A Windows Hello
+  assertion proves who the person is but supplies no password, so
+  `rememberProfileKey` cannot derive the KEK and the local private rows stay
+  sealed until the password is entered. Decide in phase 6 whether to (a) ask
+  for the password only when the listener opens something that needs saved
+  profile data, (b) accept that passkey sign-in is online-only for private
+  data, or (c) add a second factor to the passkey flow that can unwrap the
+  envelope. The spec currently implies (a) but does not say it.
+- **Migration rehearsal target.** Phase 8 needs a copy of the live
+  `audiobook.db`; confirm with the owner before copying it, and check
+  `Playwright`/`Testing`/`Archie` and each profile's library afterwards.
+- None blocking otherwise. Decisions deferred to the user: Android APK build
+  (spec 09), M4B verification environment, media tools (spec 13).
 
 ## Suggestions for next sessions
 
-- **Push when ready:** the resume fix and its follow-up hardening are committed
-  locally but not pushed (owner pushes manually from their terminal).
+- **Next code: phase 6, web passkeys.** See "Current task" for the concrete
+  plan. Nothing is committed yet; the owner stages, commits and pushes.
+- **Rerun the full suites before starting phase 6.** The client suite and
+  Playwright have not both run since `LoginGate` was deleted and the lock
+  behaviour landed, and `check:copy` has not run since the wording fix.
 - Consider a server-side `DELETE /api/profiles/:id` guard so the currently
   selected profile can't be deleted from under the user. The client now
   reloads on delete, but other devices (or a stale localStorage) can still
   point at a deleted row and get silent 400s on every progress save.
-- `npm audit` in `server/` still flags `@fastify/static` (route-guard bypass /
-  non-canonical path), `vitest` and `esbuild`. The upgrades are breaking major
-  bumps, so they need their own change with a re-run of the security suite.
+- `npm audit` in both packages: the spec 28 installs (`@noble/hashes`,
+  `@simplewebauthn/server`, soon `@simplewebauthn/browser`) changed the
+  lockfiles. Re-run it before the phase 8 handoff.
 - ~~**Spec 15 (GUI redesign) is next**, and has no spec file yet~~ — **done
   2026-10-18.** `specs/15-gui-redesign.md` exists, the redesign landed, and
-  `DESIGN.md` records the built system. What is next is item 15b, the
-  post-testing polish pass (see "Current task"). Position-display ideas still
-  unbuilt, in rough priority order: tick hover tooltips naming the chapter, a
-  drag-to-scrub time bubble, and bookmarks/highlights on the timeline (the last
-  one needs a new data model).
+  `DESIGN.md` records the built system. 15b is done; spec 28 is the current
+  work. Position-display ideas still unbuilt, in rough priority order: tick
+  hover tooltips naming the chapter, a drag-to-scrub time bubble, and
+  bookmarks/highlights on the timeline (the last one needs a new data model).
 - **Chapter editing UI.** Spec 21 shipped the
   `PUT /api/audiobooks/:id/tracks/:trackNumber/title` endpoint but no editor,
   so a user cannot yet set a track title by hand. Spec 06 deferred the editor;
@@ -1418,11 +1554,11 @@ Remaining follow-ups:
 - Line endings: one commit normalized CRLF on ~30 files (cosmetic, harmless).
 - `server/src/scripts/scan.ts` referenced by package.json "scan" script does
   not exist — see package.json "scan" script; never runs unless invoked.
-- **Fixed this session:** progress was silently lost when no profile was
+- **Fixed (2026-10-02 session):** progress was silently lost when no profile was
   selected (400s swallowed by the client) — now gated by ProfileGate.
-- **Fixed this session:** the 10s periodic progress save never fired (its
+- **Fixed (2026-10-02 session):** the 10s periodic progress save never fired (its
   interval was reset by every position tick) — now keyed on `playing` only.
-- **Fixed this session:** duplicate profile names were possible pre-migration;
+- **Fixed (2026-10-02 session):** duplicate profile names were possible pre-migration;
   live DB had 4× "E2E User" — deduped, unique index applied, 409 on dupes.
 - **Fixed:** `e2e/helpers.ts` login() raced the async auth probe
   (checked for the password box before it rendered) — now waits up to 3s.

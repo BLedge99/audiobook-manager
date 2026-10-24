@@ -49,6 +49,11 @@ services:
       # rejected, which only holds when auth is actually enabled.
       - APP_PASSWORD=${APP_PASSWORD:-household}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
+      # Spec 28: passkeys are WebAuthn, so the RP id and the page origin must
+      # agree. Vite serves the client on localhost:5173, which is a secure
+      # context; the household deployment overrides both with books.home.arpa.
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:5173}
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:3000/api/health"]
       interval: 5s

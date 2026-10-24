@@ -1,8 +1,8 @@
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { FastifyInstance, FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import { PrismaClient } from "@prisma/client";
-import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
@@ -20,6 +20,13 @@ import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy
 import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
 import { RecommendationService, DEFAULT_PAGE_SIZE } from "./metadata/recommend-service";
 import { fail } from "./http-errors";
+import { AuthService } from "./auth/service";
+import { isAdminRoute } from "./auth/policy";
+import { PasskeyService, passkeyConfigFromEnv, registerPasskeyRoutes, type PasskeyConfig } from "./auth/passkeys";
+import { registerAuthRoutes } from "./auth/routes";
+import { SESSION_HEADER, sessionTokenFromRequest } from "./auth/session";
+
+export { SESSION_HEADER };
 
 /** The largest page a client may ask for, matching the route schemas. */
 const MAX_PAGE_SIZE = 20;
@@ -28,24 +35,50 @@ export interface BuildAppOptions {
   prisma?: PrismaClient;
   logger?: boolean;
   appPassword?: string;
+  /** Test seam; production leaves the clock alone. */
+  now?: () => Date;
+  secureCookie?: boolean;
+  trustProxy?: boolean;
+  /** Test seam; production reads `WEBAUTHN_*` from the environment. */
+  passkeyConfig?: PasskeyConfig | null;
 }
 
-/**
- * Header carrying the household session token for shells that cannot use a
- * cookie. The Android WebView is cross-site relative to a plain-HTTP API, so
- * `SameSite=Lax` cookies are dropped there; see the note on the auth gate.
- */
-export const SESSION_HEADER = "x-house-session";
+/** Public API paths; everything else under `/api/` needs a session. */
+function isPublicApiPath(path: string): boolean {
+  return (
+    path === "/api/health" ||
+    path === "/api/auth/login" ||
+    path === "/api/auth/accounts" ||
+    path === "/api/auth/claim" ||
+    path === "/api/auth/logout" ||
+    path === "/api/auth/devices/session" ||
+    path.startsWith("/api/auth/passkeys/login/")
+  );
+}
+
+function headerProfileId(request: FastifyRequest): number | null {
+  const profileId = Number(request.headers["x-profile-id"]);
+  return Number.isInteger(profileId) && profileId >= 1 ? profileId : null;
+}
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const prisma = options.prisma ?? new PrismaClient();
-  const app = Fastify({ logger: options.logger ?? true });
+  const app = Fastify({
+    logger: options.logger ?? true,
+    trustProxy: options.trustProxy ?? process.env.TRUST_PROXY === "true",
+  });
   const scanner = createScanManager(prisma);
   const enrichment = new EnrichmentManager(prisma);
   const recommendations = new RecommendationService(prisma);
   const appPassword = options.appPassword ?? process.env.APP_PASSWORD;
-  const authEnabled = Boolean(appPassword);
-  const sessions = new Set<string>();
+  const auth = new AuthService({ prisma, appPassword, now: options.now });
+  const passkeys = new PasskeyService({
+    prisma,
+    config: options.passkeyConfig ?? passkeyConfigFromEnv(),
+    now: options.now,
+  });
+  const authEnabled = auth.enabled;
+  const secureCookie = options.secureCookie ?? process.env.COOKIE_SECURE === "true";
 
   function serializeBigInts<T>(value: T): T {
     return JSON.parse(JSON.stringify(value, (_key, nestedValue) => (
@@ -110,8 +143,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
   await app.register(cookie);
 
-  // Auth gate: health and the login endpoint stay public; everything else
-  // requires a valid household session when APP_PASSWORD is set.
+  // Auth gate.
+  //
+  // Only `/api/` is gated. The client has to load its login screen before it
+  // has a session, so `/`, `/assets/*` and the SPA fallback are public. This
+  // also fixes the production case where `@fastify/static` was behind the same
+  // hook as the API and the first request for `/` came back 401.
   //
   // The token is accepted from a header OR the cookie, because the two shells
   // have genuinely different constraints and only one of them can use a cookie:
@@ -133,46 +170,27 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // A `?session=` query parameter is accepted too, and is not redundant: an
   // `<audio src>` request is issued by the browser rather than by script, so it
   // has nowhere to carry a header, and streaming playback therefore cannot
-  // authenticate any other way. Verified on device: with no token in the URL,
-  // playback failed with "playback could not start" while `fetch()` worked.
+  // authenticate any other way. Spec 28 replaces this with a short-lived media
+  // token; the query path stays until that lands.
+  app.decorateRequest("auth", null);
   app.addHook("onRequest", async (request, reply) => {
+    const path = request.url.split("?")[0];
+    if (!path.startsWith("/api/")) return;
+    if (request.method === "OPTIONS") return;
     if (!authEnabled) return;
-    const open = request.url === "/api/health" || request.url.startsWith("/api/auth/login");
-    if (open) return;
-    const headerToken = request.headers[SESSION_HEADER];
-    const queryToken = (request.query as Record<string, unknown> | undefined)?.session;
-    const token =
-      (typeof headerToken === "string" ? headerToken : undefined) ??
-      (typeof queryToken === "string" ? queryToken : undefined) ??
-      request.cookies["house_session"];
-    if (!token || !sessions.has(token)) {
-      return fail(reply, 401, "auth_required");
+
+    const token = sessionTokenFromRequest(request);
+    if (token) request.auth = await auth.validate(token);
+
+    if (isPublicApiPath(path)) return;
+    if (!request.auth) return fail(reply, 401, "auth_required");
+    if (isAdminRoute(request.method, path) && request.auth.role !== "admin") {
+      return fail(reply, 403, "forbidden");
     }
   });
 
-  app.post<{ Body: { password?: string } }>("/api/auth/login", async (request, reply) => {
-    const password = request.body?.password;
-    if (typeof password !== "string") return fail(reply, 400, "password_must_be_string");
-    if (!authEnabled) return { token: "disabled" };
-    const expected = Buffer.from(appPassword as string);
-    const provided = Buffer.from(password);
-    const ok = expected.length === provided.length && timingSafeEqual(expected, provided);
-    if (!ok) return fail(reply, 401, "incorrect_password");
-    const token = randomBytes(24).toString("hex");
-    sessions.add(token);
-    // Cookie for the browser/PWA, and the token in the body for shells that
-    // cannot use a cookie cross-scheme (see the note on the auth gate above).
-    reply.setCookie("house_session", token, { path: "/", httpOnly: true, sameSite: "lax" });
-    return { ok: true, token };
-  });
-
-  app.post("/api/auth/logout", async (request, reply) => {
-    const headerToken = request.headers[SESSION_HEADER];
-    const token = (typeof headerToken === "string" ? headerToken : undefined) ?? request.cookies["house_session"];
-    if (token) sessions.delete(token);
-    reply.clearCookie("house_session", { path: "/" });
-    return { ok: true };
-  });
+  await registerAuthRoutes(app, auth, { secureCookie });
+  await registerPasskeyRoutes(app, passkeys, auth, { secureCookie });
 
   function parseIdParam(raw: string | undefined): number | null {
     const id = Number(raw);
@@ -254,12 +272,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   }
 
-  // Optional profile header: unlike the progress routes this never 400s, because
-  // the library has to render before a profile has been picked. A missing or
+  // Optional profile: unlike the progress routes this never 400s, because the
+  // library has to render before a profile has been picked. A missing or
   // malformed header simply yields no progress rather than an error.
-  function optionalProfileId(request: { headers: Record<string, unknown> }): number | null {
-    const profileId = Number(request.headers["x-profile-id"]);
-    return Number.isInteger(profileId) && profileId >= 1 ? profileId : null;
+  //
+  // Spec 28: a profile session owns its `profileId`; the header is ignored. The
+  // break-glass household session has no profile, so it may still name one
+  // during the migration. With auth disabled (development) the header behaves
+  // as it always did.
+  function optionalProfileId(request: FastifyRequest): number | null {
+    const sessionProfileId = request.auth?.session.profileId ?? null;
+    if (sessionProfileId !== null) return sessionProfileId;
+    if (request.auth && request.auth.via !== "household") return null;
+    const profileId = headerProfileId(request);
+    return profileId;
   }
 
   app.get("/api/audiobooks", async (request, reply) => {
@@ -1201,9 +1227,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // ---------------------------------------------------------------------
 
   /** Every metadata route requires a profile; favourites are per profile. */
-  function requireProfileId(request: { headers: Record<string, unknown> }): number | null {
-    const profileId = Number(request.headers["x-profile-id"]);
-    return Number.isInteger(profileId) && profileId > 0 ? profileId : null;
+  function requireProfileId(request: FastifyRequest): number | null {
+    return optionalProfileId(request);
   }
 
   app.put<{ Params: { id: string } }>("/api/audiobooks/:id/favourite", {
@@ -1600,7 +1625,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // Profiles
-  app.get("/api/profiles", async () => prisma.profile.findMany({ orderBy: { createdAt: "asc" } }));
+  //
+  // Never return `passwordHash` (or any auth secret) from the profile surface.
+  // The public account list is `/api/auth/accounts`; this route keeps the
+  // existing shape for the profile picker and the tests.
+  const profileSummary = {
+    id: true,
+    name: true,
+    color: true,
+    role: true,
+    disabled: true,
+    createdAt: true,
+    followsServerLibrary: true,
+  } as const;
+  app.get("/api/profiles", async () => prisma.profile.findMany({
+    orderBy: { createdAt: "asc" },
+    select: profileSummary,
+  }));
 
   app.post<{ Body: { name?: string; color?: string } }>("/api/profiles", async (request, reply) => {
     const name = request.body?.name?.trim();
@@ -1611,7 +1652,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // library. This is the one line the spec points at: flip `followsServerLibrary`
     // to true and copy the books across to give new profiles the full library
     // instead.
-    const profile = await prisma.profile.create({ data: { name, color: request.body?.color?.trim() || null } });
+    const profile = await prisma.profile.create({
+      data: { name, color: request.body?.color?.trim() || null },
+      select: profileSummary,
+    });
     return reply.code(201).send(profile);
   });
 
