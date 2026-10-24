@@ -37,7 +37,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label: copy.security.thisDevice }),
       });
-      if (!response.ok) throw new Error(copy.security.deviceFailed);
+      if (!response.ok) throw new Error(copy.login.deviceFailed);
       const created = (await response.json()) as { id: string; secret: string };
       id = created.id;
       await biometricVault.save({ profileId, secret: created.secret, key: toBase64(key) });
@@ -45,7 +45,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
       await refresh();
     } catch (error) {
       if (id) await boundedFetch(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined);
-      setMessage(error instanceof Error ? error.message : copy.security.deviceFailed);
+      setMessage(error instanceof Error ? error.message : copy.login.deviceFailed);
     } finally { setBusy(false); }
   };
 
@@ -53,11 +53,11 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
     setBusy(true);
     try {
       const response = await boundedFetch(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
-      if (!response.ok) throw new Error(copy.security.deviceFailed);
+      if (!response.ok) throw new Error(copy.login.deviceFailed);
       await biometricVault.clear();
       await refresh();
       setMessage(copy.security.deviceRemoved);
-    } catch (error) { setMessage(error instanceof Error ? error.message : copy.security.deviceFailed); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : copy.login.deviceFailed); }
     finally { setBusy(false); }
   };
 

@@ -4,6 +4,7 @@ import {
   activeCacheProfileId,
   cacheFavourites,
   deleteProfileCache,
+  exportActiveProfileKey,
   getPrivateValue,
   hasProfileCache,
   lockOfflineCache,
@@ -12,6 +13,7 @@ import {
   rememberProfileKey,
   rewrapProfileKey,
   unlockProfileCache,
+  unlockProfileCacheWithKey,
   WrongPasswordError,
 } from "./privateCache";
 
@@ -29,6 +31,19 @@ afterEach(async () => {
 });
 
 describe("the offline cache envelope", () => {
+  it("restores the same profile key released by the Android Vault", async () => {
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await putPrivateValue("progress", "42", { position: 1234 }, db);
+    const nativeVaultKey = await exportActiveProfileKey(7);
+    expect(nativeVaultKey).toHaveLength(32);
+
+    lockOfflineCache();
+    await unlockProfileCacheWithKey(7, nativeVaultKey!);
+
+    expect(activeCacheProfileId()).toBe(7);
+    expect(await getPrivateValue("progress", "42", db)).toEqual({ position: 1234 });
+  });
+
   it("stores only a wrapped key and encrypts private values", async () => {
     await rememberProfileKey(7, "correct-horse-9", db);
     expect(activeCacheProfileId()).toBe(7);

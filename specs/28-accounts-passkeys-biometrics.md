@@ -16,19 +16,21 @@ It is written before the code, per `AGENTS.md`. The architectural decision and
 the rejected alternatives are in
 [`decisions/016-profiles-are-accounts.md`](../decisions/016-profiles-are-accounts.md).
 
-## What exists today
+## Implementation status (2026-10-24)
 
-- `Profile` has a name and a colour. It has no password and no role.
-- `APP_PASSWORD` is the only password. `/api/auth/login` compares it and puts an
-  opaque token in an in-memory `Set`, a cookie, and the response body.
-- The token proves "someone knows the household password". It does not identify
-  a profile.
-- `x-profile-id` is trusted on every profile-scoped route, including progress,
-  favourites, wishlist, library membership, play sessions and recommendations.
-- The Android app stores the same household token in `localStorage` and sends
-  it in `x-house-session`.
-- The offline cache is not encrypted. Private rows can be read from IndexedDB
-  without the app.
+This spec is implemented through phases 1-6. The remaining work is phases 7-8
+and the manual checks below. The current evidence is:
+
+| Area | Status | Evidence / remaining work |
+|---|---|---|
+| Profile accounts, sessions, roles, password recovery and encrypted cache (phases 1-4) | Implemented | Full server and client suites pass in Linux containers. |
+| Android biometrics (phase 5) | Implemented; smoke checked on Pixel 4a | Android web build and Gradle debug APK build pass; APK installed and app launched without a fatal exception. Focused client/server tests pass. Real enrollment, online biometric sign-in, cancellation, revocation fallback, background lock and offline unlock still need device interaction with a configured server/profile. Motorola Defy check remains. |
+| Web passkeys (phase 6) | Implemented; automated flow verified | Server ceremony tests and Playwright virtual-authenticator registration/sign-in pass. Real Windows Hello checks remain. |
+| Automated suites | Mostly pass | 468 server tests pass (5 scanner tests skipped); 391 client tests pass; copy check passes. Full Playwright run: 44 passed, 1 failed and 6 flaky tests passed on retry. The failure expected an empty library, but the existing persistent Compose data volume contains books; it was left intact. Some trace artifacts also hit transient `ENOENT` errors on `/mnt/c`. |
+| HTTPS and final hardening (phases 7-8) | Not complete | Configure Caddy and `books.home.arpa`; finish session/device UI, media-token and security review, audit, migration rehearsal, copy review and remaining manual checks. |
+
+The device check proves installation and startup only. It does not prove the
+biometric prompt or authentication ceremony works on the physical sensor.
 
 ## Decisions
 

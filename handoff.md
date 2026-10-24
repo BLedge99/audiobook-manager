@@ -16,7 +16,7 @@
   **The current work is roadmap item 28 — accounts, passkeys and biometrics:**
   [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md)
   and [`decisions/016-profiles-are-accounts.md`](decisions/016-profiles-are-accounts.md).
-  Phases 1-4 are implemented. The branch latest commit `8f1555a` also implements phase 6 (web passkeys); older handoff text saying passkeys had not started is stale. This continuation adds the first phase 5 implementation (Android biometric Vault, device credential routes and client integration). It is unverified on Android and remains in the working tree. The owner stages, commits and pushes.
+  Phases 1-4 are implemented. The branch also implements phase 6 (web passkeys); older handoff text saying passkeys had not started is stale. Phase 5 implementation and focused tests are in the working tree; the Android APK was built, installed and launched on the Pixel 4a. The owner stages, commits and pushes.
 - **Spec 28 in one sentence:** a profile is now an account with its own
   password, sessions live in SQLite, admin gates the operator surfaces,
   `APP_PASSWORD` is break-glass only, and private offline data is encrypted
@@ -38,7 +38,8 @@
     unlock, exponential lockout, `createProfileSession`), `routes.ts`. Admin
     role gates and an auth hook live in `app.ts`. Identity is derived from
     the session: a member's forged `x-profile-id` is ignored.
-    `server/src/auth.test.ts` has 14 passing tests.
+    `server/src/auth.test.ts` now has 16 passing tests, including Android
+    device credential enrollment, exchange, revocation and profile isolation.
   - **3 — client accounts: done.** `AccountGate` replaced `LoginGate`
     (deleted): account picker, password sign-in, claim, household break-glass
     recovery, lock, and password-required profile switching.
@@ -51,17 +52,31 @@
     `inLibrary`; `OfflineUnlock` restores them only with the profile
     password. `privateCache.test.ts` (5) and `OfflineUnlock.test.tsx` (3)
     pass; `lockSession` clears the in-memory DEK.
-  - **6 - web passkeys: implemented, validation outstanding.** Latest commit
-    `8f1555a` adds the WebAuthn server, client settings/sign-in, ceremony tests
-    and `e2e/passkeys.spec.ts` with a virtual authenticator. No suite or E2E run
-    is recorded for this branch state.
-  - **5 - Android biometrics: implementation in progress.** This continuation
-    adds a Capacitor `BiometricVault` backed by an AES-GCM Android Keystore key
+  - **6 - web passkeys: implemented; validation passed.** The branch adds the
+    WebAuthn server, client settings/sign-in, ceremony tests and
+    `e2e/passkeys.spec.ts` with a virtual authenticator. The E2E virtual
+    authenticator test passes. The complete server and client suites pass in
+    Linux containers when the server test process has WebAuthn configuration
+    unset (468 passed, 5 skipped; 391 passed respectively).
+  - **5 - Android biometrics: implementation present; device smoke check done.**
+    The change adds a Capacitor `BiometricVault` backed by an AES-GCM Android
+    Keystore key
     requiring `BIOMETRIC_STRONG`, server enrollment/list/revoke/exchange routes,
     Settings enrollment, account-gate exchange, offline DEK unlock and a
-    five-minute background lock. No Gradle build or real-device check has been
-    run; weaker face sensors may report unavailable and leave password sign-in
-    as the path.
+    five-minute background lock. The Android build and Gradle debug APK build
+    succeeded; installed and launched on Pixel 4a (`07261JEC203154`) on
+    2026-10-24. Biometric enrollment and unlock still require a running server
+    and user interaction to verify. Focused client tests cover enrollment,
+    online exchange, revocation, offline DEK restore and hidden enrollment
+    while offline. Weaker face sensors may report unavailable and leave
+    password sign-in as the path.
+  - **Validation (2026-10-24):** `npm run check:copy`, Android TypeScript/Vite
+    build, Gradle `assembleDebug`, all 468 server tests and all 391 client tests
+    pass (5 scanner tests skipped by their suite). Full Playwright run: 44
+    passed, one failed and six were flaky (passed on retry); the remaining
+    smoke failure expected an empty library while the persistent Compose data
+    volume already contained books. It was left intact. Several Playwright
+    trace artifacts also reported transient ENOENT on the `/mnt/c` mount.
   - **7, 8 - not started:** Caddy with `books.home.arpa` and hardening,
     session/device review, audit and migration rehearsal.
 - **Item 27, per-profile library membership, is built** (server and client).
@@ -261,14 +276,14 @@ Phases run in order; see the snapshot above for what each one contains.
 | 2 | Server auth foundation + role gates | **done** |
 | 3 | Client accounts, lock, break-glass | **done** |
 | 4 | Encrypted offline cache | **done** |
-| 6 | Web passkeys (Windows Hello) | **implemented in `8f1555a`; validation outstanding** |
-| 5 | Android biometrics | **implementation in progress; build/device validation outstanding** |
+| 6 | Web passkeys (Windows Hello) | **implemented and E2E virtual authenticator passed** |
+| 5 | Android biometrics | **implementation and APK/device launch validated; enrollment flow needs server setup** |
 | 7 | Caddy + `books.home.arpa` + local CA | after 5 |
 | 8 | Hardening, session/device UI, audit, rehearsal | last |
 
-**Phase 6 - web passkeys, implemented on this branch.**
+**Phase 6 - web passkeys, implemented and validated on this branch.**
 
-The following numbered plan describes the work already present; it is retained as an implementation map. The outstanding work is validation, not writing the ceremonies from scratch.
+The following numbered plan describes the work already present; it is retained as an implementation map. The ceremony tests and virtual-authenticator E2E check pass.
 
 1. `server/src/auth/passkeys.ts` with `@simplewebauthn/server`:
    `generateRegistrationOptions` / `verifyRegistrationResponse`,
@@ -296,14 +311,13 @@ The following numbered plan describes the work already present; it is retained a
    (`WebAuthn.enable` + `WebAuthn.addVirtualAuthenticator`) registers and
    signs in; a mismatched origin must fail. Run via `scripts/e2e-wsl.sh`.
 
-**Then, in order:**
+**Remaining work, in order:**
 
-- **Phase 5 — Android biometrics.** `@capacitor/biometrics` plus Vault: enroll
-  a device secret after a password sign-in, exchange it for a session with
-  `via = "device"`, lock after a background timeout, and fall back to the
-  password on cancel or failure. A revoked device credential must fail the
-  exchange with `device_auth_failed`. The DEK lives in the Vault too, so
-  forgetting the password offline requires an online admin reset and re-sync.
+- **Phase 5 follow-up — interactive device verification.** On the Pixel 4a,
+  configure the app against the running server, sign in with a profile password,
+  enroll the Vault, then check online biometric sign-in, cancel/password
+  fallback, revocation, background lock and offline DEK unlock. Repeat what the
+  device supports on the Motorola Defy. Do not clear the persistent app data.
 - **Phase 7 — HTTPS.** Caddy with `tls internal` serving
   `https://books.home.arpa` and proxying to the API; install the local CA on
   the Windows machines; set `WEBAUTHN_RP_ID=books.home.arpa` and
@@ -1517,8 +1531,13 @@ Remaining follow-ups:
 
 ## Suggestions for next sessions
 
-- **Next code: finish phase 5 and validate phases 5 and 6.** Build the Android app and test the Pixel 4a and Motorola Defy only when the owner is ready for an install. Do not disrupt playback. Then run the verification commands above and update spec 28 acceptance criteria only where checks provide evidence.
-  The passkey/client/server suites, Android build, copy check and E2E have not been run against this worktree state.
+- **Next code: continue phase 7 / 8 and finish interactive biometric validation.**
+  The Pixel 4a now has the debug app; enrollment needs the server online and a
+  profile sign-in before the biometric prompt can be exercised. The suites,
+  Android build and copy check were run on 2026-10-24. Playwright reached 44
+  passes; one smoke check failed because its persistent database already had
+  library books, and six tests passed only after retry. The Android interaction
+  was not yet performed.
 - Consider a server-side `DELETE /api/profiles/:id` guard so the currently
   selected profile can't be deleted from under the user. The client now
   reloads on delete, but other devices (or a stale localStorage) can still

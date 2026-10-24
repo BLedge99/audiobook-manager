@@ -181,7 +181,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
     setBusy(true); setError(undefined);
     try {
       const saved = await biometricVault.unlock<{ profileId: number; secret: string; key: string }>();
-      if (saved.profileId !== mode.account.id) throw new Error(copy.security.deviceFailed);
+      if (saved.profileId !== mode.account.id) throw new Error(copy.login.deviceFailed);
       let token: string | undefined;
       let response: Response | undefined;
       try {
@@ -198,7 +198,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
           await deleteProfileCache(saved.profileId);
           throw new Error(copy.login.deviceGone);
         }
-        throw new Error(copy.security.deviceFailed);
+        throw new Error(copy.login.deviceFailed);
       }
       if (response) token = ((await response.json()) as { token?: string }).token;
       await unlockProfileCacheWithKey(saved.profileId, fromBase64(saved.key));
@@ -206,7 +206,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
     } catch (error) {
       setError(error instanceof Error && error.message === copy.login.deviceGone
         ? copy.login.deviceGone
-        : copy.security.deviceFailed);
+        : copy.login.deviceFailed);
     } finally { setBusy(false); }
   };
 

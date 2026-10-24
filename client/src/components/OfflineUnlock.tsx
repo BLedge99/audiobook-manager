@@ -39,7 +39,7 @@ export function OfflineUnlock({
       if (saved.profileId !== profileId) throw new Error("Wrong profile");
       await unlockProfileCacheWithKey(profileId, fromBase64(saved.key));
       onUnlocked();
-    } catch { setError(copy.security.deviceFailed); }
+    } catch { setError(copy.login.deviceFailed); }
     finally { setBusy(false); }
   };
 

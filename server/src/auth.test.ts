@@ -159,6 +159,71 @@ describe("profile login", () => {
   });
 });
 
+describe("Android device credentials", () => {
+  it("stores only the secret hash, exchanges a valid secret, and rejects it after revocation", async () => {
+    const profile = await createProfile();
+    const signedIn = await login(profile);
+    const headers = { [SESSION_HEADER]: tokenOf(signedIn) };
+
+    const enrollment = await app.inject({
+      method: "POST", url: "/api/auth/devices", headers,
+      payload: { label: "Pixel test device" },
+    });
+    expect(enrollment.statusCode).toBe(200);
+    const credential = enrollment.json<{ id: string; secret: string }>();
+    expect(credential.secret).toHaveLength(43);
+    const stored = await prisma.deviceCredential.findUnique({ where: { id: credential.id } });
+    expect(stored?.secretHash).not.toBe(credential.secret);
+
+    const listing = await app.inject({ method: "GET", url: "/api/auth/devices", headers });
+    expect(listing.json()).toMatchObject({ devices: [{ id: credential.id, label: "Pixel test device" }] });
+    expect(JSON.stringify(listing.json())).not.toContain(credential.secret);
+
+    const exchange = await app.inject({
+      method: "POST", url: "/api/auth/devices/session", payload: { secret: credential.secret },
+    });
+    expect(exchange.statusCode).toBe(200);
+    const session = exchange.json<{ token: string; profile: { id: number } }>();
+    expect(session.profile.id).toBe(profile.id);
+    const sessionInfo = await app.inject({
+      method: "GET", url: "/api/auth/session", headers: { [SESSION_HEADER]: session.token },
+    });
+    expect(sessionInfo.json()).toMatchObject({ via: "device", profile: { id: profile.id } });
+
+    const revoked = await app.inject({
+      method: "DELETE", url: `/api/auth/devices/${credential.id}`, headers,
+    });
+    expect(revoked.statusCode).toBe(200);
+    const rejected = await app.inject({
+      method: "POST", url: "/api/auth/devices/session", payload: { secret: credential.secret },
+    });
+    expect(rejected.statusCode).toBe(401);
+    expect(rejected.json()).toMatchObject({ code: "device_auth_failed" });
+  });
+
+  it("does not let one profile list or revoke another profile's device", async () => {
+    const owner = await createProfile();
+    const other = await createProfile();
+    const ownerLogin = await login(owner);
+    const ownerHeaders = { [SESSION_HEADER]: tokenOf(ownerLogin) };
+    const enrollment = await app.inject({
+      method: "POST", url: "/api/auth/devices", headers: ownerHeaders, payload: {},
+    });
+    const credential = enrollment.json<{ id: string }>();
+    const otherLogin = await login(other);
+    const otherHeaders = { [SESSION_HEADER]: tokenOf(otherLogin) };
+
+    const listing = await app.inject({ method: "GET", url: "/api/auth/devices", headers: otherHeaders });
+    expect(listing.json()).toEqual({ devices: [] });
+    const revoked = await app.inject({
+      method: "DELETE", url: `/api/auth/devices/${credential.id}`, headers: otherHeaders,
+    });
+    expect(revoked.statusCode).toBe(404);
+    const stillListed = await app.inject({ method: "GET", url: "/api/auth/devices", headers: ownerHeaders });
+    expect(stillListed.json()).toMatchObject({ devices: [{ id: credential.id }] });
+  });
+});
+
 describe("roles", () => {
   it("refuses an admin route to a member and allows an admin", async () => {
     const member = await createProfile();
