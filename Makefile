@@ -127,10 +127,10 @@ reset:
 	docker compose up -d --build
 
 install-server:
-	cd server && npm install
+	cd server && npm ci
 
 install-client:
-	cd client && npm install
+	cd client && npm ci
 
 install: install-server install-client
 

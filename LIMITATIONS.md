@@ -431,35 +431,26 @@ Audnexus reachable permanently rather than incidentally.
 
 ## 4. Security debt
 
-`npm audit` in `server/` reports **12 advisories (2 critical, 6 high, 4
-moderate)**. Client is clean (0).
+The security dependency refresh completed on 2026-10-24. Clean installs and
+`npm audit` report zero known vulnerabilities in the root Playwright, server,
+and client dependency trees. The app server and dev/test environments use
+Node 24; Fastify 5 and compatible plugins replace the unsupported Fastify 4
+line, and `music-metadata` 12 replaces the vulnerable parser line. Vite and
+Vitest are patched. CI audits all three dependency trees, and Dependabot checks
+for updates weekly. The production image prunes development dependencies and
+runs as the unprivileged `node` user.
 
-| Package | Severity | Issue |
-|---|---|---|
-| `tinypool` | **critical** | Prototype pollution gadget in worker options → RCE |
-| `vitest` | **critical** | via `@vitest/mocker` |
-| `@fastify/static` | high | Authorization bypass via non-canonical URL paths |
-| `fastify` | high | DoS via unbounded memory allocation in `sendWebStream` |
-| `find-my-way` | high | DDoS with HTTP2 |
-| `music-metadata` | high | Infinite loop in ASF parser |
-| `vite` | high | Path traversal in optimized deps `.map` handling |
-| `source-map-js` | high | Event-loop DoS via indexed source-map offsets |
-| `@vitest/mocker` | moderate | Path traversal / arbitrary file read |
-| `esbuild` | moderate | Dev-server cross-origin requests |
-| `vite-node` | moderate | — |
-| `file-type` | moderate | Infinite loop in ASF parser |
+Verification on 2026-10-24: server tests 468 passed / 5 skipped; client tests
+391 passed; server and client builds passed; the Android-mode web build passed;
+all 10 Playwright security tests passed. A zero audit result only describes
+known advisories at audit time, so keep the automated updates and audits active.
 
-**Assessment:** most are dev-time (`vitest`, `vite`, `esbuild`, `tinypool`) and
-do not ship in the production image. The two that matter are
-**`@fastify/static`** (auth bypass — it serves the built client in
-`Dockerfile.prod`) and **`music-metadata`** (infinite loop on a malformed ASF
-file, reachable from the scanner on untrusted media).
-
-All fixes are breaking major bumps, so they need their own change with a
-re-run of the security E2E suite. **Not started.**
-
----
-
+**Transport remains a material security gap.** The Android client and server
+currently communicate over HTTP on the household LAN. Android's cleartext
+network policy allows this for configurable local server addresses. Credentials
+and sessions therefore lack transport encryption on that network. Resolve this
+with a supported HTTPS setup (for example, managed local CA trust or a secure
+tunnel) before treating remote or untrusted networks as supported.
 ## 5. Developer-experience friction
 
 - **E2E requires WSL + Docker.** `scripts/e2e-wsl.sh` provisions a Linux Node

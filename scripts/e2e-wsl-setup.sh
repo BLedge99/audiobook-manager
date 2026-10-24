@@ -11,7 +11,7 @@
 # WSL even though `node_modules` looks correct.
 set -uo pipefail
 
-NODE_VERSION="v22.11.0"
+NODE_VERSION="v24.22.1"
 INSTALL_DIR="$HOME/.local/node-${NODE_VERSION}"
 
 install_node() {
@@ -43,8 +43,8 @@ if ! ls node_modules/.bin/playwright >/dev/null 2>&1 || \
    [ ! -f node_modules/.bin/playwright ] || \
    head -c 2 node_modules/.bin/playwright 2>/dev/null | grep -q 'MZ'; then
   echo "=== reinstalling root dependencies with the Linux npm ==="
-  rm -rf node_modules package-lock.json
-  npm install 2>&1 | tail -3
+  rm -rf node_modules
+  npm ci 2>&1 | tail -3
 fi
 
 # Playwright pins an exact browser build; a cache from another version fails

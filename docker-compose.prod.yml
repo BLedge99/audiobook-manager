@@ -1,7 +1,18 @@
 # Production-style deployment: one container serves the built client + API.
 # Usage: docker compose -f docker-compose.prod.yml up --build
 services:
+  app-data-permissions:
+    image: node:24-bookworm-slim
+    user: "0:0"
+    command: ["sh", "-c", "chown -R node:node /data"]
+    restart: "no"
+    volumes:
+      - app_data:/data
+
   app:
+    depends_on:
+      app-data-permissions:
+        condition: service_completed_successfully
     build:
       context: .
       dockerfile: Dockerfile.prod

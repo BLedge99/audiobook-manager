@@ -93,7 +93,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // `error.message` on any 4xx, and that included filesystem paths and
     // Prisma wording (spec 11); the client renders the code instead.
     request.log.error(error);
-    const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
+    const candidateStatusCode =
+      typeof error === "object" && error !== null && "statusCode" in error
+        ? error.statusCode
+        : undefined;
+    const statusCode =
+      typeof candidateStatusCode === "number" && candidateStatusCode >= 400
+        ? candidateStatusCode
+        : 500;
     return fail(reply, statusCode, statusCode >= 500 ? "internal_error" : "request_invalid");
   });
 

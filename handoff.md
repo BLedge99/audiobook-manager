@@ -327,9 +327,9 @@ The following numbered plan describes the work already present; it is retained a
   hostname, not an IP.
 - **Phase 8 — hardening.** Short-lived media tokens (an `<audio>` `src`
   cannot carry a header), signed-in-devices UI, the password-change re-wrap
-  UI, `npm audit` (the passkey/noble installs changed both lockfiles), the
-  migration rehearsal against a copy of the live database, the manual checks
-  in spec 28, and a copy review.
+  UI, the migration rehearsal against a copy of the live database, the manual
+  checks in spec 28, and a copy review. Dependency auditing is current as of
+  2026-10-24; see section 4 of `LIMITATIONS.md`.
 
 **Verification before calling a phase done:**
 
@@ -871,11 +871,10 @@ See [`LIMITATIONS.md`](LIMITATIONS.md) for the full list. The headline items:
   route (§2.1 there). Every candidate was tested and rejected.
 - **`npm run scan` is broken** — `package.json` points at a file that does not
   exist. Use `make scan`.
-- **12 npm audit advisories in `server/`** (2 critical, 6 high), mostly dev-only,
-  but `@fastify/static` (auth bypass) and `music-metadata` (infinite loop on
-  malformed media) both matter in production.
 - **No track-title / narrator editor UI** — spec 24 shipped the endpoint, but a
   human cannot use it yet.
+
+Completed 2026-10-24: security dependencies were refreshed; root, server, and client audits report zero vulnerabilities. The remaining household-LAN HTTP transport gap is recorded in `LIMITATIONS.md`.
 
 ### Two judgement calls to sanity-check
 
@@ -1393,8 +1392,9 @@ Notes for the next session:
 
 - The previous session's "browser resume test still fails" item is **closed**;
   spec 04's browser acceptance can be treated as met.
-- `npm audit` (server) still reports advisories in `@fastify/static`, `vitest`
-  and `esbuild`; the fixes are breaking major bumps and were left alone here.
+- Historical audit findings for `@fastify/static`, `vitest`, and `esbuild` were
+  addressed in the 2026-10-24 security refresh; current audits report zero
+  vulnerabilities.
 - The compose dev server uses `prisma db push`, so `prisma migrate status`
   reports all migrations as unapplied against that database. That is expected;
   the migration matters for `Dockerfile.prod` (`migrate deploy`).
@@ -1498,7 +1498,7 @@ Remaining follow-ups:
 - Commit + push from the user's terminal (owner pushes manually).
 
 ### Environment notes (important for a fresh session)
-- No system Node: use `export PATH=$HOME/node/bin:$PATH` (Node v22.11.0, npm 10.9.0).
+- No system Node: use `export PATH=$HOME/node/bin:$PATH` (Node v24.22.1).
 - Dev servers were restarted this session and are running in the
   background: server :3000 (APP_PASSWORD=household, DATABASE_URL=
   file:/tmp/audiobook-e2e.db, COVER_DIR=/tmp/covers) and client :5173
@@ -1542,9 +1542,7 @@ Remaining follow-ups:
   selected profile can't be deleted from under the user. The client now
   reloads on delete, but other devices (or a stale localStorage) can still
   point at a deleted row and get silent 400s on every progress save.
-- `npm audit` in both packages: the spec 28 installs (`@noble/hashes`,
-  `@simplewebauthn/server`, soon `@simplewebauthn/browser`) changed the
-  lockfiles. Re-run it before the phase 8 handoff.
+- Security audit refresh (2026-10-24): clean installs/audits, all unit suites, builds, and 10/10 security E2E checks passed on Node 24.22.1. Dependency audit automation and weekly Dependabot updates now cover root, server, and client. HTTP on the household LAN remains the documented security gap.
 - ~~**Spec 15 (GUI redesign) is next**, and has no spec file yet~~ — **done
   2026-10-18.** `specs/15-gui-redesign.md` exists, the redesign landed, and
   `DESIGN.md` records the built system. 15b is done; spec 28 is the current

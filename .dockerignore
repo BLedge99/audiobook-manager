@@ -1,0 +1,16 @@
+.git
+.github
+.agents
+.codex
+.devcontainer
+test/
+audiobooks/
+data/
+client/android/
+**/node_modules/
+**/dist/
+**/coverage/
+**/.env
+**/.env.*
+**/*.db
+**/*.sqlite
