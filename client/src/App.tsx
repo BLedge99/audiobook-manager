@@ -4,7 +4,7 @@ import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
 import { FilterBar } from "./components/FilterBar";
-import { needsServerUrl, fetchSession, getActiveProfileId, setActiveProfileId, setSessionToken, type SessionInfo } from "./lib/api";
+import { needsServerUrl, fetchSession, getActiveProfileId, setActiveProfileId, setSessionToken, lockSession, type SessionInfo } from "./lib/api";
 import { AccountGate } from "./components/AccountGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
 import { OfflineUnlock } from "./components/OfflineUnlock";
@@ -174,6 +174,36 @@ function App() {
   useEffect(() => {
     probeServer();
   }, [probeServer]);
+
+  // Keep the native shell private when it has been out of view for five
+  // minutes. Mobile timers can be throttled in the background, so check the
+  // elapsed wall time on return as well as using the timer.
+  useEffect(() => {
+    if (!isNativeShell()) return;
+    let hiddenAt: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const lock = () => {
+      void lockSession();
+      setAuthed(false);
+      setSession(null);
+      setOfflineUnlocked(false);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        timer = setTimeout(lock, 5 * 60 * 1000);
+      } else if (hiddenAt !== null) {
+        if (Date.now() - hiddenAt >= 5 * 60 * 1000) lock();
+        else if (timer) clearTimeout(timer);
+        hiddenAt = null;
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   /** Write the current view (tab + filters + search) to the URL. */
   const syncUrl = useCallback((nextTab: Tab, nextFilters: Filters, nextSearch: string) => {

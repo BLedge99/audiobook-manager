@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { PrismaClient, Profile, Session } from "@prisma/client";
 import type { ApiErrorCode, ApiErrorParams } from "../http-errors";
 import {
@@ -90,7 +90,10 @@ export class AuthService {
   async listAccounts() {
     const profiles = await this.prisma.profile.findMany({
       orderBy: { createdAt: "asc" },
-      include: { _count: { select: { webauthnCredentials: true } } },
+      include: { _count: { select: {
+        webauthnCredentials: true,
+        deviceCredentials: { where: { revokedAt: null, expiresAt: { gt: this.now() } } },
+      } } },
     });
     return profiles.map((profile) => ({
       id: profile.id,
@@ -100,6 +103,7 @@ export class AuthService {
       disabled: profile.disabled,
       hasPassword: Boolean(profile.passwordHash),
       hasPasskey: profile._count.webauthnCredentials > 0,
+      hasDeviceUnlock: profile._count.deviceCredentials > 0,
     }));
   }
 
@@ -296,6 +300,50 @@ export class AuthService {
     if (!profile) throw new AuthFailure(404, "not_found");
     if (profile.disabled) throw new AuthFailure(403, "account_disabled");
     return this.createSession(profileId, via, meta);
+  }
+
+  /** Create a device-bound secret. Only its hash is stored by the server. */
+  async createDeviceCredential(profileId: number, label: string | null) {
+    const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
+    if (!profile) throw new AuthFailure(404, "not_found");
+    if (profile.disabled) throw new AuthFailure(403, "account_disabled");
+    const secret = randomBytes(32).toString("base64url");
+    const created = await this.prisma.deviceCredential.create({
+      data: {
+        id: randomUUID(), profileId, secretHash: hashSessionToken(secret),
+        label: label?.trim() || null,
+        expiresAt: new Date(this.now().getTime() + 90 * 24 * 60 * 60 * 1000),
+      },
+    });
+    return { id: created.id, secret, label: created.label, expiresAt: created.expiresAt };
+  }
+
+  async exchangeDeviceCredential(secret: string, meta: SessionMetadata): Promise<LoginResult> {
+    const credential = await this.prisma.deviceCredential.findUnique({
+      where: { secretHash: hashSessionToken(secret) },
+    });
+    const now = this.now();
+    if (!credential || credential.revokedAt || credential.expiresAt <= now) {
+      throw new AuthFailure(401, "device_auth_failed");
+    }
+    await this.prisma.deviceCredential.update({
+      where: { id: credential.id }, data: { lastUsedAt: now },
+    });
+    return this.createProfileSession(credential.profileId, "device", meta);
+  }
+
+  async listDeviceCredentials(profileId: number) {
+    return this.prisma.deviceCredential.findMany({
+      where: { profileId, revokedAt: null }, orderBy: { createdAt: "asc" },
+      select: { id: true, label: true, createdAt: true, lastUsedAt: true, expiresAt: true },
+    });
+  }
+
+  async revokeDeviceCredential(profileId: number, id: string): Promise<void> {
+    const result = await this.prisma.deviceCredential.updateMany({
+      where: { id, profileId, revokedAt: null }, data: { revokedAt: this.now() },
+    });
+    if (!result.count) throw new AuthFailure(404, "device_not_found");
   }
 
   async validate(token: string): Promise<AuthContext | null> {

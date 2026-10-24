@@ -198,6 +198,22 @@ export function activeCacheKey(profileId: number): CryptoKey | undefined {
   return activeKeys.get(profileId);
 }
 
+/** Restore a DEK released by the native biometric Vault. */
+export async function unlockProfileCacheWithKey(profileId: number, rawKey: Uint8Array): Promise<void> {
+  if (rawKey.byteLength !== DEK_BYTES) throw new Error("Invalid profile key.");
+  const key = await subtle().importKey("raw", rawKey, { name: "AES-GCM" }, true,
+    ["encrypt", "decrypt", "wrapKey", "unwrapKey"]);
+  activeKeys.clear();
+  activeKeys.set(profileId, key);
+}
+
+/** Export the active DEK only so the Android native Vault can encrypt it. */
+export async function exportActiveProfileKey(profileId: number): Promise<Uint8Array | null> {
+  const key = activeKeys.get(profileId);
+  if (!key) return null;
+  return new Uint8Array(await subtle().exportKey("raw", key));
+}
+
 export function lockOfflineCache(): void {
   activeKeys.clear();
 }

@@ -12,15 +12,11 @@
 
 - Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
   (also reachable at `/mnt/c/...` from WSL, which is where Docker runs).
-- Branch: master. Specs `01..15, 15b, 16..28` and decisions `001..016` exist.
+- Branch: `deepseek-skill` tracking `origin/deepseek-skill` (requested from GitHub on 2026-10-24). The previous `master` branch and its one local-ahead commit remain preserved. An untracked Android `ExampleUnitTest.java` was already present after switching and has been left untouched. Specs `01..15, 15b, 16..28` and decisions `001..016` exist.
   **The current work is roadmap item 28 — accounts, passkeys and biometrics:**
   [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md)
   and [`decisions/016-profiles-are-accounts.md`](decisions/016-profiles-are-accounts.md).
-  Phases 1–4 are written (schema/migration, server auth, client accounts,
-  encrypted offline cache). **Phase 6, web passkeys, is the next code to
-  write**; then 5 (Android biometrics), 7 (Caddy/HTTPS) and 8 (hardening).
-  All of it is uncommitted in the working tree — the owner stages, commits and
-  pushes.
+  Phases 1-4 are implemented. The branch latest commit `8f1555a` also implements phase 6 (web passkeys); older handoff text saying passkeys had not started is stale. This continuation adds the first phase 5 implementation (Android biometric Vault, device credential routes and client integration). It is unverified on Android and remains in the working tree. The owner stages, commits and pushes.
 - **Spec 28 in one sentence:** a profile is now an account with its own
   password, sessions live in SQLite, admin gates the operator surfaces,
   `APP_PASSWORD` is break-glass only, and private offline data is encrypted
@@ -55,12 +51,19 @@
     `inLibrary`; `OfflineUnlock` restores them only with the profile
     password. `privateCache.test.ts` (5) and `OfflineUnlock.test.tsx` (3)
     pass; `lockSession` clears the in-memory DEK.
-  - **6 — web passkeys: not started.** No `server/src/auth/passkeys.ts`, no
-    passkey routes registered, no `@simplewebauthn/browser` in the client.
-    `@simplewebauthn/server` v14 is installed and
-    `auth.createProfileSession` exists for the assertion path.
-  - **5, 7, 8 — not started:** Android biometrics, Caddy with
-    `books.home.arpa`, and hardening.
+  - **6 - web passkeys: implemented, validation outstanding.** Latest commit
+    `8f1555a` adds the WebAuthn server, client settings/sign-in, ceremony tests
+    and `e2e/passkeys.spec.ts` with a virtual authenticator. No suite or E2E run
+    is recorded for this branch state.
+  - **5 - Android biometrics: implementation in progress.** This continuation
+    adds a Capacitor `BiometricVault` backed by an AES-GCM Android Keystore key
+    requiring `BIOMETRIC_STRONG`, server enrollment/list/revoke/exchange routes,
+    Settings enrollment, account-gate exchange, offline DEK unlock and a
+    five-minute background lock. No Gradle build or real-device check has been
+    run; weaker face sensors may report unavailable and leave password sign-in
+    as the path.
+  - **7, 8 - not started:** Caddy with `books.home.arpa` and hardening,
+    session/device review, audit and migration rehearsal.
 - **Item 27, per-profile library membership, is built** (server and client).
   New profiles start empty; existing profiles are migrated to contain every
   book, so shipping it changes nothing for a household that already has the
@@ -125,7 +128,7 @@
   only unmet acceptance criterion is the visible downloaded-books list with
   "Remove from device", which the household removed from the polish pass on
   2026-10-19. See `LIMITATIONS.md` §1.4 and §3.
-- Test counts as of 2026-10-24, after the spec 28 cache and account work:
+- Historical test counts from before passkey phase 6 and this Android phase 5 work (2026-10-24):
   **server 446 pass, 5 skipped** (14 of them auth), **client 374 pass** —
   but the full client suite has not been rerun since `LoginGate` was deleted,
   and the new cache tests were run individually. `npx tsc -b` in `client/` is
@@ -133,7 +136,7 @@
   offline-unlock changes; run it from WSL via `scripts/e2e-wsl.sh`.
   `make check-copy` had two banned-word hits for "cache"; the wording was
   changed and the check has not been rerun.
-  Re-run the suites rather than trusting these counts after the next phase.
+  These counts do not validate the passkey or biometric changes in the current worktree.
 - **Pushes are the owner's call.** Feature 3 (`cb28038`) was pushed from this
   session; the doc commits after it were left for the owner to push.
 
@@ -258,12 +261,14 @@ Phases run in order; see the snapshot above for what each one contains.
 | 2 | Server auth foundation + role gates | **done** |
 | 3 | Client accounts, lock, break-glass | **done** |
 | 4 | Encrypted offline cache | **done** |
-| 6 | Web passkeys (Windows Hello) | **next** |
-| 5 | Android biometrics | after 6 |
+| 6 | Web passkeys (Windows Hello) | **implemented in `8f1555a`; validation outstanding** |
+| 5 | Android biometrics | **implementation in progress; build/device validation outstanding** |
 | 7 | Caddy + `books.home.arpa` + local CA | after 5 |
 | 8 | Hardening, session/device UI, audit, rehearsal | last |
 
-**Phase 6 — web passkeys, the concrete plan.**
+**Phase 6 - web passkeys, implemented on this branch.**
+
+The following numbered plan describes the work already present; it is retained as an implementation map. The outstanding work is validation, not writing the ceremonies from scratch.
 
 1. `server/src/auth/passkeys.ts` with `@simplewebauthn/server`:
    `generateRegistrationOptions` / `verifyRegistrationResponse`,
@@ -1503,14 +1508,7 @@ Remaining follow-ups:
 
 ## Open questions / blockers
 
-- **Passkey sign-in does not unlock the offline cache.** A Windows Hello
-  assertion proves who the person is but supplies no password, so
-  `rememberProfileKey` cannot derive the KEK and the local private rows stay
-  sealed until the password is entered. Decide in phase 6 whether to (a) ask
-  for the password only when the listener opens something that needs saved
-  profile data, (b) accept that passkey sign-in is online-only for private
-  data, or (c) add a second factor to the passkey flow that can unwrap the
-  envelope. The spec currently implies (a) but does not say it.
+- **Passkey offline data boundary:** a passkey signs in online but does not unlock the password-wrapped offline key. The user enters the profile password on the offline unlock screen when they need private saved data; this is the spec approach, and the older open-question note is resolved.
 - **Migration rehearsal target.** Phase 8 needs a copy of the live
   `audiobook.db`; confirm with the owner before copying it, and check
   `Playwright`/`Testing`/`Archie` and each profile's library afterwards.
@@ -1519,11 +1517,8 @@ Remaining follow-ups:
 
 ## Suggestions for next sessions
 
-- **Next code: phase 6, web passkeys.** See "Current task" for the concrete
-  plan. Nothing is committed yet; the owner stages, commits and pushes.
-- **Rerun the full suites before starting phase 6.** The client suite and
-  Playwright have not both run since `LoginGate` was deleted and the lock
-  behaviour landed, and `check:copy` has not run since the wording fix.
+- **Next code: finish phase 5 and validate phases 5 and 6.** Build the Android app and test the Pixel 4a and Motorola Defy only when the owner is ready for an install. Do not disrupt playback. Then run the verification commands above and update spec 28 acceptance criteria only where checks provide evidence.
+  The passkey/client/server suites, Android build, copy check and E2E have not been run against this worktree state.
 - Consider a server-side `DELETE /api/profiles/:id` guard so the currently
   selected profile can't be deleted from under the user. The client now
   reloads on delete, but other devices (or a stale localStorage) can still

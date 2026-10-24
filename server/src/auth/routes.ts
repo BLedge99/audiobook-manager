@@ -78,6 +78,49 @@ export async function registerAuthRoutes(
   auth: AuthService,
   options: RegisterAuthOptions,
 ): Promise<void> {
+  // The device secret is presented only after the OS biometric prompt has
+  // released it from the native Vault. It is exchanged for an ordinary,
+  // revocable profile session and is never returned again.
+  app.post<{ Body: { secret: string } }>("/api/auth/devices/session", {
+    schema: { body: { type: "object", properties: { secret: { type: "string", minLength: 20, maxLength: 128 } }, required: ["secret"], additionalProperties: false } },
+  }, async (request, reply) => {
+    try {
+      const result = await auth.exchangeDeviceCredential(request.body.secret, metadata(request));
+      setSessionCookie(reply, result.token, options);
+      return loginPayload(result);
+    } catch (error) {
+      return sendAuthFailure(reply, error);
+    }
+  });
+
+  app.post<{ Body: { label?: string } }>("/api/auth/devices", {
+    schema: { body: { type: "object", properties: { label: { type: "string", maxLength: 80 } }, additionalProperties: false } },
+  }, async (request, reply) => {
+    if (!request.auth?.profile) return fail(reply, 403, "forbidden");
+    try {
+      return await auth.createDeviceCredential(request.auth.profile.id, request.body.label ?? null);
+    } catch (error) {
+      return sendAuthFailure(reply, error);
+    }
+  });
+
+  app.get("/api/auth/devices", async (request, reply) => {
+    if (!request.auth?.profile) return fail(reply, 403, "forbidden");
+    return { devices: await auth.listDeviceCredentials(request.auth.profile.id) };
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/auth/devices/:id", {
+    schema: { params: { type: "object", properties: { id: { type: "string", minLength: 1, maxLength: 80 } }, required: ["id"] } },
+  }, async (request, reply) => {
+    if (!request.auth?.profile) return fail(reply, 403, "forbidden");
+    try {
+      await auth.revokeDeviceCredential(request.auth.profile.id, request.params.id);
+      return { ok: true };
+    } catch (error) {
+      return sendAuthFailure(reply, error);
+    }
+  });
+
   app.post<{ Body: { password: string; profileId?: number } }>("/api/auth/login", {
     schema: {
       body: {

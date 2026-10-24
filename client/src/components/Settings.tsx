@@ -4,6 +4,7 @@ import { getServerUrl, setServerUrl } from "../lib/api";
 import { copy } from "../copy";
 import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
 import { PasskeySettings } from "./PasskeySettings";
+import { DeviceUnlockSettings } from "./DeviceUnlockSettings";
 
 export interface SettingsProps {
   /** Bytes held on the device, for the storage line. */
@@ -204,6 +205,7 @@ export function Settings({
         </section>
 
         <PasskeySettings />
+        <DeviceUnlockSettings offline={offline} />
       </div>
     </div>
   );

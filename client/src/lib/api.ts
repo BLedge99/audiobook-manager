@@ -44,6 +44,7 @@ export const SESSION_TOKEN_KEY = "houseSessionToken";
 
 /** Storage key for the profile chosen in the break-glass flow. */
 export const PROFILE_ID_KEY = "profileId";
+let nativeSessionToken = "";
 
 /** The header the server accepts the session token in (see server `app.ts`). */
 export const SESSION_HEADER = "x-house-session";
@@ -68,7 +69,7 @@ export interface SessionInfo {
 }
 
 /**
- * Persist the session token returned by `/api/auth/login`.
+ * Keep the session token returned by `/api/auth/login`.
  *
  * ## Why a token and not just the cookie
  *
@@ -81,11 +82,17 @@ export interface SessionInfo {
  *
  * `SameSite=None` would fix that but requires `Secure`, i.e. real HTTPS, which
  * a plain-HTTP LAN server does not have. So the token is also returned in the
- * login response body and sent as a header. The cookie still works and is still
- * set; this is an additional path, not a replacement.
+ * login response body and sent as a header. Browser tokens remain in
+ * localStorage for the current web flow; Android keeps its token in memory and
+ * stores the long-lived device secret only in the native biometric Vault.
  */
 export function setSessionToken(token: string | undefined | null): void {
   if (typeof window === "undefined") return;
+  if (isNativeShell()) {
+    nativeSessionToken = token || "";
+    try { window.localStorage.removeItem(SESSION_TOKEN_KEY); } catch { /* ignored */ }
+    return;
+  }
   try {
     if (token) window.localStorage.setItem(SESSION_TOKEN_KEY, token);
     else window.localStorage.removeItem(SESSION_TOKEN_KEY);
@@ -123,7 +130,7 @@ export function setActiveProfileId(id: string | number | null): void {
  */
 export async function fetchSession(): Promise<SessionInfo | null> {
   try {
-    const res = await fetch("/api/auth/session");
+    const res = await boundedFetch("/api/auth/session");
     if (!res.ok) return null;
     return (await res.json()) as SessionInfo;
   } catch {
@@ -140,7 +147,7 @@ export async function fetchSession(): Promise<SessionInfo | null> {
  */
 export async function lockSession(): Promise<void> {
   try {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await boundedFetch("/api/auth/logout", { method: "POST" });
   } catch {
     // Offline: local lock is still authoritative.
   }
@@ -152,6 +159,7 @@ export async function lockSession(): Promise<void> {
 
 function readSessionToken(): string {
   if (typeof window === "undefined") return "";
+  if (isNativeShell()) return nativeSessionToken;
   try {
     return window.localStorage.getItem(SESSION_TOKEN_KEY) || "";
   } catch {

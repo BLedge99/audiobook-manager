@@ -415,7 +415,7 @@ Audnexus reachable permanently rather than incidentally.
 |---|---|
 | **Spec 13 — media tools** | Out of scope by decision. Media is a read-only mount; writing tags into user files is not wanted. |
 | **Downloaded-books list and "Remove from device"** | An unmet spec 26 acceptance criterion: Settings shows a byte total and a count, but no list and no way to free a book from the UI. Removed from the 15b polish pass by the user on 2026-10-19; recorded here so it is not lost. `useDeviceLibrary.remove()` and `Settings` already exist — it is a UI, not a feature. |
-| **Per-profile privacy (PIN + biometrics)** | Finding 2 of the user testing. Planned as roadmap item 28 and [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md), with [`decisions/016-profiles-are-accounts.md`](decisions/016-profiles-are-accounts.md). Until it ships, the shared household password plus `x-profile-id` still lets anyone who knows the password act as any profile. |
+| **Spec 28 - accounts, passkeys and biometrics** | In progress on `deepseek-skill`. Account/session phases 1-4 and web passkey phase 6 are implemented; phase 5 Android biometric work is in progress and unverified. HTTPS deployment and final hardening remain. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and the live [`handoff.md`](handoff.md). |
 | **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. Now sequenced **after** spec 26, since restyling a shell that is about to be wrapped in an APK would mean restyling it twice. |
 | **Chapter/track title editor UI** | Spec 24 shipped the `PUT /tracks/:trackNumber/title` endpoint and the `FieldOverride` storage, but **no UI**. A hand-set narrator/track title is only reachable via API. |
 | **Bookmarks & highlights** | Needs a new data model. Deliberately out of spec 14. |
@@ -849,9 +849,9 @@ home, so the Android app became the top priority and displaced the GUI redesign.
    book, so nobody's library changes on upgrade. A separate "All books" tab;
    removing a book offers to delete its download too. The 512 MB cover cache is
    deliberately untouched by it.
-7. **Per-profile privacy (PIN, optional biometrics).** Finding 2. Now roadmap
-   item 28 and [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md);
-   the shared password + `x-profile-id` model remains until it lands.
+7. **Spec 28 - accounts, passkeys and biometrics.** Finding 2. In progress on `deepseek-skill`; the account/password foundation and web passkey implementation are present, Android biometric unlock is being completed, and HTTPS/hardening remain. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and [`handoff.md`](handoff.md).
+
+
 8. **Lock-screen control latency.** Finding 6. Measure before fixing — §5 records
    two false diagnoses in this exact area.
 9. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable

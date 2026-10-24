@@ -529,6 +529,17 @@ export const copy = {
     neverUsed: "Not used yet",
     signIn: "Sign in with Windows Hello",
     failed: "Windows Hello didn't finish. Try again, or use your password.",
+    deviceHeading: "Fingerprint or face",
+    deviceIntro: "Use this device's screen lock to open your profile. The profile password still protects it on other devices.",
+    deviceEnable: "Enable fingerprint or face",
+    deviceReady: "Fingerprint or face unlock is ready on this device.",
+    deviceRemoved: "Fingerprint or face unlock is turned off on this device.",
+    deviceNeedsPassword: "Sign in with your profile password before enabling this.",
+    deviceSignIn: "Unlock with fingerprint or face",
+    thisDevice: "This device",
+    vaultPromptTitle: "Open your profile",
+    vaultPromptSubtitle: "Use your fingerprint or face to continue.",
+    vaultPromptCancel: "Use password",
   },
 
   profile: {

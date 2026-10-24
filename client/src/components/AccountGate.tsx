@@ -9,7 +9,8 @@ import {
 import { responseErrorText } from "../lib/apiError";
 import { isNativeShell } from "../lib/platform";
 import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
-import { lockOfflineCache, rememberProfileKey } from "../local/privateCache";
+import { deleteProfileCache, fromBase64, lockOfflineCache, rememberProfileKey, unlockProfileCacheWithKey } from "../local/privateCache";
+import { biometricVault } from "../lib/biometricVault";
 import { Btn, Field, FullScreen, Wordmark, cn } from "../ui/primitives";
 
 interface Account {
@@ -20,6 +21,7 @@ interface Account {
   disabled: boolean;
   hasPassword: boolean;
   hasPasskey: boolean;
+  hasDeviceUnlock: boolean;
 }
 
 type Mode =
@@ -57,6 +59,9 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passkeysAvailable, setPasskeysAvailable] = useState(() => passkeysSupported());
+  const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+
+  useEffect(() => { void biometricVault.available().then(setBiometricsAvailable); }, []);
 
   useEffect(() => {
     let alive = true;
@@ -169,6 +174,40 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const biometricSignIn = async () => {
+    if (mode.kind !== "password") return;
+    setBusy(true); setError(undefined);
+    try {
+      const saved = await biometricVault.unlock<{ profileId: number; secret: string; key: string }>();
+      if (saved.profileId !== mode.account.id) throw new Error(copy.security.deviceFailed);
+      let token: string | undefined;
+      let response: Response | undefined;
+      try {
+        response = await boundedFetch("/api/auth/devices/session", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret: saved.secret }),
+        });
+      } catch {
+        // The DEK can open this profile offline; no server session is invented.
+      }
+      if (response && !response.ok) {
+        if (response.status === 401 || response.status === 404) {
+          await biometricVault.clear();
+          await deleteProfileCache(saved.profileId);
+          throw new Error(copy.login.deviceGone);
+        }
+        throw new Error(copy.security.deviceFailed);
+      }
+      if (response) token = ((await response.json()) as { token?: string }).token;
+      await unlockProfileCacheWithKey(saved.profileId, fromBase64(saved.key));
+      finish(saved.profileId, token);
+    } catch (error) {
+      setError(error instanceof Error && error.message === copy.login.deviceGone
+        ? copy.login.deviceGone
+        : copy.security.deviceFailed);
+    } finally { setBusy(false); }
   };
 
   const claim = async (event: FormEvent) => {
@@ -367,6 +406,11 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
                 >
                   <Fingerprint size={17} aria-hidden="true" />
                   {busy ? copy.security.adding : copy.security.signIn}
+                </Btn>
+              )}
+              {biometricsAvailable && mode.account.hasDeviceUnlock && isNativeShell() && (
+                <Btn type="button" variant="quiet" disabled={busy} onClick={() => void biometricSignIn()} className="w-full">
+                  <Fingerprint size={17} aria-hidden="true" /> {copy.security.deviceSignIn}
                 </Btn>
               )}
               <button

@@ -1,11 +1,14 @@
-import { type FormEvent, useState } from "react";
-import { CloudOff, KeyRound, LoaderCircle } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
+import { CloudOff, Fingerprint, KeyRound, LoaderCircle } from "lucide-react";
 import { copy } from "../copy";
 import {
   CacheKeyMissingError,
   unlockProfileCache,
   WrongPasswordError,
+  unlockProfileCacheWithKey,
+  fromBase64,
 } from "../local/privateCache";
+import { biometricVault } from "../lib/biometricVault";
 import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
 
 /**
@@ -25,6 +28,20 @@ export function OfflineUnlock({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [hasBiometric, setHasBiometric] = useState(false);
+  useEffect(() => { void biometricVault.hasSavedValue().then(setHasBiometric); }, []);
+
+  const unlockBiometric = async () => {
+    setBusy(true); setError(undefined);
+    try {
+      const profileId = Number(window.localStorage.getItem("profileId"));
+      const saved = await biometricVault.unlock<{ profileId: number; key: string }>();
+      if (saved.profileId !== profileId) throw new Error("Wrong profile");
+      await unlockProfileCacheWithKey(profileId, fromBase64(saved.key));
+      onUnlocked();
+    } catch { setError(copy.security.deviceFailed); }
+    finally { setBusy(false); }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -93,6 +110,9 @@ export function OfflineUnlock({
               )}
             </Btn>
           </form>
+          {hasBiometric && <Btn type="button" variant="quiet" disabled={busy} className="mt-3 w-full" onClick={() => void unlockBiometric()}>
+            <Fingerprint size={17} aria-hidden="true" /> {copy.security.deviceSignIn}
+          </Btn>}
 
           {error && (
             <p
