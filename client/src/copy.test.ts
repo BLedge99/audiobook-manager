@@ -192,6 +192,7 @@ const ICU_PENDING = [
   "copy.filters.clearCount",
   "copy.filters.groupLabel",
   "copy.search.matches",
+  "copy.security.lastActive",
   "copy.security.lastUsed",
   "copy.discover.showing",
   "copy.discover.removeFromWishlist",

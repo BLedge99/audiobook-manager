@@ -48,6 +48,9 @@ services:
       # The E2E security suite asserts that unauthenticated API calls are
       # rejected, which only holds when auth is actually enabled.
       - APP_PASSWORD=${APP_PASSWORD:-household}
+      # Development-only signing key; production Compose requires a unique
+      # MEDIA_TOKEN_SECRET from the private .env file.
+      - MEDIA_TOKEN_SECRET=${MEDIA_TOKEN_SECRET:-development-only-media-token-secret-32-bytes}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
       # Spec 28: passkeys are WebAuthn, so the RP id and the page origin must
       # agree. Vite serves the client on localhost:5173, which is a secure

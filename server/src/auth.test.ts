@@ -55,7 +55,7 @@ beforeAll(async () => {
     env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
     stdio: "ignore",
   });
-  app = await buildApp({ logger: false, appPassword: "household" });
+  app = await buildApp({ logger: false, appPassword: "household", mediaTokenSecret: "m".repeat(32) });
 }, 120_000);
 
 afterAll(async () => {
@@ -401,6 +401,18 @@ describe("lockout and reset", () => {
 });
 
 describe("sessions", () => {
+  it("lists a safe platform label and permits revoking another session", async () => {
+    const profile = await createProfile();
+    const loginResponse = await app.inject({
+      method: "POST", url: "/api/auth/login", payload: { profileId: profile.id, password: PASSWORD },
+      headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140" },
+    });
+    const token = tokenOf(loginResponse);
+    const list = await app.inject({ method: "GET", url: "/api/auth/sessions", headers: { [SESSION_HEADER]: token } });
+    expect(list.json<{ sessions: { deviceLabel: string | null; userAgent: string | null }[] }>().sessions[0])
+      .toMatchObject({ deviceLabel: "Windows device", userAgent: expect.stringContaining("Windows NT") });
+  });
+
   it("lists and revokes the caller's sessions", async () => {
     const profile = await createProfile();
     const first = tokenOf(await login(profile));
@@ -433,6 +445,43 @@ describe("sessions", () => {
       headers: { [SESSION_HEADER]: second },
     });
     expect(revoked.statusCode).toBe(401);
+  });
+});
+
+describe("scoped media tokens", () => {
+  it("issues a short-lived token for one profile-owned book and rejects replay for another resource", async () => {
+    const profile = await createProfile();
+    const root = await prisma.libraryRoot.create({ data: { path: path.join(dir, `media-${Date.now()}-${seq}`) } });
+    const book = await prisma.mediaItem.create({
+      data: { title: "Token book", author: "Author", filePath: "token.mp3", fileFormat: "mp3", libraryRootId: root.id },
+    });
+    await prisma.profileLibraryEntry.create({ data: { profileId: profile.id, mediaItemId: book.id } });
+    const headers = { [SESSION_HEADER]: tokenOf(await login(profile)) };
+
+    const issued = await app.inject({
+      method: "POST", url: "/api/auth/media-token", headers,
+      payload: { kind: "cover", id: book.id },
+    });
+    expect(issued.statusCode).toBe(200);
+    expect(issued.headers["cache-control"]).toBe("no-store");
+    const { token } = issued.json<{ token: string }>();
+    expect(token).toBeTruthy();
+
+    // There is no cover file, so 404 proves the scoped bearer passed the auth
+    // gate. Replaying it against audio or another id fails before file lookup.
+    const accepted = await app.inject({ method: "GET", url: `/api/audiobooks/${book.id}/cover?media=${token}` });
+    expect(accepted.statusCode).toBe(404);
+    const wrongKind = await app.inject({ method: "GET", url: `/api/audiobooks/${book.id}/stream?media=${token}` });
+    expect(wrongKind.statusCode).toBe(401);
+    const wrongBook = await app.inject({ method: "GET", url: `/api/audiobooks/${book.id + 1}/cover?media=${token}` });
+    expect(wrongBook.statusCode).toBe(401);
+
+    const other = await createProfile();
+    const refused = await app.inject({
+      method: "POST", url: "/api/auth/media-token", headers: { [SESSION_HEADER]: tokenOf(await login(other)) },
+      payload: { kind: "cover", id: book.id },
+    });
+    expect(refused.statusCode).toBe(404);
   });
 });
 

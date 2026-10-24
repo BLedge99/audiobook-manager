@@ -76,7 +76,7 @@ describe("AccountGate", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: copy.login.submit }));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
-    expect(window.localStorage.getItem(SESSION_TOKEN_KEY)).toBe("session-token");
+    expect(window.localStorage.getItem(SESSION_TOKEN_KEY)).toBeNull();
     expect(getActiveProfileId()).toBe("7");
   });
 
@@ -144,7 +144,7 @@ describe("AccountGate", () => {
     fireEvent.click(screen.getByRole("button", { name: copy.login.submit }));
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
-    expect(window.localStorage.getItem(SESSION_TOKEN_KEY)).toBe("household-token");
+    expect(window.localStorage.getItem(SESSION_TOKEN_KEY)).toBeNull();
     expect(getActiveProfileId()).toBeNull();
   });
 });

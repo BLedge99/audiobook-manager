@@ -25,6 +25,7 @@ import { isAdminRoute } from "./auth/policy";
 import { PasskeyService, passkeyConfigFromEnv, registerPasskeyRoutes, type PasskeyConfig } from "./auth/passkeys";
 import { registerAuthRoutes } from "./auth/routes";
 import { SESSION_HEADER, sessionTokenFromRequest } from "./auth/session";
+import { issueMediaToken, mediaResourceFromPath, verifyMediaToken } from "./auth/media-token";
 
 export { SESSION_HEADER };
 
@@ -38,9 +39,11 @@ export interface BuildAppOptions {
   /** Test seam; production leaves the clock alone. */
   now?: () => Date;
   secureCookie?: boolean;
-  trustProxy?: boolean;
+  trustProxy?: boolean | string | string[];
   /** Test seam; production reads `WEBAUTHN_*` from the environment. */
   passkeyConfig?: PasskeyConfig | null;
+  /** Test seam; production configures a separate 256-bit media signing key. */
+  mediaTokenSecret?: string;
 }
 
 /** Public API paths; everything else under `/api/` needs a session. */
@@ -63,9 +66,22 @@ function headerProfileId(request: FastifyRequest): number | null {
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const prisma = options.prisma ?? new PrismaClient();
+  const configuredProxy = process.env.TRUST_PROXY?.trim();
+  const trustProxy = options.trustProxy ?? (
+    configuredProxy === "true" ? true
+      : configuredProxy ? configuredProxy.split(",").map((value) => value.trim()).filter(Boolean)
+        : false
+  );
   const app = Fastify({
-    logger: options.logger ?? true,
-    trustProxy: options.trustProxy ?? process.env.TRUST_PROXY === "true",
+    // Media URLs carry short-lived bearer tokens in their query string. Keep
+    // request URLs and session cookies out of routine request logs.
+    logger: options.logger === false ? false : {
+      redact: {
+        paths: ["req.url", "req.headers.cookie", `req.headers.${SESSION_HEADER}`],
+        censor: "[REDACTED]",
+      },
+    },
+    trustProxy,
   });
   const scanner = createScanManager(prisma);
   const enrichment = new EnrichmentManager(prisma);
@@ -78,6 +94,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     now: options.now,
   });
   const authEnabled = auth.enabled;
+  const mediaTokenSecret = options.mediaTokenSecret ?? process.env.MEDIA_TOKEN_SECRET ??
+    (process.env.NODE_ENV === "production" ? undefined : appPassword);
+  if (authEnabled && process.env.NODE_ENV === "production" &&
+      (!mediaTokenSecret || Buffer.byteLength(mediaTokenSecret, "utf8") < 32)) {
+    throw new Error("MEDIA_TOKEN_SECRET must be set to at least 32 bytes in production");
+  }
   const secureCookie = options.secureCookie ?? process.env.COOKIE_SECURE === "true";
 
   function serializeBigInts<T>(value: T): T {
@@ -143,6 +165,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // fetch() promise. Keeping both means either scheme works.
       "https://localhost",
       "http://localhost",
+      "https://books.home.arpa",
       // Capacitor's iOS origin. Not a target platform, but the same app code
       // would hit it, and the cost of allowing it is nil.
       "capacitor://localhost",
@@ -174,17 +197,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // opaque random value, compared the same way -- this widens *how* a token is
   // presented, not *who* may present one.
   //
-  // A `?session=` query parameter is accepted too, and is not redundant: an
-  // `<audio src>` request is issued by the browser rather than by script, so it
-  // has nowhere to carry a header, and streaming playback therefore cannot
-  // authenticate any other way. Spec 28 replaces this with a short-lived media
-  // token; the query path stays until that lands.
+  // Browser media uses its HttpOnly cookie. The Android shell uses a
+  // five-minute, profile- and resource-scoped media token in the URL because
+  // native media requests cannot consistently carry the session header.
   app.decorateRequest("auth", null);
   app.addHook("onRequest", async (request, reply) => {
     const path = request.url.split("?")[0];
     if (!path.startsWith("/api/")) return;
     if (request.method === "OPTIONS") return;
     if (!authEnabled) return;
+
+    const mediaResource = mediaResourceFromPath(path);
+    if (mediaResource) {
+      const query = request.query as Record<string, unknown> | undefined;
+      if (verifyMediaToken(mediaTokenSecret, query?.media, mediaResource)) return;
+    }
 
     const token = sessionTokenFromRequest(request);
     if (token) request.auth = await auth.validate(token);
@@ -294,6 +321,64 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const profileId = headerProfileId(request);
     return profileId;
   }
+
+  async function canReadMediaItem(request: FastifyRequest, mediaItemId: number): Promise<boolean> {
+    if (!authEnabled) return true;
+    let profileId = optionalProfileId(request);
+    if (profileId === null) {
+      const resource = mediaResourceFromPath(request.url.split("?")[0]);
+      const query = request.query as Record<string, unknown> | undefined;
+      const claims = resource && verifyMediaToken(mediaTokenSecret, query?.media, resource);
+      if (claims) profileId = claims.profileId;
+    }
+    // A break-glass admin with no selected profile retains the operator access
+    // needed for recovery. Profile sessions, including admins, are scoped to
+    // the library actually assigned to that profile.
+    if (profileId === null) return request.auth?.role === "admin";
+    return Boolean(await prisma.profileLibraryEntry.findUnique({
+      where: { profileId_mediaItemId: { profileId, mediaItemId } },
+      select: { id: true },
+    }));
+  }
+
+  app.post<{ Body: { kind: "cover" | "book-stream" | "track-stream"; id: number } }>("/api/auth/media-token", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["cover", "book-stream", "track-stream"] },
+          id: { type: "integer", minimum: 1 },
+        },
+        required: ["kind", "id"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    // Development without APP_PASSWORD intentionally has no auth boundary and
+    // therefore needs no bearer token on media URLs.
+    if (!authEnabled) return { token: null, expiresAt: null };
+    const profileId = optionalProfileId(request);
+    if (profileId === null) return fail(reply, 400, "profile_required");
+    if (!mediaTokenSecret || Buffer.byteLength(mediaTokenSecret, "utf8") < 32) {
+      return fail(reply, 503, "media_token_not_configured");
+    }
+
+    const { kind, id } = request.body;
+    const allowed = kind === "track-stream"
+      ? await prisma.track.findFirst({
+        where: { id, mediaItem: libraryEntriesFor(profileId) },
+        select: { id: true },
+      })
+      : await prisma.mediaItem.findFirst({
+        where: { id, ...libraryEntriesFor(profileId) },
+        select: { id: true },
+      });
+    if (!allowed) return fail(reply, 404, kind === "track-stream" ? "track_not_found" : "audiobook_not_found");
+
+    const token = issueMediaToken(mediaTokenSecret, { profileId, kind, resourceId: id });
+    reply.header("cache-control", "no-store");
+    return { token, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
+  });
 
   app.get("/api/audiobooks", async (request, reply) => {
     // Spec 20: the browse UI needs genres, series and custom tags on the list
@@ -551,6 +636,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       include: { libraryRoot: true },
     });
     if (!item?.coverImagePath) return fail(reply, 404, "cover_not_found");
+    if (!(await canReadMediaItem(request, item.id))) return fail(reply, 404, "cover_not_found");
     // Covers may legitimately live in the app covers dir OR beside the media,
     // so allow both roots.
     const allowed = [item.libraryRoot.path, COVER_DIR].some((root) => resolveInsideRoot(item.coverImagePath as string, root) !== null);
@@ -591,6 +677,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       include: { libraryRoot: true },
     });
     if (!item) return fail(reply, 404, "audiobook_not_found");
+    if (!(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
     if (resolveInsideRoot(item.filePath, item.libraryRoot.path) === null) {
       return fail(reply, 403, "forbidden");
     }
@@ -610,6 +697,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       include: { mediaItem: { include: { libraryRoot: true } } },
     });
     if (!track) return fail(reply, 404, "track_not_found");
+    if (!(await canReadMediaItem(request, track.mediaItem.id))) return fail(reply, 404, "track_not_found");
     if (resolveInsideRoot(track.filePath, track.mediaItem.libraryRoot.path) === null) {
       return fail(reply, 403, "forbidden");
     }

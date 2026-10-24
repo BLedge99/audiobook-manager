@@ -36,6 +36,7 @@ export type ApiErrorCode =
   | "passkey_not_found"
   | "device_not_found"
   | "device_auth_failed"
+  | "media_token_not_configured"
   | "not_found"
   | "profile_required"
   | "profile_name_required"

@@ -12,6 +12,7 @@ import {
 import { fail } from "../http-errors";
 import type { AuthService, AuthContext, SessionMetadata } from "./service";
 import { AuthFailure } from "./service";
+import { deviceLabelFromUserAgent } from "./session";
 import {
   loginPayload,
   sendAuthFailure,
@@ -417,7 +418,8 @@ function publicCredential(credential: WebAuthnCredential) {
 
 function metadata(request: FastifyRequest): SessionMetadata {
   const userAgent = request.headers["user-agent"];
-  return { userAgent: typeof userAgent === "string" ? userAgent : null };
+  const safeUserAgent = typeof userAgent === "string" ? userAgent : null;
+  return { userAgent: safeUserAgent, deviceLabel: deviceLabelFromUserAgent(safeUserAgent) };
 }
 
 /**

@@ -26,23 +26,29 @@ export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/** Store a useful, non-identifying device label beside the raw user agent. */
+export function deviceLabelFromUserAgent(userAgent: string | null | undefined): string | null {
+  if (!userAgent) return null;
+  if (/android/i.test(userAgent)) return "Android device";
+  if (/iphone|ipad|ipod/i.test(userAgent)) return "Apple mobile device";
+  if (/windows/i.test(userAgent)) return "Windows device";
+  if (/macintosh|mac os/i.test(userAgent)) return "Mac device";
+  if (/linux/i.test(userAgent)) return "Linux device";
+  return null;
+}
+
 /**
  * Read the token from the sources the app actually uses:
  *
  *  - the cookie for the web/PWA;
  *  - `x-house-session` for the Android WebView, which cannot use a SameSite
  *    cookie across schemes;
- *  - `?session=` for an `<audio>`/`<img>` request, which has nowhere to put a
- *    header. Spec 28 replaces this with a short-lived media token; until that
- *    lands, the query path stays for playback.
+ *  - `<audio>` and `<img>` requests use short-lived media tokens instead of
+ *    exposing this session token in a URL.
  */
 export function sessionTokenFromRequest(request: FastifyRequest): string | null {
   const header = request.headers[SESSION_HEADER];
   if (typeof header === "string" && header.length > 0) return header;
-
-  const query = request.query as Record<string, unknown> | undefined;
-  const queryToken = query?.session;
-  if (typeof queryToken === "string" && queryToken.length > 0) return queryToken;
 
   const cookie = request.cookies?.[SESSION_COOKIE];
   return typeof cookie === "string" && cookie.length > 0 ? cookie : null;

@@ -18,16 +18,18 @@ the rejected alternatives are in
 
 ## Implementation status (2026-10-24)
 
-This spec is implemented through phases 1-6. The remaining work is phases 7-8
-and the manual checks below. The current evidence is:
+Implementation is present through phases 1-8; automated checks pass, while the
+deployment and physical-device acceptance checks below remain outstanding. The
+current evidence is:
 
 | Area | Status | Evidence / remaining work |
 |---|---|---|
 | Profile accounts, sessions, roles, password recovery and encrypted cache (phases 1-4) | Implemented | Full server and client suites pass in Linux containers. |
-| Android biometrics (phase 5) | Implemented; smoke checked on Pixel 4a | Android web build and Gradle debug APK build pass; APK installed and app launched without a fatal exception. Focused client/server tests pass. Real enrollment, online biometric sign-in, cancellation, revocation fallback, background lock and offline unlock still need device interaction with a configured server/profile. Motorola Defy check remains. |
+| Android biometrics (phase 5) | Implemented; smoke checked on Pixel 4a | APK installed and app launched without a fatal exception. Automated enrollment, online exchange, revocation, offline DEK restore and offline UI tests pass. Real sensor enrollment/sign-in, cancellation, background lock and offline unlock still need device interaction with a configured server/profile. Motorola Defy check remains. |
 | Web passkeys (phase 6) | Implemented; automated flow verified | Server ceremony tests and Playwright virtual-authenticator registration/sign-in pass. Real Windows Hello checks remain. |
-| Automated suites | Mostly pass | 468 server tests pass (5 scanner tests skipped); 391 client tests pass; copy check passes. Full Playwright run: 44 passed, 1 failed and 6 flaky tests passed on retry. The failure expected an empty library, but the existing persistent Compose data volume contains books; it was left intact. Some trace artifacts also hit transient `ENOENT` errors on `/mnt/c`. |
-| HTTPS and final hardening (phases 7-8) | Not complete | Configure Caddy and `books.home.arpa`; finish session/device UI, media-token and security review, audit, migration rehearsal, copy review and remaining manual checks. |
+| Automated suites | Pass | `make test`: 480 server tests and 395 client tests pass; copy check passes (415 strings, no errors or warnings). Earlier Playwright run: 44 passed, 1 failed and 6 flaky tests passed on retry. The failure expected an empty library, but the existing persistent Compose data volume contains books; it was left intact. |
+| HTTPS deployment (phase 7) | Implemented; not deployed/accepted | Production Caddy config, `books.home.arpa`, TLS internal CA setup docs, exact CORS origin and secure cookie config are present. Need validate production Compose/Caddy and install/trust the root CA on Windows; Windows Hello on that origin remains unverified. Android still uses HTTP on LAN per ADR 014. |
+| Final hardening (phase 8) | Implemented; acceptance checks remain | Five-minute profile/resource-scoped media tokens, session list/revoke UI, URL-token logging redaction and copy review are implemented and covered by unit/integration tests. The recent security refresh included a clean dependency audit. Live migration rehearsal, Playwright rerun and manual device checks remain. |
 
 The device check proves installation and startup only. It does not prove the
 biometric prompt or authentication ceremony works on the physical sensor.
@@ -533,8 +535,10 @@ checked against a copy of the live database before it is applied.
 - [ ] Five wrong passwords lock the profile; the lock doubles; a correct
       password clears it; an admin can unlock it.
 - [ ] An unknown profile and a wrong password answer identically.
-- [ ] `GET /api/auth/sessions` lists the caller's sessions; revoking one makes
+- [x] `GET /api/auth/sessions` lists the caller's sessions; revoking one makes
       its token fail with `auth_required`.
+- [x] Session settings list active sessions with safe device labels and allow
+      revoking other sessions.
 - [ ] Password change verifies the old password, revokes other sessions, and
       leaves the current session valid.
 - [ ] Admin reset changes the password, clears lockout, and revokes sessions and
@@ -561,6 +565,8 @@ checked against a copy of the live database before it is applied.
 - [ ] Locking clears the in-memory key and requires a fresh sign-in.
 - [ ] Caddy serves `https://books.home.arpa` with its local CA trusted on
       Windows; Windows Hello works there.
+- [x] Android media requests use five-minute, profile- and resource-scoped
+      tokens rather than placing the long-lived session token in media URLs.
 - [ ] The full server and client suites pass, `check-copy` is clean, and the
       Playwright suite includes the passkey and profile-isolation cases.
 

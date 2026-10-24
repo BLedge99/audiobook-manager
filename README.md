@@ -42,6 +42,14 @@ make reset
 
 The client will be available at `http://localhost:5173` and the API server at `http://localhost:3000`.
 
+## Production web access
+
+The production Compose deployment puts the browser app behind Caddy at
+`https://books.home.arpa` so web passkeys have a trusted HTTPS origin. See
+[`docs/production-https.md`](docs/production-https.md) for local DNS, Caddy CA
+trust and the Android HTTP address that remains available on the household
+LAN.
+
 ## Acknowledgements
 
 This project was partially vibe coded using [Bionic](https://lmstudio.ai/bionic) and Qwen 3.8 27B.

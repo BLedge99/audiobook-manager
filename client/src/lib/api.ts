@@ -39,8 +39,15 @@ export const SERVER_URL_KEY = "serverUrl";
 
 import { lockOfflineCache } from "../local/privateCache";
 
-/** Storage key for the household session token sent as a header. */
+/** Legacy key removed on sign-in; session tokens are no longer persisted. */
 export const SESSION_TOKEN_KEY = "houseSessionToken";
+
+// Remove the bearer token persisted by pre-spec-28 clients. Browsers now use
+// only the HttpOnly cookie; Android sessions are memory-only and renewed from
+// the biometric Vault or password after a process restart.
+if (typeof window !== "undefined") {
+  try { window.localStorage.removeItem(SESSION_TOKEN_KEY); } catch { /* ignored */ }
+}
 
 /** Storage key for the profile chosen in the break-glass flow. */
 export const PROFILE_ID_KEY = "profileId";
@@ -82,22 +89,18 @@ export interface SessionInfo {
  *
  * `SameSite=None` would fix that but requires `Secure`, i.e. real HTTPS, which
  * a plain-HTTP LAN server does not have. So the token is also returned in the
- * login response body and sent as a header. Browser tokens remain in
- * localStorage for the current web flow; Android keeps its token in memory and
- * stores the long-lived device secret only in the native biometric Vault.
+ * login response body and sent as a header by Android. The browser relies on
+ * the HttpOnly cookie; Android keeps its token in memory and stores the
+ * long-lived device secret only in the native biometric Vault.
  */
 export function setSessionToken(token: string | undefined | null): void {
   if (typeof window === "undefined") return;
-  if (isNativeShell()) {
-    nativeSessionToken = token || "";
-    try { window.localStorage.removeItem(SESSION_TOKEN_KEY); } catch { /* ignored */ }
-    return;
-  }
+  nativeSessionToken = isNativeShell() ? token || "" : "";
   try {
-    if (token) window.localStorage.setItem(SESSION_TOKEN_KEY, token);
-    else window.localStorage.removeItem(SESSION_TOKEN_KEY);
+    // Remove tokens left by versions that stored them in localStorage.
+    window.localStorage.removeItem(SESSION_TOKEN_KEY);
   } catch {
-    // Private mode / storage disabled. The cookie path may still work.
+    // Private mode / storage disabled. The browser cookie path still works.
   }
 }
 
@@ -158,13 +161,7 @@ export async function lockSession(): Promise<void> {
 }
 
 function readSessionToken(): string {
-  if (typeof window === "undefined") return "";
-  if (isNativeShell()) return nativeSessionToken;
-  try {
-    return window.localStorage.getItem(SESSION_TOKEN_KEY) || "";
-  } catch {
-    return "";
-  }
+  return isNativeShell() ? nativeSessionToken : "";
 }
 
 /**
@@ -339,7 +336,7 @@ export function installApiBaseUrl(): void {
     // ~8 duplicated private `request` helpers plus raw `fetch` calls, so any
     // per-call-site approach silently misses most of them -- that is exactly how
     // the first attempt at this fix shipped a passing test and a broken app.
-    const token = readSessionToken();
+    const token = isNativeShell() ? readSessionToken() : "";
     const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
     if (token && !hasHeader(headers, SESSION_HEADER)) headers[SESSION_HEADER] = token;
     return original(resolveApiRequest(input) as RequestInfo, {
@@ -444,12 +441,13 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 }
 
 /**
- * Headers for a native plugin request (Filesystem.downloadFile).
+ * Headers for a native plugin request that bypasses fetch.
  *
- * These bypass the `fetch` shim, so anything they need must be attached here.
+ * These bypass the `fetch` shim, so the in-memory native session must be
+ * attached explicitly. Browser requests rely on their HttpOnly cookie.
  */
 export function sessionHeaders(): Record<string, string> {
-  const token = readSessionToken();
+  const token = isNativeShell() ? readSessionToken() : "";
   const profileId = getActiveProfileId();
   return {
     ...(token ? { [SESSION_HEADER]: token } : {}),
@@ -457,36 +455,27 @@ export function sessionHeaders(): Record<string, string> {
   };
 }
 
+export type MediaResourceKind = "cover" | "book-stream" | "track-stream";
+
 /**
- * Attach the session token to a **URL** rather than a header.
- *
- * ## Why this exists
- *
- * Two callers cannot use a header, and neither can be routed through the fetch
- * shim:
- *
- *  - `<audio src="...">` (streaming playback). A media element request is made
- *    by the browser, not by script, so there is nowhere to put a header. This
- *    is why playback failed with "playback could not start" while every
- *    `fetch()` in the app worked.
- *  - `Filesystem.downloadFile` (native download). The Capacitor plugin does
- *    accept headers, but the download also has to work through the plugin, and
- *    one mechanism for both is easier to reason about.
- *
- * The server accepts `?session=` as well as the header and the cookie; see the
- * auth gate in `server/src/app.ts`.
- *
- * Cost: a token in a URL can land in server access logs. That is a deliberate
- * trade for a household app on a trusted LAN -- the alternative is playback
- * that cannot authenticate at all. The token is an opaque random value that is
- * useless without the household password, and it is already sent in cleartext
- * over plain HTTP here, so the log is not a new place the secret can leak to.
+ * Native media requests cannot attach the session header consistently. Give
+ * them a five-minute token bound to the signed-in profile and one media item.
+ * Browsers use the same-origin HttpOnly cookie and never put a session token in
+ * a URL.
  */
-export function withSessionToken(url: string): string {
-  const token = readSessionToken();
-  if (!token) return url;
+export async function mediaAssetUrl(path: string, kind: MediaResourceKind, id: number): Promise<string> {
+  const url = apiUrl(path);
+  if (!isNativeShell() || !readSessionToken()) return url;
+  const response = await boundedFetch(apiUrl("/api/auth/media-token"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, id }),
+  });
+  if (!response.ok) throw new Error(await responseErrorText(response));
+  const result = await response.json() as { token?: string | null };
+  if (!result.token) return url;
   const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}session=${encodeURIComponent(token)}`;
+  return `${url}${separator}media=${encodeURIComponent(result.token)}`;
 }
 
 /**
@@ -498,17 +487,15 @@ export function withSessionToken(url: string): string {
  * 1. It must go through `apiAssetUrl`. A bare `/api/audiobooks/N/cover` resolves
  *    against the WebView's `https://localhost` origin and returns the bundled
  *    `index.html`, which is not an image.
- * 2. It must carry the session token in the query string. An `<img src>`
- *    request is issued by the browser, not by script, so it cannot send the
- *    session header and never passes through the fetch shim -- exactly like
- *    `<audio src>`.
+ * 2. A native request gets a short-lived resource token; the web uses its
+ *    same-origin HttpOnly cookie.
  *
  * Verified against the server: 11 of 12 books have a cover file on disk and the
  * endpoint returns 200 with image bytes, so a missing cover in the UI is a
  * client-side URL bug, not missing data.
  */
-export function coverUrl(bookId: number): string {
-  return withSessionToken(apiAssetUrl(`/api/audiobooks/${bookId}/cover`));
+export function coverUrl(bookId: number): Promise<string> {
+  return mediaAssetUrl(`/api/audiobooks/${bookId}/cover`, "cover", bookId);
 }
 
 /**

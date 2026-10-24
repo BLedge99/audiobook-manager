@@ -61,6 +61,12 @@ describe("describeTransferError", () => {
     expect(error.message).toBe("The transfer was aborted.");
   });
 
+  it("redacts scoped media credentials from plugin errors", () => {
+    const error = describeTransferError({ message: "GET /stream?media=signed-secret failed" });
+    expect(error.message).not.toContain("signed-secret");
+    expect(error.message).toContain("media=[redacted]");
+  });
+
   it("turns a connection failure into something the listener can act on", () => {
     // The plugin says "failed to connect to server", and the household read it
     // as "the server is down" -- while the server was fine and the *phone*
@@ -92,17 +98,17 @@ describe("isDirectoryExists", () => {
 });
 
 describe("isSameDownload", () => {
-  const url = "http://192.168.1.203:3000/api/tracks/42/stream?session=abc";
+  const url = "http://192.168.1.203:3000/api/tracks/42/stream?media=abc";
 
   it("matches the same URL", () => {
     expect(isSameDownload(url, url)).toBe(true);
   });
 
   it("tolerates the plugin normalising the URL", () => {
-    expect(isSameDownload(`HTTP://192.168.1.203:3000/api/tracks/42/stream?session=a%62c`, url)).toBe(true);
+    expect(isSameDownload(`HTTP://192.168.1.203:3000/api/tracks/42/stream?media=a%62c`, url)).toBe(true);
   });
 
   it("separates concurrent downloads of different tracks", () => {
-    expect(isSameDownload("http://192.168.1.203:3000/api/tracks/43/stream?session=abc", url)).toBe(false);
+    expect(isSameDownload("http://192.168.1.203:3000/api/tracks/43/stream?media=abc", url)).toBe(false);
   });
 });

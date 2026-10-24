@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook, Track } from "../types";
-import { apiUrl, profileHeaders, withSessionToken } from "../lib/api";
+import { apiUrl, mediaAssetUrl, profileHeaders } from "../lib/api";
+import { isNativeShell } from "../lib/platform";
 import { cacheProgress, readProgress } from "../local/privateCache";
 import { copy } from "../copy";
 import { ProgressTimeline } from "./ProgressTimeline";
@@ -101,10 +102,11 @@ export function ChapterPlayer({
   // timer on every position tick (that would prevent it ever firing).
   const overallPositionRef = useRef(overallPosition);
   overallPositionRef.current = overallPosition;
+  const currentTrackId = segments[currentIndex]?.trackId;
   const remoteUrl = isChapterBook
     ? `/api/audiobooks/${book.id}/stream`
-    : tracks.length > 0
-      ? `/api/tracks/${segments[currentIndex].trackId}/stream`
+    : tracks.length > 0 && currentTrackId !== undefined
+      ? `/api/tracks/${currentTrackId}/stream`
       : `/api/audiobooks/${book.id}/stream`;
 
   /**
@@ -141,11 +143,28 @@ export function ChapterPlayer({
     };
   }, [localUrlForTrack, book.id, isChapterBook, tracks, segments, currentIndex]);
 
-  // `withSessionToken` because this URL is set on `<audio src>`: a media element
-  // request is issued by the browser, so it cannot carry the session header and
-  // bypasses the fetch shim. Without the token the server 401s the stream and
-  // playback fails with "playback could not start".
-  const streamUrl = localSrc ?? withSessionToken(apiUrl(remoteUrl));
+  const mediaKind = !isChapterBook && currentTrackId !== undefined ? "track-stream" : "book-stream";
+  const mediaId = mediaKind === "book-stream" ? book.id : currentTrackId ?? book.id;
+  const [remoteSrc, setRemoteSrc] = useState<{ path: string; url: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (localSrc) {
+      setRemoteSrc(null);
+      return () => { cancelled = true; };
+    }
+    void mediaAssetUrl(remoteUrl, mediaKind, mediaId).then((url) => {
+      if (!cancelled) setRemoteSrc({ path: remoteUrl, url });
+    }).catch(() => {
+      if (!cancelled) setError(copy.player.playbackCouldNotStart);
+    });
+    return () => { cancelled = true; };
+  }, [remoteUrl, mediaKind, mediaId, localSrc]);
+  // Browser playback uses the HttpOnly cookie. A native stream waits for its
+  // short-lived scoped media URL rather than placing the session token in the
+  // query string.
+  const streamUrl = localSrc ?? (remoteSrc?.path === remoteUrl
+    ? remoteSrc.url
+    : isNativeShell() ? "" : apiUrl(remoteUrl));
 
   const sessionRef = useRef<{ fromPosition: number; startedAt: string } | null>(null);
   // Mirror of sessionRef's start position in state, so the timeline can draw
@@ -403,7 +422,7 @@ export function ChapterPlayer({
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !streamUrl) return;
     if (!isChapterBook) setCurrentTime(0);
     setError("");
     switchingSourceRef.current = true;

@@ -16,7 +16,7 @@
   **The current work is roadmap item 28 — accounts, passkeys and biometrics:**
   [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md)
   and [`decisions/016-profiles-are-accounts.md`](decisions/016-profiles-are-accounts.md).
-  Phases 1-4 are implemented. The branch also implements phase 6 (web passkeys); older handoff text saying passkeys had not started is stale. Phase 5 implementation and focused tests are in the working tree; the Android APK was built, installed and launched on the Pixel 4a. The owner stages, commits and pushes.
+  Phases 1-8 implementation is present in the current worktree; production HTTPS deployment and interactive Windows/Android acceptance checks remain. The owner stages, commits and pushes.
 - **Spec 28 in one sentence:** a profile is now an account with its own
   password, sessions live in SQLite, admin gates the operator surfaces,
   `APP_PASSWORD` is break-glass only, and private offline data is encrypted
@@ -52,12 +52,12 @@
     `inLibrary`; `OfflineUnlock` restores them only with the profile
     password. `privateCache.test.ts` (5) and `OfflineUnlock.test.tsx` (3)
     pass; `lockSession` clears the in-memory DEK.
-  - **6 - web passkeys: implemented; validation passed.** The branch adds the
+  - **6 - web passkeys: implemented; automated validation passed.** The branch adds the
     WebAuthn server, client settings/sign-in, ceremony tests and
     `e2e/passkeys.spec.ts` with a virtual authenticator. The E2E virtual
     authenticator test passes. The complete server and client suites pass in
     Linux containers when the server test process has WebAuthn configuration
-    unset (468 passed, 5 skipped; 391 passed respectively).
+    unset (current full run: 480 server tests and 395 client tests passed).
   - **5 - Android biometrics: implementation present; device smoke check done.**
     The change adds a Capacitor `BiometricVault` backed by an AES-GCM Android
     Keystore key
@@ -69,16 +69,27 @@
     and user interaction to verify. Focused client tests cover enrollment,
     online exchange, revocation, offline DEK restore and hidden enrollment
     while offline. Weaker face sensors may report unavailable and leave
-    password sign-in as the path.
-  - **Validation (2026-10-24):** `npm run check:copy`, Android TypeScript/Vite
-    build, Gradle `assembleDebug`, all 468 server tests and all 391 client tests
-    pass (5 scanner tests skipped by their suite). Full Playwright run: 44
-    passed, one failed and six were flaky (passed on retry); the remaining
-    smoke failure expected an empty library while the persistent Compose data
-    volume already contained books. It was left intact. Several Playwright
-    trace artifacts also reported transient ENOENT on the `/mnt/c` mount.
-  - **7, 8 - not started:** Caddy with `books.home.arpa` and hardening,
-    session/device review, audit and migration rehearsal.
+    password sign-in as the path. Real sensor flows, background lock and
+    offline unlock still require interaction on Pixel 4a and Motorola Defy.
+  - **7 - HTTPS deployment: implemented, awaiting deployment checks.** Added
+    `Caddyfile`, production Compose wiring for `books.home.arpa` with
+    `tls internal`, secure cookie/WebAuthn settings, exact CORS origin and
+    [`docs/production-https.md`](docs/production-https.md). Windows CA trust and
+    Hello verification remain. Android remains HTTP on LAN per ADR 014.
+  - **8 - hardening: implemented and automated checks pass; acceptance remains.**
+    Media URLs use five-minute, profile/resource-scoped tokens; long-lived
+    session tokens are no longer stored in browser localStorage or sent in media
+    URLs. Added session/device labels, session list and revoke UI, logging
+    redaction and corresponding tests.
+  - **Validation (2026-10-24):** `make test` passed in WSL with Node 24.22.1:
+    copy check (415 strings, no errors/warnings), 23 server files / 480 tests,
+    and 34 client files / 395 tests. Existing jsdom media and React `act`
+    warnings appeared; suites passed. Previous Playwright result remains 44
+    passed, one failed and six flaky tests passed on retry; the failure expected
+    an empty library while the persistent Compose volume contains books. It was
+    left intact. Still run Playwright after this change and validate production
+    Compose/Caddy. Windows CA/Hello, Pixel/Defy sensor flows, and migration
+    against a copy of the live DB remain manual checks.
 - **Item 27, per-profile library membership, is built** (server and client).
   New profiles start empty; existing profiles are migrated to contain every
   book, so shipping it changes nothing for a household that already has the
@@ -1531,7 +1542,7 @@ Remaining follow-ups:
 
 ## Suggestions for next sessions
 
-- **Next code: continue phase 7 / 8 and finish interactive biometric validation.**
+- **Next: validate production Compose/Caddy, run Playwright and build checks, then complete the Windows CA/Hello and Pixel/Defy biometric flows plus migration rehearsal.**
   The Pixel 4a now has the debug app; enrollment needs the server online and a
   profile sign-in before the biometric prompt can be exercised. The suites,
   Android build and copy check were run on 2026-10-24. Playwright reached 44

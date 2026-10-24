@@ -540,6 +540,13 @@ export const copy = {
     vaultPromptTitle: "Open your profile",
     vaultPromptSubtitle: "Use your fingerprint or face to continue.",
     vaultPromptCancel: "Use password",
+    sessionsHeading: "Signed-in devices",
+    sessionsIntro: "Review where this profile is signed in, and sign out a device you no longer use.",
+    otherDevice: "Another device",
+    lastActive: (when: string) => `Last active ${when}`,
+    signOutDevice: "Sign out",
+    sessionRevoked: "That device has been signed out.",
+    sessionsFailed: "Could not load signed-in devices. Try again in a moment.",
   },
 
   profile: {

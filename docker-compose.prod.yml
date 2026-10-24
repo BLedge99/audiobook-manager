@@ -1,6 +1,24 @@
-# Production-style deployment: one container serves the built client + API.
-# Usage: docker compose -f docker-compose.prod.yml up --build
+# Production web deployment: Caddy terminates HTTPS and proxies the API/client.
+# Usage: docker compose -f docker-compose.prod.yml up -d --build
 services:
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      production:
+        ipv4_address: 172.30.28.2
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
   app-data-permissions:
     image: node:24-bookworm-slim
     user: "0:0"
@@ -17,17 +35,42 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     restart: unless-stopped
+    # Port 3000 remains available to the Android wrapper (ADR 014). The web
+    # browser should use books.home.arpa through Caddy on HTTPS.
     ports:
       - "3000:3000"
     environment:
       PORT: 3000
       DATABASE_URL: file:/data/library.db
       APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD before deploying}
+      MEDIA_TOKEN_SECRET: ${MEDIA_TOKEN_SECRET:?Set MEDIA_TOKEN_SECRET before deploying}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: 172.30.28.2
+      WEBAUTHN_RP_ID: books.home.arpa
+      WEBAUTHN_ORIGIN: https://books.home.arpa
+      WEBAUTHN_RP_NAME: Bookle
       COVER_DIR: /data/covers
       GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
     volumes:
       - app_data:/data
       - ${MEDIA_PATH:-./test}:/media:ro
+    networks:
+      production:
+        ipv4_address: 172.30.28.3
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
 
 volumes:
   app_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  production:
+    ipam:
+      config:
+        - subnet: 172.30.28.0/24

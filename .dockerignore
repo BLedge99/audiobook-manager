@@ -12,5 +12,6 @@ client/android/
 **/coverage/
 **/.env
 **/.env.*
+**/caddy-root.crt
 **/*.db
 **/*.sqlite

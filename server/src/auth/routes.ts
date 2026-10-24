@@ -4,6 +4,7 @@ import { fail } from "../http-errors";
 import {
   SESSION_COOKIE,
   SESSION_TTL_MS,
+  deviceLabelFromUserAgent,
   sessionTokenFromRequest,
 } from "./session";
 import { AuthFailure, AuthService, type LoginResult } from "./service";
@@ -52,7 +53,8 @@ function clearSessionCookie(reply: FastifyReply): void {
 
 function metadata(request: FastifyRequest) {
   const userAgent = request.headers["user-agent"];
-  return { userAgent: typeof userAgent === "string" ? userAgent : null };
+  const safeUserAgent = typeof userAgent === "string" ? userAgent : null;
+  return { userAgent: safeUserAgent, deviceLabel: deviceLabelFromUserAgent(safeUserAgent) };
 }
 
 function parseId(raw: string): number | null {
