@@ -149,6 +149,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // credentials, so a wildcard here would break the app *and* widen access.
   await app.register(cors, {
     credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
     origin: [
       "http://localhost:5173",
       "http://localhost:3000",

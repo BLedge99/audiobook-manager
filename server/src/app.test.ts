@@ -156,6 +156,23 @@ describe("auth gate", () => {
     }
   });
 
+  it("allows Android WebView preflights for library membership removal", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/api/audiobooks/1/library",
+      headers: {
+        origin: "http://localhost",
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": SESSION_HEADER,
+      },
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost");
+    expect(res.headers["access-control-allow-methods"]).toContain("DELETE");
+    expect(res.headers["access-control-allow-headers"]).toContain(SESSION_HEADER);
+  });
+
   it("allows the exact production HTTPS origin for passkeys", async () => {
     const res = await app.inject({
       method: "GET", url: "/api/health", headers: { origin: "https://books.home.arpa" },

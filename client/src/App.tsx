@@ -65,8 +65,22 @@ function Mark() {
 }
 
 function App() {
-  const library = useLibrary();
-  const { audiobooks, roots, loading, refreshing, error, refresh, addRoot, removeRoot, scan } = library;
+  /** The server-derived identity (spec 28); null until the probe resolves. */
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const canManageLibrary = session?.role === "admin";
+  const library = useLibrary(canManageLibrary);
+  const {
+    audiobooks,
+    roots,
+    loading,
+    refreshing,
+    error,
+    refresh,
+    refreshForProfile,
+    addRoot,
+    removeRoot,
+    scan,
+  } = library;
   const device = useDeviceLibrary(isNativeShell());
   const browse = useBrowse();
   const discover = useDiscover();
@@ -84,8 +98,6 @@ function App() {
   const [showRootForm, setShowRootForm] = useState(false);
   const [working, setWorking] = useState(false);
   const [authed, setAuthed] = useState<boolean>();
-  /** The server-derived identity (spec 28); null until the probe resolves. */
-  const [session, setSession] = useState<SessionInfo | null>(null);
   /**
    * Whether the server answered at all, as distinct from whether it said 401.
    *
@@ -345,8 +357,8 @@ function App() {
    */
   useEffect(() => {
     if (!profileId) return;
-    void refresh();
-  }, [profileId, refresh]);
+    void refreshForProfile();
+  }, [profileId, refreshForProfile]);
 
   useEffect(() => {
     if (!profileId) return;
@@ -684,6 +696,8 @@ function App() {
               )}
             </section>
 
+            {canManageLibrary && (
+              <>
             <section className="mt-12">
               <MachineHead title={copy.operator.libraryFolders.heading} />
               <p className="text-[13.5px] text-ink2">{copy.operator.libraryFolders.intro}</p>
@@ -754,6 +768,8 @@ function App() {
 
               <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh(); void browse.refresh(); }} />
             </div>
+              </>
+            )}
           </>
         )}
 
