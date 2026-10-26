@@ -346,6 +346,7 @@ export function ChapterPlayer({
     };
     const onPause = () => setPlaying(false);
     const onEnded = () => {
+      const audio = audioRef.current;
       saveProgress(overallPosition);
       flushSession(overallPosition);
       if (stopAtChapterEndRef.current) {
@@ -355,8 +356,19 @@ export function ChapterPlayer({
         return;
       }
       if (currentIndex < segments.length - 1) {
+        const next = currentIndex + 1;
         setShouldPlay(true);
-        setCurrentIndex((index) => index + 1);
+        setCurrentIndex(next);
+        // Chapter books stream a single file, so `streamUrl` is identical for
+        // every chapter and the `streamUrl` effect never re-fires after an
+        // index change. Advance directly: seek to the next segment's offset
+        // and play, mirroring `selectSegment`.
+        if (isChapterBook && audio) {
+          audio.currentTime = segments[next].offset;
+          void audio
+            .play()
+            .catch(() => { setShouldPlay(false); setError(copy.player.playbackCouldNotStart); });
+        }
       } else {
         setShouldPlay(false);
         setPlaying(false);

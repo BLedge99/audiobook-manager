@@ -13,12 +13,14 @@ const book: Audiobook = {
   createdAt: new Date().toISOString(),
 };
 
+let playMock: ReturnType<typeof vi.fn>;
+
 describe("ChapterPlayer", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn(() =>
       Promise.resolve({ ok: true, json: () => Promise.resolve({ position: 0, completed: false }) }),
     ));
-    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    playMock = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
     window.localStorage.clear();
@@ -181,5 +183,73 @@ describe("ChapterPlayer", () => {
     await waitFor(() => {
       expect(Number(slider.value)).toBeCloseTo(1800, 0);
     });
+  });
+
+  /**
+   * Regression: when a chapter of a chapter book ends, `streamUrl` is identical
+   * for every chapter (single file), so the `streamUrl` effect never re-fires
+   * and `audio.play()` was never called -- playback stayed paused at the end of
+   * the previous chapter. `onEnded` must seek to the next segment's offset and
+   * play directly, mirroring `selectSegment`.
+   */
+  it("auto-advances to the next chapter and plays when a chapter ends", async () => {
+    window.localStorage.setItem("profileId", "42");
+    const chapterBook: Audiobook = {
+      ...book,
+      duration: 900,
+      chapters: JSON.stringify([
+        { start: 0, end: 300, title: "Chapter 1" },
+        { start: 300, end: 600, title: "Chapter 2" },
+        { start: 600, end: 900, title: "Chapter 3" },
+      ]),
+    };
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+    render(<ChapterPlayer book={chapterBook} />);
+    const audio = document.querySelector("audio") as HTMLAudioElement;
+
+    const endChapter = () =>
+      act(() => { audio.dispatchEvent(new Event("ended")); });
+
+    // End of chapter 1: seek to chapter 2's offset (300) and play.
+    endChapter();
+    expect(audio.currentTime).toBe(300);
+    expect(playMock).toHaveBeenCalledTimes(1);
+
+    // End of chapter 2: seek to chapter 3's offset (600) and play.
+    endChapter();
+    expect(audio.currentTime).toBe(600);
+    expect(playMock).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * Regression: playback must stop at the last chapter rather than looping back
+   * to the first.
+   */
+  it("stops at the last chapter instead of advancing past it", async () => {
+    window.localStorage.setItem("profileId", "42");
+    const chapterBook: Audiobook = {
+      ...book,
+      duration: 900,
+      chapters: JSON.stringify([
+        { start: 0, end: 300, title: "Chapter 1" },
+        { start: 300, end: 600, title: "Chapter 2" },
+        { start: 600, end: 900, title: "Chapter 3" },
+      ]),
+    };
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+    render(<ChapterPlayer book={chapterBook} />);
+    const audio = document.querySelector("audio") as HTMLAudioElement;
+
+    const endChapter = () =>
+      act(() => { audio.dispatchEvent(new Event("ended")); });
+
+    endChapter(); // ch 1 -> ch 2
+    endChapter(); // ch 2 -> ch 3
+    const callsBeforeLast = playMock.mock.calls.length;
+
+    endChapter(); // ch 3 -> stop (no seek, no play)
+
+    expect(audio.currentTime).toBe(600);
+    expect(playMock.mock.calls.length).toBe(callsBeforeLast);
   });
 });

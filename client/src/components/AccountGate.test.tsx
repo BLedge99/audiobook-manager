@@ -4,6 +4,55 @@ import { AccountGate } from "./AccountGate";
 import { copy } from "../copy";
 import { getActiveProfileId, SESSION_TOKEN_KEY } from "../lib/api";
 
+/**
+ * Spec 28 — biometric sign-in had no test coverage. The fingerprint button only
+ * renders on the native shell with a saved Vault credential, so this test mocks
+ * the Capacitor bridge, the Vault plugin and the offline-cache unlock, then
+ * taps the button and asserts a server session is established.
+ */
+
+type CapacitorWindow = Window & { Capacitor?: { isNativePlatform?: () => boolean } };
+const capWindow = window as unknown as CapacitorWindow;
+
+const cacheMocks = vi.hoisted(() => ({
+  unlockProfileCacheWithKey: vi.fn().mockResolvedValue(undefined),
+  rememberProfileKey: vi.fn().mockResolvedValue(undefined),
+  deleteProfileCache: vi.fn().mockResolvedValue(undefined),
+  lockOfflineCache: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../local/privateCache", async (importActual) => {
+  const actual = await importActual<typeof import("../local/privateCache")>();
+  return {
+    ...actual,
+    unlockProfileCacheWithKey: cacheMocks.unlockProfileCacheWithKey,
+    rememberProfileKey: cacheMocks.rememberProfileKey,
+    deleteProfileCache: cacheMocks.deleteProfileCache,
+    lockOfflineCache: cacheMocks.lockOfflineCache,
+  };
+});
+
+const vaultMocks = vi.hoisted(() => ({
+  available: vi.fn().mockResolvedValue(true),
+  unlock: vi.fn().mockResolvedValue({
+    profileId: 7,
+    secret: "saved-secret",
+    key: "base64key",
+  }),
+  clear: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../lib/biometricVault", () => ({
+  biometricVault: {
+    supported: true,
+    available: vaultMocks.available,
+    hasSavedValue: vi.fn().mockResolvedValue(false),
+    save: vi.fn().mockResolvedValue(undefined),
+    unlock: vaultMocks.unlock,
+    clear: vaultMocks.clear,
+  },
+}));
+
 const accounts = [
   {
     id: 7,
@@ -13,6 +62,7 @@ const accounts = [
     disabled: false,
     hasPassword: true,
     hasPasskey: true,
+    hasDeviceUnlock: true,
   },
   {
     id: 8,
@@ -48,6 +98,7 @@ describe("AccountGate", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.unstubAllGlobals();
+    delete capWindow.Capacitor;
   });
 
   it("lists accounts and signs in with that profile's password", async () => {
@@ -146,5 +197,38 @@ describe("AccountGate", () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
     expect(window.localStorage.getItem(SESSION_TOKEN_KEY)).toBeNull();
     expect(getActiveProfileId()).toBeNull();
+  });
+
+  it("signs in with biometrics when a saved Vault credential exists", async () => {
+    vaultMocks.unlock.mockResolvedValueOnce({
+      profileId: 7,
+      secret: "saved-secret",
+      key: "c2VjcmV0",
+    });
+    const fetchMock = mockFetch({
+      "/api/auth/devices/session": () => json({ token: "bio-token" }),
+    });
+    const onSuccess = vi.fn();
+
+    // Pretend we are running inside the Capacitor native shell.
+    capWindow.Capacitor = { isNativePlatform: () => true };
+    render(<AccountGate onSuccess={onSuccess} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+
+    // biometricsAvailable is set asynchronously by the mount effect.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Unlock with fingerprint or face/ }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Unlock with fingerprint or face/ }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(getActiveProfileId()).toBe("7");
+    expect(cacheMocks.unlockProfileCacheWithKey).toHaveBeenCalledWith(7, expect.any(Uint8Array));
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/devices/session", expect.anything());
+    delete capWindow.Capacitor;
   });
 });

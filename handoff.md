@@ -1733,4 +1733,4 @@ The only route from a phone to the server is `adb reverse tcp:3000 tcp:3000` (US
 - Decide whether to add the biometrics-unavailable hint UX improvement.
 - Confirm whether they want to pursue the WiFi fix on the household network (main SSID / AP client isolation).
 
-Owner stages, commits and pushes changes. Working tree currently has one uncommitted change: the Settings icon in `client/src/App.tsx` changed from `BookOpen` to `Settings` (gear), imported as `GearIcon`. `tsc --noEmit` clean; all 416 client tests pass (35 files).
+Owner stages, commits and pushes changes. Committed as `b4ee251` on `master` — Settings icon changed from `BookOpen` to `Settings` (gear) in `client/src/App.tsx`; `tsc --noEmit` clean; all 416 client tests pass (35 files). APK built (`./gradlew assembleDebug`) and installed on Motorola Defy (`ZY32D8WLXM`, Android 11) via `adb install -r`; app launched successfully.

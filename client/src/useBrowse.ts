@@ -49,6 +49,10 @@ export function useBrowse() {
   const [reviewQueue, setReviewQueue] = useState<Audiobook[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  // Re-read on every render so a profile switch triggers a re-fetch. `request`
+  // reads the same key, so the server call always scopes to the current profile.
+  const profileId = typeof window !== "undefined" ? window.localStorage.getItem("profileId") : null;
+
   const refresh = useCallback(async () => {
     try {
       const [genreTree, tagList, favIds, status, review] = await Promise.all([
@@ -73,11 +77,11 @@ export function useBrowse() {
     } finally {
       setLoaded(true);
     }
-  }, []);
+  }, [profileId]);
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, profileId]);
 
   /** Keep the favourite heart in sync with the card it belongs to. */
   const setFavourite = useCallback((bookId: number, favourited: boolean) => {
