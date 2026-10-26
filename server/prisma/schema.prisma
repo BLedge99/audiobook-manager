@@ -357,6 +357,15 @@ model Profile {
   color     String?
   createdAt DateTime @default(now())
 
+  // Spec 28 / ADR 016: a profile is an account.
+  passwordHash      String?
+  passwordUpdatedAt DateTime?
+  role              String    @default("member") // admin | member
+  disabled          Boolean   @default(false)
+  failedLoginCount  Int       @default(0)
+  lockedUntil       DateTime?
+  lastLoginAt       DateTime?
+
   // Spec 27: does this profile receive newly scanned books automatically?
   //
   // The existing-vs-new distinction from the spec, made explicit. Profiles
@@ -375,6 +384,84 @@ model Profile {
   createdTags      Tag[]
   wishlist         WishlistItem[]
   libraryEntries   ProfileLibraryEntry[]
+  sessions            Session[]
+  deviceCredentials   DeviceCredential[]
+  webauthnCredentials WebAuthnCredential[]
+  webauthnChallenges  WebAuthnChallenge[]
+}
+
+// Spec 28: a database-backed sign-in, not an in-memory Set.
+//
+// `profileId` is nullable only for the break-glass household session, which is
+// an admin session with no profile. Every normal, device or passkey session has
+// a profile.
+model Session {
+  id          String    @id
+  tokenHash   String    @unique
+  profileId   Int?
+  via         String // profile | household | device
+  userAgent   String?
+  deviceLabel String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@index([expiresAt])
+}
+
+// Spec 28: Android biometric unlock. The server stores only a hash of the
+// random secret; the secret lives in the device's biometric-protected Vault.
+model DeviceCredential {
+  id         String    @id
+  profileId  Int
+  secretHash String    @unique
+  label      String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+// Spec 28: Windows Hello / WebAuthn. Web-only and additive; never the only
+// way into a profile.
+model WebAuthnCredential {
+  id           String    @id
+  profileId    Int
+  credentialId String    @unique // base64url
+  publicKey    String // base64url
+  counter      Int       @default(0)
+  transports   String? // JSON array
+  backedUp     Boolean   @default(false)
+  label        String?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+// Spec 28: one-time ceremony state. The challenge is random and expires in
+// five minutes; consumed rows are deleted rather than reused.
+model WebAuthnChallenge {
+  id        String   @id
+  profileId Int?
+  challenge String   @unique
+  type      String // registration | authentication
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 model PlaySession {

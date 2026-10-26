@@ -70,6 +70,22 @@ async function mountWith(books: Audiobook[]) {
 }
 
 describe("useLibrary", () => {
+  it("loads a member's books without requesting admin-only library roots", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("library-roots")) {
+        return fakeResponse({ code: "forbidden" }, { status: 403 });
+      }
+      return fakeResponse([book(1, "My book")]);
+    });
+
+    const { result } = renderHook(() => useLibrary(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.audiobooks.map(({ title }) => title)).toEqual(["My book"]);
+    expect(result.current.error).toBeUndefined();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("library-roots"))).toBe(false);
+  });
+
   /**
    * Spec 27 — the server library and the membership actions.
    *
@@ -124,6 +140,53 @@ describe("useLibrary", () => {
 
       // The tap has already been answered, without waiting for the round trip.
       await waitFor(() => expect(result.current.serverLibrary[0].inLibrary).toBe(true));
+    });
+
+    it("reloads the library after an add even if an older refresh was already running", async () => {
+      const { result } = await mountWith([]);
+      let releaseOldList: ((response: Response) => void) | undefined;
+      let bookListReads = 0;
+      fetchMock.mockImplementation(async (url: string, init: { method?: string }) => {
+        if (url.includes("library-roots")) return fakeResponse([]);
+        if (url.includes("server-library")) {
+          return fakeResponse([{ ...book(1, "One"), inLibrary: true }]);
+        }
+        if (url.endsWith("/1/library") && init.method === "POST") return fakeResponse({});
+        if (url.includes("/api/audiobooks")) {
+          bookListReads += 1;
+          if (bookListReads === 1) {
+            return new Promise<Response>((resolve) => {
+              releaseOldList = resolve;
+            });
+          }
+          return fakeResponse([book(1, "One")]);
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      let oldRefresh: Promise<void> | undefined;
+      act(() => {
+        oldRefresh = result.current.refresh();
+      });
+      await waitFor(() => expect(releaseOldList).toBeDefined());
+
+      let add: Promise<void> | undefined;
+      act(() => {
+        add = result.current.addToLibrary(1);
+      });
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.some(([url, init]) =>
+          String(url).endsWith("/1/library") && (init as { method?: string }).method === "POST",
+        )).toBe(true),
+      );
+
+      await act(async () => {
+        releaseOldList?.(fakeResponse([]));
+        await Promise.all([oldRefresh, add]);
+      });
+
+      expect(bookListReads).toBe(2);
+      expect(result.current.audiobooks.map(({ id }) => id)).toEqual([1]);
     });
 
     it("removes a book with a DELETE", async () => {

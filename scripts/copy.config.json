@@ -1,0 +1,19 @@
+{
+  "profiles": {
+    "consumer-plain": {
+      "bannedAdd": [
+        "bridge",
+        "plugin",
+        "session",
+        "scan",
+        "review queue",
+        "local-first",
+        "title",
+        "retry",
+        "unable",
+        "incorrect"
+      ]
+    }
+  },
+  "ignoreKeys": []
+}

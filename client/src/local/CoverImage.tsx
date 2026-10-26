@@ -111,7 +111,7 @@ export function urlCoverKey(href: string): string {
 }
 
 /** The network URL a key refers to, or undefined for a key with none. */
-function networkUrl(key: string): string | undefined {
+async function networkUrl(key: string): Promise<string | undefined> {
   if (key.startsWith("book:")) return coverUrl(Number(key.slice("book:".length)));
   if (key.startsWith("url:")) return key.slice("url:".length);
   return undefined;
@@ -228,7 +228,7 @@ async function ensure(key: string): Promise<void> {
         if (stored.etag) void enqueueRevalidate(key, stored);
         return;
       }
-      const url = networkUrl(key);
+      const url = await networkUrl(key);
       if (!url) return;
       if (entry.state.status !== "ready") {
         entry.state = LOADING;
@@ -288,7 +288,7 @@ async function enqueueFetch(url: string, etag: string | null) {
 
 /** Revalidation gets its own budget, so a cold grid is never starved by it. */
 async function enqueueRevalidate(key: string, stored: CoverRecord): Promise<void> {
-  const url = networkUrl(key);
+  const url = await networkUrl(key);
   if (!url) return;
   try {
     const fetched = await enqueueFetch(url, stored.etag);

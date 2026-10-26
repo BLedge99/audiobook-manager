@@ -100,7 +100,7 @@ describe("installApiBaseUrl", () => {
     expect(inits[0]?.credentials).toBe("include");
   });
 
-  it("sends the session token as a header on every fetch", async () => {
+  it("sends the in-memory native session as a header on every fetch", async () => {
     // The cookie cannot cross from the https://localhost WebView to an http://
     // API -- Chrome drops it, so every post-login call 401'd. This is the
     // mechanism that replaced it.
@@ -112,12 +112,14 @@ describe("installApiBaseUrl", () => {
     }) as typeof fetch;
 
     try {
+      Object.defineProperty(window, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
       setSessionToken("tok-123");
       installApiBaseUrl();
       await fetch("/api/audiobooks");
     } finally {
       window.fetch = original;
       setSessionToken(undefined);
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
     }
 
     const headers = inits[0]?.headers as Record<string, string>;
@@ -133,12 +135,14 @@ describe("installApiBaseUrl", () => {
     }) as typeof fetch;
 
     try {
+      Object.defineProperty(window, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
       setSessionToken("stored-token");
       installApiBaseUrl();
       await fetch("/api/audiobooks", { headers: { "x-house-session": "explicit" } });
     } finally {
       window.fetch = original;
       setSessionToken(undefined);
+      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
     }
 
     const headers = inits[0]?.headers as Record<string, string>;

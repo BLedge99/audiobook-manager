@@ -232,6 +232,83 @@ build if the listener tier contains the system's own vocabulary.
 not an audiobook yet" is still there, and so is every card's "not in your
 library yet". A copy pass is exactly the wrong moment to soften those.
 
+### 7b — The guardrails, and the second pass
+
+Feature 7 made the copy *reviewable*. It did not make it *enforced*: the review
+was one sitting, and the next string added cold can drift again. This is the
+follow-up. It sets up the guardrails, records the four decisions the second pass
+follows, and then does the pass. The guardrails themselves changed no visible
+string.
+
+**The guardrails, in place now:**
+
+- **The checker is vendored, not reimplemented.** `scripts/check-copy.mjs` is the
+  `ui-copy` skill's checker, copied verbatim. It reads `client/src/copy.ts`
+  against the `consumer-plain` profile and `copy.operator` against
+  `professional-b2b`. `npm run check:copy` (or `make check-copy`) runs it with
+  `--fail-on-scan`, and it is part of `make test` and CI. A banned word or a
+  scan hit fails the build.
+- **`scripts/copy.config.json` is the definition of "our words".** It adds the
+  product's own banned vocabulary — `bridge`, `plugin`, `session`, `scan`,
+  `review queue`, `local-first`, `title`, `retry`, `unable`, `incorrect` — to
+  the profile. Its `ignoreKeys` list is now empty: the burn-down is done, and
+  the list may shrink but never grow. A *new* string using one of those words
+  fails on the next run.
+- **The glossary is enforced, not just written down.** `copy.ts`'s `glossary`
+  moved from `{ concept: "term" }` to the `{ term, avoid }` shape the checker
+  reads. A listener string that says "directory" for a folder now warns, from
+  the same file that documents the term.
+- **The dynamic entries are checked.** The ~60 messages that carry a value were
+  invisible to both the test and the checker, because both skipped function
+  values. `copy.test.ts` now renders each with sample arguments and applies the
+  same vocabulary and punctuation rules, and an explicit `ICU_PENDING` list names
+  every one of them, so a new placeholder message fails until it is
+  acknowledged.
+- **Dead copy is gone.** `primitiveCopy` was exported and never read; it is
+  deleted, because a catalogue of unused strings hides the ones that matter.
+- **Two formatting faults in the table are fixed** (a property sharing a line
+  with its neighbour, and a mis-indented entry). Neither is visible to a user.
+
+**The four decisions the second pass follows:**
+
+1. **The server stops writing English.** API responses return stable codes and
+   values; the client renders the words. A message written on the server is a
+   second catalogue, and none of the rules above can reach it. *(Implemented:
+   see `decisions/015-api-error-codes.md`. The server now sends `{ code, params }`
+   and the client resolves it through `copy.apiErrors` and
+   `copy.operator.apiErrors`.)*
+2. **The listener never meets the operator's job.** No listener-facing string
+   names a folder, a scan or a review queue. Those are things the person who
+   runs the server does, and naming them teaches the listener a job they do not
+   have. This is the `scan` / `review queue` burn-down above, made a rule.
+3. **The password message states a fact, not a verdict.** "Incorrect password."
+   becomes "That password doesn't match. Try again." The value does not match,
+   and the next step is stated. (Core rule C11.)
+4. **Translations are deferred, and labelled.** Placeholder messages stay
+   template literals for now; the `ICU_PENDING` list is the migration checklist.
+   Nothing here is translated, and nothing pretends to be.
+
+**The second pass (done):**
+
+- ~~Rewrite the `ignoreKeys` strings so the list empties, then move the product
+  words into `copy.test.ts`'s `BANNED_WORDS`.~~ Done — the list is empty.
+- ~~Pull in the inline literals the checker's scan still misses — literals inside
+  JSX expressions and template literals, which today sit in `App.tsx`,
+  `Shelves.tsx`, `ui/primitives.tsx`, `useBrowse.ts`, `TagManager.tsx`,
+  `ReviewQueue.tsx`, `Settings.tsx` and `ServerSetup.tsx`.~~ Done — the plural
+  counts, shelf scroll labels, duration labels and the health-check status moved
+  into the catalog; the components that already read `copy` needed no change.
+- ~~Move Discover's success-payload prose (`Recommendation.reason`, and the
+  `message` explainer on a non-`ok` result) onto codes the client renders. It is
+  listener copy, not an error, so it belongs with the wording pass rather than
+  with the error contract.~~ Done — the server sends reason and message codes;
+  `copy.discover.reason` and the status messages own the words.
+- ~~Replace the server's `{ message }` prose with codes the client renders, and
+  stop leaking `error.message` in `server/src/app.ts`.~~ Done — ADR 015.
+- ~~Then turn on `--fail-on-scan`, fold `check-copy` into `make test`, and add the
+  CI workflow (the repository has none today).~~ Done — the checker is a gate,
+  `make test` runs it first, and `.github/workflows/ci.yml` runs both suites.
+
 ## Acceptance criteria
 
 **Refresh**
@@ -285,6 +362,24 @@ library yet". A copy pass is exactly the wrong moment to soften those.
       produce (`lib/position.ts`, `lib/browse.ts`) and the errors that cross
       module boundaries (the API layer, the device bridge, the data hooks).
 - [x] `PRODUCT.md` records the voice decision, with the rules it holds to.
+
+**Copy guardrails (feature 7b)**
+
+- [x] `scripts/check-copy.mjs` is the `ui-copy` checker, vendored verbatim, and
+      `npm run check:copy` / `make check-copy` runs it.
+- [x] The listener tier is read as `consumer-plain` and `copy.operator` as
+      `professional-b2b`; the run exits **0**, with the known violations
+      itemised in `scripts/copy.config.json` rather than failing the build.
+- [x] The product's own words are banned for new strings, and every key still
+      using one is listed in `ignoreKeys`.
+- [x] The glossary is machine-checked (`{ term, avoid }`), not merely documented.
+- [x] Every function-valued message is rendered and checked, and named in
+      `ICU_PENDING`, so a new placeholder message cannot be added silently.
+- [x] `npm --prefix client test` (358 tests) and `npx tsc -b` stay green, and no
+      visible string changes.
+- [ ] **Open:** `ignoreKeys` is empty, the inline literals are in the catalogue,
+      `--fail-on-scan` is on, `check-copy` is part of `make test` and CI, and the
+      server returns codes rather than prose.
 
 **Whole pass**
 

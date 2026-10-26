@@ -14,6 +14,7 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+caddy-root.crt
 
 # Database
 *.db
@@ -44,8 +45,10 @@ pnpm-debug.log*
 # Docker volume data (if mounted locally during dev)
 data/
 
-# Test folder (sample media, not committed)
-test/
+# Test folder (sample media, not committed). Root-anchored: a bare `test/`
+# also matched client/src/test/, which silently dropped the Vitest setup file
+# from the repository and left `npm test` unable to start.
+/test/
 # Sprint 1 spike audio (specs/26) -- local test media, never committed
 client/public/spike/
 

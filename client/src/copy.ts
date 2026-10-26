@@ -53,6 +53,24 @@
  *   values, not spliced into fragments, so a translator can reorder them.
  * - **An error says what failed, why when that is known, and how to recover.**
  *   A status code is never the whole message.
+ *
+ * ## How this file is checked
+ *
+ * `scripts/check-copy.mjs` (vendored from the ui-copy skill) reads this file
+ * against the `consumer-plain` profile, and `copy.operator` against
+ * `professional-b2b`. `npm run check:copy` runs it; `scripts/copy.config.json`
+ * records the product's own banned words and the keys still to be rewritten.
+ * `copy.test.ts` checks the *mechanics* -- no empty strings, one ellipsis, no
+ * exclamation marks, no repeated phrases, and the dynamic entries below.
+ *
+ * ## Messages with values: pending ICU
+ *
+ * An entry whose value is a function is a message with placeholders. Those are
+ * written as template literals today, which reads fine in English but cannot be
+ * reordered by a translator. They become ICU MessageFormat (or an equivalent)
+ * when the app is internationalised. Until then `copy.test.ts` keeps an
+ * explicit `ICU_PENDING` list of every such entry, so adding one is a
+ * deliberate act and the list doubles as the migration checklist.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -101,8 +119,8 @@ export const copy = {
    */
   brand: {
     name: "Audiobook Manager",
-    tagline: "local-first listening",
-    footer: "Audiobook Manager · local-first listening",
+    tagline: "your books, at home",
+    footer: "Audiobook Manager · your books, at home",
   },
 
   /**
@@ -212,7 +230,7 @@ export const copy = {
      * and the message names both, because the next action differs.
      */
     empty:
-      "Your library is empty. Add some of the books the household already has, or add a folder of audiobooks and scan it.",
+      "Your library is empty. Choose books from All books, or check back once the household adds more.",
     chooseBooks: "Choose books",
     /** The Favourites tab is empty, but the library is not. */
     noFavourites: "No favourites yet. Tap the heart on a book to keep it here.",
@@ -252,10 +270,11 @@ export const copy = {
      * a description of what the server does, not of what the person is looking
      * at.
      */
-    noGenreShelves:
-      "No genre shelves yet. Books get a genre once their details are filled in — check the review queue for the ones still waiting.",
-    noShelves:
-      "No shelves yet. Add a folder of audiobooks and scan it, and they fill in as the details arrive.",
+    noGenreShelves: "No genre shelves yet. Books get a genre once their details are filled in.",
+    noShelves: "No shelves yet. They fill in as books are added.",
+    /** The accessible names of the two arrow buttons on a shelf. */
+    scrollLeft: (shelf: string) => `Scroll ${shelf} left`,
+    scrollRight: (shelf: string) => `Scroll ${shelf} right`,
   },
 
   filters: {
@@ -316,9 +335,22 @@ export const copy = {
      * imply otherwise.
      */
     notAnAudiobook: "Book — not an audiobook yet",
-    offline: "You're offline. Discover needs a connection to suggest new titles — your library still works.",
+    offline: "You're offline. Discover needs a connection to suggest new books — your library still works.",
     notEnoughMetadata: "Not enough details about your books yet.",
-    noNewTitles: "No new titles found yet.",
+    seedNeedsDetails: "This book needs a bit more detail before we can suggest similar books.",
+    favouritesNeedDetail: "Your favourites need a bit more detail before we can suggest anything.",
+    noNewBooks: "No new books found yet.",
+    noSimilarBooks: "No similar books found yet.",
+    /**
+     * Why a suggestion was offered. The server sends the code and the value the
+     * sentence needs, so these words live in the catalog like every other.
+     */
+    reason: {
+      sharedGenre: (genre: string) => `Because it shares the genre ${genre}`,
+      favouriteAuthor: (author: string) => `Because you like ${author}`,
+      series: (series: string) => `Because it is in the ${series} series`,
+      related: "Related to books you enjoy",
+    },
   },
 
   favourites: {
@@ -369,7 +401,7 @@ export const copy = {
     heading: "Select books to add to your library",
     intro: "Every audiobook the household has. Add the ones you want.",
     loading: "Finding the books…",
-    empty: "No audiobooks have been added yet. Add a folder of audiobooks and scan it to fill the library.",
+    empty: "No audiobooks have been added yet. Books appear here once the household adds them.",
     allAudiobooks: "All audiobooks",
     /** "3 of 12 in your library" */
     heldCount: (held: number, total: number) => `${held} of ${total} in your library`,
@@ -434,8 +466,95 @@ export const copy = {
     passwordPlaceholder: "Household password",
     submit: "Sign in",
     checking: "Checking…",
-    wrongPassword: "Incorrect password.",
+    wrongPassword: "That password doesn't match. Try again.",
     unreachable: "Could not reach the server.",
+    locked: (seconds: number) =>
+      `Too many tries. Wait ${seconds} ${seconds === 1 ? "second" : "seconds"} and try again.`,
+    passwordTooShort: (minLength: number) => `Use at least ${minLength} characters.`,
+    passwordTooLong: (maxLength: number) => `Use no more than ${maxLength} characters.`,
+    passwordCommon: "Choose a password that isn't easy to guess.",
+    passwordIsName: "Choose a password that isn't the profile's name.",
+    profileUnclaimed: "This profile hasn't been set up yet. Ask the admin to set a password.",
+    accountDisabled: "This profile is switched off. Ask the admin.",
+    claimUnavailable: "This profile already has a password. Sign in instead.",
+    passkeyUnavailable: "Passkeys aren't set up on this server. Use your password.",
+    passkeyFailed: "Windows Hello didn't confirm. Try again, or use your password.",
+    passkeyGone: "That passkey isn't saved any more. Use your password.",
+    deviceGone: "That device isn't signed in any more. Use your password.",
+    deviceFailed: "Fingerprint or face unlock didn't work. Use your password.",
+  },
+
+  /**
+   * The profile sign-in surface (spec 28). The heading is reused from
+   * `copy.profile` so the account picker and the break-glass profile gate say
+   * the same thing.
+   */
+  account: {
+    intro: "Choose your profile, then enter its password.",
+    passwordLabel: (name: string) => `${name}'s password`,
+    passwordPlaceholder: "Profile password",
+    setupHeading: (name: string) => `Set up ${name}`,
+    setupIntro: "Use the household password once to choose a password for this profile.",
+    newPasswordLabel: "New password",
+    confirmPasswordLabel: "Confirm new password",
+    setupSubmit: "Set up profile",
+    mismatch: "The two passwords don't match.",
+    needsSetup: "Needs setup",
+    disabled: "Switched off",
+    noProfiles: "No profiles yet. Use the household password to set one up.",
+    loadFailed: (status: number) => `Could not load the profiles (HTTP ${status}).`,
+    unclaimedHint: "This profile doesn't have a password yet.",
+    useHousehold: "Use the household password",
+    householdHeading: "Household password",
+    householdIntro:
+      "The household password is for setup and recovery. It does not sign you in as a profile.",
+    back: "Choose another profile",
+    lock: "Lock this profile",
+  },
+
+  /**
+   * The passkey surface (spec 28, phase 6). Windows Hello is the only passkey
+   * a household member will meet; the neutral word "passkey" covers the rest.
+   */
+  security: {
+    heading: "Passkeys",
+    intro: "Use Windows Hello instead of typing your password on this computer.",
+    add: "Add Windows Hello",
+    adding: "Waiting for Windows Hello…",
+    empty: "No passkeys on this computer yet.",
+    added: "Windows Hello is ready for this profile.",
+    removed: "Passkey removed.",
+    remove: "Remove",
+    lastUsed: (when: string) => `Last used ${when}`,
+    neverUsed: "Not used yet",
+    signIn: "Sign in with Windows Hello",
+    failed: "Windows Hello didn't finish. Try again, or use your password.",
+    passwordHeading: "Password",
+    passwordIntro: "Change the password you use to sign in to this profile. Other devices will need the new one.",
+    currentPasswordLabel: "Current password",
+    passwordChange: "Change password",
+    passwordChanged: "Your password is changed.",
+    passwordUnavailable: "Could not change the password. Check the connection and try again.",
+    passwordCacheReset:
+      "The saved data on this device was out of step with the new password, so it will be downloaded again the next time you open this profile.",
+    deviceHeading: "Fingerprint or face",
+    deviceIntro: "Use this device's screen lock to open your profile. The profile password still protects it on other devices.",
+    deviceEnable: "Enable fingerprint or face",
+    deviceReady: "Fingerprint or face unlock is ready on this device.",
+    deviceRemoved: "Fingerprint or face unlock is turned off on this device.",
+    deviceNeedsPassword: "Sign in with your profile password before enabling this.",
+    deviceSignIn: "Unlock with fingerprint or face",
+    thisDevice: "This device",
+    vaultPromptTitle: "Open your profile",
+    vaultPromptSubtitle: "Use your fingerprint or face to continue.",
+    vaultPromptCancel: "Use password",
+    sessionsHeading: "Signed-in devices",
+    sessionsIntro: "Review where this profile is signed in, and sign out a device you no longer use.",
+    otherDevice: "Another device",
+    lastActive: (when: string) => `Last active ${when}`,
+    signOutDevice: "Sign out",
+    sessionRevoked: "That device has been signed out.",
+    sessionsFailed: "Could not load signed-in devices. Try again in a moment.",
   },
 
   profile: {
@@ -463,7 +582,7 @@ export const copy = {
     loadFailed: (status: number) => `Could not load the profiles (HTTP ${status}). Try again in a moment.`,
     createFailed: (status: number) => `Could not create the profile (HTTP ${status}). Try again in a moment.`,
     createUnreachable: (detail: string) => `Could not create the profile. ${detail}`,
-    sessionExpired: "Session expired. Reload the app to sign in again.",
+    sessionExpired: "You've been signed out. Reload the app to sign in again.",
     unreachable: (detail: string) => `Cannot reach the server. ${detail}`,
     checkAddress: "Check the server address in Settings.",
     switcherLabel: "Active profile",
@@ -479,6 +598,13 @@ export const copy = {
     tryAgain: "Try again",
     checking: "Checking…",
     connecting: "Connecting…",
+    // Spec 28, phase 4. Offline is a password check against the local
+    // encrypted cache, not against a server that cannot answer.
+    unlockHeading: "Open your downloads",
+    unlockIntro: "Enter your profile password to open the books on this device.",
+    noCache:
+      "This device has downloads but no protected profile data yet. Connect to the home WiFi and sign in once to set it up.",
+    unlockFailed: "Could not open your saved profile data. Try again.",
   },
 
   /**
@@ -501,6 +627,12 @@ export const copy = {
     hoursLeft: (hours: number) => `${hours}h left`,
   },
 
+  /** A bare length, with no "left" -- e.g. a book's total runtime. */
+  duration: {
+    hoursMinutes: (hours: number, minutes: number) => `${hours}h ${minutes}m`,
+    minutes: (minutes: number) => `${minutes}m`,
+  },
+
   series: {
     /** "Book 2 of 5". */
     positionInSeries: (position: number, total: number) => `Book ${position} of ${total}`,
@@ -515,19 +647,20 @@ export const copy = {
    * cannot.
    */
   errors: {
-    loadLibrary: "Unable to load the library. Try again.",
-    loadAllBooks: "Unable to read all the books from the server. Try again.",
-    loadDiscover: "Unable to load Discover. Try again.",
-    loadSimilar: "Unable to find similar books. Try again.",
-    loadMore: "Unable to load more suggestions. Try again.",
-    loadTags: "Unable to load the tags. Try again.",
+    loadLibrary: "Could not load the library. Try again.",
+    loadAllBooks: "Could not read all the books from the server. Try again.",
+    loadDiscover: "Could not load Discover. Try again.",
+    loadSimilar: "Could not find similar books. Try again.",
+    loadMore: "Could not load more suggestions. Try again.",
+    loadTags: "Could not load the tags. Try again.",
     /** The status code is secondary, never the whole message. */
-    requestFailed: (status: number) => `Something went wrong (HTTP ${status}). Try again.`,
+    requestFailed: (status: number) =>
+      `The server did not answer as expected (HTTP ${status}). Try again in a moment.`,
     addToLibrary: "Could not add the book to your library. Try again.",
     removeFromLibrary: "Could not remove the book from your library. Try again.",
-    bridgeNotReady: "The device bridge is not ready yet. Restart the app and try again.",
-    filesystemUnavailable: "The Filesystem plugin is unavailable. Reinstall the app and try again.",
-    fileTransferUnavailable: "The FileTransfer plugin is unavailable. Reinstall the app and try again.",
+    bridgeNotReady: "The app isn't ready yet. Restart it and try again.",
+    filesystemUnavailable: "The app can't save files on this phone. Reinstall it and try again.",
+    fileTransferUnavailable: "Downloads aren't working. Reinstall the app and try again.",
     /**
      * The server could not be reached.
      *
@@ -543,14 +676,44 @@ export const copy = {
     cannotReachServer:
       "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
     downloadRejected: (status: number) =>
-      `The server rejected the download (HTTP ${status}). Sign in again and retry.`,
-    trackFailed: (status: number) => `The server returned HTTP ${status} for this track.`,
-    downloadFailed: "The download failed.",
-    downloadNoData: "The download finished but wrote no data. The server may have refused the request.",
+      `The server refused the download (HTTP ${status}). Sign in again to continue.`,
+    trackFailed: (status: number) => `Could not load this track (HTTP ${status}). Try again.`,
+    downloadFailed: "Could not download this book. Try again.",
+    downloadNoData: "The download finished but saved nothing. The server may have refused it.",
     downloadIncomplete: (bytes: number, expected: number) =>
-      `The download is incomplete (${bytes} of ${expected} bytes). Retry to finish it.`,
+      `The download stopped partway (${bytes} of ${expected} bytes). Download it again.`,
     noTracks: (title: string) => `"${title}" has no tracks to download.`,
     sizeUnreadable: (detail: string) => `Could not read the size of the downloaded file: ${detail}`,
+  },
+
+  /**
+   * The sentence for each stable API error code that a **listener** can meet
+   * (ADR 015).
+   *
+   * The server sends a code plus the values the sentence needs (`params`), and
+   * the words live here. This map is deliberately short: a sentence that
+   * cannot say what failed and how to recover better than the generic
+   * `copy.errors.requestFailed` does not earn an entry. A code that names
+   * folders, scans or tags belongs to `copy.operator.apiErrors`, because those
+   * are screens the operator reads, and this tier must not use those words.
+   *
+   * Two codes reuse an entry that already exists -- the password line and the
+   * duplicate-profile line -- through the aliases in `lib/apiError.ts`, so
+   * those sentences still have exactly one home.
+   *
+   * `request_invalid` is deliberately absent. It replaced the echoed framework
+   * message on a 4xx, and a generic sentence with a way out beats
+   * `body/name must be string`.
+   */
+  apiErrors: {
+    profileRequired: "Choose a profile first.",
+    profileNameRequired: "Enter a name.",
+    audiobookNotFound: "That book isn't in the library any more.",
+    coverNotFound: "That cover isn't available.",
+    forbidden: "You don't have access to that book.",
+    audioFileNotFound: "This book's audio can't be found.",
+    trackNotFound: "That chapter can't be found.",
+    wishlistItemNotFound: "That book isn't on your wishlist any more.",
   },
 
   /* ---------------------------------------------------------------------- */
@@ -576,10 +739,17 @@ export const copy = {
     serverExample: "http://192.168.1.203:3000",
     /** The label for the server-address field, in both places it appears. */
     serverAddressLabel: "Server address",
+    /**
+     * A failed health check's status, shown as the detail of the "could not
+     * reach" sentence in Settings and ServerSetup. One entry, because both
+     * screens answer the same question the same way.
+     */
+    serverReplied: (status: number) => `HTTP ${status} from the server.`,
 
     libraryFolders: {
       heading: "Library folders",
-      intro: "Add a folder of audiobooks and the library fills in with the details and cover art.",      scanLibrary: "Scan library",
+      intro: "Add a folder of audiobooks and the library fills in with the details and cover art.",
+      scanLibrary: "Scan library",
       addFolder: "Add folder",
       folderPathLabel: "Library folder path",
       folderPathPlaceholder: "/data/audiobooks",
@@ -648,7 +818,7 @@ export const copy = {
       possibleMatch: "Possible match",
       weakMatch: "Weak match",
       currentlyShownAs: (title: string, author: string) => `Currently shown as “${title}” by ${author}.`,
-      failed: "Something went wrong. Try again.",
+      failed: "That decision wasn't saved. Try again.",
       actionFailed: "Could not complete that. Try again.",
       loadFailed: "Could not load the matches. Try again.",
       series: (name: string) => `Series: ${name}`,
@@ -676,7 +846,7 @@ export const copy = {
       merge: "Merge",
       merged: (from: string, to: string, moved: number) =>
         `Merged ${from} into ${to} — ${plural(moved, "book")} moved.`,
-      somethingWentWrong: "Something went wrong. Try again.",
+      somethingWentWrong: "That change wasn't saved. Try again.",
     },
 
     settings: {
@@ -692,8 +862,8 @@ export const copy = {
       unreachable: (address: string, detail: string) =>
         `Could not reach ${address}. Check the address and that the phone is on the home WiFi. (${detail})`,
       deviceHeading: "On this device",
-    /** Which build is installed. Every APK says 1.0, so this is the only way to tell. */
-    build: "Build",
+      /** Which build is installed. Every APK says 1.0, so this is the only way to tell. */
+      build: "Build",
       booksDownloaded: (count: number) => `${plural(count, "book")} downloaded`,
       serverUnreachable: "The server is unreachable. Downloaded books still play.",
       coversCached: (bytes: string) => `${bytes} of cover art cached, so covers still show with no connection.`,
@@ -720,26 +890,48 @@ export const copy = {
       unreachable: (address: string, detail: string) =>
         `Could not reach ${address}. Check the address, and that the phone is on the home WiFi. (${detail})`,
     },
+
+    /**
+     * API errors only an operator screen can raise: adding a folder, scanning,
+     * editing genres and tags, and the review queue.
+     *
+     * They live here, not in `copy.apiErrors`, because they name folders,
+     * scans and tags -- the words the listener tier must not use.
+     * `lib/apiError.ts` checks the listener map first, then this one, so a code
+     * is written once, for the audience that can actually meet it.
+     *
+     * `tagNameRejected` and `tagMergeFailed` are keyed by the reason the server
+     * sends (`too-long`, `same-tag`, ...). The `...Fallback` entries cover a
+     * reason this client does not know, so an older client still says
+     * something useful against a newer server instead of showing a raw code.
+     */
+    apiErrors: {
+      libraryPathRequired: "Enter a folder path.",
+      libraryPathInaccessible: "That folder can't be read. Check the path and try again.",
+      libraryRootRequired: "Add a folder before starting a scan.",
+      candidateNotFound: "That match is no longer available.",
+      genreSlugTaken: "A genre with that name already exists.",
+      parentGenreNotFound: "That parent genre no longer exists.",
+      genreNotFound: "That genre no longer exists.",
+      catchAllGenreUndeletable: "The catch-all genre can't be deleted.",
+      unknownGenreId: "One of those genres no longer exists.",
+      unknownTagId: "One of those tags no longer exists.",
+      tagNotFound: "That tag no longer exists.",
+      tagNameRejected: {
+        empty: "Enter a tag name.",
+        tooLong: "That tag name is too long.",
+        reserved: "That name is used by the app. Choose another.",
+        collidesWithGenre: "A genre already uses that name.",
+        invalidCharacters: "That tag name can't contain < > { } [ ] \\ or /.",
+      },
+      tagNameRejectedFallback: "That tag name can't be used. Choose another.",
+      tagMergeFailed: {
+        notFound: "Could not find one of those tags. Refresh and try again.",
+        sameTag: "Choose two different tags.",
+      },
+      tagMergeFailedFallback: "Could not merge those tags. Try again.",
+    },
   },
-} as const;
-
-/* -------------------------------------------------------------------------- */
-/* shared component defaults                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * The labels the shared primitives own.
- *
- * They live here because they are user-facing strings like any other, and
- * because a primitive is the one place a string is invisible to anyone reading
- * a component -- `IconBtn` in particular has a `label` prop that is the
- * control's *only* accessible name.
- */
-export const primitiveCopy = {
-  /** The default accessible name for an icon button with no label. */
-  iconButton: "Button",
-  /** The default accessible name for the empty state. */
-  emptyState: "Nothing here yet.",
 } as const;
 
 /* -------------------------------------------------------------------------- */
@@ -752,18 +944,25 @@ export const primitiveCopy = {
  * `clarify` asks for a short glossary when inconsistency spans the product.
  * This is that list, and it is the thing to check before adding a new term.
  *
- * | Concept    | The word        | Never                        |
- * |------------|-----------------|------------------------------|
- * | a saved title the person likes | favourite | like, starred, bookmarked |
- * | a directory of audiobooks      | folder    | directory, path, root      |
- * | a suggestion from a catalogue  | book      | title, item, record        |
- * | a thing to download            | download  | sync, fetch, copy          |
- * | a person in the household      | profile   | user, account, member      |
+ * The `{ term, avoid }` shape is not decoration: `scripts/check-copy.mjs`
+ * reads it and warns when a string uses an `avoid` word, so the glossary is
+ * enforced rather than merely documented. `avoid` stays conservative -- it
+ * lists the plain synonyms that are always wrong, not every word that could be
+ * misread. ("like" is absent on purpose: "find more like this" is a comparison,
+ * not a synonym for a favourite.)
+ *
+ * | Concept                        | The word  | Never (machine-checked)   |
+ * |--------------------------------|-----------|---------------------------|
+ * | a saved book the person likes  | favourite | star, bookmark            |
+ * | a directory of audiobooks      | folder    | directory, root           |
+ * | a book, in any state           | book      | item, record, volume      |
+ * | a thing pulled to the device   | download  | sync, fetch               |
+ * | a person in the household      | profile   | user, account, member     |
  */
 export const glossary = {
-  favourite: "favourite",
-  folder: "folder",
-  book: "book",
-  download: "download",
-  profile: "profile",
+  favourite: { term: "favourite", avoid: ["star", "bookmark"] },
+  folder: { term: "folder", avoid: ["directory", "root"] },
+  book: { term: "book", avoid: ["item", "record", "volume"] },
+  download: { term: "download", avoid: ["sync", "fetch"] },
+  profile: { term: "profile", avoid: ["user", "account", "member"] },
 } as const;

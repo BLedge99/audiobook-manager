@@ -17,6 +17,25 @@ import { trimDescription, type ProviderCandidate } from "./types";
  * in one place rather than scattered through the route.
  */
 
+/** Why a recommendation was offered. The client owns the words. */
+export type RecommendationReason =
+  | { code: "shared-genre"; genre: string }
+  | { code: "favourite-author"; author: string }
+  | { code: "series"; series: string }
+  | { code: "related" };
+
+/** A non-ok Discover status, as a code the client renders. */
+export type DiscoverMessageCode =
+  | "seed-needs-details"
+  | "favourites-need-details"
+  | "favourites-not-enough-metadata"
+  | "no-similar-books"
+  | "no-new-books";
+
+export interface DiscoverMessage {
+  code: DiscoverMessageCode;
+}
+
 /** A recommendation as the API returns it. Never includes a playable URL. */
 export interface Recommendation {
   title: string;
@@ -31,7 +50,7 @@ export interface Recommendation {
   provider: string;
   providerKey?: string;
   score: number;
-  reason: string;
+  reason: RecommendationReason;
 }
 
 export type DiscoverStatus = "ok" | "offline" | "insufficient-metadata" | "no-results";
@@ -40,7 +59,7 @@ export interface DiscoverResult {
   status: DiscoverStatus;
   recommendations: Recommendation[];
   /** Present when status is not ok, so the UI can explain itself. */
-  message?: string;
+  message?: DiscoverMessage;
   /** The tags the recommendations were drawn from, for transparency. */
   seededFrom?: {
     genres: string[];
@@ -113,19 +132,19 @@ function rankWithPayload(
 }
 
 /** Human-readable explanation of why a result was suggested. */
-function explain(candidate: Taggable, seed: ReturnType<typeof buildSeed>): string {
+function explain(candidate: Taggable, seed: ReturnType<typeof buildSeed>): RecommendationReason {
   const shared = (values: string[], map: Map<string, number>): string[] =>
     (values ?? []).filter((value) => map.has(value.trim().toLowerCase()));
 
   const genreHits = shared(candidate.genres ?? [], seed.genres);
-  if (genreHits.length > 0) return `Because it shares the genre ${genreHits[0]}`;
+  if (genreHits.length > 0) return { code: "shared-genre", genre: genreHits[0] };
   if (candidate.author && seed.authors.has(candidate.author.trim().toLowerCase())) {
-    return `Because you like ${candidate.author}`;
+    return { code: "favourite-author", author: candidate.author };
   }
   if (candidate.seriesName && seed.series.has(candidate.seriesName.trim().toLowerCase())) {
-    return `Because it is in the ${candidate.seriesName} series`;
+    return { code: "series", series: candidate.seriesName };
   }
-  return "Related to books you enjoy";
+  return { code: "related" };
 }
 
 export class RecommendationService {
@@ -257,7 +276,7 @@ export class RecommendationService {
       return {
         status: "insufficient-metadata",
         recommendations: [],
-        message: "This book needs a bit more metadata before we can suggest similar titles.",
+        message: { code: "seed-needs-details" },
         seededFrom,
         seedTitle: item.title,
         page,
@@ -274,7 +293,7 @@ export class RecommendationService {
     return {
       status: recommendations.length > 0 ? "ok" : "no-results",
       recommendations,
-      message: recommendations.length === 0 ? "No similar titles found." : undefined,
+      message: recommendations.length === 0 ? { code: "no-similar-books" } : undefined,
       seededFrom,
       seedTitle: item.title,
       page,
@@ -307,7 +326,7 @@ export class RecommendationService {
       return {
         status: "insufficient-metadata",
         recommendations: [],
-        message: "Favourite a few books and Discover will use them to find more like these.",
+        message: { code: "favourites-need-details" },
         page,
         pageSize,
         hasMore: false,
@@ -336,7 +355,7 @@ export class RecommendationService {
       return {
         status: "insufficient-metadata",
         recommendations: [],
-        message: "Your favourites need a bit more metadata before we can suggest anything.",
+        message: { code: "favourites-not-enough-metadata" },
         seededFrom,
         page,
         pageSize,
@@ -352,7 +371,7 @@ export class RecommendationService {
     return {
       status: recommendations.length > 0 ? "ok" : "no-results",
       recommendations,
-      message: recommendations.length === 0 ? "No new titles found yet." : undefined,
+      message: recommendations.length === 0 ? { code: "no-new-books" } : undefined,
       seededFrom,
       page,
       pageSize,

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e-dependencies:
+    name: E2E dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high
+
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+        working-directory: server
+      - run: npm audit --audit-level=high
+        working-directory: server
+      # The integration tests run `prisma migrate deploy` against a temp SQLite
+      # file, but the generated client has to exist before Vitest imports it.
+      - run: npx prisma generate
+        working-directory: server
+      - run: npm test
+        working-directory: server
+
+  client:
+    name: Client tests and copy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+        working-directory: client
+      - run: npm audit --audit-level=high
+        working-directory: client
+      # The copy gate runs first: it is fast, and it is the rule most likely to
+      # be broken by a one-line edit.
+      - run: npm run check:copy
+        working-directory: client
+      - run: npm test
+        working-directory: client
+      - run: npx tsc -b
+        working-directory: client

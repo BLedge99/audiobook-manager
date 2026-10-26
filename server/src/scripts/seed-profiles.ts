@@ -6,14 +6,21 @@
  *   npm run seed:profiles
  */
 import { PrismaClient } from "@prisma/client";
-import { DEFAULT_PROFILES, seedDefaultProfiles } from "../seed";
+import { DEFAULT_PROFILES, TEST_PROFILES, seedDefaultProfiles } from "../seed";
 
 const prisma = new PrismaClient();
 
 async function main() {
   const created = await seedDefaultProfiles(prisma);
-  for (const name of DEFAULT_PROFILES) {
-    console.log(created.includes(name) ? `  Created "${name}"` : `  "${name}" already exists — skipping`);
+  const wanted = process.env.SEED_TEST_ACCOUNTS === "true"
+    ? [...DEFAULT_PROFILES, ...TEST_PROFILES]
+    : DEFAULT_PROFILES;
+  for (const { name, role } of wanted) {
+    console.log(
+      created.includes(name)
+        ? `  Created "${name}" (${role})`
+        : `  "${name}" already exists — skipping`,
+    );
   }
   console.log("Profile seed complete.");
 }

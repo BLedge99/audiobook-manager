@@ -1,8 +1,8 @@
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { FastifyInstance, FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import { PrismaClient } from "@prisma/client";
-import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
@@ -19,6 +19,15 @@ import { buildQuery, EnrichmentManager } from "./metadata/run";
 import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy-service";
 import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
 import { RecommendationService, DEFAULT_PAGE_SIZE } from "./metadata/recommend-service";
+import { fail } from "./http-errors";
+import { AuthService } from "./auth/service";
+import { isAdminRoute } from "./auth/policy";
+import { PasskeyService, passkeyConfigFromEnv, registerPasskeyRoutes, type PasskeyConfig } from "./auth/passkeys";
+import { registerAuthRoutes } from "./auth/routes";
+import { SESSION_HEADER, sessionTokenFromRequest } from "./auth/session";
+import { issueMediaToken, mediaResourceFromPath, verifyMediaToken } from "./auth/media-token";
+
+export { SESSION_HEADER };
 
 /** The largest page a client may ask for, matching the route schemas. */
 const MAX_PAGE_SIZE = 20;
@@ -27,24 +36,71 @@ export interface BuildAppOptions {
   prisma?: PrismaClient;
   logger?: boolean;
   appPassword?: string;
+  /** Test seam; production leaves the clock alone. */
+  now?: () => Date;
+  secureCookie?: boolean;
+  trustProxy?: boolean | string | string[];
+  /** Test seam; production reads `WEBAUTHN_*` from the environment. */
+  passkeyConfig?: PasskeyConfig | null;
+  /** Test seam; production configures a separate 256-bit media signing key. */
+  mediaTokenSecret?: string;
 }
 
-/**
- * Header carrying the household session token for shells that cannot use a
- * cookie. The Android WebView is cross-site relative to a plain-HTTP API, so
- * `SameSite=Lax` cookies are dropped there; see the note on the auth gate.
- */
-export const SESSION_HEADER = "x-house-session";
+/** Public API paths; everything else under `/api/` needs a session. */
+function isPublicApiPath(path: string): boolean {
+  return (
+    path === "/api/health" ||
+    path === "/api/auth/login" ||
+    path === "/api/auth/accounts" ||
+    path === "/api/auth/claim" ||
+    path === "/api/auth/logout" ||
+    path === "/api/auth/devices/session" ||
+    path.startsWith("/api/auth/passkeys/login/")
+  );
+}
+
+function headerProfileId(request: FastifyRequest): number | null {
+  const profileId = Number(request.headers["x-profile-id"]);
+  return Number.isInteger(profileId) && profileId >= 1 ? profileId : null;
+}
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const prisma = options.prisma ?? new PrismaClient();
-  const app = Fastify({ logger: options.logger ?? true });
+  const configuredProxy = process.env.TRUST_PROXY?.trim();
+  const trustProxy = options.trustProxy ?? (
+    configuredProxy === "true" ? true
+      : configuredProxy ? configuredProxy.split(",").map((value) => value.trim()).filter(Boolean)
+        : false
+  );
+  const app = Fastify({
+    // Media URLs carry short-lived bearer tokens in their query string. Keep
+    // request URLs and session cookies out of routine request logs.
+    logger: options.logger === false ? false : {
+      redact: {
+        paths: ["req.url", "req.headers.cookie", `req.headers.${SESSION_HEADER}`],
+        censor: "[REDACTED]",
+      },
+    },
+    trustProxy,
+  });
   const scanner = createScanManager(prisma);
   const enrichment = new EnrichmentManager(prisma);
   const recommendations = new RecommendationService(prisma);
   const appPassword = options.appPassword ?? process.env.APP_PASSWORD;
-  const authEnabled = Boolean(appPassword);
-  const sessions = new Set<string>();
+  const auth = new AuthService({ prisma, appPassword, now: options.now });
+  const passkeys = new PasskeyService({
+    prisma,
+    config: options.passkeyConfig ?? passkeyConfigFromEnv(),
+    now: options.now,
+  });
+  const authEnabled = auth.enabled;
+  const mediaTokenSecret = options.mediaTokenSecret ?? process.env.MEDIA_TOKEN_SECRET ??
+    (process.env.NODE_ENV === "production" ? undefined : appPassword);
+  if (authEnabled && process.env.NODE_ENV === "production" &&
+      (!mediaTokenSecret || Buffer.byteLength(mediaTokenSecret, "utf8") < 32)) {
+    throw new Error("MEDIA_TOKEN_SECRET must be set to at least 32 bytes in production");
+  }
+  const secureCookie = options.secureCookie ?? process.env.COOKIE_SECURE === "true";
 
   function serializeBigInts<T>(value: T): T {
     return JSON.parse(JSON.stringify(value, (_key, nestedValue) => (
@@ -55,9 +111,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.addHook("preSerialization", async (_request, _reply, payload) => serializeBigInts(payload));
 
   app.setErrorHandler((error, request, reply) => {
+    // The detail is for the server log only. This handler used to echo
+    // `error.message` on any 4xx, and that included filesystem paths and
+    // Prisma wording (spec 11); the client renders the code instead.
     request.log.error(error);
-    const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
-    reply.code(statusCode).send({ message: statusCode === 500 ? "Internal server error" : error.message });
+    const candidateStatusCode =
+      typeof error === "object" && error !== null && "statusCode" in error
+        ? error.statusCode
+        : undefined;
+    const statusCode =
+      typeof candidateStatusCode === "number" && candidateStatusCode >= 400
+        ? candidateStatusCode
+        : 500;
+    return fail(reply, statusCode, statusCode >= 500 ? "internal_error" : "request_invalid");
   });
 
   // CORS allow-list.
@@ -83,6 +149,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // credentials, so a wildcard here would break the app *and* widen access.
   await app.register(cors, {
     credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
     origin: [
       "http://localhost:5173",
       "http://localhost:3000",
@@ -99,6 +166,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // fetch() promise. Keeping both means either scheme works.
       "https://localhost",
       "http://localhost",
+      "https://books.home.arpa",
       // Capacitor's iOS origin. Not a target platform, but the same app code
       // would hit it, and the cost of allowing it is nil.
       "capacitor://localhost",
@@ -106,8 +174,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
   await app.register(cookie);
 
-  // Auth gate: health and the login endpoint stay public; everything else
-  // requires a valid household session when APP_PASSWORD is set.
+  // Auth gate.
+  //
+  // Only `/api/` is gated. The client has to load its login screen before it
+  // has a session, so `/`, `/assets/*` and the SPA fallback are public. This
+  // also fixes the production case where `@fastify/static` was behind the same
+  // hook as the API and the first request for `/` came back 401.
   //
   // The token is accepted from a header OR the cookie, because the two shells
   // have genuinely different constraints and only one of them can use a cookie:
@@ -126,49 +198,34 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // opaque random value, compared the same way -- this widens *how* a token is
   // presented, not *who* may present one.
   //
-  // A `?session=` query parameter is accepted too, and is not redundant: an
-  // `<audio src>` request is issued by the browser rather than by script, so it
-  // has nowhere to carry a header, and streaming playback therefore cannot
-  // authenticate any other way. Verified on device: with no token in the URL,
-  // playback failed with "playback could not start" while `fetch()` worked.
+  // Browser media uses its HttpOnly cookie. The Android shell uses a
+  // five-minute, profile- and resource-scoped media token in the URL because
+  // native media requests cannot consistently carry the session header.
+  app.decorateRequest("auth", null);
   app.addHook("onRequest", async (request, reply) => {
+    const path = request.url.split("?")[0];
+    if (!path.startsWith("/api/")) return;
+    if (request.method === "OPTIONS") return;
     if (!authEnabled) return;
-    const open = request.url === "/api/health" || request.url.startsWith("/api/auth/login");
-    if (open) return;
-    const headerToken = request.headers[SESSION_HEADER];
-    const queryToken = (request.query as Record<string, unknown> | undefined)?.session;
-    const token =
-      (typeof headerToken === "string" ? headerToken : undefined) ??
-      (typeof queryToken === "string" ? queryToken : undefined) ??
-      request.cookies["house_session"];
-    if (!token || !sessions.has(token)) {
-      return reply.code(401).send({ message: "Authentication required" });
+
+    const mediaResource = mediaResourceFromPath(path);
+    if (mediaResource) {
+      const query = request.query as Record<string, unknown> | undefined;
+      if (verifyMediaToken(mediaTokenSecret, query?.media, mediaResource)) return;
+    }
+
+    const token = sessionTokenFromRequest(request);
+    if (token) request.auth = await auth.validate(token);
+
+    if (isPublicApiPath(path)) return;
+    if (!request.auth) return fail(reply, 401, "auth_required");
+    if (isAdminRoute(request.method, path) && request.auth.role !== "admin") {
+      return fail(reply, 403, "forbidden");
     }
   });
 
-  app.post<{ Body: { password?: string } }>("/api/auth/login", async (request, reply) => {
-    const password = request.body?.password;
-    if (typeof password !== "string") return reply.code(400).send({ message: "Password must be a string" });
-    if (!authEnabled) return { token: "disabled" };
-    const expected = Buffer.from(appPassword as string);
-    const provided = Buffer.from(password);
-    const ok = expected.length === provided.length && timingSafeEqual(expected, provided);
-    if (!ok) return reply.code(401).send({ message: "Incorrect password" });
-    const token = randomBytes(24).toString("hex");
-    sessions.add(token);
-    // Cookie for the browser/PWA, and the token in the body for shells that
-    // cannot use a cookie cross-scheme (see the note on the auth gate above).
-    reply.setCookie("house_session", token, { path: "/", httpOnly: true, sameSite: "lax" });
-    return { ok: true, token };
-  });
-
-  app.post("/api/auth/logout", async (request, reply) => {
-    const headerToken = request.headers[SESSION_HEADER];
-    const token = (typeof headerToken === "string" ? headerToken : undefined) ?? request.cookies["house_session"];
-    if (token) sessions.delete(token);
-    reply.clearCookie("house_session", { path: "/" });
-    return { ok: true };
-  });
+  await registerAuthRoutes(app, auth, { secureCookie });
+  await registerPasskeyRoutes(app, passkeys, auth, { secureCookie });
 
   function parseIdParam(raw: string | undefined): number | null {
     const id = Number(raw);
@@ -244,19 +301,85 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     await app.register(fastifyStatic, { root: clientDist, prefix: "/", wildcard: false });
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith("/api/")) {
-        return reply.code(404).send({ message: "Not found" });
+        return fail(reply, 404, "not_found");
       }
       reply.sendFile("index.html");
     });
   }
 
-  // Optional profile header: unlike the progress routes this never 400s, because
-  // the library has to render before a profile has been picked. A missing or
+  // Optional profile: unlike the progress routes this never 400s, because the
+  // library has to render before a profile has been picked. A missing or
   // malformed header simply yields no progress rather than an error.
-  function optionalProfileId(request: { headers: Record<string, unknown> }): number | null {
-    const profileId = Number(request.headers["x-profile-id"]);
-    return Number.isInteger(profileId) && profileId >= 1 ? profileId : null;
+  //
+  // Spec 28: a profile session owns its `profileId`; the header is ignored. The
+  // break-glass household session has no profile, so it may still name one
+  // during the migration. With auth disabled (development) the header behaves
+  // as it always did.
+  function optionalProfileId(request: FastifyRequest): number | null {
+    const sessionProfileId = request.auth?.session.profileId ?? null;
+    if (sessionProfileId !== null) return sessionProfileId;
+    if (request.auth && request.auth.via !== "household") return null;
+    const profileId = headerProfileId(request);
+    return profileId;
   }
+
+  async function canReadMediaItem(request: FastifyRequest, mediaItemId: number): Promise<boolean> {
+    if (!authEnabled) return true;
+    let profileId = optionalProfileId(request);
+    if (profileId === null) {
+      const resource = mediaResourceFromPath(request.url.split("?")[0]);
+      const query = request.query as Record<string, unknown> | undefined;
+      const claims = resource && verifyMediaToken(mediaTokenSecret, query?.media, resource);
+      if (claims) profileId = claims.profileId;
+    }
+    // A break-glass admin with no selected profile retains the operator access
+    // needed for recovery. Profile sessions, including admins, are scoped to
+    // the library actually assigned to that profile.
+    if (profileId === null) return request.auth?.role === "admin";
+    return Boolean(await prisma.profileLibraryEntry.findUnique({
+      where: { profileId_mediaItemId: { profileId, mediaItemId } },
+      select: { id: true },
+    }));
+  }
+
+  app.post<{ Body: { kind: "cover" | "book-stream" | "track-stream"; id: number } }>("/api/auth/media-token", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["cover", "book-stream", "track-stream"] },
+          id: { type: "integer", minimum: 1 },
+        },
+        required: ["kind", "id"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    // Development without APP_PASSWORD intentionally has no auth boundary and
+    // therefore needs no bearer token on media URLs.
+    if (!authEnabled) return { token: null, expiresAt: null };
+    const profileId = optionalProfileId(request);
+    if (profileId === null) return fail(reply, 400, "profile_required");
+    if (!mediaTokenSecret || Buffer.byteLength(mediaTokenSecret, "utf8") < 32) {
+      return fail(reply, 503, "media_token_not_configured");
+    }
+
+    const { kind, id } = request.body;
+    const allowed = kind === "track-stream"
+      ? await prisma.track.findFirst({
+        where: { id, mediaItem: libraryEntriesFor(profileId) },
+        select: { id: true },
+      })
+      : await prisma.mediaItem.findFirst({
+        where: { id, ...libraryEntriesFor(profileId) },
+        select: { id: true },
+      });
+    if (!allowed) return fail(reply, 404, kind === "track-stream" ? "track_not_found" : "audiobook_not_found");
+
+    const token = issueMediaToken(mediaTokenSecret, { profileId, kind, resourceId: id });
+    reply.header("cache-control", "no-store");
+    return { token, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
+  });
 
   app.get("/api/audiobooks", async (request, reply) => {
     // Spec 20: the browse UI needs genres, series and custom tags on the list
@@ -401,11 +524,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
     const added = await addBookToProfile(prisma, profileId, id);
     return { added, inLibrary: true };
   });
@@ -421,9 +544,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const removed = await removeBookFromProfile(prisma, profileId, id);
     return { removed, inLibrary: false };
   });
@@ -432,12 +555,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Number("abc") is NaN, which Prisma turns into a 500. Validate like the
     // other id routes so a bad id is a 400/404, not a server error.
     const id = parseIdParam((request.params as { id: string }).id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({
       where: { id },
       include: { tracks: true, contributors: { include: { contributor: true } } },
     });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
     // Spec 11: strip filePath / coverImagePath (and track paths) from the payload.
     return publicMediaItem({
       ...item,
@@ -455,11 +578,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.post<{ Body: { path?: string; label?: string } }>("/api/library-roots", async (request, reply) => {
     const rootPath = request.body.path?.trim();
-    if (!rootPath) return reply.code(400).send({ message: "A library path is required" });
+    if (!rootPath) return fail(reply, 400, "library_path_required");
     try {
       await access(rootPath);
     } catch {
-      return reply.code(400).send({ message: "Library path is not accessible" });
+      return fail(reply, 400, "library_path_inaccessible");
     }
     const root = await prisma.libraryRoot.upsert({
       where: { path: path.resolve(rootPath) },
@@ -471,7 +594,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.delete<{ Params: { id: string } }>("/api/library-roots/:id", async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     await prisma.libraryRoot.delete({ where: { id } });
     return reply.code(204).send();
   });
@@ -480,7 +603,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const roots = request.body?.rootId
       ? await prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
       : await prisma.libraryRoot.findMany();
-    if (roots.length === 0) return reply.code(400).send({ message: "Add a library root before scanning" });
+    if (roots.length === 0) return fail(reply, 400, "library_root_required");
     for (const root of roots) {
       void scanner
         .scanRoot(root.id)
@@ -513,15 +636,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       where: { id: parseIdParam(request.params.id) ?? -1 },
       include: { libraryRoot: true },
     });
-    if (!item?.coverImagePath) return reply.code(404).send({ message: "Cover not found" });
+    if (!item?.coverImagePath) return fail(reply, 404, "cover_not_found");
+    if (!(await canReadMediaItem(request, item.id))) return fail(reply, 404, "cover_not_found");
     // Covers may legitimately live in the app covers dir OR beside the media,
     // so allow both roots.
     const allowed = [item.libraryRoot.path, COVER_DIR].some((root) => resolveInsideRoot(item.coverImagePath as string, root) !== null);
-    if (!allowed) return reply.code(403).send({ message: "Forbidden" });
+    if (!allowed) return fail(reply, 403, "forbidden");
     try {
       await access(item.coverImagePath);
     } catch {
-      return reply.code(404).send({ message: "Cover not found" });
+      return fail(reply, 404, "cover_not_found");
     }
     reply.type(`image/${path.extname(item.coverImagePath).slice(1) || "jpeg"}`);
     // Spec 15b feature 1 -- conditional cover delivery.
@@ -543,7 +667,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const stats = await stat(item.coverImagePath);
       match = `${item.coverImagePath}:${stats.mtimeMs}:${stats.size}`;
     } catch {
-      return reply.code(404).send({ message: "Cover not found" });
+      return fail(reply, 404, "cover_not_found");
     }
     return sendConditional(request, reply, createReadStream(item.coverImagePath), { match });
   });
@@ -553,33 +677,35 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       where: { id: parseIdParam(request.params.id) ?? -1 },
       include: { libraryRoot: true },
     });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
+    if (!(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
     if (resolveInsideRoot(item.filePath, item.libraryRoot.path) === null) {
-      return reply.code(403).send({ message: "Forbidden" });
+      return fail(reply, 403, "forbidden");
     }
     try {
       return await streamAudioFile(item.filePath, request.headers.range, reply);
     } catch {
-      return reply.code(404).send({ message: "Audio file not found" });
+      return fail(reply, 404, "audio_file_not_found");
     }
   });
 
   app.get<{ Params: { id: string } }>("/api/tracks/:id/stream", async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
-    if (!Number.isInteger(id) || id < 1) return reply.code(400).send({ message: "Invalid track ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
+    if (!Number.isInteger(id) || id < 1) return fail(reply, 400, "invalid_track_id");
     const track = await prisma.track.findUnique({
       where: { id },
       include: { mediaItem: { include: { libraryRoot: true } } },
     });
-    if (!track) return reply.code(404).send({ message: "Track not found" });
+    if (!track) return fail(reply, 404, "track_not_found");
+    if (!(await canReadMediaItem(request, track.mediaItem.id))) return fail(reply, 404, "track_not_found");
     if (resolveInsideRoot(track.filePath, track.mediaItem.libraryRoot.path) === null) {
-      return reply.code(403).send({ message: "Forbidden" });
+      return fail(reply, 403, "forbidden");
     }
     try {
       return await streamAudioFile(track.filePath, request.headers.range, reply);
     } catch {
-      return reply.code(404).send({ message: "Audio file not found" });
+      return fail(reply, 404, "audio_file_not_found");
     }
   });
 
@@ -680,9 +806,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
 
     // Manual single-book path: run the chain now rather than enqueueing, so
     // the spec 07 "candidates appear" behaviour still holds synchronously.
@@ -726,9 +852,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
     const rows = await prisma.metadataCandidate.findMany({
       where: { mediaItemId: id },
       orderBy: { confidence: "desc" },
@@ -756,9 +882,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
 
     const body = (request.body ?? {}) as {
       candidateId?: number;
@@ -774,7 +900,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (body.candidateId !== undefined) {
       const candidate = await prisma.metadataCandidate.findUnique({ where: { id: body.candidateId } });
       if (!candidate || candidate.mediaItemId !== id) {
-        return reply.code(400).send({ message: "Candidate not found for this book" });
+        return fail(reply, 400, "candidate_not_found");
       }
       const applied = await applyCandidate(prisma, item, rowToCandidate(candidate));
       if (applied.coverImagePath) data.coverImagePath = applied.coverImagePath;
@@ -856,10 +982,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }, async (request, reply) => {
     const body = request.body as { slug: string; name: string; parentId?: number; sortOrder?: number };
     const existing = await prisma.genre.findUnique({ where: { slug: body.slug } });
-    if (existing) return reply.code(409).send({ message: "A genre with that slug already exists" });
+    if (existing) return fail(reply, 409, "genre_slug_taken");
     if (body.parentId) {
       const parent = await prisma.genre.findUnique({ where: { id: body.parentId } });
-      if (!parent) return reply.code(400).send({ message: "Parent genre not found" });
+      if (!parent) return fail(reply, 400, "parent_genre_not_found");
     }
     return prisma.genre.create({ data: body });
   });
@@ -879,9 +1005,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const genre = await prisma.genre.findUnique({ where: { id } });
-    if (!genre) return reply.code(404).send({ message: "Genre not found" });
+    if (!genre) return fail(reply, 404, "genre_not_found");
     return prisma.genre.update({ where: { id }, data: request.body as Record<string, unknown> });
   });
 
@@ -889,12 +1015,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const genre = await prisma.genre.findUnique({ where: { id } });
-    if (!genre) return reply.code(404).send({ message: "Genre not found" });
+    if (!genre) return fail(reply, 404, "genre_not_found");
     // The catch-all bucket is load-bearing: unmapped provider genres land
     // there. Removing it would silently discard genres on the next pass.
-    if (genre.isCatchAll) return reply.code(409).send({ message: "The catch-all genre cannot be deleted" });
+    if (genre.isCatchAll) return fail(reply, 409, "catch_all_genre_undeletable");
     await prisma.genre.delete({ where: { id } });
     return { deleted: true };
   });
@@ -904,7 +1030,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({
       where: { id },
       include: {
@@ -914,7 +1040,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         contributors: { include: { contributor: true } },
       },
     });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
 
     const overridden = new Set(item.overrides.map((row) => row.field));
     return {
@@ -984,9 +1110,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
 
     const body = request.body as Record<string, unknown>;
     const data: Record<string, unknown> = {};
@@ -1035,7 +1161,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       if (body.genreIds.length > 0) {
         const found = await prisma.genre.count({ where: { id: { in: body.genreIds as number[] } } });
         if (found !== (body.genreIds as number[]).length) {
-          return reply.code(400).send({ message: "Unknown genre id" });
+          return fail(reply, 400, "unknown_genre_id");
         }
       }
       // A user-chosen genre set replaces the provider's entirely, and is
@@ -1054,7 +1180,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const tagIds = [...new Set(body.tagIds as number[])];
       if (tagIds.length > 0) {
         const found = await prisma.tag.count({ where: { id: { in: tagIds } } });
-        if (found !== tagIds.length) return reply.code(400).send({ message: "Unknown tag id" });
+        if (found !== tagIds.length) return fail(reply, 400, "unknown_tag_id");
       }
       await setBookTags(prisma, id, tagIds);
     }
@@ -1109,9 +1235,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
 
     const { count } = await prisma.fieldOverride.deleteMany({ where: { mediaItemId: id } });
     await prisma.mediaItem.update({
@@ -1157,17 +1283,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     async (request, reply) => {
       const id = parseIdParam(request.params.id);
-      if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+      if (id === null) return fail(reply, 400, "invalid_id");
       const trackNumber = Number(request.params.trackNumber);
       if (!Number.isInteger(trackNumber) || trackNumber < 1) {
-        return reply.code(400).send({ message: "Invalid track number" });
+        return fail(reply, 400, "invalid_track_number");
       }
 
       const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
-      if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+      if (!item) return fail(reply, 404, "audiobook_not_found");
 
       const track = await prisma.track.findFirst({ where: { mediaItemId: id, trackNumber } });
-      if (!track) return reply.code(404).send({ message: "Track not found" });
+      if (!track) return fail(reply, 404, "track_not_found");
 
       const field = trackTitleOverrideField(trackNumber);
       const raw = (request.body as { title?: unknown } | undefined)?.title;
@@ -1197,20 +1323,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // ---------------------------------------------------------------------
 
   /** Every metadata route requires a profile; favourites are per profile. */
-  function requireProfileId(request: { headers: Record<string, unknown> }): number | null {
-    const profileId = Number(request.headers["x-profile-id"]);
-    return Number.isInteger(profileId) && profileId > 0 ? profileId : null;
+  function requireProfileId(request: FastifyRequest): number | null {
+    return optionalProfileId(request);
   }
 
   app.put<{ Params: { id: string } }>("/api/audiobooks/:id/favourite", {
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
 
     // Idempotent: favouriting twice is a no-op, not an error.
     const existing = await prisma.favourite.findUnique({
@@ -1226,9 +1351,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
 
     // Un-favouriting something already un-favourited is a no-op.
     const { count } = await prisma.favourite.deleteMany({ where: { profileId, mediaItemId: id } });
@@ -1237,7 +1362,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get("/api/favourites", async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
 
     const favourites = await prisma.favourite.findMany({
       where: { profileId },
@@ -1267,7 +1392,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   /** The current profile's favourites, as a plain id set for list endpoints. */
   app.get("/api/favourites/ids", async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const rows = await prisma.favourite.findMany({ where: { profileId }, select: { mediaItemId: true } });
     return rows.map((row) => row.mediaItemId);
   });
@@ -1294,7 +1419,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }, async (request, reply) => {
     const body = request.body as { name: string };
     const result = await createTag(prisma, body.name, optionalProfileId(request));
-    if ("reason" in result) return reply.code(409).send({ message: `Tag name rejected: ${result.reason}` });
+    if ("reason" in result) return fail(reply, 409, "tag_name_rejected", { reason: result.reason });
     return reply.code(result.created ? 201 : 200).send(result.tag);
   });
 
@@ -1310,9 +1435,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const result = await renameTag(prisma, id, (request.body as { name: string }).name);
-    if ("reason" in result) return reply.code(409).send({ message: `Tag name rejected: ${result.reason}` });
+    if ("reason" in result) return fail(reply, 409, "tag_name_rejected", { reason: result.reason });
     return result.tag;
   });
 
@@ -1320,9 +1445,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const tag = await prisma.tag.findUnique({ where: { id } });
-    if (!tag) return reply.code(404).send({ message: "Tag not found" });
+    if (!tag) return fail(reply, 404, "tag_not_found");
     // Cascades to MediaItemTag, so every assignment goes with it.
     await prisma.tag.delete({ where: { id } });
     return { deleted: true };
@@ -1340,12 +1465,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const { targetTagId } = request.body as { targetTagId: number };
     const result = await mergeTags(prisma, id, targetTagId);
     if ("reason" in result) {
       const status = result.reason === "not-found" ? 404 : 400;
-      return reply.code(status).send({ message: `Merge failed: ${result.reason}` });
+      return fail(reply, status, "tag_merge_failed", { reason: result.reason });
     }
     // The count is reported so the UI can confirm how many books moved.
     return { moved: result.moved, mergedInto: targetTagId };
@@ -1383,9 +1508,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const exists = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
-    if (!exists) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!exists) return fail(reply, 404, "audiobook_not_found");
 
     const { page, pageSize } = readPaging(request.query);
     const result = await recommendations.similarTo(id, { page, pageSize });
@@ -1407,7 +1532,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const { page, pageSize } = readPaging(request.query);
     const result = await recommendations.forProfile(profileId, { page, pageSize });
     return publicRecommendations(result);
@@ -1415,7 +1540,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get("/api/wishlist", async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const items = await prisma.wishlistItem.findMany({
       where: { profileId },
       orderBy: { createdAt: "desc" },
@@ -1447,7 +1572,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const body = request.body as {
       title: string;
       author?: string;
@@ -1465,7 +1590,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
     const item = await recommendations.saveToWishlist(
       profileId,
-      { ...body, narrators: body.narrators ?? [], genres: body.genres ?? [], score: 0, reason: "" },
+      { ...body, narrators: body.narrators ?? [], genres: body.genres ?? [], score: 0, reason: { code: "related" } },
       body.seedMediaItemId,
     );
     return reply.code(201).send(publicWishlistItem(item));
@@ -1475,13 +1600,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
 
     // Scoped by profile: one profile cannot delete another's wishlist entry.
     const { count } = await prisma.wishlistItem.deleteMany({ where: { id, profileId } });
-    if (count === 0) return reply.code(404).send({ message: "Wishlist item not found" });
+    if (count === 0) return fail(reply, 404, "wishlist_item_not_found");
     return { deleted: true };
   });
 
@@ -1489,13 +1614,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
-    if (profileId === null) return reply.code(400).send({ message: "A profile is required" });
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const owned = (request.body as { owned?: boolean } | undefined)?.owned ?? true;
 
     const result = await prisma.wishlistItem.updateMany({ where: { id, profileId }, data: { owned } });
-    if (result.count === 0) return reply.code(404).send({ message: "Wishlist item not found" });
+    if (result.count === 0) return fail(reply, 404, "wishlist_item_not_found");
     const item = await prisma.wishlistItem.findUnique({ where: { id } });
     return publicWishlistItem(item!);
   });
@@ -1503,9 +1628,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // AI: optional metadata match assistant (works only if LM Studio is up)
   app.post<{ Params: { id: string } }>("/api/audiobooks/:id/ai-suggest", async (request, reply) => {
     const id = parseIdParam(request.params.id);
-    if (id === null) return reply.code(400).send({ message: "Invalid ID" });
+    if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
     const adapter = new LMStudioAdapter();
     if (!(await adapter.available())) {
       return { available: false, suggestion: null };
@@ -1522,9 +1647,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Progress (profile-scoped)
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/progress", async (request, reply) => {
     const profileId = Number(request.headers["x-profile-id"]);
-    if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
+    if (!Number.isInteger(profileId) || profileId < 1) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
     const row = await prisma.listeningHistory.findFirst({
       where: { mediaItemId: item.id, profileId },
       orderBy: { lastPlayed: "desc" },
@@ -1534,9 +1659,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.put<{ Params: { id: string }; Body: { position?: number; completed?: boolean } }>("/api/audiobooks/:id/progress", async (request, reply) => {
     const profileId = Number(request.headers["x-profile-id"]);
-    if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
+    if (!Number.isInteger(profileId) || profileId < 1) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
 
     const rawPosition = typeof request.body?.position === "number" && Number.isFinite(request.body.position) ? request.body.position : 0;
     // Clamp into the book's real bounds when the duration is known. A
@@ -1561,13 +1686,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.post<{ Params: { id: string }; Body: { fromPosition?: number; toPosition?: number; speed?: number; startedAt?: string; endedAt?: string } }>("/api/audiobooks/:id/sessions", async (request, reply) => {
     const profileId = Number(request.headers["x-profile-id"]);
-    if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
+    if (!Number.isInteger(profileId) || profileId < 1) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
-    if (!item) return reply.code(404).send({ message: "Audiobook not found" });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
     const toPosition = Number(request.body?.toPosition);
     const fromPosition = Number(request.body?.fromPosition);
     if (!Number.isFinite(toPosition) || !Number.isFinite(fromPosition)) {
-      return reply.code(400).send({ message: "fromPosition and toPosition are required" });
+      return fail(reply, 400, "positions_required");
     }
     // Keep history rows physically meaningful: no negative offsets, and no
     // position past the end of the book.
@@ -1591,23 +1716,42 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get("/api/history", async (request, reply) => {
     const profileId = Number(request.headers["x-profile-id"]);
-    if (!Number.isInteger(profileId) || profileId < 1) return reply.code(400).send({ message: "A profile is required" });
+    if (!Number.isInteger(profileId) || profileId < 1) return fail(reply, 400, "profile_required");
     return prisma.playSession.findMany({ where: { profileId }, orderBy: { startedAt: "desc" }, take: 100 });
   });
 
   // Profiles
-  app.get("/api/profiles", async () => prisma.profile.findMany({ orderBy: { createdAt: "asc" } }));
+  //
+  // Never return `passwordHash` (or any auth secret) from the profile surface.
+  // The public account list is `/api/auth/accounts`; this route keeps the
+  // existing shape for the profile picker and the tests.
+  const profileSummary = {
+    id: true,
+    name: true,
+    color: true,
+    role: true,
+    disabled: true,
+    createdAt: true,
+    followsServerLibrary: true,
+  } as const;
+  app.get("/api/profiles", async () => prisma.profile.findMany({
+    orderBy: { createdAt: "asc" },
+    select: profileSummary,
+  }));
 
   app.post<{ Body: { name?: string; color?: string } }>("/api/profiles", async (request, reply) => {
     const name = request.body?.name?.trim();
-    if (!name) return reply.code(400).send({ message: "A profile name is required" });
+    if (!name) return fail(reply, 400, "profile_name_required");
     const existing = await prisma.profile.findUnique({ where: { name } });
-    if (existing) return reply.code(409).send({ message: "A profile with that name already exists" });
+    if (existing) return fail(reply, 409, "profile_name_taken");
     // Spec 27: a new profile starts EMPTY and does not follow the server
     // library. This is the one line the spec points at: flip `followsServerLibrary`
     // to true and copy the books across to give new profiles the full library
     // instead.
-    const profile = await prisma.profile.create({ data: { name, color: request.body?.color?.trim() || null } });
+    const profile = await prisma.profile.create({
+      data: { name, color: request.body?.color?.trim() || null },
+      select: profileSummary,
+    });
     return reply.code(201).send(profile);
   });
 

@@ -152,8 +152,9 @@ describe("the Server library tab", () => {
   it("says so when the server has no books at all", () => {
     renderTab({ books: [] });
     expect(screen.getByText(/No audiobooks have been added yet/)).toBeInTheDocument();
-    // The empty state names the next action rather than just reporting.
-    expect(screen.getByText(/Add a folder/)).toBeInTheDocument();
+    // The empty state says why it is empty rather than asking the listener to
+    // do something only the operator can do.
+    expect(screen.getByText(/once the household adds them/)).toBeInTheDocument();
   });
 
   it("shows an error when the server library cannot be read", () => {

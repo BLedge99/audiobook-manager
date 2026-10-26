@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { copy } from "../copy";
 import {
   apiAssetUrl,
   apiFetch,
@@ -216,24 +217,36 @@ describe("apiFetch", () => {
     expect(calls[0].init?.credentials).toBe("include");
   });
 
-  it("surfaces the server's message on failure", async () => {
+  it("renders the catalog's sentence for the server's error code", async () => {
     const original = globalThis.fetch;
     globalThis.fetch = (() =>
-      Promise.resolve(new Response(JSON.stringify({ message: "Invalid range" }), { status: 416 }))) as typeof fetch;
+      Promise.resolve(new Response(JSON.stringify({ code: "audiobook_not_found" }), { status: 404 }))) as typeof fetch;
 
     try {
-      await expect(apiFetch("/api/audiobooks/1/stream")).rejects.toThrow("Invalid range");
+      await expect(apiFetch("/api/audiobooks/1")).rejects.toThrow(copy.apiErrors.audiobookNotFound);
     } finally {
       globalThis.fetch = original;
     }
   });
 
-  it("falls back to the raw body when the error is not JSON", async () => {
+  it("falls back to the generic sentence when the error is not JSON", async () => {
     const original = globalThis.fetch;
     globalThis.fetch = (() => Promise.resolve(new Response("<html>oops</html>", { status: 502 }))) as typeof fetch;
 
     try {
-      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("<html>oops</html>");
+      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("The server did not answer as expected (HTTP 502). Try again in a moment.");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("falls back to the generic sentence for a code it does not know", async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (() =>
+      Promise.resolve(new Response(JSON.stringify({ code: "a_code_from_a_newer_server" }), { status: 409 }))) as typeof fetch;
+
+    try {
+      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("The server did not answer as expected (HTTP 409). Try again in a moment.");
     } finally {
       globalThis.fetch = original;
     }

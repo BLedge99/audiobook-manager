@@ -16,6 +16,8 @@ defensive requirements and the automated security test suite.
    missing/invalid params; bounded `:id` integers.
 4. **Range requests bounded.** Malformed ranges → 416; never stream unbounded.
 5. **Error hygiene.** API errors don't leak absolute host paths or stack traces.
+   A failed request answers `{ code, params? }`; the thrown `error.message` is
+   logged server-side and never echoed (ADR 015).
 6. **CORS limited** to the client origin(s).
 7. **Auth readiness.** Session gate (spec 03) wraps all routes; default
    deployment is LAN-only with the household password.

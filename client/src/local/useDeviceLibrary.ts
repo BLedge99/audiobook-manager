@@ -15,7 +15,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Audiobook } from "../types";
 import { deviceFiles, localDb } from "./device";
-import { sessionHeaders } from "../lib/api";
 import { downloadBook as runDownload, trackStreamUrl, type DownloadProgress } from "./download";
 import {
   bookBytes,
@@ -25,6 +24,7 @@ import {
   removeDownloadedBook,
   totalReplicaBytes,
 } from "./replica";
+import { readProgress } from "./privateCache";
 import type { ReplicaBook } from "./db";
 
 export interface DeviceLibrary {
@@ -66,7 +66,14 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
       const raw = await Promise.all(list.map((book) => localDb.books.get(book.id)));
       const next: Record<number, ReplicaBook> = {};
       for (const row of raw) {
-        if (row) next[row.id] = row;
+        if (!row) continue;
+        // The replica stores only shared metadata. Progress is private and
+        // comes back from the encrypted rows when the profile key is unlocked;
+        // without a key the book is still playable, just with no resume point.
+        const progress = await readProgress(row.id);
+        next[row.id] = progress
+          ? { ...row, book: { ...row.book, progress } }
+          : row;
       }
       setRows(next);
     } catch {
@@ -106,11 +113,6 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
           db: localDb,
           files: deviceFiles,
           trackUrl: trackStreamUrl,
-          // Sent as well as in the query string. The URL token is what makes
-          // this work at all (a native plugin call cannot rely on the fetch
-          // shim), but the header is free and keeps the request identical in
-          // shape to every other one the app makes.
-          headers: sessionHeaders(),
         },
         onProgress,
       );

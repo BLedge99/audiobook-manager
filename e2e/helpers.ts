@@ -22,10 +22,24 @@ export async function ensureAuthed(page: Page): Promise<void> {
 
 /** Sign in through the household login gate (no-op if the gate isn't shown). */
 export async function login(page: Page): Promise<void> {
-  const passwordBox = page.getByPlaceholder("Household password");
+  let passwordBox = page.getByPlaceholder("Household password");
   // The auth probe resolves a moment after page load, so wait briefly
   // for the gate before deciding we're already signed in.
-  const gated = await passwordBox.waitFor({ state: "visible", timeout: 3_000 }).then(() => true).catch(() => false);
+  let gated = await passwordBox.waitFor({ state: "visible", timeout: 3_000 }).then(() => true).catch(() => false);
+  if (!gated) {
+    // Spec 28: the default gate is the profile picker. The household key is a
+    // separate recovery mode, and these older tests use it to set up profiles.
+    const householdLink = page.getByRole("button", { name: "Use the household password" });
+    const onAccountGate = await householdLink
+      .waitFor({ state: "visible", timeout: 3_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (onAccountGate) {
+      await householdLink.click();
+      passwordBox = page.getByPlaceholder("Household password");
+      gated = true;
+    }
+  }
   if (gated) {
     await passwordBox.fill(E2E_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();

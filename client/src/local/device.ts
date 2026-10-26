@@ -114,7 +114,8 @@ export function describeTransferError(error: unknown): Error {
   if (typeof httpStatus === "number") {
     return new Error(copy.errors.trackFailed(httpStatus));
   }
-  const message = candidate?.message || copy.errors.downloadFailed;
+  const message = (candidate?.message || copy.errors.downloadFailed)
+    .replace(/([?&]media=)[^&\s]+/gi, "$1[redacted]");
   // A connection failure says nothing useful on its own. "The server is down"
   // and "the phone cannot reach the server" look identical to the person
   // holding the phone, and they have different fixes -- so the message names
@@ -262,7 +263,7 @@ export const deviceFiles: FileSystemPort = {
 
     // Announce before the call and confirm after. If this is where a download
     // hangs, the missing second line is the whole diagnosis.
-    console.log(`[download] plugin downloadFile -> ${url.replace(/session=[^&]*/, "session=...")}`);
+    console.log(`[download] plugin downloadFile -> ${url.replace(/media=[^&]*/, "media=...")}`);
     try {
       await FileTransfer.downloadFile({
         url,
@@ -276,7 +277,11 @@ export const deviceFiles: FileSystemPort = {
       });
       console.log("[download] plugin downloadFile returned");
     } catch (error) {
-      console.log("[download] plugin downloadFile threw:", error);
+      const details = error as { code?: string; data?: { httpStatus?: number } };
+      console.log("[download] plugin downloadFile failed:", {
+        code: details?.code,
+        httpStatus: details?.data?.httpStatus,
+      });
       throw describeTransferError(error);
     } finally {
       // Always detach: a leaked listener keeps firing for the life of the

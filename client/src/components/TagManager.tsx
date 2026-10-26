@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GitMerge, Plus, Tag as TagIcon, Trash2 } from "lucide-react";
 import type { TagSummary } from "../types";
 import { copy } from "../copy";
+import { responseErrorText } from "../lib/apiError";
 import { Btn, Field, MachineHead, Notice } from "../ui/primitives";
 
 /**
@@ -21,14 +22,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   if (profileId) headers["x-profile-id"] = profileId;
   const response = await fetch(url, { ...options, headers: { ...headers, ...(options?.headers as Record<string, string>) } });
   if (!response.ok) {
-    const body = await response.text();
-    let message = body;
-    try {
-      message = JSON.parse(body).message || body;
-    } catch {
-      /* not json */
-    }
-    throw new Error(message || `Request failed (${response.status})`);
+    throw new Error(await responseErrorText(response));
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

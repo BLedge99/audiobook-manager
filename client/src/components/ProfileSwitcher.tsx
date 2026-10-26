@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { LockKeyhole, Trash2 } from "lucide-react";
 import { copy } from "../copy";
+import { getActiveProfileId, lockSession, setActiveProfileId } from "../lib/api";
+import { responseErrorText } from "../lib/apiError";
 import { Btn, Field, cn } from "../ui/primitives";
 
 interface Profile {
@@ -9,12 +11,29 @@ interface Profile {
   color?: string | null;
 }
 
+const PENDING_PROFILE_KEY = "pendingProfileId";
+
 export function ProfileSwitcher() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [currentId, setCurrentId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
+  const [currentId, setCurrentId] = useState<string | null>(() => getActiveProfileId());
+  const [via, setVia] = useState<"profile" | "household" | "device" | null>(null);
   const [newName, setNewName] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.ok) {
+          const body = (await res.json()) as { via?: "profile" | "household" | "device" };
+          setVia(body.via ?? null);
+        }
+      } catch {
+        // The select still works for the break-glass path.
+      }
+    })();
+  }, []);
 
   const load = async () => {
     const res = await fetch("/api/profiles");
@@ -24,9 +43,32 @@ export function ProfileSwitcher() {
   useEffect(() => { void load(); }, []);
 
   const select = (id: number) => {
-    window.localStorage.setItem("profileId", String(id));
-    setCurrentId(String(id));
-    window.location.reload();
+    if (String(id) === currentId) return;
+    if (via === "household") {
+      // Break-glass migration path: the household key is the authority, so
+      // choosing a profile from it does not need that profile's password.
+      window.localStorage.setItem("profileId", String(id));
+      setCurrentId(String(id));
+      window.location.reload();
+      return;
+    }
+    // A normal profile switch is a lock: sign out, remember the destination,
+    // and let the account picker ask for that profile's password.
+    void (async () => {
+      await lockSession();
+      setActiveProfileId(null);
+      window.localStorage.setItem(PENDING_PROFILE_KEY, String(id));
+      window.location.reload();
+    })();
+  };
+
+  const lock = () => {
+    void (async () => {
+      await lockSession();
+      setActiveProfileId(null);
+      window.localStorage.removeItem(PENDING_PROFILE_KEY);
+      window.location.reload();
+    })();
   };
 
   const add = async (event: FormEvent) => {
@@ -51,13 +93,19 @@ export function ProfileSwitcher() {
       select(profile.id);
     } else if (res.status === 409) {
       setError(copy.profile.duplicate);
+    } else {
+      setError(await responseErrorText(res));
     }
   };
 
   const remove = async (id: number) => {
-    await fetch(`/api/profiles/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError(await responseErrorText(res));
+      return;
+    }
     if (String(id) === currentId) {
-      window.localStorage.removeItem("profileId");
+      setActiveProfileId(null);
       setCurrentId(null);
       // Reload like `select` does. Without it the app keeps the deleted id
       // in state, so the profile gate never reappears and every progress save
@@ -112,6 +160,17 @@ export function ProfileSwitcher() {
           <Trash2 size={15} aria-hidden="true" />
         </Btn>
       )}
+
+      <Btn
+        variant="quiet"
+        size="sm"
+        onClick={lock}
+        aria-label={copy.account.lock}
+        title={copy.account.lock}
+        className="hidden text-ink3 sm:inline-flex"
+      >
+        <LockKeyhole size={15} aria-hidden="true" />
+      </Btn>
 
       {showAdd && (
         <form onSubmit={add} className="flex items-center gap-1.5">

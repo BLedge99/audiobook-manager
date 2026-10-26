@@ -29,7 +29,7 @@ function recommendation(n: number): Recommendation {
     provider: "openlibrary",
     providerKey: `/works/${n}`,
     score: 1 - n / 100,
-    reason: "Because it shares the genre horror",
+    reason: { code: "shared-genre", genre: "horror" },
   } as unknown as Recommendation;
 }
 

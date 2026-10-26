@@ -77,6 +77,24 @@ export async function countReplicaBooks(db: LocalLibraryDatabase): Promise<numbe
   return db.books.count();
 }
 
+/**
+ * The shared half of a book row.
+ *
+ * `progress`, `favourited` and `inLibrary` are profile-private and live in
+ * encrypted rows instead (spec 28). Stripping them here is what keeps a
+ * downloaded book's plaintext replica from leaking who listened to what. The
+ * public catalogue fields -- title, author, tracks, cover identity -- stay.
+ */
+function sharedReplicaBook(book: Audiobook): Audiobook {
+  const {
+    progress: _progress,
+    favourited: _favourited,
+    inLibrary: _inLibrary,
+    ...shared
+  } = book;
+  return shared;
+}
+
 /** Record that a book is on the device, refreshing its metadata. */
 export async function putReplicaBook(
   db: LocalLibraryDatabase,
@@ -86,7 +104,7 @@ export async function putReplicaBook(
   const existing = await db.books.get(book.id);
   await db.books.put({
     id: book.id,
-    book,
+    book: sharedReplicaBook(book),
     fetchedAt: new Date().toISOString(),
     // Preserve tracks already downloaded when only the metadata is refreshed,
     // so a metadata refresh never silently un-downloads a book.

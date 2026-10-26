@@ -415,7 +415,7 @@ Audnexus reachable permanently rather than incidentally.
 |---|---|
 | **Spec 13 — media tools** | Out of scope by decision. Media is a read-only mount; writing tags into user files is not wanted. |
 | **Downloaded-books list and "Remove from device"** | An unmet spec 26 acceptance criterion: Settings shows a byte total and a count, but no list and no way to free a book from the UI. Removed from the 15b polish pass by the user on 2026-10-19; recorded here so it is not lost. `useDeviceLibrary.remove()` and `Settings` already exist — it is a UI, not a feature. |
-| **Per-profile privacy (PIN + biometrics)** | Finding 2 of the user testing. Needs its own ADR before any code: a new auth level, a schema change and a biometric path, with spec 11's auth-model constraints shaping it rather than following it. |
+| **Spec 28 - accounts, passkeys and biometrics** | Implementation through phases 1-8 is present on `deepseek-skill`; automated suites pass (507 server, 401 client, 51 Playwright), the live-database migration was rehearsed with `prisma migrate deploy`, and Caddy/Compose config validates. Caddy/CA deployment and Windows Hello, real Android biometric flows (including Motorola Defy) remain unverified. Android media still uses household-LAN HTTP. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and the live [`handoff.md`](handoff.md). |
 | **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. Now sequenced **after** spec 26, since restyling a shell that is about to be wrapped in an APK would mean restyling it twice. |
 | **Chapter/track title editor UI** | Spec 24 shipped the `PUT /tracks/:trackNumber/title` endpoint and the `FieldOverride` storage, but **no UI**. A hand-set narrator/track title is only reachable via API. |
 | **Bookmarks & highlights** | Needs a new data model. Deliberately out of spec 14. |
@@ -431,35 +431,30 @@ Audnexus reachable permanently rather than incidentally.
 
 ## 4. Security debt
 
-`npm audit` in `server/` reports **12 advisories (2 critical, 6 high, 4
-moderate)**. Client is clean (0).
+The security dependency refresh completed on 2026-10-24. Clean installs and
+`npm audit` report zero known vulnerabilities in the root Playwright, server,
+and client dependency trees. The app server and dev/test environments use
+Node 24; Fastify 5 and compatible plugins replace the unsupported Fastify 4
+line, and `music-metadata` 12 replaces the vulnerable parser line. Vite and
+Vitest are patched. CI audits all three dependency trees, and Dependabot checks
+for updates weekly. The production image prunes development dependencies and
+runs as the unprivileged `node` user.
 
-| Package | Severity | Issue |
-|---|---|---|
-| `tinypool` | **critical** | Prototype pollution gadget in worker options → RCE |
-| `vitest` | **critical** | via `@vitest/mocker` |
-| `@fastify/static` | high | Authorization bypass via non-canonical URL paths |
-| `fastify` | high | DoS via unbounded memory allocation in `sendWebStream` |
-| `find-my-way` | high | DDoS with HTTP2 |
-| `music-metadata` | high | Infinite loop in ASF parser |
-| `vite` | high | Path traversal in optimized deps `.map` handling |
-| `source-map-js` | high | Event-loop DoS via indexed source-map offsets |
-| `@vitest/mocker` | moderate | Path traversal / arbitrary file read |
-| `esbuild` | moderate | Dev-server cross-origin requests |
-| `vite-node` | moderate | — |
-| `file-type` | moderate | Infinite loop in ASF parser |
+Verification on 2026-10-24: latest full `make test` passed with 480 server
+tests and 395 client tests; copy check passed. Server, standard client, and
+Android-mode client builds passed; the production Compose file parses with
+validation-only required secrets. The earlier security run reported all 10
+Playwright security tests passing. A zero audit result only describes
+known advisories at audit time, so keep the automated updates and audits active.
 
-**Assessment:** most are dev-time (`vitest`, `vite`, `esbuild`, `tinypool`) and
-do not ship in the production image. The two that matter are
-**`@fastify/static`** (auth bypass — it serves the built client in
-`Dockerfile.prod`) and **`music-metadata`** (infinite loop on a malformed ASF
-file, reachable from the scanner on untrusted media).
-
-All fixes are breaking major bumps, so they need their own change with a
-re-run of the security E2E suite. **Not started.**
-
----
-
+**Transport remains a material security gap for Android.** Production web now
+has a Caddy `tls internal` endpoint at `books.home.arpa`, with setup steps in
+[`docs/production-https.md`](docs/production-https.md). It has not yet been
+deployed or tested with Windows CA trust/Hello. Android still communicates over
+HTTP on the household LAN because its configurable local server path does not
+yet provision a trusted TLS CA. Credentials and sessions on that path therefore
+lack transport encryption; do not use it on untrusted networks or expose it to
+the Internet.
 ## 5. Developer-experience friction
 
 - **E2E requires WSL + Docker.** `scripts/e2e-wsl.sh` provisions a Linux Node
@@ -909,7 +904,9 @@ home, so the Android app became the top priority and displaced the GUI redesign.
    book, so nobody's library changes on upgrade. A separate "All books" tab;
    removing a book offers to delete its download too. The 512 MB cover cache is
    deliberately untouched by it.
-7. **Per-profile privacy (PIN, optional biometrics).** Finding 2. ADR first.
+7. **Spec 28 - accounts, passkeys and biometrics.** Implementation is present through phases 1-8; the live-database migration was rehearsed with `prisma migrate deploy`, an automated pre-account migration test now guards it, and the full Playwright suite passes (51 tests). Finish acceptance with Caddy/CA deployment, Windows Hello and real Android sensor flows. Android LAN HTTP remains a transport gap. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and [`handoff.md`](handoff.md).
+
+
 8. **Lock-screen control latency.** Finding 6. Measure before fixing — §5 records
    two false diagnoses in this exact area.
 9. **Track title / narrator editor UI** — makes the spec 24 endpoint reachable

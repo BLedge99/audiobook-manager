@@ -27,11 +27,11 @@ describe("validateDownloadedSize", () => {
 
   it("rejects an empty file", () => {
     // The 401-body case can also produce nothing at all.
-    expect(() => validateDownloadedSize(0, 0)).toThrow(/wrote no data/i);
+    expect(() => validateDownloadedSize(0, 0)).toThrow(/saved nothing/i);
   });
 
   it("rejects a truncated file", () => {
-    expect(() => validateDownloadedSize(29, 7_558_385)).toThrow(/incomplete/i);
+    expect(() => validateDownloadedSize(29, 7_558_385)).toThrow(/stopped partway/i);
   });
 
   it("tolerates a small mismatch, so a padded final chunk is not a failure", () => {
@@ -59,6 +59,12 @@ describe("describeTransferError", () => {
   it("falls back to the plugin message when there is no HTTP status", () => {
     const error = describeTransferError({ code: "OS-PLUG-FLTR-0008", message: "The transfer was aborted." });
     expect(error.message).toBe("The transfer was aborted.");
+  });
+
+  it("redacts scoped media credentials from plugin errors", () => {
+    const error = describeTransferError({ message: "GET /stream?media=signed-secret failed" });
+    expect(error.message).not.toContain("signed-secret");
+    expect(error.message).toContain("media=[redacted]");
   });
 
   it("turns a connection failure into something the listener can act on", () => {
@@ -92,17 +98,17 @@ describe("isDirectoryExists", () => {
 });
 
 describe("isSameDownload", () => {
-  const url = "http://192.168.1.203:3000/api/tracks/42/stream?session=abc";
+  const url = "http://192.168.1.203:3000/api/tracks/42/stream?media=abc";
 
   it("matches the same URL", () => {
     expect(isSameDownload(url, url)).toBe(true);
   });
 
   it("tolerates the plugin normalising the URL", () => {
-    expect(isSameDownload(`HTTP://192.168.1.203:3000/api/tracks/42/stream?session=a%62c`, url)).toBe(true);
+    expect(isSameDownload(`HTTP://192.168.1.203:3000/api/tracks/42/stream?media=a%62c`, url)).toBe(true);
   });
 
   it("separates concurrent downloads of different tracks", () => {
-    expect(isSameDownload("http://192.168.1.203:3000/api/tracks/43/stream?session=abc", url)).toBe(false);
+    expect(isSameDownload("http://192.168.1.203:3000/api/tracks/43/stream?media=abc", url)).toBe(false);
   });
 });

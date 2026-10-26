@@ -17,7 +17,7 @@
  * show real progress rather than a spinner that either completes or fails.
  */
 
-import { apiUrl, withSessionToken } from "../lib/api";
+import { mediaAssetUrl } from "../lib/api";
 import { validateDownloadedSize } from "./device";
 import { DownloadTrace } from "./trace";
 import type { Audiobook, Track } from "../types";
@@ -52,7 +52,7 @@ export interface DownloadDeps {
    * Injected so the orchestration is testable without a server, and so the
    * per-track stream endpoint stays the caller's decision.
    */
-  trackUrl: (trackId: number) => string;
+  trackUrl: (trackId: number) => string | Promise<string>;
   headers?: Record<string, string>;
   /** Injected for deterministic timestamps in tests. */
   now?: () => Date;
@@ -61,13 +61,11 @@ export interface DownloadDeps {
 /**
  * The stream URL for one track, from the server's per-track endpoint.
  *
- * Carries the session token in the query string. `Filesystem.downloadFile` is a
- * native plugin call, so it bypasses the `fetch` shim that attaches the token
- * to every JS request -- without this the server answers 401 and the download
- * sits at "Downloading 0%" forever.
+ * The native download plugin bypasses the fetch shim, so its URL receives a
+ * short-lived token scoped to this one track instead of the session token.
  */
-export function trackStreamUrl(trackId: number): string {
-  return withSessionToken(apiUrl(`/api/tracks/${trackId}/stream`));
+export function trackStreamUrl(trackId: number): Promise<string> {
+  return mediaAssetUrl(`/api/tracks/${trackId}/stream`, "track-stream", trackId);
 }
 
 /**
@@ -141,10 +139,11 @@ async function downloadTrack(
 ): Promise<void> {
   const path = trackPath(book.id, track.id, extension);
   const label = `track ${index + 1}/${total}`;
+  const url = await deps.trackUrl(track.id);
 
   const result = await trace.step(`${label}: fetch audio`, STEP_BUDGETS.trackDownload, () =>
     deps.files.download({
-      url: deps.trackUrl(track.id),
+      url,
       path,
       headers: deps.headers,
       onProgress: (trackFraction) => {

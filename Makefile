@@ -1,4 +1,4 @@
-.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client test-e2e capture device-tunnel verify lan
+.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client check-copy test-e2e capture device-tunnel verify lan
 
 ## Expose the server on the LAN so a phone can reach it.
 # The whole stack runs inside WSL, and WSL's NAT mode only relays the server to
@@ -127,10 +127,10 @@ reset:
 	docker compose up -d --build
 
 install-server:
-	cd server && npm install
+	cd server && npm ci
 
 install-client:
-	cd client && npm install
+	cd client && npm ci
 
 install: install-server install-client
 
@@ -140,13 +140,29 @@ client:
 server:
 	cd server && npm run dev
 
-test: test-server test-client
+test: check-copy test-server test-client
 
 test-server:
 	cd server && npm test
 
 test-client:
 	cd client && npm test
+
+## Check the interface copy against the ui-copy rules (spec 15b feature 7).
+# The catalog check is the gate: a banned word in a listener-facing string
+# fails. `--fail-on-scan` makes the source scan a gate too, so a literal that
+# never made it into the catalog fails the build instead of only being printed.
+# The scan is line-based, so `copy.test.ts` and the review still catch the
+# shapes it cannot see (JSX expressions and template literals).
+#
+# `scripts/copy.config.json` records the product's own banned words. Its
+# `ignoreKeys` list is empty: the burn-down finished in feature 7b's second
+# pass, and the list may only shrink from here -- never add a key to silence a
+# new string.
+#
+# Part of `make test`, and of CI.
+check-copy:
+	cd client && npm run check:copy
 
 ## Full E2E suite against the running stack.
 # The compose-up, the health wait and the test run stay in ONE recipe on

@@ -40,11 +40,14 @@ describe("auth gate", () => {
   it("rejects unauthenticated requests", async () => {
     const res = await app.inject({ method: "GET", url: "/api/audiobooks" });
     expect(res.statusCode).toBe(401);
+    // A code, not prose: the client owns the sentence (ADR 015).
+    expect(res.json()).toEqual({ code: "auth_required" });
   });
 
   it("rejects a wrong password", async () => {
     const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "nope" } });
     expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ code: "incorrect_password" });
   });
 
   it("accepts the household password and issues a session cookie", async () => {
@@ -91,15 +94,11 @@ describe("auth gate", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("authenticates from a session query parameter, for <audio src> requests", async () => {
-    // An <audio src> request is issued by the browser, not by script, so it
-    // cannot carry the session header. Without accepting the token in the URL,
-    // streaming playback cannot authenticate at all -- observed on device as
-    // "playback could not start" while every fetch() call worked.
+  it("does not accept a long-lived session token from a URL", async () => {
     const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
     const { token } = login.json<{ token: string }>();
     const res = await app.inject({ method: "GET", url: `/api/audiobooks?session=${token}` });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(401);
   });
 
   it("ignores an unrelated query parameter when authenticating", async () => {
@@ -111,8 +110,8 @@ describe("auth gate", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("rejects a bad session query parameter", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/audiobooks?session=not-a-real-token" });
+  it("rejects a media query parameter on non-media endpoints", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/audiobooks?media=not-a-real-token" });
     expect(res.statusCode).toBe(401);
   });
 
@@ -155,6 +154,31 @@ describe("auth gate", () => {
       expect(res.statusCode, `origin ${origin}`).toBe(200);
       expect(res.headers["access-control-allow-origin"], `origin ${origin}`).toBe(origin);
     }
+  });
+
+  it("allows Android WebView preflights for library membership removal", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/api/audiobooks/1/library",
+      headers: {
+        origin: "http://localhost",
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": SESSION_HEADER,
+      },
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost");
+    expect(res.headers["access-control-allow-methods"]).toContain("DELETE");
+    expect(res.headers["access-control-allow-headers"]).toContain(SESSION_HEADER);
+  });
+
+  it("allows the exact production HTTPS origin for passkeys", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/api/health", headers: { origin: "https://books.home.arpa" },
+    });
+    expect(res.headers["access-control-allow-origin"]).toBe("https://books.home.arpa");
+    expect(res.headers["access-control-allow-credentials"]).toBe("true");
   });
 
   it("sends Access-Control-Allow-Credentials, so the session cookie survives", async () => {
@@ -594,5 +618,35 @@ describe("track title override", () => {
     // chapter in again, so the row must be gone rather than blank.
     const rows = await prisma.fieldOverride.findMany({ where: { mediaItemId: bookId, field: "trackTitle:1" } });
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("the API error contract", () => {
+  async function authed() {
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    return login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  }
+
+  it("sends a code, not prose", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/audiobooks/1/library",
+      headers: { cookie: await authed() },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ code: "profile_required" });
+  });
+
+  it("carries the values a sentence needs as params", async () => {
+    // A reserved name is rejected by the tag validator. The reason travels as
+    // data so the client can say it in its own words.
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/tags",
+      headers: { cookie: await authed() },
+      payload: { name: "discover" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ code: "tag_name_rejected", params: { reason: "reserved" } });
   });
 });

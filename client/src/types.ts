@@ -130,6 +130,25 @@ export interface BookTagSuite {
 
 // --- Spec 19 Discover ----------------------------------------------------
 
+/** Why a recommendation was offered. The server sends the code and values. */
+export type RecommendationReason =
+  | { code: "shared-genre"; genre: string }
+  | { code: "favourite-author"; author: string }
+  | { code: "series"; series: string }
+  | { code: "related" };
+
+/** A non-ok Discover status, as a code the client renders. */
+export type DiscoverMessageCode =
+  | "seed-needs-details"
+  | "favourites-need-details"
+  | "favourites-not-enough-metadata"
+  | "no-similar-books"
+  | "no-new-books";
+
+export interface DiscoverMessage {
+  code: DiscoverMessageCode;
+}
+
 export interface Recommendation {
   title: string;
   author?: string;
@@ -143,7 +162,7 @@ export interface Recommendation {
   provider: string;
   providerKey?: string;
   score: number;
-  reason: string;
+  reason: RecommendationReason;
 }
 
 export type DiscoverStatus = "ok" | "offline" | "insufficient-metadata" | "no-results";
@@ -151,7 +170,7 @@ export type DiscoverStatus = "ok" | "offline" | "insufficient-metadata" | "no-re
 export interface DiscoverResult {
   status: DiscoverStatus;
   recommendations: Recommendation[];
-  message?: string;
+  message?: DiscoverMessage;
   seedTitle?: string;
   seededFrom?: { genres: string[]; authors: string[]; series: string[]; bookCount: number };
   /** 1-based page, echoed back so the client can tell where it is. */

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
 import { boundedFetch, describeFailure, sessionHeaders } from "./lib/api";
+import { responseErrorText } from "./lib/apiError";
 import { copy } from "./copy";
+import { cacheLibraryPrivateState } from "./local/privateCache";
 
 /**
  * Library state, spec 15b feature 4.
@@ -42,14 +44,7 @@ async function conditionalRequest<T>(url: string, etag: string | null): Promise<
   const response = await boundedFetch(url, { headers });
   if (response.status === 304) return { changed: false };
   if (!response.ok) {
-    const body = await response.text();
-    let message = body;
-    try {
-      message = JSON.parse(body).message || body;
-    } catch {
-      /* not json; the raw body is the best message available */
-    }
-    throw new Error(message || copy.errors.requestFailed(response.status));
+    throw new Error(await responseErrorText(response));
   }
   return { changed: true, data: (await response.json()) as T, etag: response.headers.get("etag") };
 }
@@ -63,19 +58,12 @@ async function writeRequest<T>(url: string, method: string, body?: unknown): Pro
     headers,
   });
   if (!response.ok) {
-    const text = await response.text();
-    let message = text;
-    try {
-      message = JSON.parse(text).message || text;
-    } catch {
-      /* not json */
-    }
-    throw new Error(message || copy.errors.requestFailed(response.status));
+    throw new Error(await responseErrorText(response));
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
-export function useLibrary() {
+export function useLibrary(canManageLibrary = true) {
   const [audiobooks, setAudiobooks] = useState<Audiobook[]>([]);
   const [roots, setRoots] = useState<LibraryRoot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,20 +114,29 @@ export function useLibrary() {
         // Both endpoints are conditional and independent: `library-roots`
         // carries scan state, which changes during a scan even when no book
         // does, so folding it into one payload would invalidate the library's
-        // tag for a reason the client cannot see.
+        // tag for a reason the client cannot see. Only admins can read roots;
+        // a member's protected operator request must not block their library.
         const [books, libraryRoots] = await Promise.all([
           conditionalRequest<Audiobook[]>("/api/audiobooks", booksEtagRef.current),
-          conditionalRequest<LibraryRoot[]>("/api/library-roots", rootsEtagRef.current),
+          canManageLibrary
+            ? conditionalRequest<LibraryRoot[]>("/api/library-roots", rootsEtagRef.current)
+            : Promise.resolve<Conditional<LibraryRoot[]>>({ changed: false }),
         ]);
         // A 304 leaves state alone -- which is the whole point. An error does
         // too: a failed refresh must not empty a library that already loaded.
         if (books.changed) {
           setAudiobooks(books.data);
           booksEtagRef.current = books.etag;
+          // Keep the encrypted offline copy in step with the last successful
+          // online view. No-op until the profile key is unlocked.
+          void cacheLibraryPrivateState(books.data);
         }
         if (libraryRoots.changed) {
           setRoots(libraryRoots.data);
           rootsEtagRef.current = libraryRoots.etag;
+        } else if (!canManageLibrary) {
+          setRoots([]);
+          rootsEtagRef.current = null;
         }
         setError(undefined);
       } catch (requestError) {
@@ -155,10 +152,29 @@ export function useLibrary() {
 
     inFlightRef.current = run;
     return run;
-  }, []);
+  }, [canManageLibrary]);
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  const refreshForProfile = useCallback(async () => {
+    while (inFlightRef.current) {
+      await inFlightRef.current;
+    }
+    booksEtagRef.current = null;
+    rootsEtagRef.current = null;
+    await refresh();
+  }, [refresh]);
+
+  const refreshAfterMembershipChange = useCallback(async () => {
+    // A refresh started before the membership write may still be in flight.
+    // Let it finish before invalidating its ETag and fetching the new shelf.
+    while (inFlightRef.current) {
+      await inFlightRef.current;
+    }
+    booksEtagRef.current = null;
+    await refresh();
   }, [refresh]);
 
   const addRoot = async (path: string, label: string) => {
@@ -220,10 +236,10 @@ export function useLibrary() {
         );
         throw requestError;
       }
-      await refresh();
+      await refreshAfterMembershipChange();
       await loadServerLibrary();
     },
-    [refresh, loadServerLibrary],
+    [refreshAfterMembershipChange, loadServerLibrary],
   );
 
   /**
@@ -250,10 +266,10 @@ export function useLibrary() {
         );
         throw requestError;
       }
-      await refresh();
+      await refreshAfterMembershipChange();
       await loadServerLibrary();
     },
-    [refresh, loadServerLibrary],
+    [refreshAfterMembershipChange, loadServerLibrary],
   );
 
   useEffect(() => {
@@ -278,6 +294,7 @@ export function useLibrary() {
     serverLibraryLoading,
     serverLibraryError,
     loadServerLibrary,
+    refreshForProfile,
     addToLibrary,
     removeFromLibrary,
   };

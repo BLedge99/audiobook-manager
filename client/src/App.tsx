@@ -4,9 +4,20 @@ import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
 import { FilterBar } from "./components/FilterBar";
-import { needsServerUrl, onServerUnreachable } from "./lib/api";
-import { LoginGate } from "./components/LoginGate";
+import {
+  needsServerUrl,
+  onServerUnreachable,
+  fetchSession,
+  getActiveProfileId,
+  setActiveProfileId,
+  setSessionToken,
+  lockSession,
+  type SessionInfo,
+} from "./lib/api";
+import { AccountGate } from "./components/AccountGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
+import { OfflineUnlock } from "./components/OfflineUnlock";
+import { activeCacheProfileId, hasProfileCache } from "./local/privateCache";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
@@ -33,7 +44,7 @@ import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
-import { copy } from "./copy";
+import { copy, plural } from "./copy";
 import { Specks, ThemeToggle, Notice, MachineHead, StatusLegend, Btn, IconBtn, cn } from "./ui/primitives";
 import type { Audiobook } from "./types";
 
@@ -63,8 +74,22 @@ function Mark() {
 }
 
 function App() {
-  const library = useLibrary();
-  const { audiobooks, roots, loading, refreshing, error, refresh, addRoot, removeRoot, scan } = library;
+  /** The server-derived identity (spec 28); null until the probe resolves. */
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const canManageLibrary = session?.role === "admin";
+  const library = useLibrary(canManageLibrary);
+  const {
+    audiobooks,
+    roots,
+    loading,
+    refreshing,
+    error,
+    refresh,
+    refreshForProfile,
+    addRoot,
+    removeRoot,
+    scan,
+  } = library;
   const device = useDeviceLibrary(isNativeShell());
   const browse = useBrowse();
   const discover = useDiscover();
@@ -91,9 +116,21 @@ function App() {
    * was locked out of it by the very feature that let them download it.
    */
   const [serverReachable, setServerReachable] = useState<boolean>();
+  const [profileId, setProfileId] = useState<string | null>(() => getActiveProfileId());
+  /** The session profile is authoritative; localStorage is the break-glass hint. */
+  const activeProfileId = session?.profile ? String(session.profile.id) : profileId;
   /** A probe in flight, so a failing probe cannot trigger another one. */
   const probeInFlight = useRef(false);
-  const [profileId, setProfileId] = useState<string | null>(() => window.localStorage.getItem("profileId"));
+  /**
+   * Offline cache state (spec 28). `undefined` means "still checking"; `false`
+   * means this device has downloads but no envelope, which is a different
+   * explanation from "nothing downloaded".
+   */
+  const [offlineCacheExists, setOfflineCacheExists] = useState<boolean>();
+  const [offlineUnlocked, setOfflineUnlocked] = useState<boolean>(() => {
+    const id = Number(window.localStorage.getItem("profileId"));
+    return Number.isInteger(id) && id > 0 && activeCacheProfileId() === id;
+  });
   // Spec 20: both the tab and the filters live in the URL, so a shared or
   // bookmarked link restores the whole view. Persisting filters alone was not
   // enough -- reloading a filtered link landed on the Library tab and looked
@@ -126,9 +163,37 @@ function App() {
     if (probeInFlight.current) return;
     probeInFlight.current = true;
     void probeServerRequest()
-      .then((probe) => {
+      .then(async (probe) => {
         setServerReachable(probe.reachable);
-        setAuthed(probe.authed);
+        if (!probe.reachable) {
+          setAuthed(false);
+          return;
+        }
+        if (!probe.authed) {
+          setAuthed(false);
+          setSession(null);
+          setSessionToken(null);
+          setActiveProfileId(null);
+          setProfileId(null);
+          return;
+        }
+
+        const info = await fetchSession();
+        if (!info) {
+          setAuthed(false);
+          setSession(null);
+          setSessionToken(null);
+          return;
+        }
+        setSession(info);
+        setAuthed(true);
+        if (info.profile) {
+          const id = String(info.profile.id);
+          setProfileId(id);
+          setActiveProfileId(id);
+        } else if (info.via === "household") {
+          setProfileId(getActiveProfileId());
+        }
       })
       .finally(() => {
         probeInFlight.current = false;
@@ -173,6 +238,36 @@ function App() {
       }),
     [probeServer],
   );
+
+  // Keep the native shell private when it has been out of view for five
+  // minutes. Mobile timers can be throttled in the background, so check the
+  // elapsed wall time on return as well as using the timer.
+  useEffect(() => {
+    if (!isNativeShell()) return;
+    let hiddenAt: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const lock = () => {
+      void lockSession();
+      setAuthed(false);
+      setSession(null);
+      setOfflineUnlocked(false);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        timer = setTimeout(lock, 5 * 60 * 1000);
+      } else if (hiddenAt !== null) {
+        if (Date.now() - hiddenAt >= 5 * 60 * 1000) lock();
+        else if (timer) clearTimeout(timer);
+        hiddenAt = null;
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   /** Write the current view (tab + filters + search) to the URL. */
   const syncUrl = useCallback((nextTab: Tab, nextFilters: Filters, nextSearch: string) => {
@@ -314,8 +409,8 @@ function App() {
    */
   useEffect(() => {
     if (!profileId) return;
-    void refresh();
-  }, [profileId, refresh]);
+    void refreshForProfile();
+  }, [profileId, refreshForProfile]);
 
   useEffect(() => {
     if (!profileId) return;
@@ -366,6 +461,39 @@ function App() {
     };
   }, [serverReachable, probeServer]);
 
+  /**
+   * Decide whether offline can be opened at all.
+   *
+   * Downloads without an envelope are not private data we can show. The app
+   * says so instead of falling through on a stale localStorage profile.
+   */
+  useEffect(() => {
+    if (serverReachable !== false || !activeProfileId) {
+      setOfflineCacheExists(undefined);
+      return;
+    }
+    const id = Number(activeProfileId);
+    if (!Number.isInteger(id) || id < 1) {
+      setOfflineCacheExists(false);
+      return;
+    }
+    if (activeCacheProfileId() === id) {
+      setOfflineCacheExists(true);
+      setOfflineUnlocked(true);
+      return;
+    }
+
+    let alive = true;
+    void hasProfileCache(id).then((exists) => {
+      if (!alive) return;
+      setOfflineCacheExists(exists);
+      setOfflineUnlocked(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [serverReachable, activeProfileId]);
+
   if (needsServerUrl()) {
     return <ServerSetup onDone={() => window.location.reload()} />;
   }
@@ -395,9 +523,7 @@ function App() {
    * last choice is the right one anyway.
    */
   if (!serverReachable) {
-    if (device.books.length > 0 && profileId) {
-      // Fall through to the app below.
-    } else {
+    if (device.books.length === 0 || !activeProfileId) {
       return (
         <OfflineNotice
           hasBooks={device.books.length > 0}
@@ -405,16 +531,52 @@ function App() {
         />
       );
     }
+    if (offlineCacheExists === undefined) return <Splash />;
+    if (!offlineCacheExists) {
+      return (
+        <OfflineNotice
+          hasBooks
+          noCache
+          onRetry={probeServer}
+        />
+      );
+    }
+    if (!offlineUnlocked) {
+      return (
+        <OfflineUnlock
+          onUnlocked={() => {
+            setOfflineUnlocked(true);
+            // Re-read the replica now that the key is in memory, so cached
+            // progress appears on the shelf immediately.
+            void device.refresh();
+            void browse.refresh();
+          }}
+        />
+      );
+    }
   }
 
   if (serverReachable && authed === false) {
-    return <LoginGate onSuccess={() => { setAuthed(true); void refresh(); }} />;
+    return (
+      <AccountGate
+        onSuccess={() => {
+          void (async () => {
+            await refresh();
+            probeServer();
+          })();
+        }}
+      />
+    );
   }
 
+  if (serverReachable && authed && !session) return <Splash />;
+
   // Progress is profile-scoped: no profile selected means nothing can be
-  // saved or restored, so pick (or create) one before browsing.
-  if (serverReachable && authed && !profileId) {
-    return <ProfileGate onSuccess={() => setProfileId(window.localStorage.getItem("profileId"))} />;
+  // saved or restored, so pick (or create) one before browsing. A normal
+  // profile session always has one; this is the break-glass household path
+  // during the migration.
+  if (serverReachable && authed && !activeProfileId) {
+    return <ProfileGate onSuccess={() => setProfileId(getActiveProfileId())} />;
   }
 
   const submitRoot = async (event: FormEvent) => {
@@ -607,6 +769,8 @@ function App() {
               )}
             </section>
 
+            {canManageLibrary && (
+              <>
             <section className="mt-12">
               <MachineHead title={copy.operator.libraryFolders.heading} />
               <p className="text-[13.5px] text-ink2">{copy.operator.libraryFolders.intro}</p>
@@ -677,6 +841,8 @@ function App() {
 
               <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh(); void browse.refresh(); }} />
             </div>
+              </>
+            )}
           </>
         )}
 
@@ -692,7 +858,7 @@ function App() {
 
             {isFilterActive(filters) || search.trim().length > 0 ? (
               <section>
-                <MachineHead title={copy.browse.filteredHeading} count={`${filteredBooks.length} ${filteredBooks.length === 1 ? "title" : "titles"}`} />
+                <MachineHead title={copy.browse.filteredHeading} count={plural(filteredBooks.length, "book")} />
                 <AudiobookGrid
                   books={filteredBooks}
                   emptyMessage={copy.library.noMatches}
@@ -760,7 +926,12 @@ function App() {
       {selectedBook && <AudiobookDetail
         book={selectedBook}
         onClose={() => setSelectedBook(undefined)}
-        onProgressSaved={() => setLibraryTick((tick) => tick + 1)}
+        onProgressSaved={() => {
+          setLibraryTick((tick) => tick + 1);
+          // Offline the server refetch fails, so the replica's cached progress
+          // is what refreshes the shelf.
+          void device.refresh();
+        }}
         genres={browse.genres}
         tags={browse.tags}
         favourited={favouriteIds.has(selectedBook.id)}

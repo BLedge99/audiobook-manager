@@ -3,6 +3,10 @@ import { HardDriveDownload, LoaderCircle, Save, Server, WifiOff } from "lucide-r
 import { getServerUrl, setServerUrl } from "../lib/api";
 import { copy } from "../copy";
 import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
+import { PasskeySettings } from "./PasskeySettings";
+import { DeviceUnlockSettings } from "./DeviceUnlockSettings";
+import { SessionSettings } from "./SessionSettings";
+import { PasswordSettings } from "./PasswordSettings";
 
 export interface SettingsProps {
   /** Bytes held on the device, for the storage line. */
@@ -67,7 +71,7 @@ export function Settings({
     setMessage("");
     try {
       const response = await fetch(`${saved}/api/health`);
-      if (!response.ok) throw new Error(`Server replied ${response.status}`);
+      if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
       setStatus("ok");
       setMessage(copy.operator.settings.connected);
       onSaved();
@@ -201,6 +205,11 @@ export function Settings({
             </div>
           )}
         </section>
+
+        <SessionSettings offline={offline} />
+        <PasswordSettings offline={offline} />
+        <PasskeySettings />
+        <DeviceUnlockSettings offline={offline} />
       </div>
     </div>
   );
