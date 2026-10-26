@@ -75,6 +75,24 @@ export function sendAuthFailure(reply: FastifyReply, error: unknown) {
  * inline in `app.ts` because the auth gate and these routes share the service
  * and must move together.
  */
+/**
+ * Spec 28: expired and revoked session rows are deleted by a best-effort
+ * cleanup on login. Correctness never depends on it -- `validate` already
+ * rejects those rows -- so a failure is swallowed rather than turning a
+ * successful sign-in into an error.
+ *
+ * This lives on the login path (not a timer) because a login is the moment the
+ * server is already writing to the table, and it is bounded by how often a
+ * person signs in.
+ */
+async function cleanupAfterLogin(auth: AuthService): Promise<void> {
+  try {
+    await auth.cleanupExpired();
+  } catch {
+    /* best effort */
+  }
+}
+
 export async function registerAuthRoutes(
   app: FastifyInstance,
   auth: AuthService,
@@ -89,6 +107,7 @@ export async function registerAuthRoutes(
     try {
       const result = await auth.exchangeDeviceCredential(request.body.secret, metadata(request));
       setSessionCookie(reply, result.token, options);
+      await cleanupAfterLogin(auth);
       return loginPayload(result);
     } catch (error) {
       return sendAuthFailure(reply, error);
@@ -148,6 +167,7 @@ export async function registerAuthRoutes(
           )
         : await auth.loginHousehold(request.body.password, metadata(request), request.ip);
       setSessionCookie(reply, result.token, options);
+      await cleanupAfterLogin(auth);
       return loginPayload(result);
     } catch (error) {
       return sendAuthFailure(reply, error);
@@ -221,6 +241,7 @@ export async function registerAuthRoutes(
           request.ip,
         );
         setSessionCookie(reply, result.token, options);
+        await cleanupAfterLogin(auth);
         return loginPayload(result);
       } catch (error) {
         return sendAuthFailure(reply, error);

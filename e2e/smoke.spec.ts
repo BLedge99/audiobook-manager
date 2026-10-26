@@ -7,7 +7,10 @@ test("app loads and shows library heading", async ({ page }) => {
   // Any profile will do, so never depend on a specific seeded name here.
   await pickAnyProfile(page);
   await expect(page.getByRole("heading", { name: "Audiobook Manager" })).toBeVisible();
-  await expect(page.getByText(/Your library is empty/)).toBeVisible();
+  // The library heading is always rendered; the empty sentence is not, because
+  // the household's persistent volume legitimately contains books. Asserting
+  // the empty state made this pass only on a fresh database.
+  await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
 });
 
 test("pwa manifest is linked and served", async ({ page }) => {

@@ -486,7 +486,10 @@ export class AuthService {
 
   private lockedSeconds(profile: Profile): number {
     if (!profile.lockedUntil) return 0;
-    return Math.max(0, this.secondsUntil(profile.lockedUntil));
+    // Deliberately not `secondsUntil`: that clamps to at least 1 for the
+    // retry-after header, which would make an expired lock look permanent.
+    const remaining = profile.lockedUntil.getTime() - this.now().getTime();
+    return Math.max(0, Math.ceil(remaining / 1000));
   }
 
   private secondsUntil(date: Date): number {

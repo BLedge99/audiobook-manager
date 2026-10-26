@@ -6,6 +6,7 @@ import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
 import { PasskeySettings } from "./PasskeySettings";
 import { DeviceUnlockSettings } from "./DeviceUnlockSettings";
 import { SessionSettings } from "./SessionSettings";
+import { PasswordSettings } from "./PasswordSettings";
 
 export interface SettingsProps {
   /** Bytes held on the device, for the storage line. */
@@ -206,6 +207,7 @@ export function Settings({
         </section>
 
         <SessionSettings offline={offline} />
+        <PasswordSettings offline={offline} />
         <PasskeySettings />
         <DeviceUnlockSettings offline={offline} />
       </div>

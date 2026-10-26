@@ -20,6 +20,21 @@ async function main() {
   } finally {
     await prisma.$disconnect();
   }
+
+  // Spec 28: expired and revoked auth rows are cleared at startup as well as
+  // on login. Best effort by design -- `validate` already rejects them, so a
+  // failure here must not stop the server from serving.
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    const { AuthService } = await import("./auth/service");
+    const cleanupClient = new PrismaClient();
+    await new AuthService({ prisma: cleanupClient }).cleanupExpired();
+    await cleanupClient.$disconnect();
+    console.log("[server] cleaned up expired auth rows");
+  } catch (err) {
+    console.error("[server] auth cleanup skipped:", err);
+  }
+
   await app.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`[server] listening on 0.0.0.0:${PORT}`);
 

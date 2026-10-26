@@ -72,6 +72,21 @@ describe("AccountGate biometric sign-in", () => {
     expect(onSuccess).toHaveBeenCalledOnce();
   });
 
+  it("falls back to the password form when the prompt is cancelled", async () => {
+    mocks.unlock.mockRejectedValue(new Error("cancelled"));
+    const onSuccess = vi.fn();
+    render(<AccountGate onSuccess={onSuccess} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+    fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(copy.login.deviceFailed);
+    expect(mocks.setToken).not.toHaveBeenCalled();
+    expect(onSuccess).not.toHaveBeenCalled();
+    // Biometrics never traps a person: the password field is still there.
+    expect(screen.getByLabelText(copy.account.passwordLabel("Ben"))).toBeInTheDocument();
+    expect(mocks.deleteCache).not.toHaveBeenCalled();
+  });
+
   it("clears a revoked device secret and its stale offline private data", async () => {
     mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"
       ? response(200, [{ id: 7, name: "Ben", role: "member", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: true }])

@@ -37,6 +37,20 @@ household network; the web HTTPS setup does not encrypt that Android connection.
    The web API is only intended to be used at `https://books.home.arpa`. Port
    3000 also remains published for the Android wrapper.
 
+## Check the configuration before deploying
+
+Both files can be validated without starting anything. Run these from the
+repository root on the machine that will host the stack:
+
+```powershell
+docker compose -f docker-compose.prod.yml config > $null   # resolves the file and its .env
+docker run --rm -v "${PWD}/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.7-alpine caddy validate --config /etc/caddy/Caddyfile
+```
+
+`Caddyfile` reported `Valid configuration` with `caddy:2.11.7-alpine` on
+2026-10-26, and the production Compose file resolved with `compose config: ok`.
+Neither check proves the browser will trust the CA; that is the next section.
+
 ## Trust Caddy's local CA on Windows
 
 The first HTTPS request causes Caddy to create its local CA and issue the site

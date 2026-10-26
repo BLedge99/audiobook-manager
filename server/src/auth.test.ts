@@ -6,6 +6,7 @@ import path from "node:path";
 import { PrismaClient, type Profile } from "@prisma/client";
 import { buildApp, SESSION_HEADER } from "./app";
 import { hashPassword } from "./auth/password";
+import { hashSessionToken } from "./auth/session";
 
 const dir = mkdtempSync(path.join(tmpdir(), "audiobook-auth-test-"));
 const dbFile = path.join(dir, "test.db");
@@ -445,6 +446,86 @@ describe("sessions", () => {
       headers: { [SESSION_HEADER]: second },
     });
     expect(revoked.statusCode).toBe(401);
+  });
+});
+
+describe("expired auth rows", () => {
+  it("are deleted by a successful login", async () => {
+    const profile = await createProfile();
+    const now = Date.now();
+    const base = {
+      profileId: profile.id,
+      via: "profile",
+      createdAt: new Date(now - 60_000),
+      lastUsedAt: new Date(now - 60_000),
+    };
+    await prisma.session.create({
+      data: {
+        ...base,
+        id: `expired-${profile.id}`,
+        tokenHash: hashSessionToken(`expired-token-${profile.id}`),
+        expiresAt: new Date(now - 1000),
+      },
+    });
+    await prisma.session.create({
+      data: {
+        ...base,
+        id: `revoked-${profile.id}`,
+        tokenHash: hashSessionToken(`revoked-token-${profile.id}`),
+        expiresAt: new Date(now + 60_000),
+        revokedAt: new Date(now - 1000),
+      },
+    });
+
+    const res = await login(profile);
+    expect(res.statusCode).toBe(200);
+
+    expect(await prisma.session.count({ where: { id: `expired-${profile.id}` } })).toBe(0);
+    expect(await prisma.session.count({ where: { id: `revoked-${profile.id}` } })).toBe(0);
+    // The session created by this login is the only one left for the profile.
+    expect(
+      await prisma.session.count({ where: { profileId: profile.id, revokedAt: null } }),
+    ).toBe(1);
+  });
+  it("rejects an expired session and extends one inside the renewal window", async () => {
+    const profile = await createProfile();
+    const token = tokenOf(await login(profile));
+    const row = await prisma.session.findUnique({ where: { tokenHash: hashSessionToken(token) } });
+    expect(row).toBeTruthy();
+
+    await prisma.session.update({
+      where: { id: row!.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    const expired = await app.inject({
+      method: "GET",
+      url: "/api/auth/session",
+      headers: { [SESSION_HEADER]: token },
+    });
+    expect(expired.statusCode).toBe(401);
+
+    const freshToken = tokenOf(await login(profile));
+    const fresh = await prisma.session.findUnique({
+      where: { tokenHash: hashSessionToken(freshToken) },
+    });
+    const nearExpiry = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+    await prisma.session.update({
+      where: { id: fresh!.id },
+      data: { expiresAt: nearExpiry },
+    });
+
+    const slid = await app.inject({
+      method: "GET",
+      url: "/api/auth/session",
+      headers: { [SESSION_HEADER]: freshToken },
+    });
+    expect(slid.statusCode).toBe(200);
+
+    const after = await prisma.session.findUnique({ where: { id: fresh!.id } });
+    expect(after!.expiresAt.getTime()).toBeGreaterThan(nearExpiry.getTime());
+    // Sliding never makes a session older than the 90-day hard cap.
+    const cap = fresh!.createdAt.getTime() + 90 * 24 * 60 * 60 * 1000;
+    expect(after!.expiresAt.getTime()).toBeLessThanOrEqual(cap);
   });
 });
 

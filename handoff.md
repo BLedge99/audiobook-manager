@@ -57,7 +57,7 @@
     `e2e/passkeys.spec.ts` with a virtual authenticator. The E2E virtual
     authenticator test passes. The complete server and client suites pass in
     Linux containers when the server test process has WebAuthn configuration
-    unset (current full run: 480 server tests and 395 client tests passed).
+    unset (current full run: 507 server tests and 401 client tests passed).
   - **5 - Android biometrics: implementation present; device smoke check done.**
     The change adds a Capacitor `BiometricVault` backed by an AES-GCM Android
     Keystore key
@@ -80,16 +80,25 @@
     Media URLs use five-minute, profile/resource-scoped tokens; long-lived
     session tokens are no longer stored in browser localStorage or sent in media
     URLs. Added session/device labels, session list and revoke UI, logging
-    redaction and corresponding tests.
-  - **Validation (2026-10-24):** `make test` passed in WSL with Node 24.22.1:
-    copy check (415 strings, no errors/warnings), 23 server files / 480 tests,
-    and 34 client files / 395 tests. Existing jsdom media and React `act`
-    warnings appeared; suites passed. Previous Playwright result remains 44
-    passed, one failed and six flaky tests passed on retry; the failure expected
-    an empty library while the persistent Compose volume contains books. It was
-    left intact. Still run Playwright after this change and validate production
-    Compose/Caddy. Windows CA/Hello, Pixel/Defy sensor flows, and migration
-    against a copy of the live DB remain manual checks.
+    redaction, the password-change screen with local DEK re-wrap, expired
+    session/credential cleanup on login and startup, and corresponding tests.
+    Caddy and production Compose validate; the migration was rehearsed on a copy
+    of the live-shaped database; the `profile_unclaimed` code is now documented.
+  - **Validation (2026-10-26):** `make test` passed in WSL with Node 24.22.1:
+    copy check (422 strings, no errors/warnings), 28 server files / 507 tests,
+    and 35 client files / 401 tests; `tsc --noEmit` is clean at both tiers.
+    Existing jsdom media and React `act` warnings appeared; suites passed.
+    Playwright (`scripts/e2e-wsl.sh`, stack restarted first):
+    **51 passed in 4.3m, no flaky retries**, including the passkey
+    virtual-authenticator registration/sign-in, the 8 phone-layout checks and
+    all security cases. Added since the last snapshot: `auth/lockout.test.ts`
+    (backoff ladder, which found that an expired lock never released),
+    `auth/passkeys-origin.test.ts` (the ceremony is handed the configured
+    origin/RP id), `migration.test.ts` (pre-account database → `migrate
+    deploy`, including the rename collision case), `static.test.ts` (SPA shell
+    public, API still gated), a cancelled-biometric fallback test, and a
+    5s-timeout flake fixed with explicit timeouts. Windows CA/Hello and
+    Pixel/Defy sensor flows remain manual.
 - **Item 27, per-profile library membership, is built** (server and client).
   New profiles start empty; existing profiles are migrated to contain every
   book, so shipping it changes nothing for a household that already has the
@@ -222,7 +231,7 @@
 | 15b | post-testing-polish | **done** | Spec `specs/15b-post-testing-polish.md`; evidence `user-testing-2026-10-18.md`. Shipped: **4** refresh never blanks the library (`235aa28`), **5** player-first book page (`35316d5`), **1** cover cache + tri-state cover (`4a7df3c`, on-device fix `fb19435`), **3** Discover 5-at-a-time + "Show 5 more" (`cb28038`), and **7** the copy review. `client/src/copy.ts` holds every string, split into a listener tier and an operator tier, with a build-failing jargon guard; the voice decision is in `PRODUCT.md`. Findings 2 and 6 were deliberately out; 2 became ADR 016. |
 | 27 | per-profile-library | **server done, client done** | Spec `specs/27-per-profile-library.md`. `ProfileLibraryEntry` (a row per profile+book, unique), `Profile.followsServerLibrary` (the existing-vs-new distinction), `GET /api/audiobooks` scoped to the caller's membership, `GET /api/server-library` with an `inLibrary` flag, `POST`/`DELETE /api/audiobooks/:id/library`, and the scanner adding new books to every following profile. The data migration gives every existing profile every book, so shipping it changes nothing for a household that already has the app. Client: an "All books" tab (heading: "Select books to add to your library"), removal from the book detail that asks about the download only when there is one, and three distinct empty states. |
 | 26 | android-app | **Sprint 2 done** | Offline listening on Android. `specs/26-android-app.md` + ADR 012. Device is a **read replica + progress**, not a second library manager. **Verified on device: cross-origin auth (header token, cookie is dropped cross-scheme), cover art, download with real progress.** All 5 tracks of a book downloaded byte-for-byte identical to `Content-Length`. Stage tracing (`trace.ts`) makes every pipeline step time-boxed and visible. See "Downloads" in Current task for the four bugs behind this. **Next: server-URL gate, then offline playback with the network off** |
-| 28 | accounts-passkeys-biometrics | **phases 1–4 done; 6 next** | Spec `specs/28-accounts-passkeys-biometrics.md`, ADR 016. `Profile` is the account (`passwordHash`, `role`); sessions live in SQLite and store only a token hash; admin gates scan/enrichment/taxonomy/library roots/profiles; `APP_PASSWORD` is break-glass only; login/claim/change/reset/unlock with exponential lockout. Encrypted offline cache: random DEK wrapped by a scrypt KEK, AES-GCM private rows, `AccountGate` + `OfflineUnlock`. Migration renames `Playwright`→`test`, `Testing`→`admin-test`, keeps `Archie`. **Remaining: web passkeys (6), Android biometrics (5), Caddy `books.home.arpa` (7), hardening (8).** |
+| 28 | accounts-passkeys-biometrics | **all 8 phases implemented; only manual Windows/Android/Caddy checks remain** | Spec `specs/28-accounts-passkeys-biometrics.md`, ADR 016. `Profile` is the account (`passwordHash`, `role`); sessions live in SQLite and store only a token hash; admin gates scan/enrichment/taxonomy/library roots/profiles; `APP_PASSWORD` is break-glass only; login/claim/change/reset/unlock with exponential lockout. Encrypted offline cache: random DEK wrapped by a scrypt KEK, AES-GCM private rows, `AccountGate` + `OfflineUnlock`. Migration renames `Playwright`→`test`, `Testing`→`admin-test`, keeps `Archie`; automated pre-account migration test added. Web passkeys, Android biometrics, Caddy config and hardening are present; what is left needs a Windows machine, the phones, or a deployed CA. |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -289,8 +298,8 @@ Phases run in order; see the snapshot above for what each one contains.
 | 4 | Encrypted offline cache | **done** |
 | 6 | Web passkeys (Windows Hello) | **implemented and E2E virtual authenticator passed** |
 | 5 | Android biometrics | **implementation and APK/device launch validated; enrollment flow needs server setup** |
-| 7 | Caddy + `books.home.arpa` + local CA | after 5 |
-| 8 | Hardening, session/device UI, audit, rehearsal | last |
+| 7 | Caddy + `books.home.arpa` + local CA | **config written and validated; deployment and CA trust need the Windows machines** |
+| 8 | Hardening, session/device UI, audit, rehearsal | **implemented; automated checks pass, manual checks remain** |
 
 **Phase 6 - web passkeys, implemented and validated on this branch.**
 
@@ -336,11 +345,12 @@ The following numbered plan describes the work already present; it is retained a
   and Playwright (it is also a secure context). Document that
   `http://192.168.1.203:3000` cannot support passkeys — WebAuthn needs a
   hostname, not an IP.
-- **Phase 8 — hardening.** Short-lived media tokens (an `<audio>` `src`
-  cannot carry a header), signed-in-devices UI, the password-change re-wrap
-  UI, the migration rehearsal against a copy of the live database, the manual
-  checks in spec 28, and a copy review. Dependency auditing is current as of
-  2026-10-24; see section 4 of `LIMITATIONS.md`.
+- **Phase 8 — hardening.** Done in code: media tokens, signed-in-devices UI,
+  the password-change re-wrap UI (`PasswordSettings`), expired-row cleanup,
+  logging redaction, the `profile_unclaimed` error, the live-database migration
+  rehearsal and a copy review. What remains is acceptance, not code: the manual
+  checks in spec 28 (Windows Hello, both phones, offline, break-glass) and a
+  final Playwright run against the deployed stack.
 
 **Verification before calling a phase done:**
 
@@ -372,6 +382,11 @@ typecheck** — run `tsc` separately (see the 15b note below).
   `test`/`admin-test` passwords; production never does (`seed.ts`).
 - **Passkeys need HTTPS or localhost.** Windows Hello will not appear on a
   plain-HTTP LAN address; phase 7 is what makes the household URL work.
+- **`secondsUntil` clamps to at least 1, so it cannot answer "is the lock
+  over?".** `lockedSeconds` reused it, which meant an expired lock reported one
+  second remaining forever and a five-failure lockout never released. Use the
+  raw difference for expiry and the clamp only for the retry-after header; the
+  ladder is pinned by `auth/lockout.test.ts`.
 
 ### Historical record — 15b and earlier
 

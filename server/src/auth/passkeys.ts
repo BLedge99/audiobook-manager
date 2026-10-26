@@ -470,6 +470,12 @@ export async function registerPasskeyRoutes(
           auth,
         );
         setSessionCookie(reply, result.token, options);
+        // Best effort, matching the password login path (spec 28).
+        try {
+          await auth.cleanupExpired();
+        } catch {
+          /* expired rows are never a correctness dependency */
+        }
         return loginPayload(result);
       } catch (error) {
         return sendAuthFailure(reply, error);

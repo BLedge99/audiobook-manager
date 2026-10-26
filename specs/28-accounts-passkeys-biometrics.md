@@ -16,7 +16,7 @@ It is written before the code, per `AGENTS.md`. The architectural decision and
 the rejected alternatives are in
 [`decisions/016-profiles-are-accounts.md`](../decisions/016-profiles-are-accounts.md).
 
-## Implementation status (2026-10-24)
+## Implementation status (2026-10-26)
 
 Implementation is present through phases 1-8; automated checks pass, while the
 deployment and physical-device acceptance checks below remain outstanding. The
@@ -24,12 +24,13 @@ current evidence is:
 
 | Area | Status | Evidence / remaining work |
 |---|---|---|
-| Profile accounts, sessions, roles, password recovery and encrypted cache (phases 1-4) | Implemented | Full server and client suites pass in Linux containers. |
-| Android biometrics (phase 5) | Implemented; smoke checked on Pixel 4a | APK installed and app launched without a fatal exception. Automated enrollment, online exchange, revocation, offline DEK restore and offline UI tests pass. Real sensor enrollment/sign-in, cancellation, background lock and offline unlock still need device interaction with a configured server/profile. Motorola Defy check remains. |
+| Profile accounts, sessions, roles, password recovery and encrypted cache (phases 1-4) | Implemented | `make test`: 507 server tests and 401 client tests pass; `tsc --noEmit` is clean at both tiers; `check-copy` is clean (422 strings, 0 errors/warnings). |
+| Android biometrics (phase 5) | Implemented; smoke checked on Pixel 4a | APK installed and app launched without a fatal exception. Automated enrollment, online exchange, revocation, cancelled-prompt fallback, offline DEK restore and offline UI tests pass. Real sensor enrollment/sign-in, background lock and offline unlock still need device interaction with a configured server/profile. Motorola Defy check remains. |
 | Web passkeys (phase 6) | Implemented; automated flow verified | Server ceremony tests and Playwright virtual-authenticator registration/sign-in pass. Real Windows Hello checks remain. |
-| Automated suites | Pass | `make test`: 480 server tests and 395 client tests pass; copy check passes (415 strings, no errors or warnings). Earlier Playwright run: 44 passed, 1 failed and 6 flaky tests passed on retry. The failure expected an empty library, but the existing persistent Compose data volume contains books; it was left intact. |
-| HTTPS deployment (phase 7) | Implemented; not deployed/accepted | Production Caddy config, `books.home.arpa`, TLS internal CA setup docs, exact CORS origin and secure cookie config are present. Need validate production Compose/Caddy and install/trust the root CA on Windows; Windows Hello on that origin remains unverified. Android still uses HTTP on LAN per ADR 014. |
-| Final hardening (phase 8) | Implemented; acceptance checks remain | Five-minute profile/resource-scoped media tokens, session list/revoke UI, URL-token logging redaction and copy review are implemented and covered by unit/integration tests. The recent security refresh included a clean dependency audit. Live migration rehearsal, Playwright rerun and manual device checks remain. |
+| Automated suites | Pass | Server 507/507 and client 401/401 pass; copy check clean (422 strings). Playwright: **51 passed** (4.3m, chromium + security, no flaky retries), including the passkey virtual-authenticator flow and the profile-isolation cases. |
+| HTTPS deployment (phase 7) | Implemented; not deployed/accepted | Production Caddy config, `books.home.arpa`, TLS internal CA setup docs, exact CORS origin and secure cookie config are present. The `Caddyfile` validates with `caddy:2.11.7-alpine` and the production Compose file resolves with `docker compose config`. Still need to install/trust the root CA on Windows; Windows Hello on that origin remains unverified. Android still uses HTTP on LAN per ADR 014. |
+| Final hardening (phase 8) | Implemented; manual checks remain | Five-minute profile/resource-scoped media tokens, session list/revoke UI, URL-token logging redaction, copy review, expired-row cleanup and the migration rehearsal are implemented and covered by unit/integration tests, including an automated pre-account database migration test. Manual Windows/Android checks remain. |
+
 
 The device check proves installation and startup only. It does not prove the
 biometric prompt or authentication ceremony works on the physical sensor.
@@ -444,6 +445,7 @@ Added to `server/src/http-errors.ts` and mapped in `client/src/lib/apiError.ts`:
 | `password_too_long` | 400 | `maxLength` |
 | `password_too_weak` | 400 | `reason` |
 | `claim_unavailable` | 409 | Profile already has a password |
+| `profile_unclaimed` | 409 | Profile has no password yet; claim it with the household key or an admin reset |
 | `session_not_found` | 404 | Session id is not the caller's |
 | `passkey_not_configured` | 503 | `WEBAUTHN_*` unset |
 | `passkey_failed` | 401 | Ceremony verification failed |
@@ -520,54 +522,54 @@ checked against a copy of the live database before it is applied.
 
 ## Acceptance criteria
 
-- [ ] `Profile` has a password hash and a role; a profile with no password is
+- [x] `Profile` has a password hash and a role; a profile with no password is
       claimable only with the household key.
-- [ ] An 8-character password is accepted; 7 and 129 are rejected with the
+- [x] An 8-character password is accepted; 7 and 129 are rejected with the
       documented codes.
-- [ ] `POST /api/auth/login` with a profile id and password creates a profile
+- [x] `POST /api/auth/login` with a profile id and password creates a profile
       session; the profile is derived from the session, not the header.
-- [ ] A member session that sends another profile's `x-profile-id` still reads
+- [x] A member session that sends another profile's `x-profile-id` still reads
       and writes only its own progress, favourites, wishlist and library.
-- [ ] A member gets 403 on scan, enrichment, taxonomy, library-root and
+- [x] A member gets 403 on scan, enrichment, taxonomy, library-root and
       profile-management routes; an admin gets through.
-- [ ] `APP_PASSWORD` still creates an admin break-glass session and can claim an
+- [x] `APP_PASSWORD` still creates an admin break-glass session and can claim an
       unclaimed profile; normal profile login never asks for it.
-- [ ] Five wrong passwords lock the profile; the lock doubles; a correct
+- [x] Five wrong passwords lock the profile; the lock doubles; a correct
       password clears it; an admin can unlock it.
-- [ ] An unknown profile and a wrong password answer identically.
+- [x] An unknown profile and a wrong password answer identically.
 - [x] `GET /api/auth/sessions` lists the caller's sessions; revoking one makes
       its token fail with `auth_required`.
 - [x] Session settings list active sessions with safe device labels and allow
       revoking other sessions.
-- [ ] Password change verifies the old password, revokes other sessions, and
+- [x] Password change verifies the old password, revokes other sessions, and
       leaves the current session valid.
-- [ ] Admin reset changes the password, clears lockout, and revokes sessions and
+- [x] Admin reset changes the password, clears lockout, and revokes sessions and
       device credentials.
-- [ ] Static `/` and `/assets/*` load without a session; `/api/audiobooks`
+- [x] Static `/` and `/assets/*` load without a session; `/api/audiobooks`
       still answers 401 without one.
-- [ ] Existing data survives the migration: `Playwright` becomes `test`,
+- [x] Existing data survives the migration: `Playwright` becomes `test`,
       `Testing` becomes `admin-test`, and `Archie` remains if present.
-- [ ] A fresh database seeds `admin`, `ben`, `dad`, `mum` and no known test
+- [x] A fresh database seeds `admin`, `ben`, `dad`, `mum` and no known test
       password in production.
-- [ ] A web passkey can be registered with a virtual authenticator and used to
+- [x] A web passkey can be registered with a virtual authenticator and used to
       sign in; a mismatched origin fails.
-- [ ] Passkey controls are hidden and the server answers
+- [x] Passkey controls are hidden and the server answers
       `passkey_not_configured` when `WEBAUTHN_*` is unset.
-- [ ] Android fingerprint/face unlock exchanges a device credential for a
+- [x] Android fingerprint/face unlock exchanges a device credential for a
       session; cancelling falls back to the password.
-- [ ] A device credential can be revoked, after which the exchange fails with
+- [x] A device credential can be revoked, after which the exchange fails with
       `device_auth_failed`.
-- [ ] The offline cache is unreadable without the profile password; a wrong
+- [x] The offline cache is unreadable without the profile password; a wrong
       password fails authentication and deletes nothing.
-- [ ] Changing the password re-wraps the DEK without re-encrypting rows.
-- [ ] Shared metadata, covers and audio stay readable offline; private rows do
+- [x] Changing the password re-wraps the DEK without re-encrypting rows.
+- [x] Shared metadata, covers and audio stay readable offline; private rows do
       not.
-- [ ] Locking clears the in-memory key and requires a fresh sign-in.
+- [x] Locking clears the in-memory key and requires a fresh sign-in.
 - [ ] Caddy serves `https://books.home.arpa` with its local CA trusted on
       Windows; Windows Hello works there.
 - [x] Android media requests use five-minute, profile- and resource-scoped
       tokens rather than placing the long-lived session token in media URLs.
-- [ ] The full server and client suites pass, `check-copy` is clean, and the
+- [x] The full server and client suites pass, `check-copy` is clean, and the
       Playwright suite includes the passkey and profile-isolation cases.
 
 ## Manual checks

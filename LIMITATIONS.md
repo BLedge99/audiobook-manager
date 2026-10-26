@@ -415,7 +415,7 @@ Audnexus reachable permanently rather than incidentally.
 |---|---|
 | **Spec 13 — media tools** | Out of scope by decision. Media is a read-only mount; writing tags into user files is not wanted. |
 | **Downloaded-books list and "Remove from device"** | An unmet spec 26 acceptance criterion: Settings shows a byte total and a count, but no list and no way to free a book from the UI. Removed from the 15b polish pass by the user on 2026-10-19; recorded here so it is not lost. `useDeviceLibrary.remove()` and `Settings` already exist — it is a UI, not a feature. |
-| **Spec 28 - accounts, passkeys and biometrics** | Implementation through phases 1-8 is present on `deepseek-skill`; automated suites pass. Caddy/CA deployment and Windows Hello, real Android biometric flows (including Motorola Defy), Playwright rerun, and migration rehearsal remain unverified. Android media still uses household-LAN HTTP. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and the live [`handoff.md`](handoff.md). |
+| **Spec 28 - accounts, passkeys and biometrics** | Implementation through phases 1-8 is present on `deepseek-skill`; automated suites pass (507 server, 401 client, 51 Playwright), the live-database migration was rehearsed with `prisma migrate deploy`, and Caddy/Compose config validates. Caddy/CA deployment and Windows Hello, real Android biometric flows (including Motorola Defy) remain unverified. Android media still uses household-LAN HTTP. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and the live [`handoff.md`](handoff.md). |
 | **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. Now sequenced **after** spec 26, since restyling a shell that is about to be wrapped in an APK would mean restyling it twice. |
 | **Chapter/track title editor UI** | Spec 24 shipped the `PUT /tracks/:trackNumber/title` endpoint and the `FieldOverride` storage, but **no UI**. A hand-set narrator/track title is only reachable via API. |
 | **Bookmarks & highlights** | Needs a new data model. Deliberately out of spec 14. |
@@ -844,7 +844,7 @@ home, so the Android app became the top priority and displaced the GUI redesign.
    book, so nobody's library changes on upgrade. A separate "All books" tab;
    removing a book offers to delete its download too. The 512 MB cover cache is
    deliberately untouched by it.
-7. **Spec 28 - accounts, passkeys and biometrics.** Implementation is present through phases 1-8; finish acceptance with Caddy/CA deployment, Windows Hello and real Android sensor flows, Playwright, and a live-database migration rehearsal. Android LAN HTTP remains a transport gap. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and [`handoff.md`](handoff.md).
+7. **Spec 28 - accounts, passkeys and biometrics.** Implementation is present through phases 1-8; the live-database migration was rehearsed with `prisma migrate deploy`, an automated pre-account migration test now guards it, and the full Playwright suite passes (51 tests). Finish acceptance with Caddy/CA deployment, Windows Hello and real Android sensor flows. Android LAN HTTP remains a transport gap. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and [`handoff.md`](handoff.md).
 
 
 8. **Lock-screen control latency.** Finding 6. Measure before fixing — §5 records
