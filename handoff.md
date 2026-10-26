@@ -1678,3 +1678,59 @@ Remaining follow-ups:
 1. Read `roadmap.md` for the plan; read this file for current position.
 2. `git log --oneline -5` and `git status` to see what landed.
 3. Continue the "Current task" section; update this file before ending.
+
+---
+
+## User-reported issues — investigation (2026-10-26)
+
+### 1) No fingerprint prompt on Pixel 4a (spec 28, phase 5)
+
+**Finding: working as designed, gated on device state — not a code bug.**
+
+The biometrics button in `AccountGate.tsx` (line 411) renders only when all three are true:
+
+| Condition | What it requires |
+|-----------|------------------|
+| `biometricsAvailable` | `biometricVault.available()` → Android `BiometricVaultPlugin.isAvailable()` → `BiometricManager.canAuthenticate(BIOMETRIC_STRONG) == BIOMETRIC_SUCCESS`. Needs biometric hardware **and** at least one fingerprint/face enrolled at the Android OS level, and not locked out by device policy. |
+| `mode.account.hasDeviceUnlock` | Server `GET /api/auth/accounts` → `profile._count.deviceCredentials > 0`. The profile must have a device credential enrolled in the app. |
+| `isNativeShell()` | Running inside the Capacitor APK, not a browser/PWA. |
+
+The enrollment chain:
+1. Settings → "Fingerprint or face" section ("Enable fingerprint or face") only renders when `biometricVault.supported() && available` (`DeviceUnlockSettings.tsx` line 64). If `available()` is false, the section never appears.
+2. Enrolling POSTs to `/api/auth/devices` (server creates a DeviceCredential, stores only its SHA-256 hash) and saves `{ profileId, secret, DEK }` to the biometric Vault. After that `hasDeviceUnlock` becomes true.
+3. `AccountGate` then shows "Unlock with fingerprint or face".
+
+On the Pixel 4a the user never saw any biometrics setting. Most likely cause: **no fingerprint is enrolled at the Android OS level**, so `canAuthenticate(BIOMETRIC_STRONG)` returns `BIOMETRIC_ERROR_NONE_ENROLLED`, `available()` is false, and both the Settings section and the AccountGate button stay hidden. Alternative: they are testing in a browser/PWA rather than the installed APK (`isNativeShell()` false), but USB-tunnel use suggests the APK.
+
+This matches spec 28's designed behavior: "cancelling falls back to the password"; "an unavailable sensor… falls back to the password screen". Password is always the fallback.
+
+**What the user needs to do:**
+- Enroll a fingerprint in Android Settings (Security → Fingerprint) on the Pixel 4a.
+- Open the app's Settings → "Fingerprint or face" → "Enable fingerprint or face" (this requires a signed-in profile and a reachable server).
+- After enabling, `AccountGate` will show "Unlock with fingerprint or face".
+
+**Possible UX improvement (not yet built):** when biometrics is unavailable, show a hint like "Enroll a fingerprint in Android Settings to use it here" instead of silently hiding the control. No code change made yet — ask the user before adding.
+
+### 2) WiFi does not detect the server; only USB tunnel works (Pixel 4a)
+
+**Finding: household network topology problem, not an app problem. Documented since 2026-10-21.**
+
+Both phones are on Cisco AP `toob-9F4CE1` (192.168.1.0/24, normal DHCP lease) with **client isolation**: every packet to another device is blackholed. The router and host answer nothing; connections to port 3000 *hang* rather than being refused. The host firewall *does* allow inbound TCP 3000 from the local subnet. `http://192.168.1.203:3000` works from a laptop on the LAN but not from either phone.
+
+The only route from a phone to the server is `adb reverse tcp:3000 tcp:3000` (USB tunnel). The app has no server auto-discovery — the URL is manually configured in Settings — and even with the correct URL configured, client isolation blocks the connection.
+
+**Why the user says it "regressed":** the phones have never reached the LAN from this WiFi segment since Oct 21. They may have previously been on a different SSID where it worked, or may have been using the USB tunnel and forgotten. Nothing in the app changed to cause this.
+
+**App-side behavior is correct:** `boundedFetch` has a 30s timeout, the reachability probe bounds at 10s, and when unreachable the app shows the offline banner + device library with the message "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right."
+
+**Fix is on the household network:** put the phones on the main SSID, or turn off client isolation on the Cisco AP `toob-9F4CE1`. Do not modify the app to work around this (no mDNS discovery planned; outside spec scope).
+
+---
+
+## Action needed from the owner
+
+- Confirm the Pixel 4a fingerprint enrollment status (Android Settings → Security → Fingerprint).
+- Decide whether to add the biometrics-unavailable hint UX improvement.
+- Confirm whether they want to pursue the WiFi fix on the household network (main SSID / AP client isolation).
+
+Owner stages, commits and pushes changes. Working tree currently has one uncommitted change: the Settings icon in `client/src/App.tsx` changed from `BookOpen` to `Settings` (gear), imported as `GearIcon`. `tsc --noEmit` clean; all 416 client tests pass (35 files).

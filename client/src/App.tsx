@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Trash2, WifiOff, BookOpen, Server } from "lucide-react";
+import { Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Trash2, WifiOff, Server, Settings as GearIcon } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
@@ -626,7 +626,7 @@ function App() {
           <div className="flex items-center gap-2 sm:ml-auto">
             <ThemeToggle />
             <IconBtn label={copy.shell.settings} onClick={() => setShowSettings(true)}>
-              <BookOpen size={19} aria-hidden="true" />
+              <GearIcon size={19} aria-hidden="true" />
             </IconBtn>
             {/*
               The refresh control reports what it is doing rather than making
