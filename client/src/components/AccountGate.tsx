@@ -288,7 +288,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
       <div className="flex flex-col items-center">
         <Wordmark title={copy.brand.name} subtitle={copy.brand.tagline} />
 
-        <div className="panel mt-8 w-full max-w-sm px-6 py-7">
+        <div className="panel mt-8 w-full min-w-0 max-w-sm px-4 py-6 sm:px-6 sm:py-7">
           <h1 className="font-display text-2xl font-semibold text-ink">{heading}</h1>
           <p className="mt-1.5 text-sm text-ink2">
             {mode.kind === "setup"
@@ -309,7 +309,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
 
           {!loading && mode.kind === "list" && (
             <>
-              <div className="mt-5 grid gap-3">
+              <div className="mt-5 grid min-w-0 gap-3">
                 {accounts.map((account, index) => (
                   <button
                     key={account.id}
@@ -323,7 +323,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
                       )
                     }
                     className={cn(
-                      "capsule flex items-center gap-3 px-4 py-3 text-left",
+                      "capsule flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
                       index % 2 ? "capsule--alt" : "",
                       account.disabled && "opacity-55",
                     )}

@@ -90,6 +90,35 @@ async function findOverflow(page: import("@playwright/test").Page) {
 }
 
 test.describe("phone layout", () => {
+  test("the listener picker fits narrow phone screens", async ({ page }) => {
+    for (const width of PHONE_WIDTHS) {
+      await page.setViewportSize({ width, height: 780 });
+      await page.goto("/");
+      await expect(page.getByRole("heading", { name: "Who's listening?" })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Use the household password/ })).toBeVisible();
+
+      const result = await findOverflow(page);
+      expect(
+        result.scrollWidth,
+        `the account picker overflows at ${width}px: document is ${result.scrollWidth}px wide. ` +
+          `Widest offenders: ${JSON.stringify(result.offenders, null, 2)}`,
+      ).toBeLessThanOrEqual(result.viewport + 1);
+    }
+
+    await page.setViewportSize({ width: 320, height: 780 });
+    await page.goto("/");
+    await login(page);
+    await expect(page.getByRole("heading", { name: "Who's listening?" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "+ Add profile" })).toBeVisible();
+
+    const result = await findOverflow(page);
+    expect(
+      result.scrollWidth,
+      `the profile picker overflows at 320px: document is ${result.scrollWidth}px wide. ` +
+        `Widest offenders: ${JSON.stringify(result.offenders, null, 2)}`,
+    ).toBeLessThanOrEqual(result.viewport + 1);
+  });
+
   for (const width of PHONE_WIDTHS) {
     test(`library does not scroll sideways at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 780 });

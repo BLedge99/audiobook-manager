@@ -97,21 +97,21 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
       <div className="flex flex-col items-center">
         <Wordmark title={copy.brand.name} subtitle={copy.brand.tagline} />
 
-        <div className="panel mt-8 w-full max-w-sm px-6 py-7">
+        <div className="panel mt-8 w-full min-w-0 max-w-sm px-4 py-6 sm:px-6 sm:py-7">
           {/* The straight apostrophe is load-bearing: `e2e/helpers.ts` matches
               this heading by exact accessible name, and a typographic one makes
               the whole suite fail to pick a profile. */}
           <h1 className="font-display text-2xl font-semibold text-ink">{copy.profile.heading}</h1>
           <p className="mt-1.5 text-sm text-ink2">{copy.profile.intro}</p>
 
-          <div className="mt-5 grid gap-3">
+          <div className="mt-5 grid min-w-0 gap-3">
             {profiles.map((profile, index) => (
               <button
                 key={profile.id}
                 type="button"
                 onClick={() => select(profile.id)}
                 className={cn(
-                  "capsule flex items-center gap-3 px-4 py-3 text-left",
+                  "capsule flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
                   index % 2 ? "capsule--alt" : "",
                 )}
               >
@@ -122,7 +122,7 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
                 >
                   <UserRound size={18} className="text-white" />
                 </span>
-                <span className="min-w-0 truncate font-display text-[17px] font-semibold text-ink">
+                <span className="min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-ink">
                   {profile.name}
                 </span>
               </button>
