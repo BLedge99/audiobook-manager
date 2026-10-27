@@ -132,6 +132,7 @@ export function AudiobookDetail({
   onDeleteDownload,
   deviceAction,
   localUrlForTrack,
+  profileId,
 }: {
   book: Audiobook;
   onClose: () => void;
@@ -167,6 +168,14 @@ export function AudiobookDetail({
    * the network off (spec 26). Optional for the same reason as `deviceAction`.
    */
   localUrlForTrack?: (bookId: number, trackId: number) => Promise<string | undefined>;
+  /**
+   * The signed-in profile, passed down to the player.
+   *
+   * The player gates playback on it (progress is per profile) and used to read
+   * it from storage at mount, which refused playback for a session that the
+   * server restored from a cookie.
+   */
+  profileId?: string | number | null;
 }) {
   const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
   /**
@@ -271,7 +280,7 @@ export function AudiobookDetail({
           )}
           {deviceAction && <div className="mt-5">{deviceAction}</div>}
 
-          <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} />
+          <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} profileId={profileId} />
 
           {/* Spec 18/19/20: favourite and find-more-like actions on the book.
               Above the fold, because both are things a listener does next. */}

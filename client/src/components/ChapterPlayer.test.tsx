@@ -13,7 +13,53 @@ const book: Audiobook = {
   createdAt: new Date().toISOString(),
 };
 
+/** One file with embedded chapters -- the shape that broke the old player. */
+const chapterBook: Audiobook = {
+  ...book,
+  duration: 900,
+  tracks: [{ id: 41, trackNumber: 1, duration: 900 }],
+  chapters: JSON.stringify([
+    { start: 0, end: 300, title: "One" },
+    { start: 300, end: 600, title: "Two" },
+    { start: 600, end: 900, title: "Three" },
+  ]),
+};
+
+/** Many files, no chapters -- the shape the old player was built for. */
+const trackBook: Audiobook = {
+  ...book,
+  duration: 2375,
+  tracks: [
+    { id: 11, trackNumber: 1, duration: 830 },
+    { id: 12, trackNumber: 2, duration: 1545 },
+  ],
+};
+
 let playMock: ReturnType<typeof vi.fn>;
+let pauseMock: ReturnType<typeof vi.fn>;
+
+const audioOf = () => document.querySelector("audio") as HTMLAudioElement;
+const sliderOf = () => document.querySelector('input[aria-label="Audiobook progress"]') as HTMLInputElement;
+
+/** Wait until the player has a source, which is what the load effect keys on. */
+const waitForSource = (src: string) =>
+  waitFor(() => expect(audioOf().getAttribute("src")).toBe(src));
+
+const dragTo = async (value: number) => {
+  const slider = sliderOf();
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setValue?.call(slider, String(value));
+    slider.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+};
+
+const tick = (currentTime: number) => {
+  act(() => {
+    audioOf().currentTime = currentTime;
+    audioOf().dispatchEvent(new Event("timeupdate"));
+  });
+};
 
 describe("ChapterPlayer", () => {
   beforeEach(() => {
@@ -21,7 +67,7 @@ describe("ChapterPlayer", () => {
       Promise.resolve({ ok: true, json: () => Promise.resolve({ position: 0, completed: false }) }),
     ));
     playMock = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
-    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    pauseMock = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
     window.localStorage.clear();
   });
@@ -46,11 +92,29 @@ describe("ChapterPlayer", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  /**
+   * The player must take the profile from the app, not only from storage: a
+   * session the server restored from a cookie never wrote `profileId`, and
+   * reading it once at mount left Play disabled for a signed-in listener.
+   */
+  it("takes the profile from the app rather than from storage", () => {
+    render(<ChapterPlayer book={book} profileId="7" />);
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("never leaves the media element without a source", async () => {
+    window.localStorage.setItem("profileId", "42");
+    render(<ChapterPlayer book={chapterBook} />);
+    await waitForSource("/api/audiobooks/1/stream");
+    expect(audioOf().getAttribute("src")).not.toBe("");
+  });
+
   it("saves the latest seek position when switching books immediately", () => {
     window.localStorage.setItem("profileId", "42");
     const fetchMock = vi.mocked(fetch);
     const { unmount } = render(<ChapterPlayer book={book} />);
-    const audio = document.querySelector("audio") as HTMLAudioElement;
+    const audio = audioOf();
     audio.currentTime = 1800;
 
     unmount();
@@ -72,7 +136,7 @@ describe("ChapterPlayer", () => {
     window.localStorage.setItem("profileId", "42");
     const fetchMock = vi.mocked(fetch);
     const { unmount } = render(<ChapterPlayer book={book} />);
-    const audio = document.querySelector("audio") as HTMLAudioElement;
+    const audio = audioOf();
 
     // The listener never pressed play, so there is nothing worth saving.
     audio.currentTime = 0;
@@ -87,7 +151,7 @@ describe("ChapterPlayer", () => {
   it("restores the saved position for the book it was stored against", async () => {
     window.localStorage.setItem("profileId", "42");
     // jsdom never loads media, so readyState stays 0 and the restore would
-    // sit in pendingSeek waiting for a `loadedmetadata` that never arrives.
+    // wait for a `loadedmetadata` that never arrives.
     Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       if (String(url).endsWith("/progress")) {
@@ -100,10 +164,9 @@ describe("ChapterPlayer", () => {
 
     // The restore fetch resolves and seeks the media element.
     await waitFor(() => {
-      const audio = document.querySelector("audio") as HTMLAudioElement;
-      expect(audio.currentTime).toBe(900);
+      expect(audioOf().currentTime).toBe(900);
     });
-    expect(document.querySelector('input[aria-label="Audiobook progress"]')).toHaveValue("900");
+    expect(sliderOf()).toHaveValue("900");
   });
 
   /**
@@ -114,10 +177,8 @@ describe("ChapterPlayer", () => {
     window.localStorage.setItem("profileId", "42");
     Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
     const fetchMock = vi.fn((url: string, options?: RequestInit) => {
-      if (String(url).endsWith("/progress") && options?.method === "PUT") {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ position: 900, completed: false }) });
-      }
-      if (String(url).endsWith("/progress")) {
+      // The GET restores; the PUT must never write a zero back.
+      if (String(url).endsWith("/progress") && options?.method !== "PUT") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ position: 900, completed: false }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -126,8 +187,7 @@ describe("ChapterPlayer", () => {
 
     const { unmount } = render(<ChapterPlayer book={book} />);
     await waitFor(() => {
-      const audio = document.querySelector("audio") as HTMLAudioElement;
-      expect(audio.currentTime).toBe(900);
+      expect(audioOf().currentTime).toBe(900);
     });
 
     unmount();
@@ -148,137 +208,228 @@ describe("ChapterPlayer", () => {
    */
   it("lands a cross-track seek on the requested offset in the new track", async () => {
     window.localStorage.setItem("profileId", "42");
-    const multiTrack: Audiobook = {
-      ...book,
-      duration: 2375,
-      tracks: [
-        { id: 11, trackNumber: 1, duration: 830 },
-        { id: 12, trackNumber: 2, duration: 1545 },
-      ],
-    };
     Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
-    vi.stubGlobal("fetch", vi.fn(() =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve({ position: 0, completed: false }) })));
 
-    const { container } = render(<ChapterPlayer book={multiTrack} />);
-    const audio = container.querySelector("audio") as HTMLAudioElement;
-    const slider = container.querySelector('input[aria-label="Audiobook progress"]') as HTMLInputElement;
+    render(<ChapterPlayer book={trackBook} />);
+    const audio = audioOf();
+    await waitForSource("/api/tracks/11/stream");
 
     // 1800s overall lands in track 2 (offset 830) -> 970s into that track.
-    await act(async () => {
-      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setValue?.call(slider, "1800");
-      slider.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await dragTo(1800);
 
-    // The media element must be pointed at the new track, at the right offset.
-    // (jsdom does no media loading, so `src` is checked rather than
-    // `currentSrc`; the real cross-track seek is covered end-to-end by
-    // e2e/progress-resume.spec.ts.)
     await waitFor(() => {
       expect(audio.getAttribute("src")).toBe("/api/tracks/12/stream");
       expect(audio.currentTime).toBeCloseTo(970, 0);
     });
     // And the displayed position is the overall one, not the within-track one.
-    await waitFor(() => {
-      expect(Number(slider.value)).toBeCloseTo(1800, 0);
+    expect(Number(sliderOf().value)).toBeCloseTo(1800, 0);
+  });
+
+  /**
+   * Regression (the "head jumps back to the start" bug): while a seek into a
+   * different file is in flight, the outgoing file keeps reporting its own
+   * position. The readout must keep showing the requested position until the
+   * element actually gets there.
+   */
+  it("never shows a position behind the seek while the new source loads", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+
+    render(<ChapterPlayer book={trackBook} />);
+    const audio = audioOf();
+    await waitForSource("/api/tracks/11/stream");
+
+    await dragTo(1800);
+    await waitForSource("/api/tracks/12/stream");
+
+    // A stray timeupdate from the file we just left.
+    tick(5);
+    expect(Number(sliderOf().value)).toBeCloseTo(1800, 0);
+
+    // The same media, now at the requested place: pending is satisfied and the
+    // readout stays where the listener put it.
+    tick(970);
+    expect(Number(sliderOf().value)).toBeCloseTo(1800, 0);
+    expect(audio.getAttribute("src")).toBe("/api/tracks/12/stream");
+  });
+
+  /**
+   * The chapter book's advance mechanism, and the one the old player never had:
+   * crossing a chapter boundary is a *position* change inside one file. No
+   * URL changes, nothing reloads, playback is not interrupted.
+   */
+  it("moves into the next chapter as the position crosses the boundary", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+
+    render(<ChapterPlayer book={chapterBook} />);
+    const audio = audioOf();
+    await waitForSource("/api/audiobooks/1/stream");
+    const srcBefore = audio.getAttribute("src");
+    const pausesBefore = pauseMock.mock.calls.length;
+
+    tick(310);
+
+    await waitFor(() => expect(screen.getByTestId("position-readout")).toHaveTextContent("Two"));
+    // Seamless: the same file is still loaded and playback was not paused.
+    expect(audio.getAttribute("src")).toBe(srcBefore);
+    expect(pauseMock.mock.calls.length).toBe(pausesBefore);
+    expect(Number(sliderOf().value)).toBeCloseTo(310, 0);
+  });
+
+  /**
+   * A chapter book is one file, so `ended` means the *book* ended. The old
+   * `onEnded` advanced to the next chapter, which is unreachable in real use:
+   * by the time the file ends, the position is already in the last chapter.
+   */
+  it("marks the book complete when the one file ends", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+    const fetchMock = vi.mocked(fetch);
+
+    render(<ChapterPlayer book={chapterBook} />);
+    await waitForSource("/api/audiobooks/1/stream");
+
+    act(() => {
+      audioOf().currentTime = 900;
+      audioOf().dispatchEvent(new Event("ended"));
     });
+
+    const completion = fetchMock.mock.calls.find(([url, options]) =>
+      String(url) === `/api/audiobooks/1/progress` &&
+      (options as RequestInit | undefined)?.method === "PUT" &&
+      JSON.parse(String((options as RequestInit).body)).completed === true,
+    );
+    await waitFor(() => expect(completion).toBeDefined());
+    expect(JSON.parse(String(completion?.[1]?.body)).position).toBe(900);
   });
 
   /**
-   * Regression: when a chapter of a chapter book ends, `streamUrl` is identical
-   * for every chapter (single file), so the `streamUrl` effect never re-fires
-   * and `audio.play()` was never called -- playback stayed paused at the end of
-   * the previous chapter. `onEnded` must seek to the next segment's offset and
-   * play directly, mirroring `selectSegment`.
+   * A book of many files keeps the old behaviour: the end of one file loads the
+   * next one. It must not advance twice, because the element's clock at the end
+   * of track 1 reads that track's duration -- which is where track 2 *starts*.
    */
-  it("auto-advances to the next chapter and plays when a chapter ends", async () => {
+  it("advances to the next track when a track ends", async () => {
     window.localStorage.setItem("profileId", "42");
-    const chapterBook: Audiobook = {
-      ...book,
-      duration: 900,
-      chapters: JSON.stringify([
-        { start: 0, end: 300, title: "Chapter 1" },
-        { start: 300, end: 600, title: "Chapter 2" },
-        { start: 600, end: 900, title: "Chapter 3" },
-      ]),
-    };
     Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
-    render(<ChapterPlayer book={chapterBook} />);
-    const audio = document.querySelector("audio") as HTMLAudioElement;
 
-    const endChapter = () =>
-      act(() => { audio.dispatchEvent(new Event("ended")); });
+    render(<ChapterPlayer book={trackBook} />);
+    await waitForSource("/api/tracks/11/stream");
 
-    // End of chapter 1: seek to chapter 2's offset (300) and play.
-    endChapter();
-    expect(audio.currentTime).toBe(300);
-    expect(playMock).toHaveBeenCalledTimes(1);
+    act(() => {
+      audioOf().currentTime = 830;
+      audioOf().dispatchEvent(new Event("ended"));
+    });
 
-    // End of chapter 2: seek to chapter 3's offset (600) and play.
-    endChapter();
-    expect(audio.currentTime).toBe(600);
-    expect(playMock).toHaveBeenCalledTimes(2);
-  });
-
-  /**
-   * Regression: playback must stop at the last chapter rather than looping back
-   * to the first.
-   */
-  it("stops at the last chapter instead of advancing past it", async () => {
-    window.localStorage.setItem("profileId", "42");
-    const chapterBook: Audiobook = {
-      ...book,
-      duration: 900,
-      chapters: JSON.stringify([
-        { start: 0, end: 300, title: "Chapter 1" },
-        { start: 300, end: 600, title: "Chapter 2" },
-        { start: 600, end: 900, title: "Chapter 3" },
-      ]),
-    };
-    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
-    render(<ChapterPlayer book={chapterBook} />);
-    const audio = document.querySelector("audio") as HTMLAudioElement;
-
-    const endChapter = () =>
-      act(() => { audio.dispatchEvent(new Event("ended")); });
-
-    endChapter(); // ch 1 -> ch 2
-    endChapter(); // ch 2 -> ch 3
-    const callsBeforeLast = playMock.mock.calls.length;
-
-    endChapter(); // ch 3 -> stop (no seek, no play)
-
-    expect(audio.currentTime).toBe(600);
-    expect(playMock.mock.calls.length).toBe(callsBeforeLast);
-  });
-
-  /**
-   * Regression: picking a chapter of a chapter book must seek straight to that
-   * chapter's offset and keep playing there. `selectSegment` sets `currentTime`
-   * directly on the single stream source (the `streamUrl` effect never re-fires
-   * for a chapter book), and the local-file resolution must not flicker
-   * `streamUrl` and reload the media element back to track zero.
-   */
-  it("seeks to the chosen chapter and keeps playing instead of restarting", () => {
-    window.localStorage.setItem("profileId", "42");
-    const chapterBook: Audiobook = {
-      ...book,
-      duration: 900,
-      chapters: JSON.stringify([
-        { start: 0, end: 300, title: "Chapter 1" },
-        { start: 300, end: 600, title: "Chapter 2" },
-      ]),
-    };
-    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
-    render(<ChapterPlayer book={chapterBook} />);
-    const audio = document.querySelector("audio") as HTMLAudioElement;
-
-    fireEvent.click(screen.getByRole("button", { name: /Chapter 2/ }));
-
-    // The seek lands on chapter 2's offset (300s), not the track start.
-    expect(audio.currentTime).toBe(300);
-    expect(audio.currentTime).not.toBe(0);
+    await waitForSource("/api/tracks/12/stream");
     expect(playMock).toHaveBeenCalled();
+  });
+
+  it("stops at the end of the chapter the sleep timer was set in", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+
+    render(<ChapterPlayer book={chapterBook} />);
+    await waitForSource("/api/audiobooks/1/stream");
+
+    fireEvent.change(screen.getByLabelText("Sleep timer"), { target: { value: "-1" } });
+    const pausesBefore = pauseMock.mock.calls.length;
+
+    // Still inside chapter 1: keep going.
+    tick(299);
+    expect(pauseMock.mock.calls.length).toBe(pausesBefore);
+
+    // Chapter 1 ends: stop, and disarm the timer.
+    tick(300);
+    expect(pauseMock.mock.calls.length).toBeGreaterThan(pausesBefore);
+    expect(screen.getByLabelText("Sleep timer")).toHaveValue("off");
+  });
+
+  /**
+   * Picking a chapter of a single-file book must seek within the file it
+   * already has. Changing the source here is what used to discard the seek and
+   * restart at the beginning of the file.
+   */
+  it("seeks to the chosen chapter without reloading the source", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+
+    render(<ChapterPlayer book={chapterBook} />);
+    const audio = audioOf();
+    await waitForSource("/api/audiobooks/1/stream");
+    const srcBefore = audio.getAttribute("src");
+
+    fireEvent.click(screen.getByRole("button", { name: /Two/ }));
+
+    // The seek lands on chapter 2's offset (300s), not the start of the file.
+    expect(audio.currentTime).toBe(300);
+    expect(audio.getAttribute("src")).toBe(srcBefore);
+    expect(playMock).toHaveBeenCalled();
+  });
+
+  it("moves back and forward a chapter from the transport buttons", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+
+    render(<ChapterPlayer book={chapterBook} />);
+    const audio = audioOf();
+    await waitForSource("/api/audiobooks/1/stream");
+
+    fireEvent.click(screen.getByRole("button", { name: "Next chapter" }));
+    expect(audio.currentTime).toBe(300);
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous chapter" }));
+    expect(audio.currentTime).toBe(0);
+  });
+
+  it("skips 15 seconds without changing the source", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+
+    render(<ChapterPlayer book={chapterBook} />);
+    const audio = audioOf();
+    await waitForSource("/api/audiobooks/1/stream");
+
+    fireEvent.click(screen.getByRole("button", { name: /Forward 15 seconds/ }));
+    expect(audio.currentTime).toBe(15);
+
+    fireEvent.click(screen.getByRole("button", { name: /Back 15 seconds/ }));
+    expect(audio.currentTime).toBe(0);
+  });
+
+  /**
+   * Pressing Play before the source has resolved is legal, and on Android it is
+   * what a listener actually does. Playback then starts from the load effect,
+   * outside the click, so the browser's autoplay policy refuses it with
+   * `NotAllowedError`. That is not a broken book: the source has arrived, and
+   * the next tap plays synchronously. Reporting "Playback could not start"
+   * here made a one-second race look like the dead player that was reported.
+   */
+  it("does not claim failure when the autoplay policy refuses a deferred play", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+    playMock.mockRejectedValue(Object.assign(new Error("blocked"), { name: "NotAllowedError" }));
+
+    render(<ChapterPlayer book={chapterBook} />);
+    await waitForSource("/api/audiobooks/1/stream");
+
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+
+    // Back to Play, and no error text: trying again is the whole remedy.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("reports a real play failure", async () => {
+    window.localStorage.setItem("profileId", "42");
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+    playMock.mockRejectedValue(Object.assign(new Error("no source"), { name: "NotSupportedError" }));
+
+    render(<ChapterPlayer book={chapterBook} />);
+    await waitForSource("/api/audiobooks/1/stream");
+
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/could not start/i));
   });
 });

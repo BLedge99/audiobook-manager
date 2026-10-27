@@ -102,4 +102,35 @@ describe("ServerSetup", () => {
     expect(screen.getByRole("alert").textContent).toMatch(/could not reach/i);
     expect(onDone).not.toHaveBeenCalled();
   });
+
+  it("does not render a continue offline button when onContinueOffline is not provided", () => {
+    render(<ServerSetup onDone={() => {}} />);
+    expect(screen.queryByRole("button", { name: /continue offline/i })).not.toBeInTheDocument();
+  });
+
+  it("offers a route to continue offline when onContinueOffline is provided", () => {
+    const onContinueOffline = vi.fn();
+    render(<ServerSetup onDone={() => {}} onContinueOffline={onContinueOffline} />);
+    const continueBtn = screen.getByRole("button", { name: /continue offline/i });
+    expect(continueBtn).toBeInTheDocument();
+
+    fireEvent.click(continueBtn);
+    expect(onContinueOffline).toHaveBeenCalledOnce();
+  });
+
+  it("disables the continue offline button while checking connection", async () => {
+    let resolveHealth!: (res: Response) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { resolveHealth = resolve; })));
+
+    const onContinueOffline = vi.fn();
+    render(<ServerSetup onDone={() => {}} onContinueOffline={onContinueOffline} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/192\.168/), { target: { value: "192.168.1.203:3000" } });
+    fireEvent.click(screen.getByRole("button", { name: /connect/i }));
+
+    const continueBtn = screen.getByRole("button", { name: /continue offline/i });
+    expect(continueBtn).toBeDisabled();
+
+    resolveHealth(new Response("{}", { status: 200 }));
+  });
 });

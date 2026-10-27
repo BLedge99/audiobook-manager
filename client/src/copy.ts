@@ -886,6 +886,7 @@ export const copy = {
       addressPlaceholder: "192.168.1.203:3000",
       submit: "Connect",
       changeAddress: "Change server address",
+      continueOffline: "Continue offline",
       checking: "Checking…",
       enterAddress: "Enter a server address.",
       networkError: "network error",

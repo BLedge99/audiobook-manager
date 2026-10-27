@@ -13,17 +13,31 @@
  * base URL), so it now lives here rather than being imported from a component.
  */
 
-interface CapacitorBridge {
-  isNativePlatform?: () => boolean;
-}
-
-function bridge(): CapacitorBridge | undefined {
-  if (typeof window === "undefined") return undefined;
-  return (window as unknown as { Capacitor?: CapacitorBridge }).Capacitor;
-}
-
 /** True when running inside the Capacitor shell rather than a browser. */
 export function isNativeShell(): boolean {
-  const native = bridge();
-  return typeof native?.isNativePlatform === "function" && native.isNativePlatform();
+  if (typeof window === "undefined") return false;
+  /**
+   * Capacitor's native side injects `window.androidBridge` on Android and
+   * `window.webkit.messageHandlers.bridge` on iOS *before* the web app loads.
+   * These are set by the native bridge regardless of whether `@capacitor/core`
+   * was imported -- which this app deliberately avoids doing at module scope
+   * (see `local/device.ts`), because importing it before the bridge is ready
+   * blanks the screen.
+   *
+   * Reading `window.Capacitor.isNativePlatform()` would not work here: that
+   * object is only created by `@capacitor/core`'s module evaluation, which this
+   * app never triggers. Mirror Capacitor's own `getPlatformId()` instead and
+   * check the injected bridge directly.
+   */
+  const win = window as unknown as {
+    androidBridge?: unknown;
+    webkit?: { messageHandlers?: { bridge?: unknown } };
+    Capacitor?: { isNativePlatform?: () => boolean };
+  };
+  return (
+    !!win.androidBridge ||
+    !!win.webkit?.messageHandlers?.bridge ||
+    (typeof win.Capacitor?.isNativePlatform === "function" &&
+      win.Capacitor.isNativePlatform())
+  );
 }

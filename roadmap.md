@@ -13,8 +13,8 @@ has a matching spec in `specs/`.
 | 02 | Test infrastructure | `npm test` runs backend + frontend unit suites; `npx playwright test` runs E2E headless via docker compose |
 | 03 | Per-user profiles & household auth | Multiple named profiles; each has isolated progress/history; single shared household password gates the app |
 | 04 | Server-side progress & full listening history | Position, completed, sessions, speed, timestamps persist per profile per book and survive device switches |
-| 05 | Playback experience core | Resume, speed control, sleep timer, chapter seek all work in desktop and mobile browsers |
-| 06 | Chapter support | M4B chapters and multi-file track lists render and seek correctly; chapter editing possible later |
+| 05 | Playback experience core | Resume, speed control, sleep timer, chapter seek all work in desktop and mobile browsers. **Rebuilt 2026-10-27** (ADR 017): the player's state is the listening position, not the loaded media source, so a seek into another file cannot rewind the readout and advance never depends on an `ended` event. Remaining: `e2e/playback.spec.ts` and the on-device check |
+| 06 | Chapter support | M4B chapters and multi-file track lists render and seek correctly; chapter editing possible later. **Rebuilt 2026-10-27**: one segment/source mapping (`lib/playback.ts`) for both shapes — a chapter is a seek inside one file, a track is a file. Spec: [`specs/06-chapter-support.md`](specs/06-chapter-support.md) |
 | 07 | Metadata enrichment | Every book can be matched to Open Library/Google Books, confirmed or corrected manually, covers/descriptions filled |
 | 08 | PWA packaging | App installable on Android home screen, offline shell, lock-screen/background playback behaves |
 | 09 | Android wrapper | Capacitor or TWA wrapper builds an installable APK pointing at the server |

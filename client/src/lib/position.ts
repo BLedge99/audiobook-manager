@@ -57,7 +57,14 @@ export function parseSegments(book: Audiobook): { segments: Segment[]; kind: Seg
   //
   // Checking tracks first would collapse it to a single segment and lose the
   // chapter list entirely.
-  const chapters = parseChapters(book);
+  //
+  // The one exception is a book of *more than one file*. Its chapters would be
+  // absolute times into one file, so playing them as offsets into "the book"
+  // would be nonsense, and `planPosition` would map them to a stream that only
+  // serves the first file. The scanner only records chapters for a single file,
+  // so this is a guard against bad data rather than a supported shape.
+  const chapterTracks = book.tracks.length ? [...book.tracks] : [];
+  const chapters = chapterTracks.length <= 1 ? parseChapters(book) : [];
   if (chapters.length > 0) {
     const segments = chapters
       .map((chapter, index) => {

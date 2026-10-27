@@ -23,19 +23,28 @@ The owner installed the updated APK on the Motorola Defy and confirmed that
 offline access and the first-press fingerprint login fixes work. The Pixel 4a is
 now connected for playback investigation.
 
-**Current blocker: audiobooks do not play on the Pixel 4a.** In particular,
-"The Christmas Pig" (`bookId=120`, downloaded M4B
-`files/books/120/2588.m4b`, 321,857,108 bytes) shows the player, but tapping
-Play immediately returns it to the paused state and no audio is heard. The file
-exists and has the expected size; this does not establish that Android can
-decode or play it. Unit tests and the Android build passed, but those checks did
-not reproduce real WebView audio playback. Do not mark the player complete
-until playback is verified on-device.
+**Pixel playback is now verified.** The current APK played "The Christmas Pig"
+(`bookId=120`, local M4B `files/books/120/2588.m4b`, 321,857,108 bytes) from
+the app-private file URL. The WebView audio element reached `playing`, advanced
+past 28 seconds with no media error, Android reported active media playback,
+and the owner confirmed hearing audio. The player rewrite is still uncommitted;
+do not treat unit tests alone as device verification, but the reported failure
+did not reproduce after the Pixel was connected and signed into a profile.
 
-The Pixel currently has the APK installed at 17:42 on 2026-10-27; the updated
-debug APK was installed on the Defy at 18:52. If reproducing on the Pixel,
-install the newly built APK with `adb install -r` (do not clear app data) and
-capture WebView/media errors while testing the downloaded Christmas Pig.
+The setup issue was separate: the Pixel's HTTPS-origin storage had no active
+profile, and its saved server address was `https://192.168.1.203:3000`, while
+the server speaks plain HTTP. For this test, `http://localhost:3000` was used
+with `adb reverse tcp:3000 tcp:3000`, then the owner signed in on the Pixel.
+That localhost address only works while the USB reverse is active.
+
+**Wi-Fi is still blocked.** A direct phone request to
+`http://192.168.1.203:3000/api/health` and a raw TCP connection both timed out.
+The PC server listens on `0.0.0.0:3000` and the PC can reach that LAN address,
+so the phone's Wi-Fi-to-PC path (likely AP isolation, network segmentation, or
+firewall policy) remains to be resolved. The app's example IP is only an
+example; the correct scheme for this HTTP server is `http://`, not `https://`.
+
+**Offline access option from Connect to your library screen added.** When the device has downloaded audiobooks, `ServerSetup` now offers a "Continue offline" action so the user is not trapped on the connection screen when the home server is unreachable. If profile state in localStorage was cleared while offline, `App.tsx` restores the active profile ID from the on-device encrypted cache envelope. The updated APK was rebuilt (`npm run build:android`, `npx cap sync android`, `gradlew clean assembleDebug`) and installed on the connected Pixel 4a (`07261JEC203154`) with reverse tunnel on port 3000 established.
 
 ### The four states of the player, and what each one got wrong
 

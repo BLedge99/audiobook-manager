@@ -17,7 +17,7 @@ import {
 import { AccountGate } from "./components/AccountGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
 import { OfflineUnlock } from "./components/OfflineUnlock";
-import { activeCacheProfileId, hasProfileCache } from "./local/privateCache";
+import { activeCacheProfileId, hasProfileCache, listCachedProfileIds } from "./local/privateCache";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
@@ -108,6 +108,7 @@ function App() {
   const [working, setWorking] = useState(false);
   const [authed, setAuthed] = useState<boolean>();
   const [showServerSetup, setShowServerSetup] = useState(false);
+  const [bypassServerSetup, setBypassServerSetup] = useState(false);
   /**
    * Whether the server answered at all, as distinct from whether it said 401.
    *
@@ -166,6 +167,9 @@ function App() {
     void probeServerRequest()
       .then(async (probe) => {
         setServerReachable(probe.reachable);
+        if (probe.reachable) {
+          setBypassServerSetup(false);
+        }
         if (!probe.reachable) {
           setAuthed(false);
           // AccountGate can persist a profile immediately before this probe
@@ -472,6 +476,22 @@ function App() {
    * says so instead of falling through on a stale localStorage profile.
    */
   useEffect(() => {
+    if (activeProfileId) return;
+    let alive = true;
+    void listCachedProfileIds().then((ids) => {
+      if (!alive) return;
+      if (ids.length === 1) {
+        const id = String(ids[0]);
+        setActiveProfileId(id);
+        setProfileId(id);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [activeProfileId]);
+
+  useEffect(() => {
     if (serverReachable !== false || !activeProfileId) {
       setOfflineCacheExists(undefined);
       return;
@@ -498,8 +518,20 @@ function App() {
     };
   }, [serverReachable, activeProfileId]);
 
-  if (needsServerUrl() || showServerSetup) {
-    return <ServerSetup onDone={() => window.location.reload()} />;
+  const canContinueOffline = device.books.length > 0;
+  const handleContinueOffline = useCallback(() => {
+    setShowServerSetup(false);
+    setBypassServerSetup(true);
+    setServerReachable(false);
+  }, []);
+
+  if ((needsServerUrl() || showServerSetup) && !bypassServerSetup) {
+    return (
+      <ServerSetup
+        onDone={() => window.location.reload()}
+        onContinueOffline={canContinueOffline ? handleContinueOffline : undefined}
+      />
+    );
   }
 
   // Still deciding whether the server is there. Rendering the login form now
@@ -532,7 +564,10 @@ function App() {
         <OfflineNotice
           hasBooks={false}
           onRetry={probeServer}
-          onChangeServer={() => setShowServerSetup(true)}
+          onChangeServer={() => {
+            setShowServerSetup(true);
+            setBypassServerSetup(false);
+          }}
         />
       );
     }
@@ -541,7 +576,10 @@ function App() {
         <OfflineNotice
           hasBooks
           onRetry={probeServer}
-          onChangeServer={() => setShowServerSetup(true)}
+          onChangeServer={() => {
+            setShowServerSetup(true);
+            setBypassServerSetup(false);
+          }}
         />
       );
     }
@@ -552,7 +590,10 @@ function App() {
           hasBooks
           noCache
           onRetry={probeServer}
-          onChangeServer={() => setShowServerSetup(true)}
+          onChangeServer={() => {
+            setShowServerSetup(true);
+            setBypassServerSetup(false);
+          }}
         />
       );
     }
@@ -971,6 +1012,7 @@ function App() {
           ) : undefined
         }
         localUrlForTrack={isNativeShell() ? device.localUrlForTrack : undefined}
+        profileId={activeProfileId}
       />}
 
       {showSettings && (

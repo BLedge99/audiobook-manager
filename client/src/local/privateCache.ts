@@ -279,6 +279,14 @@ export async function hasProfileCache(
   return (await db.keyEnvelopes.get(profileId)) !== undefined;
 }
 
+/** Profiles that have an encrypted cache envelope on this device. */
+export async function listCachedProfileIds(
+  db: LocalLibraryDatabase = localDb,
+): Promise<number[]> {
+  const envelopes = await db.keyEnvelopes.toArray();
+  return envelopes.map((row) => row.profileId);
+}
+
 /**
  * Rewrap the DEK with a new password. Rows are untouched.
  *

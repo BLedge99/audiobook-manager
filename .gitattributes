@@ -1,0 +1,8 @@
+# Keep shell scripts LF whatever the host's `core.autocrlf` says.
+#
+# Windows checkouts default to `core.autocrlf=true`, which rewrites every text
+# file to CRLF -- including the bash entry points under `scripts/`. A CRLF bash
+# script fails on its first line with `set: pipefail: invalid option name`, and
+# `scripts/e2e-wsl.sh` sources `e2e-wsl-setup.sh`, so the whole E2E suite was
+# unrunnable from WSL while looking like a Docker or Playwright problem.
+*.sh text eol=lf

@@ -28,7 +28,17 @@ import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
  * has to re-run from scratch anyway, and this is the same trick
  * `ProfileSwitcher` uses.
  */
-export function ServerSetup({ onDone }: { onDone: () => void }) {
+export function ServerSetup({
+  onDone,
+  onContinueOffline,
+}: {
+  onDone: () => void;
+  /**
+   * Offer offline mode when the home server cannot be reached, so the user can
+   * browse and play the books they already have downloaded.
+   */
+  onContinueOffline?: () => void;
+}) {
   const [value, setValue] = useState(() => getServerUrl());
   const [status, setStatus] = useState<"idle" | "checking" | "failed">("idle");
   const [message, setMessage] = useState("");
@@ -101,6 +111,18 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
           <Btn type="submit" variant="primary" disabled={status === "checking"} className="mt-4 w-full">
             {status === "checking" ? copy.operator.serverSetup.checking : copy.operator.serverSetup.submit}
           </Btn>
+
+          {onContinueOffline && (
+            <Btn
+              type="button"
+              variant="quiet"
+              disabled={status === "checking"}
+              onClick={onContinueOffline}
+              className="mt-2 w-full"
+            >
+              {copy.operator.serverSetup.continueOffline}
+            </Btn>
+          )}
         </form>
       </div>
     </FullScreen>
