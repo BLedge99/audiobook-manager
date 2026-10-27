@@ -8,6 +8,158 @@
 > [`LIMITATIONS.md`](LIMITATIONS.md)** — broken features, caps with reasons,
 > security debt, and a suggested order of work. Read it first.
 
+## ⚠️ Current task — the player, rebuilt around the listening position (2026-10-27)
+
+Uncommitted work on `master`. **The owner stages and commits.**
+
+The player was "completely broken" on the Android phone ("Playback could not
+start"), after a chain of patches that each fixed one book shape and broke the
+other. It has been rebuilt. Read this before changing it again; the history is
+the whole explanation.
+
+### Device verification update — 2026-10-27
+
+The owner installed the updated APK on the Motorola Defy and confirmed that
+offline access and the first-press fingerprint login fixes work. The Pixel 4a is
+now connected for playback investigation.
+
+**Current blocker: audiobooks do not play on the Pixel 4a.** In particular,
+"The Christmas Pig" (`bookId=120`, downloaded M4B
+`files/books/120/2588.m4b`, 321,857,108 bytes) shows the player, but tapping
+Play immediately returns it to the paused state and no audio is heard. The file
+exists and has the expected size; this does not establish that Android can
+decode or play it. Unit tests and the Android build passed, but those checks did
+not reproduce real WebView audio playback. Do not mark the player complete
+until playback is verified on-device.
+
+The Pixel currently has the APK installed at 17:42 on 2026-10-27; the updated
+debug APK was installed on the Defy at 18:52. If reproducing on the Pixel,
+install the newly built APK with `adb install -r` (do not clear app data) and
+capture WebView/media errors while testing the downloaded Christmas Pig.
+
+### The four states of the player, and what each one got wrong
+
+| | Commit | Model | Broke |
+|---|---|---|---|
+| **A** | `ad4dbee` | `currentIndex -> streamUrl`; one effect keyed on the URL | (worked, for multi-file books) |
+| **A2** | `e0e022a` | same, plus `pendingSeekRef` + `desiredTimeRef` + `desiredTimeLockedRef`; `setCurrentTime(0)` on every source swap | seek showed 0 for a frame or two before landing |
+| **B** | `a97b344` | single-file books get Track rows; `isChapterBook = chapters.length > 0`; chapters win in `parseSegments` | **a chapter book has one URL for all its chapters**, so "advance by changing the URL" stopped applying. Chapters never advanced. `f33219b`'s `onEnded` "fix" was unreachable: `ended` fires at the end of the *file*, when the index is already the last chapter, so its tests passed but real playback did not |
+| **C** | `f33219b` + `010c779` | `remoteSrc` (media-token indirection) + `localTrackIdRef` | `streamUrl` could be `""` in the Android shell (`isNativeShell() ? "" : apiUrl(...)`) and `if (!streamUrl) return` meant the element never got a source; a token failure did the same. `localTrackIdRef` was set *before* resolving, so a cold start memoised "no local file" for the life of the player |
+
+**The root cause in one sentence:** the state was "which media source is
+loaded", when it is "where in the book am I". See
+[`decisions/017-player-state-is-position.md`](decisions/017-player-state-is-position.md).
+
+### What it is now
+
+| File | Role |
+|---|---|
+| `client/src/lib/position.ts` | segments + all position maths (unchanged, one guard added: chapters are only used when a book has at most one track) |
+| `client/src/lib/playback.ts` | **new, pure.** `planPosition(book, segments, kind, position)` → `{ segment, source, base, sourceTime }`; `planSegment`; `bookPositionFromSource`; neighbours; `segmentEnd` |
+| `client/src/lib/playback.test.ts` | **new.** 24 tests incl. a round-trip invariant over every second of both book shapes |
+| `client/src/lib/usePlayerSource.ts` | **new.** the only source resolver: local file → media-token stream → plain stream URL. Never empty. Retries local when the device library loads; `markLocalFailed()`; `retry()` for a fresh token |
+| `client/src/lib/usePlayerSource.test.tsx` | **new.** 9 tests: local preferred, stream fallback, token failure, token timeout, late replica, local failure, token refresh |
+| `client/src/components/ChapterPlayer.tsx` | rewritten around `position` + `pending` + `playIntent`; one `goTo(position, {play})` transport primitive; event handlers registered once and reading refs |
+
+Invariants the rewrite relies on — do not "simplify" them away:
+
+- `pending ?? position` is what the UI shows. That is why a cross-file seek
+  never flashes back to the start.
+- A seek **inside the loaded file** is a `currentTime` write. A seek **into a
+  different file** is a position change, and the load effect re-applies the
+  same position once the new file has metadata. There is no "pending seek"
+  bookkeeping beyond the one `pending` position.
+- **Advance is a position change, not an event.** A chapter book plays straight
+  through a chapter boundary inside one file; `ended` means the *book* ended.
+  A track book's `ended` means "load the next file" and uses the *loaded
+  source's* index, not the element's clock (at the end of track 1 the clock
+  reads track 1's duration, which is where track 2 starts — using it skips a
+  track).
+- The source is never `""`. If you find yourself writing `? "" :`, stop.
+- The profile comes from `App.tsx` (`profileId` prop) with a stored fallback,
+  not from `localStorage` read once at mount.
+- **A deferred `play()` can be refused by the autoplay policy.** Tapping Play
+  before the source has resolved means playback starts from the load effect,
+  outside the gesture, and the browser answers `NotAllowedError`. That is not a
+  failure to report: the source exists by then, so the next tap plays
+  synchronously. `reportPlayFailure` distinguishes it from a real refusal —
+  do not collapse them back into one message.
+
+### Verification
+
+Run from `client/`:
+
+```bash
+npx tsc -b            # clean
+npx vitest run        # 39 files / 471 tests green (429 before this change)
+npm run check:copy    # 422 strings, 0 errors
+```
+
+New tests worth knowing about: `playback.test.ts` (the mapping),
+`usePlayerSource.test.tsx` (never-empty source), and in
+`ChapterPlayer.test.tsx` — displayed position never goes backwards during a
+cross-file seek, a chapter pick does not change `src`, chapter advance is
+driven by `timeupdate` rather than a fake `ended`, a track book advances
+exactly one track on `ended`, and a deferred Play refused by the autoplay
+policy (`NotAllowedError`) is not reported as "could not start".
+
+E2E (stack must be up):
+
+```bash
+scripts/e2e-wsl.sh e2e/playback.spec.ts   # 1 passed
+```
+
+### Remaining work, in order
+
+1. **`e2e/playback.spec.ts` — run and green.** It proves the element gets a
+   non-empty source, the stream delivers media (`duration > 0`), and pause
+   sticks. Headless WSL Chromium has no ALSA audio device, so `currentTime`
+   does not advance there — that is verified on the device instead. The stack
+   must be brought up with `scripts/e2e-wsl.sh` (compose up, health wait, then
+   playwright) in a single WSL session; the distro SIGTERMs containers when
+   idle.
+2. **On the phone (Pixel 4a / Defy)**: the debug APK is installed
+   (`com.technative.audiobookmanager`, built at
+   `client/android/app/build/outputs/apk/debug/app-debug.apk`, adb serial
+   `07261JEC203154`). Point the app at the running stack
+   (`http://<lan-ip>:3000` on its first screen; currently `192.168.1.203:3000`),
+   then check streamed M4B playback, chapter advance, a scrub across a chapter,
+   and downloaded playback with the server unreachable (airplane mode).
+
+   **Root cause of the earlier "can't enter an IP" dead end** (fixed):
+   `isNativeShell()` in `client/src/lib/platform.ts` checked
+   `window.Capacitor.isNativePlatform()`, but `window.Capacitor` is only created
+   by `@capacitor/core`'s module evaluation — which this app deliberately never
+   imports at module scope (see `client/src/local/device.ts`, importing it
+   before the bridge is ready blanks the screen). So `isNativeShell()`
+   returned `false` on the device, `needsServerUrl()` returned `false`,
+   `ServerSetup` never rendered, and the app fell through to
+   `OfflineNotice` ("can't reach server", Try Again does nothing).
+   The fix detects the native shell directly via `window.androidBridge` (Android)
+   / `window.webkit.messageHandlers.bridge` (iOS) — exactly what Capacitor's own
+   `getPlatformId()` checks — with `window.Capacitor.isNativePlatform()` kept as
+   a fallback for tests. `ServerSetup` now renders on first run, the user can
+   enter `http://192.168.1.203:3000`, and on submit the app fetches `/api/health`
+   against that URL and reloads.
+
+   If WSL restarts, the guest IP changes — re-run
+   `scripts/expose-lan.ps1` to refresh the port proxy, then re-enter the URL on
+   the phone if needed.
+
+3. If a device check fails, the likely places are
+   `usePlayerSource.resolveRemote` (token path) and the `onError` escalation
+   ladder in `ChapterPlayer` — in that order.
+
+### Spec and limitation updates made with this change
+
+- `specs/06-chapter-support.md` — behaviour and acceptance criteria rewritten
+  around the segment/source model.
+- `decisions/017-player-state-is-position.md` — the ADR.
+- `LIMITATIONS.md` — the unreachable `onEnded` branch and the memoised
+  local-file guard are recorded as fixed-by-removal, with the reasoning.
+
+---
+
 ## Current state (snapshot)
 
 - Repo: `C:\Users\benle\Documents\Projects\TechNative\audiobook-manager`
@@ -253,6 +405,7 @@
 | 27 | per-profile-library | **server done, client done** | Spec `specs/27-per-profile-library.md`. `ProfileLibraryEntry` (a row per profile+book, unique), `Profile.followsServerLibrary` (the existing-vs-new distinction), `GET /api/audiobooks` scoped to the caller's membership, `GET /api/server-library` with an `inLibrary` flag, `POST`/`DELETE /api/audiobooks/:id/library`, and the scanner adding new books to every following profile. The data migration gives every existing profile every book, so shipping it changes nothing for a household that already has the app. Client: an "All books" tab (heading: "Select books to add to your library"), removal from the book detail that asks about the download only when there is one, and three distinct empty states. |
 | 26 | android-app | **Sprint 2 done** | Offline listening on Android. `specs/26-android-app.md` + ADR 012. Device is a **read replica + progress**, not a second library manager. **Verified on device: cross-origin auth (header token, cookie is dropped cross-scheme), cover art, download with real progress.** All 5 tracks of a book downloaded byte-for-byte identical to `Content-Length`. Stage tracing (`trace.ts`) makes every pipeline step time-boxed and visible. See "Downloads" in Current task for the four bugs behind this. **Next: server-URL gate, then offline playback with the network off** |
 | 28 | accounts-passkeys-biometrics | **all 8 phases implemented; only manual Windows/Android/Caddy checks remain** | Spec `specs/28-accounts-passkeys-biometrics.md`, ADR 016. `Profile` is the account (`passwordHash`, `role`); sessions live in SQLite and store only a token hash; admin gates scan/enrichment/taxonomy/library roots/profiles; `APP_PASSWORD` is break-glass only; login/claim/change/reset/unlock with exponential lockout. Encrypted offline cache: random DEK wrapped by a scrypt KEK, AES-GCM private rows, `AccountGate` + `OfflineUnlock`. Migration renames `Playwright`→`test`, `Testing`→`admin-test`, keeps `Archie`; automated pre-account migration test added. Web passkeys, Android biometrics, Caddy config and hardening are present; what is left needs a Windows machine, the phones, or a deployed CA. |
+| — | **player rebuilt (2026-10-27)** | **implemented; 469 client tests green; E2E and device check NOT run** | Fixes 05/06. The player's state is now the listening position, not the loaded source: `lib/playback.ts` (pure mapping, 24 tests), `lib/usePlayerSource.ts` (local → token → plain URL, never empty, 9 tests), `ChapterPlayer.tsx` rewritten around `position`/`pending`/`playIntent` with one `goTo`. `profileId` now comes from `App.tsx`. ADR 017. See "⚠️ Current task" at the top of this file for the history and what is left. |
 
 ## Bugs found by the live enrichment run (`npm run verify:enrichment`)
 
@@ -291,6 +444,12 @@ genres, 3 correctly held in the review queue.
 - Temp-dir cleanup and the `symlinkSync` privilege probe no longer fail
   otherwise-green suites. One test skips without Windows Developer Mode.
 - Spec 02's Docker/E2E tier still needs Docker, which is unavailable here.
+- **The bash entry points must stay LF.** Windows `git` is configured with
+  `core.autocrlf=true`, which rewrote `scripts/e2e-wsl-setup.sh` to CRLF; bash
+  then fails on line 1 with `set: pipefail: invalid option name` and the whole
+  E2E suite is unrunnable from WSL while looking like a Docker or Playwright
+  fault. `.gitattributes` now pins `*.sh` to `eol=lf`. If any script starts with
+  "$'\r': command not found", that is the same cause.
 
 ## Build order after 14
 
@@ -303,6 +462,10 @@ a read-only mount by design. **After 15: 26 (Android offline), 27 (per-profile
 library) and 28 (accounts/passkeys/biometrics), which is the current work.**
 
 ## Current task
+
+> **Deferred while the player rewrite at the top of this file is in progress.**
+> Everything below is roadmap item 28 and remains accurate; only manual
+> Windows/Android/Caddy checks are left there.
 
 ### Next action — read this first
 
@@ -1713,17 +1876,38 @@ This matches spec 28's designed behavior: "cancelling falls back to the password
 
 ### 2) WiFi does not detect the server; only USB tunnel works (Pixel 4a)
 
-**Finding: household network topology problem, not an app problem. Documented since 2026-10-21.**
+**Finding: there are two independent gates.** The app must permit HTTP LAN
+requests, and the WiFi must permit devices to reach one another.
 
 Both phones are on Cisco AP `toob-9F4CE1` (192.168.1.0/24, normal DHCP lease) with **client isolation**: every packet to another device is blackholed. The router and host answer nothing; connections to port 3000 *hang* rather than being refused. The host firewall *does* allow inbound TCP 3000 from the local subnet. `http://192.168.1.203:3000` works from a laptop on the LAN but not from either phone.
 
-The only route from a phone to the server is `adb reverse tcp:3000 tcp:3000` (USB tunnel). The app has no server auto-discovery — the URL is manually configured in Settings — and even with the correct URL configured, client isolation blocks the connection.
+The only route measured from a phone to the server on this AP is
+`adb reverse tcp:3000 tcp:3000` (USB tunnel). The app has no server
+auto-discovery — the URL is manually configured in Settings — and even with
+the correct URL configured, client isolation blocks the connection.
 
-**Why the user says it "regressed":** the phones have never reached the LAN from this WiFi segment since Oct 21. They may have previously been on a different SSID where it worked, or may have been using the USB tunnel and forgotten. Nothing in the app changed to cause this.
+**App-side configuration:** retain Capacitor's default `https://localhost`
+origin to preserve localStorage and IndexedDB, and set
+`android.allowMixedContent = true` for the HTTP LAN API. The earlier
+`androidScheme: "http"` workaround changed the storage origin and hid the
+existing downloaded-book catalogue. See ADR 014 and LIMITATIONS 1.6.
 
-**App-side behavior is correct:** `boundedFetch` has a 30s timeout, the reachability probe bounds at 10s, and when unreachable the app shows the offline banner + device library with the message "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right."
+The current report says the phone is on WiFi, but whether it can reach the
+server from that network is unverified. The older measurements found client
+isolation on `toob-9F4CE1`; test the updated app on a network that permits
+device-to-device traffic before concluding the WebView fix failed. This work
+has not been installed or tested on a phone.
 
-**Fix is on the household network:** put the phones on the main SSID, or turn off client isolation on the Cisco AP `toob-9F4CE1`. Do not modify the app to work around this (no mDNS discovery planned; outside spec scope).
+If the phone still cannot reach the server from that SSID, put both devices on
+the main SSID or disable client isolation on `toob-9F4CE1`. Do not work around
+AP isolation with mDNS discovery; that is outside spec scope.
+
+**Storage recovery decision (2026-10-27):** the owner confirmed that the
+downloads to preserve were saved before the HTTP-origin change. The Android
+config has therefore returned to Capacitor's default HTTPS origin and enables
+mixed content for the configured LAN server. Data written under the interim
+HTTP origin remains separate. Rebuild and install are still required; no phone
+was attached for this change.
 
 ---
 

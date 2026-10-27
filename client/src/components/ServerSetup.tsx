@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Plug } from "lucide-react";
-import { setServerUrl } from "../lib/api";
+import { getServerUrl, setServerUrl } from "../lib/api";
 import { copy } from "../copy";
 import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
 
@@ -29,7 +29,7 @@ import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
  * `ProfileSwitcher` uses.
  */
 export function ServerSetup({ onDone }: { onDone: () => void }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(() => getServerUrl());
   const [status, setStatus] = useState<"idle" | "checking" | "failed">("idle");
   const [message, setMessage] = useState("");
 

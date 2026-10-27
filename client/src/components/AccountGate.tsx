@@ -30,6 +30,17 @@ type Mode =
   | { kind: "setup"; account: Account }
   | { kind: "household" };
 
+function shouldRetryBiometricUnlock(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  const nativeCode = message.match(/biometric prompt error code\s+(\d+)/i);
+  if (nativeCode) {
+    // User cancellation, lockout, and missing hardware should return to the
+    // password path without opening another prompt.
+    return [1, 2, 5, 8].includes(Number(nativeCode[1]));
+  }
+  return !/cancel/i.test(message);
+}
+
 const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
 const PENDING_PROFILE_KEY = "pendingProfileId";
 
@@ -192,8 +203,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
           break;
         } catch (error) {
           lastError = error;
-          const cancelled = error instanceof Error && /cancel/i.test(error.message);
-          if (attempt === 0 && !cancelled) continue;
+          if (attempt === 0 && shouldRetryBiometricUnlock(error)) continue;
           throw error;
         }
       }

@@ -107,6 +107,7 @@ function App() {
   const [showRootForm, setShowRootForm] = useState(false);
   const [working, setWorking] = useState(false);
   const [authed, setAuthed] = useState<boolean>();
+  const [showServerSetup, setShowServerSetup] = useState(false);
   /**
    * Whether the server answered at all, as distinct from whether it said 401.
    *
@@ -167,6 +168,9 @@ function App() {
         setServerReachable(probe.reachable);
         if (!probe.reachable) {
           setAuthed(false);
+          // AccountGate can persist a profile immediately before this probe
+          // fails. Refresh the in-memory hint so offline sign-in can continue.
+          setProfileId(getActiveProfileId());
           return;
         }
         if (!probe.authed) {
@@ -494,7 +498,7 @@ function App() {
     };
   }, [serverReachable, activeProfileId]);
 
-  if (needsServerUrl()) {
+  if (needsServerUrl() || showServerSetup) {
     return <ServerSetup onDone={() => window.location.reload()} />;
   }
 
@@ -523,11 +527,21 @@ function App() {
    * last choice is the right one anyway.
    */
   if (!serverReachable) {
-    if (device.books.length === 0 || !activeProfileId) {
+    if (device.books.length === 0) {
       return (
         <OfflineNotice
-          hasBooks={device.books.length > 0}
+          hasBooks={false}
           onRetry={probeServer}
+          onChangeServer={() => setShowServerSetup(true)}
+        />
+      );
+    }
+    if (!activeProfileId) {
+      return (
+        <OfflineNotice
+          hasBooks
+          onRetry={probeServer}
+          onChangeServer={() => setShowServerSetup(true)}
         />
       );
     }
@@ -538,6 +552,7 @@ function App() {
           hasBooks
           noCache
           onRetry={probeServer}
+          onChangeServer={() => setShowServerSetup(true)}
         />
       );
     }
@@ -560,6 +575,7 @@ function App() {
     return (
       <AccountGate
         onSuccess={() => {
+          setProfileId(getActiveProfileId());
           void (async () => {
             await refresh();
             probeServer();

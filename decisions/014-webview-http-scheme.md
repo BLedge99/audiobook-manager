@@ -1,9 +1,10 @@
-# ADR 014 — The WebView serves the app over http, so the LAN server is reachable
+# ADR 014 — Keep the WebView origin stable while reaching LAN servers
 
 ## Status
 
-Accepted. Fixes `LIMITATIONS.md` 1.6, which blocked the product's primary
-deployment: a phone could not reach its own home server by LAN address.
+Accepted. This supersedes the earlier decision to serve the WebView over
+`http://localhost`. The app must reach a plain-HTTP home server over Wi-Fi
+without changing the origin that owns the device's localStorage and IndexedDB.
 
 ## Context
 
@@ -51,34 +52,28 @@ This is why the user remembered it working before: it did, but only over USB.
 
 ## Decision
 
-Two changes, and the second one is the reason this ADR needed rewriting.
+Keep Capacitor's default `https://localhost` origin. Set
+`android.allowMixedContent: true` in `capacitor.config.ts` so the WebView may
+make the app's plain-HTTP requests to the user-configured home server. Keep
+`server.cleartext` and `network_security_config.xml` configured for Android's
+network stack, and keep both `https://localhost` and `http://localhost` on the
+server's CORS allow-list.
 
-**1. Set `server.androidScheme: "http"` in `capacitor.config.ts`.**
+The mixed-content setting is a security trade-off. It is acceptable only for
+the current local-first app, whose bundled UI calls the configured home server
+over a trusted LAN. Use HTTPS for the server if the app is exposed beyond that
+network.
 
-The app is then served from `http://localhost`. The page is no longer a secure
-context, so `http://192.168.x.x` is same-scheme rather than mixed content, and
-the request is issued normally.
+The earlier `server.androidScheme: "http"` change did make a same-scheme LAN
+request possible, but it also changed the browser origin. Both localStorage and
+IndexedDB are origin-scoped; the old profile/server URL and downloaded-book
+catalogue became invisible even though the audio files remained on disk. The
+new configuration restores the original origin rather than asking listeners to
+rebuild that data from scratch.
 
-**2. Add `http://localhost` to the server's CORS allow-list** (`server/src/app.ts`).
-
-The allow-list named `https://localhost` — correct for Capacitor's default
-scheme, and therefore correct until change 1 landed. CORS compares the origin
-*whole*, so moving to `http://localhost` silently removed the app from its own
-allow-list.
-
-This was not caught by reasoning, or by any unit test, or by the browser. It was
-caught by installing the APK on a second phone and running the probe again,
-where the LAN fetch **still** failed in 21ms.
-
-The failure mode is unusually nasty and worth recording: the browser rejects the
-request as CORS, but the renderer reports it to `fetch()` as a bare
-`TypeError: Failed to fetch` with no mention of CORS in the message, the console
-warning, or the promise. Nothing in the app points at the cause. The only way to
-see it is to `curl` an `OPTIONS` preflight with `Origin: http://localhost` and
-notice the absent `Access-Control-Allow-Origin` header — which is exactly what
-had to be done here. Both schemes are now allowed and both are asserted in
-`server/src/app.test.ts`, because the two settings are coupled and the coupling
-is invisible.
+Both CORS origins remain allowed and are tested in `server/src/app.test.ts`.
+This matters because a CORS rejection surfaces to `fetch()` as a bare
+`TypeError: Failed to fetch`, which does not reveal the cause.
 
 ## A correction worth being explicit about
 
@@ -102,10 +97,13 @@ a *private* address and would fail after a preflight round trip, not in 1ms, and
 `localhost` is already exempt from PNA's origin check. Adding the header would
 have been a plausible patch that fixed nothing.
 
-**Add `android:usesCleartextTraffic="true"` to the manifest.** It is absent, and
-it is tempting to add. It would not help: that attribute and
-`networkSecurityConfig` both govern what the *network stack* may do, and the
-network stack was never the problem. The renderer never issued the request.
+**Only allow cleartext at the Android network layer.** This does not change the
+WebView's mixed-content policy, so the renderer still blocks the request.
+
+**Keep the `http://localhost` origin.** This fixed the renderer block but
+separated existing localStorage and IndexedDB data from the new origin. It is
+not the default because offline downloads and profile state must survive app
+updates.
 
 **Terminate TLS on the server.** The genuinely correct fix for a real deployment,
 and rejected here only because the household would have to trust a self-signed
@@ -114,37 +112,20 @@ burden. Recorded as the destination if the app ever leaves a trusted LAN.
 
 ## Consequences
 
-- **The app reaches a home server by IP over Wi-Fi.** That is the product's
-  stated deployment, and it now works without a cable.
-- The app's own origin is not a secure context. It serves bundled local assets
-  and nothing else. Every request it makes still goes to the address the user
-  typed, over a LAN — the same trust boundary `network_security_config.xml`
-  already documents, with the same reasoning. No new exposure is introduced,
-  because the app was already making plain-HTTP requests to a user-typed host.
-- **localStorage is a different origin.** `https://localhost` and
-  `http://localhost` are different origins, so an existing install appears to be
-  a fresh one: the server URL and the chosen profile are gone. The server-URL
-  screen appears once and the listener re-enters the address. Expected, one time,
-  and worth saying out loud rather than letting someone think their profile was
-  deleted.
-- Any future feature needing a secure context (WebCrypto, service workers over
-  HTTPS, `getUserMedia`) would need this revisited. None is on the roadmap, and
-  the PWA build is unaffected because it is served over real HTTPS.
+- **The app keeps its existing `https://localhost` origin.** localStorage and
+  IndexedDB remain available, including the downloaded-book catalogue.
+- The WebView allows mixed content. Treat this as a constrained LAN-only
+  deployment; do not rely on it for untrusted network access.
+- The interim `http://localhost` build has a separate origin. Data written by
+  that build is not migrated automatically and remains available only when
+  running a build that uses that origin.
+- This setting does not bypass Wi-Fi client isolation. The phone and server
+  must be able to reach one another on the selected network.
 
 ## Verification
 
-Verified on a **Motorola Defy, Android 11, WebView 155**, with **no USB cable
-and no `adb reverse` tunnel** — the whole point being that a tunnel would mask
-the failure it is supposed to detect:
-
-| Check | Result |
-|---|---|
-| `adb reverse --list` | empty — nothing masking the network path |
-| Phone → host over Wi-Fi | ping 0% loss, ~3.8ms |
-| Origin in the WebView | `http://localhost` (was `https://localhost`) |
-| `GET http://192.168.1.203:3000/api/health` from the app | `200`, 44ms |
-| `GET /api/audiobooks` | `200`, 27ms |
-| Screenshot | 12 real titles, real covers, favourites visible |
-
-The Pixel 4a (WebView 154) has not been re-tested against this fix; the Defy is
-a strictly newer WebView and passed, which is the harder case.
+The earlier HTTP-origin build was verified on a Motorola Defy. This
+storage-preserving configuration still requires a physical-device check with
+`adb reverse` disabled. The handoff records client isolation on the Cisco AP as
+a separate, known network blocker; verify on a network that permits
+device-to-device traffic before attributing a failed request to the app.

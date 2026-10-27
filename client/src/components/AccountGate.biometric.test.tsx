@@ -87,6 +87,16 @@ describe("AccountGate biometric sign-in", () => {
     expect(mocks.deleteCache).not.toHaveBeenCalled();
   });
 
+  it("does not retry a native prompt the listener explicitly cancelled", async () => {
+    mocks.unlock.mockRejectedValue(new Error("Biometric prompt error code 10: User canceled"));
+    render(<AccountGate onSuccess={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+    fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(copy.login.deviceFailed);
+    expect(mocks.unlock).toHaveBeenCalledOnce();
+  });
+
   it("clears a revoked device secret and its stale offline private data", async () => {
     mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"
       ? response(200, [{ id: 7, name: "Ben", role: "member", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: true }])

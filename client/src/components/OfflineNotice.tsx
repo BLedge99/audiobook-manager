@@ -20,12 +20,15 @@ export function OfflineNotice({
   hasBooks,
   noCache = false,
   onRetry,
+  onChangeServer,
 }: {
   /** Whether the device holds any downloaded books at all. */
   hasBooks: boolean;
   /** Downloads exist but this profile has no encrypted cache on the device. */
   noCache?: boolean;
   onRetry: () => void;
+  /** Offer a way to correct a stale or mistyped server address. */
+  onChangeServer?: () => void;
 }) {
   const [checking, setChecking] = useState(false);
 
@@ -61,6 +64,11 @@ export function OfflineNotice({
             {checking ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Wifi size={16} aria-hidden="true" />}
             {checking ? copy.offline.checking : copy.offline.tryAgain}
           </Btn>
+          {onChangeServer && (
+            <Btn variant="quiet" onClick={onChangeServer} className="mt-2 w-full sm:w-auto">
+              {copy.operator.serverSetup.changeAddress}
+            </Btn>
+          )}
         </div>
       </div>
     </FullScreen>

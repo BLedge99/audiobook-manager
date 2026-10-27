@@ -16,6 +16,9 @@ claims here turned out to be stale and are corrected below: §1.4's first-run
 dead end is fixed, and §1.7's missing post-profile refetch is being closed as
 the first feature of the 15b pass. Everything else is unchanged.
 
+**Updated 2026-10-27** to preserve the Android WebView origin while enabling
+LAN HTTP requests; see §1.6.
+
 Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
 than intended · **DEFERRED** = deliberately not built.
 
@@ -143,7 +146,7 @@ correctness problem.
 ---
 
 ### 1.6 The Android WebView would not reach a home server by LAN address
-**Status: FIXED and verified on a cable-free device — 2026-10-18.**
+**Status: mixed-content policy addressed in config; device verification required.**
 
 A Pixel 4a with `com.google.android.webview` **154.0.8037.106** refused every
 `fetch` from the app to a LAN address. Measured, from inside the app's own
@@ -169,19 +172,18 @@ standard's "potentially trustworthy origin" rule, which is exactly why the
 original `adb reverse` setup worked and a real Wi-Fi client never did. **The app
 worked over USB for a reason unrelated to how anyone actually uses it.**
 
-**Fix — two changes, not one.** `server.androidScheme = "http"` in
-`capacitor.config.ts` so the app is served from `http://localhost` and a LAN
-address is same-scheme rather than mixed content. **And** `http://localhost`
-added to the server's CORS allow-list, because the scheme change moves the app's
-origin and CORS compares the origin whole.
+**Fix — keep the storage origin and allow the LAN request.** The app retains
+Capacitor's default `https://localhost` origin so existing localStorage and
+IndexedDB data (including the downloaded-book catalogue) remains visible.
+`android.allowMixedContent = true` permits the app's HTTP requests to the
+user-configured home server; `server.cleartext` and
+`network_security_config.xml` allow cleartext at Android's network layer. Both
+`https://localhost` and `http://localhost` remain on the CORS allow-list.
 
-> **The second change is the one that mattered, and it is invisible when missed.**
-> With only the scheme change the app *still* failed, in 21ms, exactly as before.
-> The renderer reports a CORS rejection to `fetch()` as a bare
-> `TypeError: Failed to fetch` — no mention of CORS in the message, the console
-> warning, or the promise. The two settings are coupled and the coupling is
-> silent, so both origins are now allowed and both are asserted in
-> `server/src/app.test.ts`.
+The CORS origin and mixed-content policy are separate gates. The renderer
+reports a CORS rejection to `fetch()` as a bare `TypeError: Failed to fetch`,
+with no mention of CORS in the promise. Both local origins remain on the
+allow-list and are asserted in `server/src/app.test.ts`.
 
 The full reasoning, the alternatives rejected (including
 `Access-Control-Allow-Private-Network`, a plausible-sounding explanation that is
@@ -192,17 +194,18 @@ The full reasoning, the alternatives rejected (including
 "the phone reaches the home server by IP". Every documented setup path assumed
 that worked, and it did not.
 
-**One consequence to expect:** the origin changes from `https://localhost` to
-`http://localhost`, which is a different origin, so an existing install loses its
-stored server URL and profile and shows the server-URL screen once. That is
-expected — not a deleted profile.
+**Data consequence of the interim HTTP-origin build:** `http://localhost` and
+`https://localhost` have separate localStorage and IndexedDB stores. Returning
+to the default HTTPS origin makes data saved by an interim HTTP-origin build
+unavailable in that build; it does not delete it. Do not clear app data or
+uninstall while either origin may contain the only copy of downloaded-book
+metadata.
 
-**Verified** on a **Motorola Defy, Android 11, WebView 155**, over Wi-Fi with
-`adb reverse --list` confirmed **empty** so nothing masked the network path:
-`/api/health` → `200` in 44ms, `/api/audiobooks` → `200` in 27ms, and a
-screenshot showing 12 real titles with real covers. The Pixel 4a has not been
-re-tested against the fix; the Defy's WebView is newer, which is the harder
-case.
+The HTTP-origin approach was previously verified on a **Motorola Defy,
+Android 11, WebView 155**, over Wi-Fi. The storage-preserving mixed-content
+configuration has **not** yet been verified on a physical device. Wi-Fi client
+isolation is a separate network-level failure; see the current device finding
+in [`handoff.md`](./handoff.md).
 
 ### 1.7 The library is fetched before a profile exists, so progress is stale on arrival
 **Status: FIXED (2026-10-19) by spec 15b feature 4.**
@@ -699,6 +702,47 @@ the Internet.
   `src` is `http://localhost/_capacitor_file_/...`, the media session reports
   `state=3` (playing) with the position advancing, and the chapter list is
   intact.
+
+- **The chapter-advance fix that "passed its tests" was unreachable code.**
+  Found 2026-10-27, when the household reported that the player had stopped
+  working entirely.
+
+  `f33219b` made `onEnded` seek to the next chapter's offset and play, because
+  a chapter book streams one file and the `[streamUrl]` effect — which did the
+  advancing — could never re-fire. The reasoning was right and the code never
+  ran: a media element fires `ended` at the end of the **file**, and for a
+  one-file book the playhead is already in the last chapter by then, so the
+  function took the "book finished" branch. Its two regression tests passed
+  because they dispatched `ended` while the index was still at chapter 1, a
+  state a real element cannot be in.
+
+  **The general trap: a test that fabricates an impossible event order proves
+  nothing.** If an event handler is only reachable in a state the real system
+  cannot produce, the handler is dead code, and the test is a lie that keeps the
+  dead code alive. The fix was to delete the branch, not to keep it: advance is
+  a position change and is driven by the clock (ADR 017).
+
+- **Two guards, each added for a good reason, together made playback
+  impossible in the Android shell.** Found 2026-10-27.
+
+  1. `const streamUrl = local ?? (… : isNativeShell() ? "" : apiUrl(remote))`
+     with `if (!streamUrl) return` below it. Until a media token arrived, the
+     element had **no source at all**; if the token request failed, it never
+     got one, and pressing Play produced "Playback could not start. Try again."
+     — an error about a request that had not been made.
+  2. `010c779` set `localTrackIdRef.current = trackId` *before* the local URL
+     resolved, to stop a chapter pick reloading the media element.
+     `localUrlForTrack` returns `undefined` for "not downloaded" **and** for
+     "the replica has not loaded yet", so opening a book promptly after launch
+     cached "no local file" for the life of the player. Offline, that is a
+     player that does nothing.
+
+  Both are gone rather than guarded: one resolver
+  (`client/src/lib/usePlayerSource.ts`) returns local → token → plain URL and
+  **cannot return an empty string**, and it only treats a *successful* local
+  resolution as final. The rule to carry: **an optimisation must never be able
+  to remove the only working path.** A media token is an optimisation; the
+  stream URL without one is the path.
 
 - **A promise that rejects while nothing is listening is an unhandled
   rejection**, and Vitest reports those as errors that fail the whole run — so

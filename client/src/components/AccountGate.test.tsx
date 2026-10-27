@@ -236,7 +236,9 @@ describe("AccountGate", () => {
     let unlockCalls = 0;
     vaultMocks.unlock.mockImplementation(async () => {
       unlockCalls += 1;
-      if (unlockCalls === 1) throw new Error("Biometric vault unavailable");
+      if (unlockCalls === 1) {
+        throw new Error("Biometric prompt error code 1: sensor temporarily unavailable");
+      }
       return { profileId: 7, secret: "saved-secret", key: "c2VjcmV0" };
     });
     const fetchMock = mockFetch({

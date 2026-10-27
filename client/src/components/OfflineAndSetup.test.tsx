@@ -24,9 +24,9 @@ describe("OfflineNotice", () => {
     expect(screen.getByText(/download a book/i)).toBeInTheDocument();
   });
 
-  it("tells someone with books to pick a profile rather than to sign in", () => {
+  it("explains how to restore offline listening when books are downloaded", () => {
     render(<OfflineNotice hasBooks onRetry={() => {}} />);
-    expect(screen.getByText(/books already on this phone/i)).toBeInTheDocument();
+    expect(screen.getByText(/books are on this phone/i)).toBeInTheDocument();
     expect(screen.queryByText(/download a book/i)).not.toBeInTheDocument();
   });
 
@@ -35,6 +35,13 @@ describe("OfflineNotice", () => {
     render(<OfflineNotice hasBooks={false} onRetry={onRetry} />);
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(onRetry).toHaveBeenCalled();
+  });
+
+  it("offers a route to correct the server address", () => {
+    const onChangeServer = vi.fn();
+    render(<OfflineNotice hasBooks onRetry={() => {}} onChangeServer={onChangeServer} />);
+    fireEvent.click(screen.getByRole("button", { name: /change server address/i }));
+    expect(onChangeServer).toHaveBeenCalledOnce();
   });
 });
 
@@ -63,6 +70,12 @@ describe("ServerSetup", () => {
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     // Normalised with a scheme, so the user need not type one.
     expect(window.localStorage.getItem("serverUrl")).toBe("http://192.168.1.203:3000");
+  });
+
+  it("prefills the saved address so it can be corrected", () => {
+    window.localStorage.setItem("serverUrl", "http://192.168.1.203:3000");
+    render(<ServerSetup onDone={() => {}} />);
+    expect(screen.getByLabelText(/server address/i)).toHaveValue("http://192.168.1.203:3000");
   });
 
   it("rejects nonsense without persisting it", async () => {

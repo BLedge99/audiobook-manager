@@ -592,7 +592,8 @@ export const copy = {
 
   offline: {
     heading: "Can't reach the server",
-    withBooks: "Choose a profile to listen to the books already on this phone.",
+    withBooks:
+      "These books are on this phone. Reconnect to the server to choose a profile for offline listening.",
     withoutBooks:
       "Nothing has been downloaded to this phone yet. Connect to the home WiFi, open the app and download a book — then it will play with no network at all.",
     tryAgain: "Try again",
@@ -884,6 +885,7 @@ export const copy = {
       addressLabel: "Server address",
       addressPlaceholder: "192.168.1.203:3000",
       submit: "Connect",
+      changeAddress: "Change server address",
       checking: "Checking…",
       enterAddress: "Enter a server address.",
       networkError: "network error",

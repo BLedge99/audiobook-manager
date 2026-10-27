@@ -123,7 +123,9 @@ public class BiometricVaultPlugin extends Plugin {
           }
         } catch (Exception error) { call.reject("Biometric check failed", error); }
       }
-      @Override public void onAuthenticationError(int code, CharSequence message) { call.reject("Biometric check cancelled"); }
+      @Override public void onAuthenticationError(int code, CharSequence message) {
+        call.reject("Biometric prompt error code " + code + ": " + message);
+      }
       @Override public void onAuthenticationFailed() { /* Allow the OS to retry. */ }
     });
     prompt.authenticate(new BiometricPrompt.PromptInfo.Builder()
