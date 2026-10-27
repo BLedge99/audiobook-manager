@@ -231,4 +231,38 @@ describe("AccountGate", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/devices/session", expect.anything());
     delete capWindow.Capacitor;
   });
+
+  it("retries biometric unlock once when the first prompt fails transiently", async () => {
+    let unlockCalls = 0;
+    vaultMocks.unlock.mockImplementation(async () => {
+      unlockCalls += 1;
+      if (unlockCalls === 1) throw new Error("Biometric vault unavailable");
+      return { profileId: 7, secret: "saved-secret", key: "c2VjcmV0" };
+    });
+    const fetchMock = mockFetch({
+      "/api/auth/devices/session": () => json({ token: "bio-token" }),
+    });
+    const onSuccess = vi.fn();
+
+    capWindow.Capacitor = { isNativePlatform: () => true };
+    render(<AccountGate onSuccess={onSuccess} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Unlock with fingerprint or face/ }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Unlock with fingerprint or face/ }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(getActiveProfileId()).toBe("7");
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/devices/session", expect.anything());
+    // The first attempt failed and was retried, so unlock ran twice.
+    expect(unlockCalls).toBe(2);
+    expect(cacheMocks.unlockProfileCacheWithKey).toHaveBeenCalledWith(7, expect.any(Uint8Array));
+    delete capWindow.Capacitor;
+  });
 });

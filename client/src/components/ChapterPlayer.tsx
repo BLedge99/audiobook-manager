@@ -55,6 +55,11 @@ export function ChapterPlayer({
   // which otherwise overwrites the target with a near-zero value.
   const desiredTimeLockedRef = useRef(false);
   const speedRef = useRef(1);
+  // The track whose local URL is currently resolved. Chapters of a single-file
+  // book share one track, so re-resolving the same track on every chapter pick
+  // would flicker `streamUrl` and reload the media element, discarding the
+  // seek the listener just asked for.
+  const localTrackIdRef = useRef<number | null>(null);
   // Segment maths lives in lib/position so the GUI redesign (spec 15) can
   // restyle this player without reimplementing any of it.
   const { segments, kind: segmentKind } = useMemo(() => parseSegments(book), [book]);
@@ -124,15 +129,24 @@ export function ChapterPlayer({
   const [localSrc, setLocalSrc] = useState<string | undefined>();
   useEffect(() => {
     let cancelled = false;
-    setLocalSrc(undefined);
-
     if (!localUrlForTrack || tracks.length === 0) return;
     // For a chapter book the segments are the chapters, which carry no track
     // id -- the whole book is one file, and that file is the book's single
     // track. Resolving it is what makes a downloaded M4B play on a plane
     // instead of streaming a file it already has.
     const trackId = segments[currentIndex]?.trackId ?? (isChapterBook ? tracks[0]?.id : undefined);
-    if (trackId === undefined) return;
+    if (trackId === undefined) {
+      setLocalSrc(undefined);
+      localTrackIdRef.current = null;
+      return;
+    }
+    // Don't re-resolve (and thereby flicker `streamUrl` and reload the media
+    // element) when the effective track hasn't changed. Picking a chapter of
+    // a single-file book must keep the current source and the seek that
+    // `selectSegment` just applied.
+    if (trackId === localTrackIdRef.current) return;
+    localTrackIdRef.current = trackId;
+    setLocalSrc(undefined);
 
     void localUrlForTrack(book.id, trackId).then((url) => {
       if (!cancelled) setLocalSrc(url);

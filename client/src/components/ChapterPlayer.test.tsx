@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, act } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import { ChapterPlayer } from "./ChapterPlayer";
 import type { Audiobook } from "../types";
 
@@ -251,5 +251,34 @@ describe("ChapterPlayer", () => {
 
     expect(audio.currentTime).toBe(600);
     expect(playMock.mock.calls.length).toBe(callsBeforeLast);
+  });
+
+  /**
+   * Regression: picking a chapter of a chapter book must seek straight to that
+   * chapter's offset and keep playing there. `selectSegment` sets `currentTime`
+   * directly on the single stream source (the `streamUrl` effect never re-fires
+   * for a chapter book), and the local-file resolution must not flicker
+   * `streamUrl` and reload the media element back to track zero.
+   */
+  it("seeks to the chosen chapter and keeps playing instead of restarting", () => {
+    window.localStorage.setItem("profileId", "42");
+    const chapterBook: Audiobook = {
+      ...book,
+      duration: 900,
+      chapters: JSON.stringify([
+        { start: 0, end: 300, title: "Chapter 1" },
+        { start: 300, end: 600, title: "Chapter 2" },
+      ]),
+    };
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 1 });
+    render(<ChapterPlayer book={chapterBook} />);
+    const audio = document.querySelector("audio") as HTMLAudioElement;
+
+    fireEvent.click(screen.getByRole("button", { name: /Chapter 2/ }));
+
+    // The seek lands on chapter 2's offset (300s), not the track start.
+    expect(audio.currentTime).toBe(300);
+    expect(audio.currentTime).not.toBe(0);
+    expect(playMock).toHaveBeenCalled();
   });
 });

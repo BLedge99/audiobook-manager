@@ -180,7 +180,24 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
     if (mode.kind !== "password") return;
     setBusy(true); setError(undefined);
     try {
-      const saved = await biometricVault.unlock<{ profileId: number; secret: string; key: string }>();
+      // The first biometric prompt after launch can fail transiently on some
+      // devices (keystore / sensor warm-up). Retry once so a single finger or
+      // face press unlocks instead of requiring two. An intentional cancel is
+      // not retried: the caller falls back to the password screen.
+      let saved: { profileId: number; secret: string; key: string } | undefined;
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          saved = await biometricVault.unlock<{ profileId: number; secret: string; key: string }>();
+          break;
+        } catch (error) {
+          lastError = error;
+          const cancelled = error instanceof Error && /cancel/i.test(error.message);
+          if (attempt === 0 && !cancelled) continue;
+          throw error;
+        }
+      }
+      if (!saved) throw lastError ?? new Error(copy.login.deviceFailed);
       if (saved.profileId !== mode.account.id) throw new Error(copy.login.deviceFailed);
       let token: string | undefined;
       let response: Response | undefined;
