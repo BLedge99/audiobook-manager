@@ -288,6 +288,32 @@ export async function listCachedProfileIds(
 }
 
 /**
+ * Decide the offline-cache UI state from what this device can prove.
+ *
+ * `hasEnvelope` is whether a `keyEnvelopes` row exists (written by password
+ * sign-in). `vaultSaved` is whether the native biometric Vault holds a key
+ * for this profile (written by biometric sign-in). Either is enough to say
+ * the cache exists offline; neither means there is nothing to unlock.
+ *
+ * The cache is not "unlocked" in either case: a DEK must be in memory before
+ * private rows can be read, so both still require an unlock step first. A
+ * DEK already in memory is handled by the caller (it returns early before
+ * this function is needed).
+ */
+export function offlineCacheState(
+  hasEnvelope: boolean,
+  vaultSaved: boolean,
+): {
+  offlineCacheExists: boolean;
+  offlineUnlocked: boolean;
+} {
+  if (hasEnvelope || vaultSaved) {
+    return { offlineCacheExists: true, offlineUnlocked: false };
+  }
+  return { offlineCacheExists: false, offlineUnlocked: false };
+}
+
+/**
  * Rewrap the DEK with a new password. Rows are untouched.
  *
  * Call this only after the server has accepted the password change. If no

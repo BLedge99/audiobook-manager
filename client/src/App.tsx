@@ -17,7 +17,7 @@ import {
 import { AccountGate } from "./components/AccountGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
 import { OfflineUnlock } from "./components/OfflineUnlock";
-import { activeCacheProfileId, hasProfileCache, listCachedProfileIds } from "./local/privateCache";
+import { activeCacheProfileId, hasProfileCache, listCachedProfileIds, offlineCacheState } from "./local/privateCache";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
@@ -38,6 +38,7 @@ import {
 import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { isNativeShell } from "./lib/platform";
 import { probeServer as probeServerRequest } from "./lib/reachability";
+import { biometricVault } from "./lib/biometricVault";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
 import { useDeviceLibrary } from "./local/useDeviceLibrary";
 import { Settings } from "./components/Settings";
@@ -508,11 +509,19 @@ function App() {
     }
 
     let alive = true;
-    void hasProfileCache(id).then((exists) => {
+    void (async () => {
+      const hasEnvelope = await hasProfileCache(id);
       if (!alive) return;
-      setOfflineCacheExists(exists);
-      setOfflineUnlocked(false);
-    });
+      // Biometric sign-in restores the DEK from the native Vault; it never
+      // writes a keyEnvelopes row (no password to derive a KEK from). A saved
+      // Vault value means this profile's cache exists offline and just needs
+      // the biometric unlock to bring the key into memory.
+      const vaultSaved = await biometricVault.hasSavedValue();
+      if (!alive) return;
+      const state = offlineCacheState(hasEnvelope, vaultSaved);
+      setOfflineCacheExists(state.offlineCacheExists);
+      setOfflineUnlocked(state.offlineUnlocked);
+    })();
     return () => {
       alive = false;
     };

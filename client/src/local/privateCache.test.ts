@@ -8,6 +8,7 @@ import {
   getPrivateValue,
   hasProfileCache,
   lockOfflineCache,
+  offlineCacheState,
   putPrivateValue,
   readFavourites,
   rememberProfileKey,
@@ -113,5 +114,37 @@ describe("the offline cache envelope", () => {
       "CacheKeyMissingError",
     );
     expect(await hasProfileCache(99, db)).toBe(false);
+  });
+});
+
+describe("offlineCacheState", () => {
+  it("treats an existing envelope as an existing, locked cache", () => {
+    expect(offlineCacheState(true, false)).toEqual({
+      offlineCacheExists: true,
+      offlineUnlocked: false,
+    });
+  });
+
+  it("treats a Vault-saved biometric key as an existing, locked cache", () => {
+    // The biometric sign-in path never writes a keyEnvelopes row, so the
+    // cache is discovered through the Vault instead.
+    expect(offlineCacheState(false, true)).toEqual({
+      offlineCacheExists: true,
+      offlineUnlocked: false,
+    });
+  });
+
+  it("treats both an envelope and a Vault key as an existing, locked cache", () => {
+    expect(offlineCacheState(true, true)).toEqual({
+      offlineCacheExists: true,
+      offlineUnlocked: false,
+    });
+  });
+
+  it("reports no cache when neither an envelope nor a Vault key exists", () => {
+    expect(offlineCacheState(false, false)).toEqual({
+      offlineCacheExists: false,
+      offlineUnlocked: false,
+    });
   });
 });
