@@ -224,6 +224,79 @@ test.describe("favourites", () => {
     expect(second.ok()).toBeTruthy();
     expect(await second.json()).toMatchObject({ favourited: true, alreadyExisted: true });
   });
+
+  test("a favourite added offline persists after reload and unlock", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length === 0, "need a scanned library");
+    const book = all[0];
+
+    // Go offline: every page-initiated API call fails.
+    await page.route("**/api/*", (route) => route.abort());
+
+    // Favourite while offline: the server call fails but the cache holds it.
+    await page.getByRole("heading", { name: book.title, exact: true }).first().click();
+    await page.getByRole("button", { name: "Add to favourites", exact: true }).click();
+    await page.getByLabel("Close details").click();
+
+    // Reload while still offline: the app must offer offline unlock.
+    await page.reload();
+    await expect(page.getByPlaceholder("Household password")).toBeVisible();
+
+    // Unlock with the household password.
+    await page.getByPlaceholder("Household password").fill("household");
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    // After unlock, browse.refresh() restores cached favourites.
+    await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
+
+    // The offline-added favourite must appear in the Favourites tab.
+    await tab(page, /^Favourites/).click();
+    await expect(page.getByRole("heading", { name: book.title, exact: true }).first()).toBeVisible();
+  });
+
+  test("favourites added offline sync to the server on reconnect, mobile wins", async ({ page }) => {
+    await enterApp(page);
+    const all = await books(page);
+    test.skip(all.length < 4, "need at least 4 books");
+
+    const profileId = await page.evaluate(() => window.localStorage.getItem("profileId"));
+    const headers = { "x-profile-id": profileId as string };
+
+    // Online: favourite book 0. Server now has {0}.
+    await page.request.put(`/api/audiobooks/${all[0].id}/favourite`, { headers });
+    const before = await (await page.request.get("/api/favourites/ids", { headers })).json();
+    expect(before).toEqual([all[0].id]);
+
+    // Go offline: every page-initiated API call fails.
+    await page.route("**/api/*", (route) => route.abort());
+
+    // Add 3 more favourites offline (books 1, 2, 3). Server calls fail, cached locally.
+    for (const book of all.slice(1, 4)) {
+      await page.getByRole("heading", { name: book.title, exact: true }).first().click();
+      await page.getByRole("button", { name: "Add to favourites", exact: true }).click();
+      await page.getByLabel("Close details").click();
+    }
+
+    // Reconnect: stop aborting page-initiated requests.
+    await page.unroute("**/api/*");
+
+    // Click refresh to trigger probe + reconnect sync (refresh + syncFavourites).
+    await page.getByRole("button", { name: /^Refresh library/ }).click();
+
+    // syncFavourites() pushes mobile-only ids 1, 2, 3 to the server.
+    await expect
+      .poll(async () => {
+        const synced = await (await page.request.get("/api/favourites/ids", { headers })).json();
+        return synced as number[];
+      }, { timeout: 15_000 })
+      .toContain(all[1].id);
+
+    const synced = await (await page.request.get("/api/favourites/ids", { headers })).json();
+    for (const book of all.slice(0, 4)) {
+      expect(synced).toContain(book.id);
+    }
+  });
 });
 
 test.describe("custom tags", () => {

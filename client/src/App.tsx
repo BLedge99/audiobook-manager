@@ -452,7 +452,10 @@ function App() {
     if (!wasOffline.current) return;
     wasOffline.current = false;
     void refresh();
-  }, [serverReachable, refresh]);
+    // Reconcile favourites: mobile's offline additions win over the server's
+    // stale list. Push mobile-only ids to the server and cache the merge.
+    void browse.syncFavourites();
+  }, [serverReachable, refresh, browse.syncFavourites]);
 
   // Re-probe when the app comes back to the foreground. Without this, someone
   // who opened the app at home, left, and came back would stay stuck in the

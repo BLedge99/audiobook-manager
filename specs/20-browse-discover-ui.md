@@ -29,6 +29,11 @@ surfaces instead of them being rebuilt afterwards.
   unabridged, genres, custom tags — each field individually editable, with
   precedence visibly indicated (which value came from you vs the provider).
 - **Favourite heart** on cards and in detail.
+- **Offline favourites persistence.** Favourites are cached to the encrypted
+  offline cache so they survive a page reload and work while the server is
+  unreachable. A favourite added while offline is written to the local cache
+  immediately and synced to the server on reconnect. Mobile's offline additions
+  win over a stale server list (union, mobile priority).
 - **Tag manager** page: create, rename, merge, delete.
 - **Enrichment review queue.** Books below the auto-apply threshold, with their
   candidates, confidence shown, and one-click apply/reject.
@@ -47,7 +52,16 @@ surfaces instead of them being rebuilt afterwards.
       its provenance.
 - [x] The review queue applies a candidate without a page reload and the
       change is visible immediately.
-- [x] Accessible: keyboard-navigable shelves and filters, labelled controls.
+- [ ] Favourites persist across a page reload while online (restored from the
+      last successful server response cached to the encrypted offline cache).
+- [ ] Favourites persist across a page reload while offline (restored from the
+      encrypted cache once the profile cache is unlocked).
+- [ ] A favourite added while the server is unreachable still toggles the heart
+      and is cached locally; it syncs to the server on reconnect.
+- [ ] On reconnect, mobile's cached favourites are merged with the server's
+      list (union). Mobile-only additions are pushed to the server; the server
+      never overwrites favourites the user added while offline.
+- [ ] Accessible: keyboard-navigable shelves and filters, labelled controls.
 - [x] Tests: client unit tests for filter-combination logic and shelf grouping
       (pure), component tests for the favourite toggle and review queue, E2E
       for browse → favourite → discover.

@@ -60,4 +60,26 @@ describe("OfflineUnlock", () => {
       expect(screen.getByRole("alert")).toHaveTextContent(copy.offline.noCache),
     );
   });
+
+  it("restores cached favourites after offline unlock", async () => {
+    window.localStorage.setItem("profileId", "7");
+    await rememberProfileKey(7, "correct-horse-9");
+    // Simulate favourites cached from a previous online session.
+    await import("../local/privateCache").then(({ cacheFavourites }) =>
+      cacheFavourites([10, 20]),
+    );
+    lockOfflineCache();
+    const onUnlocked = vi.fn();
+    render(<OfflineUnlock onUnlocked={onUnlocked} />);
+
+    fireEvent.change(screen.getByPlaceholderText(copy.account.passwordPlaceholder), {
+      target: { value: "correct-horse-9" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: copy.login.submit }));
+
+    await waitFor(() => expect(onUnlocked).toHaveBeenCalled());
+    // After unlock, the DEK is in memory and cached favourites are readable.
+    const { readFavourites } = await import("../local/privateCache");
+    expect(await readFavourites()).toEqual([10, 20]);
+  });
 });

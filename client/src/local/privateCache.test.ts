@@ -117,6 +117,25 @@ describe("the offline cache envelope", () => {
   });
 });
 
+describe("favourites in the encrypted cache", () => {
+  it("round-trips favourites through the encrypted cache after unlock", async () => {
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await cacheFavourites([42, 7, 1], db);
+
+    lockOfflineCache();
+    await unlockProfileCache(7, "correct-horse-9", db);
+
+    expect(await readFavourites(db)).toEqual([42, 7, 1]);
+  });
+
+  it("does not cache favourites when no key is unlocked", async () => {
+    lockOfflineCache();
+    const result = await cacheFavourites([1], db);
+    expect(result).toBe(false);
+    expect(await readFavourites(db)).toBeUndefined();
+  });
+});
+
 describe("offlineCacheState", () => {
   it("treats an existing envelope as an existing, locked cache", () => {
     expect(offlineCacheState(true, false)).toEqual({

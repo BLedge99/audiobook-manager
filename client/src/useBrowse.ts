@@ -54,19 +54,29 @@ export function useBrowse() {
   const profileId = typeof window !== "undefined" ? window.localStorage.getItem("profileId") : null;
 
   const refresh = useCallback(async () => {
+    let favIds: number[] | undefined;
+
+    // Each endpoint is independent: one failure must not discard the others.
+    // Favourites are cached as soon as they arrive, even if enrichment or the
+    // genre/tag endpoints fail.
+    const genreRes = await request<GenreNode[]>("/api/genres")
+      .catch((err) => { console.warn("genres endpoint failed", err); return [] as GenreNode[]; });
+    setGenres(genreRes);
+
+    const tagRes = await request<TagSummary[]>("/api/tags")
+      .catch((err) => { console.warn("tags endpoint failed", err); return [] as TagSummary[]; });
+    setTags(tagRes);
+
     try {
-      const [genreTree, tagList, favIds, status, review] = await Promise.all([
-        request<GenreNode[]>("/api/genres"),
-        request<TagSummary[]>("/api/tags"),
-        request<number[]>("/api/favourites/ids"),
-        request<EnrichmentStatus>("/api/enrichment/status"),
-        request<Audiobook[]>("/api/enrichment/review-queue"),
-      ]);
-      setGenres(genreTree);
-      setTags(tagList);
+      favIds = await request<number[]>("/api/favourites/ids");
+      // Merge server favourites with the encrypted cache: offline additions
+      // must not be lost to a stale server list.
+      const cached = await readFavourites();
+      if (cached) {
+        favIds = [...new Set([...favIds, ...cached])];
+      }
       setFavourites(favIds);
-      setEnrichment(status);
-      setReviewQueue(review);
+      // Cache immediately so an offline reload can restore them.
       void cacheFavourites(favIds);
     } catch {
       // Browse degrades to the plain library rather than an error screen. If
@@ -74,9 +84,17 @@ export function useBrowse() {
       // favourites instead of an empty heart set.
       const cached = await readFavourites();
       if (cached) setFavourites(cached);
-    } finally {
-      setLoaded(true);
     }
+
+    const status = await request<EnrichmentStatus>("/api/enrichment/status")
+      .catch((err) => { console.warn("enrichment status endpoint failed", err); return undefined; });
+    setEnrichment(status);
+
+    const review = await request<Audiobook[]>("/api/enrichment/review-queue")
+      .catch((err) => { console.warn("review queue endpoint failed", err); return [] as Audiobook[]; });
+    setReviewQueue(review);
+
+    setLoaded(true);
   }, [profileId]);
 
   useEffect(() => {
@@ -98,16 +116,56 @@ export function useBrowse() {
         : [...favourites, bookId];
       // Optimistic: a heart that lags a tap feels broken.
       setFavourite(bookId, !favourited);
+      // Persist locally first so the change survives offline and reload.
+      await cacheFavourites(next);
       try {
         await request(`/api/audiobooks/${bookId}/favourite`, { method: favourited ? "DELETE" : "PUT" });
-        void cacheFavourites(next);
-      } catch (error) {
-        setFavourite(bookId, favourited); // roll back
-        throw error;
+      } catch {
+        // Server unreachable or rejected: the local cache holds the truth.
+        // Sync will retry on reconnect via syncFavourites(). Do not roll back
+        // — the user's intent is preserved locally. Do not re-throw — the
+        // toggle succeeded from the user's perspective.
       }
     },
     [favourites, setFavourite],
   );
+
+  /**
+   * Reconcile local cached favourites with the server.
+   *
+   * Called when the server becomes reachable again. Computes the union of the
+   * encrypted cache and the server's list, pushes mobile-only additions to the
+   * server, and caches the merged result. Mobile's offline additions win over a
+   * stale server list — the server never deletes favourites the user added while
+   * offline.
+   */
+  const syncFavourites = useCallback(async () => {
+    const cached = await readFavourites();
+    if (!cached) return;
+
+    let serverIds: number[];
+    try {
+      serverIds = await request<number[]>("/api/favourites/ids");
+    } catch {
+      return; // still unreachable; try again next sync
+    }
+
+    const serverSet = new Set(serverIds);
+
+    // Mobile-only additions: ids the user favourited offline that the server lacks.
+    const mobileOnly = cached.filter((id) => !serverSet.has(id));
+    for (const id of mobileOnly) {
+      try {
+        await request(`/api/audiobooks/${id}/favourite`, { method: "PUT" });
+      } catch {
+        // Best effort; will retry on next sync. Leave in cache.
+      }
+    }
+
+    const merged = [...new Set([...cached, ...serverIds])];
+    setFavourites(merged);
+    await cacheFavourites(merged);
+  }, []);
 
   return {
     genres,
@@ -118,6 +176,7 @@ export function useBrowse() {
     loaded,
     refresh,
     toggleFavourite,
+    syncFavourites,
     isFavourite: (bookId: number) => favourites.includes(bookId),
   };
 }

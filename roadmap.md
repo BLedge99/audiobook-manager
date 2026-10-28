@@ -30,6 +30,7 @@ has a matching spec in `specs/`.
 | 18 | Favourites & custom tags | Per-profile favourites; household-managed tag vocabulary with create/rename/merge/delete; assignments survive rescan |
 | 19 | Recommendations & wishlist | Discover returns only books the household does not own, seeded by one book or the profile's favourites; per-profile wishlist with an "owned" marker |
 | 20 | Browse & Discover UI | Genre shelves, filter bar with URL state, category pages, series shelves, Discover tab, full tag-suite detail, tag manager, enrichment review queue |
+| 20b | Offline favourites persistence | Favourites survive page reload and offline use; added offline sync to server on reconnect with mobile priority. Spec: [`specs/20-browse-discover-ui.md`](specs/20-browse-discover-ui.md). |
 | 21 | Official chapter titles | Embedded chapter names ("Section 01", "01 - TITLE") replaced by real provider chapter names, matched by filename identity; a hand-set title is never overwritten and survives rescans |
 | 22 | Search | Typed search over the library: bare words match title/author/narrator/series/tag/genre/description, `author:`/`genre:`/`narrator:`/`series:`/`tag:` narrow to one field, results are shareable via the URL |
 | 23 | Cover art fallback | A book whose winning provider has no cover (LibriVox carries no cover field) gets artwork from the best candidate that does, borrowing only the image |

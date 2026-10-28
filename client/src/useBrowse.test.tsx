@@ -84,4 +84,115 @@ describe("useBrowse", () => {
     await waitFor(() => expect(view.result.current.favourites).toEqual([9, 10]));
     expect(cacheMocks.readFavourites).toHaveBeenCalled();
   });
+
+  it("caches a favourite locally when the server is unreachable", async () => {
+    window.localStorage.setItem("profileId", "7");
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/api/favourites/ids")) return fakeResponse([1]);
+      if (String(url).includes("/favourite")) throw new Error("offline");
+      return fakeResponse([]);
+    });
+    cacheMocks.readFavourites.mockResolvedValue([1]);
+
+    const view = mount();
+    await waitFor(() => expect(view.result.current.favourites).toEqual([1]));
+
+    await act(async () => {
+      await view.result.current.toggleFavourite(2);
+    });
+
+    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([1, 2]);
+    expect(view.result.current.favourites).toContain(2);
+  });
+
+  it("removes a favourite from the local cache when the server is unreachable", async () => {
+    window.localStorage.setItem("profileId", "7");
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/api/favourites/ids")) return fakeResponse([1, 2]);
+      if (String(url).includes("/favourite")) throw new Error("offline");
+      return fakeResponse([]);
+    });
+    cacheMocks.readFavourites.mockResolvedValue([1, 2]);
+
+    const view = mount();
+    await waitFor(() => expect(view.result.current.favourites).toEqual([1, 2]));
+
+    await act(async () => {
+      await view.result.current.toggleFavourite(2);
+    });
+
+    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([1]);
+    expect(view.result.current.favourites).toEqual([1]);
+  });
+
+  it("caches favourites when genres endpoint fails", async () => {
+    window.localStorage.setItem("profileId", "7");
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/api/favourites/ids")) return fakeResponse([5, 6]);
+      if (String(url).endsWith("/api/genres")) throw new Error("down");
+      return fakeResponse([]);
+    });
+
+    const view = mount();
+    await waitFor(() => expect(view.result.current.favourites).toEqual([5, 6]));
+
+    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([5, 6]);
+    expect(view.result.current.loaded).toBe(true);
+  });
+
+  it("syncFavourites pushes mobile-only additions to the server and keeps server-only ids", async () => {
+    window.localStorage.setItem("profileId", "7");
+    const posted: number[] = [];
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/api/favourites/ids")) return fakeResponse([1, 9]);
+      if (String(url).includes("/favourite")) {
+        const match = String(url).match(/\/(\d+)\/favourite$/);
+        if (match) posted.push(Number(match[1]));
+        return fakeResponse(undefined, 204);
+      }
+      return fakeResponse([]);
+    });
+    cacheMocks.readFavourites.mockResolvedValue([1, 2]);
+
+    const view = mount();
+    // Let refresh() set favourites from the server first ([1, 9]), merged with
+    // the cached [1, 2] -> [1, 9, 2].
+    await waitFor(() => expect(view.result.current.favourites).toEqual([1, 9, 2]));
+
+    await act(async () => {
+      await view.result.current.syncFavourites();
+    });
+
+    // Mobile-only id 2 pushed to server; server-only id 9 kept.
+    expect(posted).toEqual([2]);
+    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([1, 2, 9]);
+    expect(view.result.current.favourites).toEqual([1, 2, 9]);
+  });
+
+  it("syncFavourites syncs multiple mobile-only additions to the server", async () => {
+    window.localStorage.setItem("profileId", "7");
+    const posted: number[] = [];
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/api/favourites/ids")) return fakeResponse([1]);
+      if (String(url).includes("/favourite")) {
+        const match = String(url).match(/\/(\d+)\/favourite$/);
+        if (match) posted.push(Number(match[1]));
+        return fakeResponse(undefined, 204);
+      }
+      return fakeResponse([]);
+    });
+    cacheMocks.readFavourites.mockResolvedValue([1, 2, 3, 4]);
+
+    const view = mount();
+    // Let refresh() merge server [1] with cached [1, 2, 3, 4] -> [1, 2, 3, 4].
+    await waitFor(() => expect(view.result.current.favourites).toEqual([1, 2, 3, 4]));
+
+    await act(async () => {
+      await view.result.current.syncFavourites();
+    });
+
+    expect(posted).toEqual([2, 3, 4]);
+    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([1, 2, 3, 4]);
+    expect(view.result.current.favourites).toEqual([1, 2, 3, 4]);
+  });
 });
