@@ -24,9 +24,10 @@ import "fake-indexeddb/auto";
  */
 if (typeof HTMLMediaElement !== "undefined") {
   const noop = () => {};
-  const props = ["play", "pause", "load", "canPlayType", "addTextTrack"];
+  const props: Array<keyof HTMLMediaElement> = ["play", "pause", "load", "canPlayType", "addTextTrack"];
   for (const prop of props) {
     if (typeof HTMLMediaElement.prototype[prop] === "undefined") {
+      // @ts-expect-error - polyfilling unimplemented methods
       HTMLMediaElement.prototype[prop] = noop;
     }
   }
