@@ -27,6 +27,15 @@ export interface FileSystemPort {
   remove(path: string): Promise<void>;
   /** Size of a file in bytes, relative to the replica's directory. */
   stat(path: string): Promise<number>;
+  /**
+   * Names of the entries directly under `path`.
+   *
+   * Used by download recovery (spec 29): audio can outlive the database row
+   * that pointed at it, and the only remaining record of those books is the
+   * directory names under `books/`. Throws when the directory cannot be read;
+   * a missing directory and an unreadable one are different findings.
+   */
+  listDir(path: string): Promise<string[]>;
   /** A URL an `<audio>` element can play and seek within. */
   playableUrl(path: string): Promise<string>;
 }

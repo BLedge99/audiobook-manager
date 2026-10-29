@@ -19,6 +19,7 @@ import { Btn, FullScreen, MachineMark, Wordmark } from "../ui/primitives";
 export function OfflineNotice({
   hasBooks,
   noCache = false,
+  libraryReadFailed = false,
   onRetry,
   onChangeServer,
 }: {
@@ -26,6 +27,14 @@ export function OfflineNotice({
   hasBooks: boolean;
   /** Downloads exist but this profile has no encrypted cache on the device. */
   noCache?: boolean;
+  /**
+   * The device library could not be read, so its contents are unknown.
+   *
+   * This takes precedence over every other explanation: if the app could not
+   * open the replica, it has no business saying there is nothing downloaded.
+   */
+  libraryReadFailed?: boolean;
+  /** Re-probes the server *and* re-reads the device library. */
   onRetry: () => void;
   /** Offer a way to correct a stale or mistyped server address. */
   onChangeServer?: () => void;
@@ -53,11 +62,13 @@ export function OfflineNotice({
           <h1 className="mt-5 font-display text-2xl font-semibold text-ink">{copy.offline.heading}</h1>
 
           <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-ink2">
-            {hasBooks
-              ? noCache
-                ? copy.offline.noCache
-                : copy.offline.withBooks
-              : copy.offline.withoutBooks}
+            {libraryReadFailed
+              ? copy.offline.libraryReadFailed
+              : hasBooks
+                ? noCache
+                  ? copy.offline.noCache
+                  : copy.offline.withBooks
+                : copy.offline.withoutBooks}
           </p>
 
           <Btn variant="primary" onClick={retry} disabled={checking} className="mt-6 w-full sm:w-auto">

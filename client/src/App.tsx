@@ -17,7 +17,14 @@ import {
 import { AccountGate } from "./components/AccountGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
 import { OfflineUnlock } from "./components/OfflineUnlock";
-import { activeCacheProfileId, hasProfileCache, listCachedProfileIds } from "./local/privateCache";
+import {
+  activeCacheProfileId,
+  hasProfileCache,
+  listCachedProfileIds,
+  offlineCacheState,
+} from "./local/privateCache";
+import { offlineScreen, type CacheState } from "./lib/offlineGate";
+import { biometricVault } from "./lib/biometricVault";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
@@ -124,11 +131,19 @@ function App() {
   /** A probe in flight, so a failing probe cannot trigger another one. */
   const probeInFlight = useRef(false);
   /**
-   * Offline cache state (spec 28). `undefined` means "still checking"; `false`
-   * means this device has downloads but no envelope, which is a different
-   * explanation from "nothing downloaded".
+   * Offline cache state (spec 29). `unknown` means "still checking";
+   * `absent` means neither an envelope nor a fingerprint key exists, which is a
+   * different explanation from "nothing downloaded" -- and a different screen.
    */
-  const [offlineCacheExists, setOfflineCacheExists] = useState<boolean>();
+  const [cacheState, setCacheState] = useState<CacheState>("unknown");
+  /**
+   * The listener chose "listen without progress" on the offline unlock screen.
+   *
+   * This is the escape that screen used to lack. It is deliberately not
+   * persisted: a cold start should offer the key once more, because unlocking
+   * is what restores progress. What it must never do is nag mid-session.
+   */
+  const [skippedUnlock, setSkippedUnlock] = useState(false);
   const [offlineUnlocked, setOfflineUnlocked] = useState<boolean>(() => {
     const id = Number(window.localStorage.getItem("profileId"));
     return Number.isInteger(id) && id > 0 && activeCacheProfileId() === id;
@@ -306,12 +321,13 @@ function App() {
   /**
    * Which books to show.
    *
-   * Normally the live server library. But when the server cannot be reached and
-   * the device has books, fall back to the replica rather than showing an error
-   * over an empty shelf -- being away from home is the case the whole feature
-   * exists for, so it must not look like a failure.
+   * Normally the live server library. But when the server cannot be reached,
+   * fall back to the replica rather than showing an error over an empty shelf --
+   * being away from home is the case the whole feature exists for, so it must
+   * not look like a failure. Offline with nothing downloaded is still the app:
+   * the library tab shows an honest empty state (spec 29).
    */
-  const offline = serverReachable === false && device.books.length > 0;
+  const offline = serverReachable === false;
   const libraryBooks = offline ? device.books : audiobooks;
 
   const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);
@@ -491,26 +507,44 @@ function App() {
     };
   }, [activeProfileId]);
 
+  /**
+   * What this device can prove it holds for the active profile (spec 29).
+   *
+   * Two things count: the password-wrapped envelope in `keyEnvelopes`, or the
+   * native biometric Vault, which stores the DEK itself and therefore never
+   * writes an envelope. Checking only the envelope told a listener who signed
+   * in with a fingerprint that there was "no protected profile data" while the
+   * books *and* the key were both on the phone.
+   */
   useEffect(() => {
     if (serverReachable !== false || !activeProfileId) {
-      setOfflineCacheExists(undefined);
+      setCacheState("unknown");
       return;
     }
     const id = Number(activeProfileId);
     if (!Number.isInteger(id) || id < 1) {
-      setOfflineCacheExists(false);
+      setCacheState("absent");
+      setOfflineUnlocked(false);
       return;
     }
+    // The key is already in memory: no need to ask IndexedDB or the Vault.
     if (activeCacheProfileId() === id) {
-      setOfflineCacheExists(true);
+      setCacheState("present");
       setOfflineUnlocked(true);
       return;
     }
 
     let alive = true;
-    void hasProfileCache(id).then((exists) => {
+    void Promise.all([
+      hasProfileCache(id),
+      // `hasSavedValue` is a plain `contains()` on SharedPreferences, so it
+      // stays true even for a value the Keystore can no longer decrypt. That is
+      // still enough to *offer* the unlock screen: OfflineUnlock classifies the
+      // failure and offers two exits, so a stale value is recoverable there.
+      biometricVault.hasSavedValue().catch(() => false),
+    ]).then(([hasEnvelope, vaultSaved]) => {
       if (!alive) return;
-      setOfflineCacheExists(exists);
+      setCacheState(offlineCacheState(hasEnvelope, vaultSaved));
       setOfflineUnlocked(false);
     });
     return () => {
@@ -518,99 +552,138 @@ function App() {
     };
   }, [serverReachable, activeProfileId]);
 
-  const canContinueOffline = device.books.length > 0;
+  // A skip lasts for this offline session only. Reconnecting, or switching who
+  // is listening, is a fresh decision -- and a fresh opportunity to save
+  // progress.
+  useEffect(() => {
+    if (serverReachable !== false) setSkippedUnlock(false);
+  }, [serverReachable]);
+
+  useEffect(() => {
+    setSkippedUnlock(false);
+  }, [activeProfileId]);
+
   const handleContinueOffline = useCallback(() => {
     setShowServerSetup(false);
     setBypassServerSetup(true);
     setServerReachable(false);
   }, []);
 
+  /** Leave for the server-address screen; shared by every offline exit. */
+  const openServerSetup = useCallback(() => {
+    setShowServerSetup(true);
+    setBypassServerSetup(false);
+  }, []);
+
+  const retryOffline = useCallback(() => {
+    // "Try again" has to mean both halves. It used to re-probe the server only,
+    // so a replica read that had failed stayed failed however many times the
+    // button was pressed.
+    probeServer();
+    void device.refresh();
+  }, [probeServer, device.refresh]);
+
+  // Spec 29 recovery: adopt audio that outlived its database row.
+  const [recovering, setRecovering] = useState(false);
+  const [recoverMessage, setRecoverMessage] = useState<string>();
+  const recoverDownloads = useCallback(async () => {
+    setRecovering(true);
+    setRecoverMessage(undefined);
+    try {
+      const result = await device.recover();
+      setRecoverMessage(
+        result.recovered.length > 0
+          ? copy.offline.unclaimedRestored(result.recovered.length)
+          : result.unreadable.length > 0
+            // The server could not be asked. That is not the same as "nothing
+            // here matches", and the files were left untouched either way.
+            ? copy.offline.recoverFailed
+            : copy.offline.unclaimedNothing,
+      );
+    } catch {
+      setRecoverMessage(copy.offline.recoverFailed);
+    } finally {
+      setRecovering(false);
+    }
+  }, [device.recover]);
+
   if ((needsServerUrl() || showServerSetup) && !bypassServerSetup) {
     return (
       <ServerSetup
         onDone={() => window.location.reload()}
-        onContinueOffline={canContinueOffline ? handleContinueOffline : undefined}
+        /* Always offered in the native shell (spec 29). It used to require
+           loaded books, which hid the escape exactly when the library could not
+           be read, and it was disabled while a health check ran -- so a hanging
+           check could keep someone out of their downloads. */
+        onContinueOffline={isNativeShell() ? handleContinueOffline : undefined}
       />
     );
   }
 
   // Still deciding whether the server is there. Rendering the login form now
   // would flash a password box at someone who is simply on a slow connection.
-  //
-  // The second condition matters as much as the first: if the server is *not*
-  // there, the next question is "does this device have anything to play?", and
-  // the answer lives in IndexedDB, which is read asynchronously. Deciding
-  // before the device library has loaded would show "nothing to listen to" to
-  // someone who has three books on the phone.
-  if (serverReachable === undefined || (serverReachable === false && device.loading)) {
-    return <Splash />;
-  }
+  if (serverReachable === undefined) return <Splash />;
 
   /**
-   * Offline.
+   * Offline: one tested decision, not a ladder of `if`s (spec 29).
    *
-   * The point of downloading a book is to listen to it with no network, so being
-   * unreachable must not mean being locked out. If this device has books and we
-   * know who the listener was, go straight in and let the replica serve the
-   * library.
-   *
-   * The profile is reused from `localStorage` rather than re-asked for: the
-   * profile list lives on the server, so ProfileGate cannot run here, and the
-   * last choice is the right one anyway.
+   * The table lives in `lib/offlineGate.ts`; this file only renders its answer.
+   * The rule it encodes is that being unreachable never dead-ends: every screen
+   * below has at least one action that leaves it.
    */
-  if (!serverReachable) {
-    if (device.books.length === 0) {
-      return (
-        <OfflineNotice
-          hasBooks={false}
-          onRetry={probeServer}
-          onChangeServer={() => {
-            setShowServerSetup(true);
-            setBypassServerSetup(false);
-          }}
-        />
-      );
-    }
-    if (!activeProfileId) {
-      return (
-        <OfflineNotice
-          hasBooks
-          onRetry={probeServer}
-          onChangeServer={() => {
-            setShowServerSetup(true);
-            setBypassServerSetup(false);
-          }}
-        />
-      );
-    }
-    if (offlineCacheExists === undefined) return <Splash />;
-    if (!offlineCacheExists) {
-      return (
-        <OfflineNotice
-          hasBooks
-          noCache
-          onRetry={probeServer}
-          onChangeServer={() => {
-            setShowServerSetup(true);
-            setBypassServerSetup(false);
-          }}
-        />
-      );
-    }
-    if (!offlineUnlocked) {
-      return (
-        <OfflineUnlock
-          onUnlocked={() => {
-            setOfflineUnlocked(true);
-            // Re-read the replica now that the key is in memory, so cached
-            // progress appears on the shelf immediately.
-            void device.refresh();
-            void browse.refresh();
-          }}
-        />
-      );
-    }
+  const screen = offline
+    ? offlineScreen({
+        deviceLoading: device.loading,
+        booksOnDevice: device.books.length,
+        libraryReadError: device.libraryReadError,
+        hasProfile: Boolean(activeProfileId),
+        cache: cacheState,
+        unlocked: offlineUnlocked,
+        skippedUnlock,
+      })
+    : null;
+
+  if (screen?.kind === "waiting") return <Splash />;
+
+  if (screen?.kind === "libraryReadFailed") {
+    return (
+      <OfflineNotice
+        hasBooks={device.books.length > 0}
+        libraryReadFailed
+        onRetry={retryOffline}
+        onChangeServer={openServerSetup}
+      />
+    );
   }
+
+  if (screen?.kind === "unlock") {
+    return (
+      <OfflineUnlock
+        onUnlocked={() => {
+          setOfflineUnlocked(true);
+          // Re-read the replica now that the key is in memory, so cached
+          // progress appears on the shelf immediately.
+          void device.refresh();
+          void browse.refresh();
+        }}
+        onChangeServer={openServerSetup}
+        onListenWithoutProgress={() => setSkippedUnlock(true)}
+      />
+    );
+  }
+
+  // A browser has no on-device library, so "No books downloaded" would be the
+  // wrong sentence there. The notice keeps both exits and says the honest thing.
+  if (screen?.kind === "shell" && device.books.length === 0 && !isNativeShell()) {
+    return <OfflineNotice hasBooks={false} onRetry={retryOffline} onChangeServer={openServerSetup} />;
+  }
+
+  /** Whether progress and favourites can actually be read on this screen. */
+  const progressAvailable =
+    !offline || (screen?.kind === "shell" ? screen.progressAvailable : false);
+  /** Offline shows the library only: every other tab needs the server. */
+  const visibleTabs = offline ? TABS.filter((entry) => entry.id === "library") : TABS;
+  const shownTab: Tab = offline ? "library" : tab;
 
   if (serverReachable && authed === false) {
     return (
@@ -698,7 +771,9 @@ function App() {
             >
               <RefreshCw size={19} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
             </IconBtn>
-            <ProfileSwitcher />
+            {/* The profile list lives on the server, so offline the switcher has
+                nothing to offer and would open a panel that cannot fill. */}
+            {!offline && <ProfileSwitcher />}
           </div>
         </div>
 
@@ -712,15 +787,15 @@ function App() {
           className="rail fixed inset-x-0 bottom-0 z-40 pb-[max(10px,env(safe-area-inset-bottom))] sm:static sm:z-auto sm:border-t-0 sm:bg-transparent sm:backdrop-filter-none sm:pb-0"
         >
           <ul className="mx-auto flex w-full max-w-7xl gap-1.5 px-3 sm:justify-center sm:px-6">
-            {TABS.map(({ id, label: tabLabel, icon: Icon }) => (
+            {visibleTabs.map(({ id, label: tabLabel, icon: Icon }) => (
               <li key={id} className="min-w-0 flex-1 sm:flex-none">
                 <button
                   type="button"
                   onClick={() => openTab(id)}
-                  aria-current={tab === id ? "page" : undefined}
+                  aria-current={shownTab === id ? "page" : undefined}
                   className={cn(
                     "flex w-full flex-col items-center justify-center gap-1 rounded-[16px_13px_16px_13px/13px_16px_13px_16px] px-2 py-2 text-[11px] font-bold transition sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13.5px]",
-                    tab === id
+                    shownTab === id
                       ? "bg-rasp text-white shadow-[0_3px_0_-1px_color-mix(in_srgb,var(--ink)_70%,transparent)]"
                       : "text-ink2 hover:bg-ink/5",
                   )}
@@ -753,7 +828,7 @@ function App() {
           </Notice>
         )}
 
-        {offline && (
+        {offline && device.books.length > 0 && (
           <Notice tone="warn" role="status" icon={<WifiOff size={16} aria-hidden="true" />} className="mb-6">
             <p>{copy.shell.offlineBanner(device.books.length)}</p>
             {/* Why it is offline, not just that it is. "Offline" is a symptom,
@@ -764,8 +839,46 @@ function App() {
           </Notice>
         )}
 
-        {tab === "library" && (
+        {/*
+          Listening without unlocking is allowed, but not silently pretending
+          progress is being kept. One persistent line, never a prompt: asking
+          again on every track would be nagging (spec 29).
+        */}
+        {offline && !progressAvailable && device.books.length > 0 && (
+          <Notice tone="warn" role="status" className="mb-6">
+            {copy.offline.progressNotSaved}
+          </Notice>
+        )}
+
+        {shownTab === "library" && (
           <>
+            {/*
+              Spec 29: audio can outlive the database row that described it --
+              the WebView origin change left exactly this. Say so where the loss
+              is felt (the shelf), and let the server re-adopt the files.
+            */}
+            {isNativeShell() && device.unclaimed.length > 0 && (
+              <Notice tone="warn" role="status" className="mb-6">
+                <p>{copy.offline.unclaimed(device.unclaimed.length)}</p>
+                {offline ? (
+                  <p className="mt-1 text-[12.5px]">{copy.offline.unclaimedOffline}</p>
+                ) : (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Btn
+                      size="sm"
+                      variant="primary"
+                      disabled={recovering}
+                      onClick={() => void recoverDownloads()}
+                    >
+                      {recovering ? copy.offline.unclaimedFinding : copy.offline.unclaimedAction}
+                    </Btn>
+                    {recoverMessage && (
+                      <span className="text-[12.5px] font-bold">{recoverMessage}</span>
+                    )}
+                  </div>
+                )}
+              </Notice>
+            )}
             {/*
               Order is the thesis: the dock and the shelf come first, and every
               operator control comes last.
@@ -802,24 +915,39 @@ function App() {
                 )}
               </MachineHead>
               <StatusLegend className="mb-4" />
-              {loading && !libraryBooks.length ? (
+              {loading && !libraryBooks.length && !offline ? (
                 /* Only reachable before the first response has ever arrived: the
                    hook latches `loading` false once anything has loaded, so a
-                   refresh can never get here.
-
-                   The `!libraryBooks.length` matters offline. The banner above
-                   says "showing the 2 books downloaded to this device", and a
-                   "Loading library…" panel underneath it contradicts that --
-                   the books are *here*, the server is what is missing. */
+                   refresh can never get here. */
                 <div className="panel panel--sunk px-6 py-20 text-center text-ink2">{copy.shell.loadingLibrary}</div>
               ) : (
                 <AudiobookGrid
                   books={searchedBooks}
-                  emptyMessage={copy.library.empty}
+                  /*
+                   * Offline with nothing downloaded is not a failure screen any
+                   * more: it is the library, empty, with the two actions that
+                   * can refill it. `chooseBooks` would open a tab that needs the
+                   * server, so it is replaced rather than shown dead.
+                   */
+                  emptyMessage={offline ? copy.offline.emptyHeading : copy.library.empty}
                   emptyAction={
-                    <Btn variant="quiet" size="sm" onClick={() => openTab("server-library")}>
-                      <Server size={15} aria-hidden="true" /> {copy.library.chooseBooks}
-                    </Btn>
+                    offline ? (
+                      <div className="grid justify-items-center gap-3">
+                        <p className="max-w-sm text-sm text-ink2">{copy.offline.emptyIntro}</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          <Btn variant="primary" size="sm" onClick={retryOffline}>
+                            <RefreshCw size={15} aria-hidden="true" /> {copy.offline.tryAgain}
+                          </Btn>
+                          <Btn variant="quiet" size="sm" onClick={openServerSetup}>
+                            {copy.operator.serverSetup.changeAddress}
+                          </Btn>
+                        </div>
+                      </div>
+                    ) : (
+                      <Btn variant="quiet" size="sm" onClick={() => openTab("server-library")}>
+                        <Server size={15} aria-hidden="true" /> {copy.library.chooseBooks}
+                      </Btn>
+                    )
                   }
                   {...gridProps}
                 />
@@ -903,7 +1031,7 @@ function App() {
           </>
         )}
 
-        {tab === "browse" && (
+        {shownTab === "browse" && (
           <>
             <section className="mb-7">
               <h2 className="text-[30px] leading-[1.05] sm:text-4xl">{copy.browse.heading}</h2>
@@ -940,9 +1068,9 @@ function App() {
           </>
         )}
 
-        {tab === "discover" && <Discover discover={discover} hasFavourites={favouriteIds.size > 0} />}
+        {shownTab === "discover" && <Discover discover={discover} hasFavourites={favouriteIds.size > 0} />}
 
-        {tab === "server-library" && (
+        {shownTab === "server-library" && (
           <ServerLibrary
             books={library.serverLibrary}
             loading={library.serverLibraryLoading}
@@ -962,7 +1090,7 @@ function App() {
           />
         )}
 
-        {tab === "favourites" && (
+        {shownTab === "favourites" && (
           <section>
             <h2 className="text-[30px] leading-[1.05] sm:text-4xl">{copy.favourites.heading}</h2>
             <p className="mb-6 mt-2 max-w-xl text-ink2">

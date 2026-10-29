@@ -67,9 +67,9 @@ end.
 Either add the file or delete the script entry.
 
 ### 1.4 The Android app cannot work away from home
-**Status: MOSTLY FIXED (2026-10-14, reconciled 2026-10-19). Downloads, offline
-playback and first-run setup all work; only the storage-management UI is
-missing.**
+**Status: MOSTLY FIXED (2026-10-14, reconciled 2026-10-19; offline entry and
+recovery reworked 2026-10-29). Downloads, offline playback and first-run setup
+all work; only the storage-management UI is missing.**
 
 Sprint 2 has landed. What now works, verified on a Pixel 4a:
 
@@ -107,6 +107,28 @@ Still broken:
 play offline. That is a human report from real listening, which is stronger
 evidence than a spike, but it has not been re-verified against the spec 26
 manual checklist (airplane mode, seek, screen off) on a second run.
+
+**Offline entry and recovery — reworked 2026-10-29 (spec 29).** Three failures
+made downloads look lost, and are now addressed:
+
+- A device whose saved fingerprint key had been invalidated (enrolling a new
+  fingerprint does this) could not unlock with either the fingerprint or the
+  password, and the screen had no exit. The unlock screen now always offers
+  **change server address** and **listen without progress**, and only a key that
+  can never work is cleared.
+- A replica that could not be read was rendered as an empty device ("nothing has
+  been downloaded"). It now says the library could not be read and the audio may
+  still be here, and **Try again** re-reads the device as well as the server.
+- Continuing offline with nothing downloaded used to be a wall. It now opens the
+  app with the Library tab only and an honest empty state, Settings still
+  reachable and the address changeable.
+- Audio left under `books/` with no database row (the WebView origin change did
+  this) is detected on the shelf and can be re-adopted from the server with one
+  tap. **This restores the audio and catalogue metadata; it does not restore the
+  old progress or favourites**, which were encrypted under the previous origin.
+
+Device verification of these four items is still outstanding; the checklist is
+in `specs/29-offline-resilience.md`.
 
 **Sprint 1 is complete** and it de-risked the two things that could have changed
 the architecture. On a Pixel 4a / Android 13:
@@ -200,6 +222,15 @@ to the default HTTPS origin makes data saved by an interim HTTP-origin build
 unavailable in that build; it does not delete it. Do not clear app data or
 uninstall while either origin may contain the only copy of downloaded-book
 metadata.
+
+**Recovery (spec 29, 2026-10-29) recovers files, not the old database.** The
+audio under `books/<bookId>/<trackId>.<ext>` survives an origin change, so the
+app can list those directories and re-adopt them from the server with **Find
+them** on the shelf. What it cannot recover is anything that lived only in the
+old origin's IndexedDB: progress positions, favourites, and library membership
+were encrypted under the previous origin's key. Recovery therefore restores
+"the book is on this phone and plays", not "where you were". Nothing is deleted
+by recovery; a folder the server does not recognise is reported and left alone.
 
 The HTTP-origin approach was previously verified on a **Motorola Defy,
 Android 11, WebView 155**, over Wi-Fi. The storage-preserving mixed-content
@@ -419,6 +450,7 @@ Audnexus reachable permanently rather than incidentally.
 | **Spec 13 — media tools** | Out of scope by decision. Media is a read-only mount; writing tags into user files is not wanted. |
 | **Downloaded-books list and "Remove from device"** | An unmet spec 26 acceptance criterion: Settings shows a byte total and a count, but no list and no way to free a book from the UI. Removed from the 15b polish pass by the user on 2026-10-19; recorded here so it is not lost. `useDeviceLibrary.remove()` and `Settings` already exist — it is a UI, not a feature. |
 | **Spec 28 - accounts, passkeys and biometrics** | Implementation through phases 1-8 is present on `deepseek-skill`; automated suites pass (507 server, 401 client, 51 Playwright), the live-database migration was rehearsed with `prisma migrate deploy`, and Caddy/Compose config validates. Caddy/CA deployment and Windows Hello, real Android biometric flows (including Motorola Defy) remain unverified. Android media still uses household-LAN HTTP. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and the live [`handoff.md`](handoff.md). |
+| **Spec 29 - offline resilience (device pass)** | Implemented 2026-10-29; client 521 tests, copy gate, server 507 tests and a debug APK all pass. What remains is on the phone, not in the code: cold-start offline with a working fingerprint, listen-without-progress, the invalidated-key path after a new enrolment, offline with nothing downloaded, and **Find them** on orphaned folders. The numbered checklist and its ticked state live in [`specs/29-offline-resilience.md`](specs/29-offline-resilience.md). |
 | **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. Now sequenced **after** spec 26, since restyling a shell that is about to be wrapped in an APK would mean restyling it twice. |
 | **Chapter/track title editor UI** | Spec 24 shipped the `PUT /tracks/:trackNumber/title` endpoint and the `FieldOverride` storage, but **no UI**. A hand-set narrator/track title is only reachable via API. |
 | **Bookmarks & highlights** | Needs a new data model. Deliberately out of spec 14. |

@@ -10,6 +10,7 @@ interface DeviceRecord { id: string; label: string | null }
 
 export function DeviceUnlockSettings({ offline = false }: { offline?: boolean }) {
   const [available, setAvailable] = useState(false);
+  const [checked, setChecked] = useState(false);
   const [vaultSaved, setVaultSaved] = useState(false);
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [message, setMessage] = useState("");
@@ -20,6 +21,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
     if (!biometricVault.supported() || !Number.isInteger(profileId) || profileId < 1) return;
     setAvailable(await biometricVault.available());
     setVaultSaved(await biometricVault.hasSavedValue());
+    setChecked(true);
     try {
       const response = await boundedFetch("/api/auth/devices");
       if (response.ok) setDevices(((await response.json()) as { devices: DeviceRecord[] }).devices);
@@ -61,7 +63,23 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
     finally { setBusy(false); }
   };
 
-  if (offline || !biometricVault.supported() || !available) return null;
+  if (offline || !biometricVault.supported() || !checked) return null;
+
+  /*
+   * The sensor is missing or nothing is enrolled. The old code returned null
+   * here, which left a silent gap where the control should be -- and no way to
+   * learn that enrolling a fingerprint in Android Settings is what turns this
+   * on. Spec 29 asks for the explanation instead of the gap.
+   */
+  if (!available) {
+    return (
+      <section className="mt-6 border-t-2 border-dashed border-ink/20 pt-5" aria-labelledby="device-unlock-heading">
+        <h2 id="device-unlock-heading" className="font-display text-xl font-semibold text-ink">{copy.security.deviceHeading}</h2>
+        <p className="mt-1 text-sm text-ink2">{copy.security.deviceUnavailable}</p>
+      </section>
+    );
+  }
+
   return (
     <section className="mt-6 border-t-2 border-dashed border-ink/20 pt-5" aria-labelledby="device-unlock-heading">
       <h2 id="device-unlock-heading" className="font-display text-xl font-semibold text-ink">{copy.security.deviceHeading}</h2>

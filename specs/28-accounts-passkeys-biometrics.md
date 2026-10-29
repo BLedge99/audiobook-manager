@@ -255,6 +255,14 @@ household key.
 - Cancelling the prompt, a biometric lockout, an unavailable sensor, a changed
   enrolment or a revoked device credential falls back to the password screen.
   The password field is always visible; biometrics never traps a person.
+  **Refined 2026-10-29 (spec 29):** the failure is classified rather than
+  treated uniformly. A cancellation is silent and never retried (the old retry
+  table re-opened the prompt after "Use password"); a lockout says to wait and
+  keeps the key; a **changed enrolment invalidates the Keystore key** and is the
+  one failure that clears the saved value, after which the device can be set up
+  again; a value belonging to another profile is valid and is never cleared. See
+  [`specs/29-offline-resilience.md`](29-offline-resilience.md) and
+  `client/src/lib/biometricFailure.ts`.
 - `GET /api/auth/devices` lists the caller's device credentials; `DELETE
   /api/auth/devices/:id` revokes one. A reset revokes all of them.
 - The device credential is device-level. On a shared phone it proves the phone's
@@ -282,10 +290,12 @@ household key.
 - Offline sign-in asks for the profile password, derives the KEK, unwraps the
   DEK and authenticates the cache. A wrong password fails AES-GCM and shows the
   same "that password doesn't match" sentence; it does not delete data.
-- If the profile has no local envelope (new device, cleared storage), offline
-  sign-in says there is nothing cached on this device and offers the password
-  form only when the server is reachable. It does not create a fake empty
-  profile.
+- If the profile has no local envelope and no Vault key (new device, cleared
+  storage), nothing is asked for: offline opens the shelf with progress and
+  favourites unavailable and says so. **Updated 2026-10-29 (spec 29):** an
+  envelope is only one of the two proofs. A device signed in with a fingerprint
+  stores the DEK in the Vault and writes no envelope, so that device has a
+  cache. It does not create a fake empty profile in either case.
 - Changing the password re-wraps the DEK with the new KEK; the data is not
   re-encrypted. Admin reset cannot re-wrap a cache on a device that is offline;
   when that device next contacts the server it is signed out, and the client

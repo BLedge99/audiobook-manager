@@ -42,6 +42,21 @@ make reset
 
 The client will be available at `http://localhost:5173` and the API server at `http://localhost:3000`.
 
+## Android app
+
+The phone app is a Capacitor shell around the same client. Build and install a
+debug APK on every ADB-ready device with:
+
+```powershell
+.\scripts\install-android.ps1
+```
+
+Keep the USB tunnel up (`adb reverse tcp:3000 tcp:3000`) if the phone is using
+`http://localhost:3000`, or point it at the home server's LAN address in
+Settings. The app works offline for downloaded books; the offline behaviour,
+the fingerprint lifecycle and recovery of audio left behind by an origin change
+are documented in [`specs/29-offline-resilience.md`](specs/29-offline-resilience.md).
+
 ## Production web access
 
 The production Compose deployment puts the browser app behind Caddy at

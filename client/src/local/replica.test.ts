@@ -48,6 +48,7 @@ function fakeFiles(onRemove?: (path: string) => void | Promise<void>) {
       await onRemove?.(path);
     }),
     stat: vi.fn(async () => 0),
+    listDir: vi.fn(async () => [] as string[]),
     playableUrl: vi.fn(async (path: string) => `capacitor-file://${path}`),
   };
   return { files, removed, failOn };

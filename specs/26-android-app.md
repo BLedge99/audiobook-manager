@@ -258,6 +258,11 @@ consideration, not a spike dependency.
   `localhost:3000` and is also what solves DHCP-assigned IP changes.
 - Discover states it needs a connection, as it already does.
 
+Offline entry, the read-failure path and recovery of orphaned audio are
+specified in [`specs/29-offline-resilience.md`](29-offline-resilience.md):
+being unreachable never dead-ends, and the app never reports an unreadable
+library as an empty one.
+
 ## Acceptance criteria
 
 - [ ] An installable APK sideloads onto an Android device.

@@ -241,6 +241,8 @@ const ICU_PENDING = [
   "copy.operator.settings.coversCached",
   "copy.operator.serverReplied",
   "copy.operator.serverSetup.unreachable",
+  "copy.offline.unclaimed",
+  "copy.offline.unclaimedRestored",
 ].sort();
 
 describe("the copy table", () => {

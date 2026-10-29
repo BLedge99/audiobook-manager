@@ -82,4 +82,14 @@ describe("DeviceUnlockSettings", () => {
     const { container } = render(<DeviceUnlockSettings offline />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it("explains that a fingerprint must be enrolled when none is available", async () => {
+    // The old code returned null here, leaving a silent gap where device
+    // sign-in should be -- and no way to learn what would turn it on (spec 29).
+    mocks.available.mockResolvedValue(false);
+    render(<DeviceUnlockSettings />);
+
+    expect(await screen.findByText(copy.security.deviceUnavailable)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: copy.security.deviceEnable })).not.toBeInTheDocument();
+  });
 });

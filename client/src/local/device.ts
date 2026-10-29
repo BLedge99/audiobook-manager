@@ -305,6 +305,20 @@ export const deviceFiles: FileSystemPort = {
     return size;
   },
 
+  /**
+   * Names directly under `path`.
+   *
+   * Spec 29 recovery reads `books/` to find audio whose database row is gone.
+   * Errors are thrown rather than swallowed: the caller distinguishes "no such
+   * folder" (nothing downloaded, or nothing recoverable) from "could not read
+   * it" (say so, change nothing). Detection catches its own failures.
+   */
+  async listDir(path) {
+    const Filesystem = await fs();
+    const result = await Filesystem.readdir({ path, directory: DEVICE_DIRECTORY });
+    return result.files.map((entry) => entry.name);
+  },
+
   async playableUrl(path) {
     const Filesystem = await fs();
     // `getUri` turns an app-private file into an absolute `file://` URL, and

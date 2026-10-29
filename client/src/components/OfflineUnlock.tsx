@@ -9,21 +9,49 @@ import {
   fromBase64,
 } from "../local/privateCache";
 import { biometricVault } from "../lib/biometricVault";
+import {
+  biometricFailureMessage,
+  classifyBiometricFailure,
+  shouldRetryBiometricUnlock,
+} from "../lib/biometricFailure";
 import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
 
 /**
- * Offline sign-in for the downloaded library (spec 28, phase 4).
+ * Offline sign-in for the downloaded library (spec 28, phase 4; spec 29).
  *
  * The server cannot check a password when it is unreachable, so the check is
  * local: the password derives the KEK and unwraps the DEK. A wrong password is
  * an AES-GCM authentication failure and changes nothing. This is deliberately
  * distinct from the online account picker -- there is no account list to fetch
  * and no session to create.
+ *
+ * ## Why this screen always has two exits
+ *
+ * It used to have none, which turned every unopenable cache into a permanent
+ * dead end: no password can succeed without an envelope, and a saved
+ * fingerprint value can become permanently undecryptable when Android
+ * invalidates its Keystore key (enrolling a new fingerprint does exactly that).
+ * A listener in that state could only force-quit the app.
+ *
+ * So the screen offers, below the form and in this order:
+ *
+ * - **Use a different server address** -- the usual fix when the app is offline
+ *   because the phone is pointed at a stale address (an `adb reverse` tunnel,
+ *   a changed LAN IP).
+ * - **Listen without progress** -- the books are on the device and the shelf
+ *   does not need the key. Only progress and favourites do. This is the
+ *   listener's call, so it is a button, not an error state.
  */
 export function OfflineUnlock({
   onUnlocked,
+  onChangeServer,
+  onListenWithoutProgress,
 }: {
   onUnlocked: () => void;
+  /** Leave for the server-address screen. */
+  onChangeServer: () => void;
+  /** Enter the shelf with progress and favourites hidden. */
+  onListenWithoutProgress: () => void;
 }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -35,12 +63,44 @@ export function OfflineUnlock({
     setBusy(true); setError(undefined);
     try {
       const profileId = Number(window.localStorage.getItem("profileId"));
-      const saved = await biometricVault.unlock<{ profileId: number; key: string }>();
-      if (saved.profileId !== profileId) throw new Error("Wrong profile");
+      /*
+       * Same rule as the sign-in screen: a first prompt can fail transiently
+       * while the sensor or Keystore warms up, and that is the only kind of
+       * failure worth asking a second time. A cancellation is not retried --
+       * re-opening the prompt is exactly how biometrics traps a person.
+       */
+      let saved: { profileId: number; key: string };
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          saved = await biometricVault.unlock<{ profileId: number; key: string }>();
+          break;
+        } catch (promptError) {
+          if (attempt === 0 && shouldRetryBiometricUnlock(promptError)) continue;
+          throw promptError;
+        }
+      }
+      if (saved.profileId !== profileId) {
+        // The value is valid, just for someone else on this phone. Never clear
+        // it: that would destroy the other profile's device sign-in.
+        setError(copy.login.deviceOtherProfile);
+        return;
+      }
       await unlockProfileCacheWithKey(profileId, fromBase64(saved.key));
       onUnlocked();
-    } catch { setError(copy.login.deviceFailed); }
-    finally { setBusy(false); }
+    } catch (failure) {
+      const kind = classifyBiometricFailure(failure);
+      if (kind === "key-invalid") {
+        // The Keystore key is gone for good. Drop the ciphertext so the device
+        // can be set up again, and fall back to the password.
+        await biometricVault.clear().catch(() => undefined);
+        setHasBiometric(false);
+      }
+      setError(biometricFailureMessage(kind, {
+        failed: copy.login.deviceFailed,
+        locked: copy.login.deviceLocked,
+        needsSetup: copy.login.deviceNeedsSetup,
+      }));
+    } finally { setBusy(false); }
   };
 
   const submit = async (event: FormEvent) => {
@@ -60,7 +120,9 @@ export function OfflineUnlock({
       if (unlockError instanceof WrongPasswordError) {
         setError(copy.login.wrongPassword);
       } else if (unlockError instanceof CacheKeyMissingError) {
-        setError(copy.offline.noCache);
+        // No envelope on this device. The fingerprint path may still work, so
+        // this is not the end of the screen -- the exits below are.
+        setError(copy.offline.unlockIntroNoKey);
       } else {
         setError(copy.offline.unlockFailed);
       }
@@ -122,6 +184,19 @@ export function OfflineUnlock({
               {error}
             </p>
           )}
+
+          {/* The two exits. Quiet, but always present: an offline screen with no
+              action is how listeners got stuck. Deliberately *not* disabled
+              while a prompt is open -- a sensor that never answers must not be
+              able to hold the screen shut. */}
+          <div className="mt-4 grid gap-2 border-t-2 border-dashed border-ink/15 pt-4">
+            <Btn type="button" variant="quiet" className="w-full" onClick={onChangeServer}>
+              {copy.operator.serverSetup.changeAddress}
+            </Btn>
+            <Btn type="button" variant="quiet" className="w-full" onClick={onListenWithoutProgress}>
+              {copy.offline.listenWithoutProgress}
+            </Btn>
+          </div>
         </div>
       </div>
     </FullScreen>

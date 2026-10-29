@@ -79,7 +79,10 @@ describe("AccountGate biometric sign-in", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
     fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(copy.login.deviceFailed);
+    await waitFor(() => expect(mocks.unlock).toHaveBeenCalledOnce());
+    // A cancellation is a choice, not a failure: no error is shouted back, and
+    // the password form simply stays where it was (spec 29).
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(mocks.setToken).not.toHaveBeenCalled();
     expect(onSuccess).not.toHaveBeenCalled();
     // Biometrics never traps a person: the password field is still there.
@@ -93,12 +96,28 @@ describe("AccountGate biometric sign-in", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
     fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(copy.login.deviceFailed);
+    await waitFor(() => expect(mocks.unlock).toHaveBeenCalledOnce());
+    // The old table retried codes 5/10/13, so pressing "Use password" re-opened
+    // the prompt. Cancelling must never do that.
     expect(mocks.unlock).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(mocks.clear).not.toHaveBeenCalled();
   });
 
-  it("clears a revoked device secret and its stale offline private data", async () => {
-    mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"
+  it("says a fingerprint must be enrolled when the sensor is unavailable", async () => {
+    // A profile with device sign-in set up, but Android has no biometric
+    // enrolled: the explanation replaces the silently missing button (spec 29).
+    mocks.available.mockResolvedValue(false);
+    render(<AccountGate onSuccess={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+
+    expect(await screen.findByText(copy.security.deviceUnavailable)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: copy.security.deviceSignIn }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("clears a revoked device secret and its stale offline private data", async () => {    mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"
       ? response(200, [{ id: 7, name: "Ben", role: "member", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: true }])
       : response(401, { code: "device_auth_failed" }));
     render(<AccountGate onSuccess={() => {}} />);

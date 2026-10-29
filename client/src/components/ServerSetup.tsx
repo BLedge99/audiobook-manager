@@ -116,7 +116,6 @@ export function ServerSetup({
             <Btn
               type="button"
               variant="quiet"
-              disabled={status === "checking"}
               onClick={onContinueOffline}
               className="mt-2 w-full"
             >

@@ -118,7 +118,7 @@ describe("ServerSetup", () => {
     expect(onContinueOffline).toHaveBeenCalledOnce();
   });
 
-  it("disables the continue offline button while checking connection", async () => {
+  it("keeps continue offline usable while a connection check is running", async () => {
     let resolveHealth!: (res: Response) => void;
     vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { resolveHealth = resolve; })));
 
@@ -128,8 +128,12 @@ describe("ServerSetup", () => {
     fireEvent.change(screen.getByPlaceholderText(/192\.168/), { target: { value: "192.168.1.203:3000" } });
     fireEvent.click(screen.getByRole("button", { name: /connect/i }));
 
+    // Spec 29: a health check that hangs must not be the reason someone cannot
+    // reach downloads that are already on the phone.
     const continueBtn = screen.getByRole("button", { name: /continue offline/i });
-    expect(continueBtn).toBeDisabled();
+    expect(continueBtn).toBeEnabled();
+    fireEvent.click(continueBtn);
+    expect(onContinueOffline).toHaveBeenCalled();
 
     resolveHealth(new Response("{}", { status: 200 }));
   });

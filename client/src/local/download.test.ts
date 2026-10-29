@@ -39,6 +39,7 @@ function fakeFiles(options: { bytes?: number; failOn?: Set<string>; reportBytes?
       written.delete(path);
     }),
     stat: vi.fn(async (path: string) => written.get(path) ?? 0),
+    listDir: vi.fn(async () => [] as string[]),
     playableUrl: vi.fn(async (path: string) => `capacitor-file://${path}`),
   };
   return { files, written };

@@ -50,7 +50,7 @@ public class BiometricVaultPlugin extends Plugin {
       Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(Cipher.ENCRYPT_MODE, key);
       prompt(call, cipher, true, payload);
-    } catch (Exception error) { call.reject("Biometric vault unavailable", error); }
+    } catch (Exception error) { call.reject("VAULT_UNAVAILABLE: Biometric vault unavailable", error); }
   }
 
   @PluginMethod public void unlock(PluginCall call) {
@@ -63,7 +63,14 @@ public class BiometricVaultPlugin extends Plugin {
       Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
       cipher.init(Cipher.DECRYPT_MODE, getKey(), new GCMParameterSpec(128, iv));
       prompt(call, cipher, false, null);
-    } catch (Exception error) { call.reject("Biometric vault unavailable", error); }
+    } catch (Exception error) {
+      // Stable code: the Keystore key is gone or was invalidated (enrolling a
+      // new fingerprint does that), so this saved value can never be opened
+      // again. The client clears it and falls back to the password. Without
+      // this code the failure looked identical to a transient one, which is
+      // how a phone ended up with a permanently unusable device sign-in.
+      call.reject("VAULT_KEY_INVALID: Biometric vault unavailable", error);
+    }
   }
 
   @PluginMethod public void clear(PluginCall call) {
@@ -99,7 +106,7 @@ public class BiometricVaultPlugin extends Plugin {
   }
 
   private void prompt(PluginCall call, Cipher cipher, boolean encrypt, String payload) {
-    if (!(getActivity() instanceof FragmentActivity)) { call.reject("Biometric prompt unavailable"); return; }
+    if (!(getActivity() instanceof FragmentActivity)) { call.reject("VAULT_UNAVAILABLE: Biometric prompt unavailable"); return; }
     FragmentActivity activity = (FragmentActivity) getActivity();
     BiometricPrompt prompt = new BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), new BiometricPrompt.AuthenticationCallback() {
       @Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
@@ -121,10 +128,14 @@ public class BiometricVaultPlugin extends Plugin {
             response.put("payload", value);
             call.resolve(response);
           }
-        } catch (Exception error) { call.reject("Biometric check failed", error); }
+        } catch (Exception error) {
+          call.reject(encrypt ? "VAULT_UNAVAILABLE: Biometric check failed" : "VAULT_KEY_INVALID: Biometric check failed", error);
+        }
       }
       @Override public void onAuthenticationError(int code, CharSequence message) {
-        call.reject("Biometric prompt error code " + code + ": " + message);
+        // Keep the numeric code in the message: an older client classifies on
+        // it, and the stable prefix is what the current one reads first.
+        call.reject(biometricErrorCode(code) + ": Biometric prompt error code " + code + ": " + message);
       }
       @Override public void onAuthenticationFailed() { /* Allow the OS to retry. */ }
     });
@@ -139,5 +150,35 @@ public class BiometricVaultPlugin extends Plugin {
   private String promptValue(PluginCall call, String key, String fallback) {
     String value = call.getString(key);
     return value == null || value.isEmpty() ? fallback : value;
+  }
+
+  /**
+   * Stable code for an androidx.biometric error, so the client can tell a
+   * cancellation from a lockout from a broken key without parsing prose.
+   *
+   * These groupings match `client/src/lib/biometricFailure.ts`. A cancellation
+   * must never be retried: that is what made pressing "Use password" open the
+   * prompt again.
+   */
+  private static String biometricErrorCode(int code) {
+    switch (code) {
+      case 5:  // ERROR_CANCELED
+      case 10: // ERROR_NEGATIVE_BUTTON
+      case 13: // ERROR_USER_CANCELED
+        return "BIOMETRIC_CANCELLED";
+      case 7:  // ERROR_LOCKOUT
+      case 9:  // ERROR_LOCKOUT_PERMANENT
+        return "BIOMETRIC_LOCKOUT";
+      case 1:  // ERROR_HW_UNAVAILABLE
+      case 11: // ERROR_NO_BIOMETRICS
+      case 12: // ERROR_HW_NOT_PRESENT
+        return "BIOMETRIC_UNAVAILABLE";
+      case 2:  // ERROR_UNABLE_TO_PROCESS
+      case 3:  // ERROR_TIMEOUT
+      case 8:  // ERROR_VENDOR
+        return "BIOMETRIC_TRANSIENT";
+      default:
+        return "BIOMETRIC_ERROR";
+    }
   }
 }

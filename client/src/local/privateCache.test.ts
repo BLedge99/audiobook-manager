@@ -8,6 +8,7 @@ import {
   getPrivateValue,
   hasProfileCache,
   lockOfflineCache,
+  offlineCacheState,
   putPrivateValue,
   readFavourites,
   rememberProfileKey,
@@ -31,6 +32,16 @@ afterEach(async () => {
 });
 
 describe("the offline cache envelope", () => {
+  it("counts a fingerprint Vault key as a cache as well as a password envelope", () => {
+    // Spec 29 / ADR 018. A device signed in with a fingerprint stores the DEK
+    // in the native Vault and never writes an envelope, so checking only the
+    // envelope told that listener their downloads had no protected data.
+    expect(offlineCacheState(true, false)).toBe("present");
+    expect(offlineCacheState(false, true)).toBe("present");
+    expect(offlineCacheState(true, true)).toBe("present");
+    expect(offlineCacheState(false, false)).toBe("absent");
+  });
+
   it("restores the same profile key released by the Android Vault", async () => {
     await rememberProfileKey(7, "correct-horse-9", db);
     await putPrivateValue("progress", "42", { position: 1234 }, db);

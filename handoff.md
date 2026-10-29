@@ -8,7 +8,148 @@
 > [`LIMITATIONS.md`](LIMITATIONS.md)** — broken features, caps with reasons,
 > security debt, and a suggested order of work. Read it first.
 
-## ⚠️ Current task — the player, rebuilt around the listening position (2026-10-27)
+## Current task — offline resilience: no dead ends, no false claims (2026-10-29)
+
+Uncommitted work on `master`, based on `47b38df`. **The owner stages and
+commits.** Spec: [`specs/29-offline-resilience.md`](specs/29-offline-resilience.md);
+ADR: [`decisions/018-offline-cache-is-provable-two-ways.md`](decisions/018-offline-cache-is-provable-two-ways.md).
+The approved task plan (decisions, 23 tasks, 9-commit sequence, device
+checklist) is at `C:\Users\benle\.opencode\plan\offline-resilience-plan.md`.
+
+### Why this build exists
+
+`47b38df` is a revert of `d5db2df` and `72b7ddb`, which felt like they broke more
+than they fixed. The audit found both diagnosed real gaps; the regression was
+that `d5db2df` routed an unprovable cache into `OfflineUnlock`, which had **no
+exit**, while `hasSavedValue()` stays true for a Keystore key invalidated by a
+new fingerprint enrolment. Both unlock paths could fail with nothing clickable.
+`72b7ddb`'s honest library-read diagnostics are kept; its rewrite of
+`copy.offline.withoutBooks` is not.
+
+Decisions locked with the owner (all ten are in the plan file):
+
+1. Offline, unprovable cache → unlock screen **with** change-address and
+   listen-without-progress.
+2. Unusable saved key → clear, explain once, password path.
+3. Orphaned audio → detect and one-tap recover **where the loss is felt** (the
+   shelf); no Settings storage screen.
+4. Library read failure → say the audio may still be here; retry re-reads both.
+5. Continue offline is always offered in the native shell; landing offline with
+   nothing downloaded enters Library with an empty state, not a wall.
+6. Offline + empty → Library tab only (Discover / All books / Favourites hidden);
+   Settings stays reachable.
+7. Recovery offline → detect, promise restore later, keep files untouched.
+8. Biometrics unavailable → explain in **both** Settings and sign-in.
+9. Listen without progress → allowed, persistent "progress not saved" line, no
+   repeat prompting.
+10. Verify on the phone with a numbered checklist.
+
+### Implemented (all uncommitted)
+
+**Decision layer**
+
+- `client/src/lib/offlineGate.ts` + `offlineGate.test.ts` — `offlineScreen()`
+  returns `waiting | libraryReadFailed | unlock | shell{progressAvailable}`.
+- `client/src/lib/biometricFailure.ts` + test — classifier, retry rule, clear
+  rule, message mapping.
+- `client/src/local/privateCache.ts` — `offlineCacheState(hasEnvelope, vaultSaved)`;
+  a cache is present when either proof exists.
+
+**Components**
+
+- `OfflineUnlock.tsx` — rewritten. Required `onChangeServer` /
+  `onListenWithoutProgress`; fingerprint path classifies failures; only
+  `key-invalid` clears the Vault; a wrong-profile value is never cleared.
+- `AccountGate.tsx` — uses the classifier, replaces the inverted retry table
+  (it retried codes 1/2/5/8, so "Use password" could re-open the prompt), shows
+  the enrol-a-fingerprint hint when unavailable.
+- `DeviceUnlockSettings.tsx` — shows the same hint instead of returning null.
+- `OfflineNotice.tsx` — `libraryReadFailed` takes precedence over every other
+  explanation.
+- `ServerSetup.tsx` — Continue offline is no longer disabled while checking.
+
+**`App.tsx`**
+
+- `offline = serverReachable === false` (no longer gated on holding books).
+- Renders the branch from `offlineScreen()`; `skippedUnlock` resets on
+  reconnect/profile change; `retryOffline` probes **and** re-reads;
+  `openServerSetup` is shared by every exit.
+- Offline+empty: Library only, "No books downloaded" with Try again / Change
+  address; progress-not-saved line; ProfileSwitcher hidden.
+- Browser offline with no device library still gets `OfflineNotice`.
+
+**Native / recovery**
+
+- `BiometricVaultPlugin.java` — stable codes (`VAULT_KEY_INVALID`,
+  `VAULT_UNAVAILABLE`, `BIOMETRIC_CANCELLED/LOCKOUT/UNAVAILABLE/TRANSIENT`) with
+  the numeric code and message retained for older clients.
+- `device.ts` / `replica.ts` — `listDir` on `FileSystemPort`.
+- `local/recover.ts` + `recover.test.ts` — `findUnclaimedBookIds`,
+  `matchTrackFiles`, `recoverBooks`; server-confirmed, idempotent, never deletes.
+- `useDeviceLibrary.ts` — `libraryReadError`, honest initial `loading`,
+  `unclaimed`, `recover()`.
+- `App.tsx` shelf shows "Audio for N books is already on this phone" with
+  **Find them** online, or the promise-to-restore line offline.
+
+**Copy** — new listener-tier strings in `copy.ts`; `copy.test.ts` ICU list
+updated; `check:copy` passes at 441 strings / 0 errors.
+
+### Verification so far (2026-10-29, end of session)
+
+- `npx tsc -b` (client) - clean.
+- `npx vitest run` (client) - **42 files, 521 tests, all passing** (was 477 at
+  `47b38df`).
+- `npm run check:copy` - 441 strings, 0 errors, 0 unresolved.
+- `npm test` (server, `server/` after `npm ci`) - **28 files, 507 passed, 1
+  skipped.** `make` is not on PATH in this shell; this is the same suite
+  `make test-server` runs.
+- **APK built:** `client/android/app/build/outputs/apk/debug/app-debug.apk`
+  (4.6 MB, 2026-10-29 08:57). `npm run build:android` + `npx cap sync android` +
+  `gradlew assembleDebug` all succeeded, so the Java plugin changes compile.
+  `ANDROID_HOME` must be set (`%LOCALAPPDATA%\Android\Sdk`); without it Gradle
+  fails with "SDK location not found", which is a local-environment error, not a
+  code error.
+- Device pass: **not run.** `adb devices` is empty here, so the APK is built but
+  not installed. `scripts/install-android.ps1` does build, install and `adb
+  reverse` in one step.
+- `scripts/e2e-wsl.sh` (Playwright): **not run.** Docker is not on PATH here and
+  WSL is stopped. No `e2e/` spec references the offline UI, so this is the
+  phone-layout/regression gate rather than a check of this change.
+
+### Remaining work, in order
+
+1. **Install and work the device checklist** (below; the only gate still
+   open). `.\scripts\install-android.ps1` (currently untracked; commit it with
+   the Android change). Keep the `adb reverse` tunnel up; use airplane mode for
+   the offline checks.
+2. **`scripts/e2e-wsl.sh`** (phone-layout/regression) when Docker is available.
+3. **Owner device checklist** (in spec 29, and the plan file):
+   cold start offline with a working fingerprint; listen without progress (line
+   visible, no error toast); enrol a new fingerprint then cold start (key
+   cleared, password works); offline with zero books (Library only, Settings and
+   address reachable); change address from unlock and empty state; reconnect
+   clears the banners; **Find them** restores orphaned folders; Settings shows
+   the enrol-a-fingerprint hint.
+4. **Record the device results** in this section and tick spec 29's boxes.
+5. **Commit sequence** (owner stages; each green) — plan file T23:
+   docs → offline table → cache+exits → library read failure → empty shell →
+   biometric lifecycle → recovery → android script → device results.
+
+### Traps for the next agent
+
+- **Do not `git pull`.** Local `master` is 3 behind `origin/master`, and those
+  commits are the two rejected ones plus a duplicate `60e4da9`. Pulling restores
+  the dead end. Ask the owner before pushing.
+- `hasSavedValue()` is a `contains()` check: true even for an undecryptable
+  value. That is why the unlock screen is offered and the failure is classified
+  there, not why the cache is assumed unlocked.
+- `putPrivateValue` no-ops without a key. Listening without progress must stay
+  silent apart from the one line.
+- Recovery adopts files only. Do not claim progress or favourites come back.
+- The unlocked DEK lives in memory; `activeCacheProfileId()` is the only truth
+  for "unlocked".
+
+## Previous task — the player, rebuilt around the listening position (2026-10-27)
 
 Uncommitted work on `master`. **The owner stages and commits.**
 

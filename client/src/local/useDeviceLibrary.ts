@@ -14,8 +14,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Audiobook } from "../types";
+import { apiUrl, boundedFetch, profileHeaders } from "../lib/api";
+import { copy } from "../copy";
 import { deviceFiles, localDb } from "./device";
 import { downloadBook as runDownload, trackStreamUrl, type DownloadProgress } from "./download";
+import { listUnclaimedOnDevice, recoverBooks, type RecoveryResult } from "./recover";
 import {
   bookBytes,
   downloadedTracks,
@@ -33,6 +36,26 @@ export interface DeviceLibrary {
   /** Raw replica rows, for download state and byte counts. */
   rows: Record<number, ReplicaBook>;
   loading: boolean;
+  /**
+   * Why the replica could not be read, or null when it was read fine.
+   *
+   * This is deliberately a message rather than a swallowed catch. A replica
+   * that will not open used to look exactly like a device with nothing on it,
+   * and the app then told the listener "nothing has been downloaded" while the
+   * audio sat on disk. `OfflineNotice` needs to be able to say "may still be
+   * here" instead.
+   */
+  libraryReadError: string | null;
+  /**
+   * Book ids whose audio is on the phone but has no replica row (spec 29).
+   *
+   * Detection only: nothing is adopted until `recover` runs, and that needs the
+   * server to confirm the catalogue entry. Empty when the filesystem cannot be
+   * listed, so detection never becomes a visible failure.
+   */
+  unclaimed: number[];
+  /** Rebuild replica rows for `unclaimed` from the server, then refresh. */
+  recover: () => Promise<RecoveryResult>;
   usedBytes: number;
   /** Reload from IndexedDB. */
   refresh: () => Promise<void>;
@@ -51,14 +74,22 @@ export interface DeviceLibrary {
 
 export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
   const [rows, setRows] = useState<Record<number, ReplicaBook>>({});
-  const [loading, setLoading] = useState(false);
+  // Start "loading" whenever the library is enabled: the first paint must not
+  // claim the device is empty before IndexedDB has been asked.
+  const [loading, setLoading] = useState(enabled);
+  const [libraryReadError, setLibraryReadError] = useState<string | null>(null);
+  const [unclaimed, setUnclaimed] = useState<number[]>([]);
 
   const refresh = useCallback(async () => {
     if (!enabled) {
       setRows({});
+      setLoading(false);
+      setLibraryReadError(null);
+      setUnclaimed([]);
       return;
     }
     setLoading(true);
+    setLibraryReadError(null);
     try {
       const list = await listReplicaAudiobooks(localDb);
       // Re-read the rows rather than rebuilding them from the projection, so
@@ -76,10 +107,18 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
           : row;
       }
       setRows(next);
-    } catch {
-      // A replica that will not open must not break the app; the server view
-      // is still usable and the device library is simply empty.
+      // Files that outlived their row: audio from before an origin change, or
+      // from a database that was cleared. Read after the rows so `known` is
+      // exactly what the app can currently see.
+      setUnclaimed(await listUnclaimedOnDevice(deviceFiles, Object.keys(next).map(Number)));
+    } catch (error) {
+      // A replica that will not open must not break the app -- but it must not
+      // be reported as an empty library either. Keep the server view usable and
+      // remember why the device view is missing, so the offline screen can say
+      // so instead of pretending there is nothing here.
+      console.error("Could not read the on-device audiobook library.", error);
       setRows({});
+      setLibraryReadError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
@@ -130,6 +169,34 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
     [refresh],
   );
 
+  /**
+   * Adopt the audio that is already here (spec 29).
+   *
+   * The server is the authority on what the files are: a folder is only a book
+   * if `GET /api/audiobooks/:id` confirms it. Offline this throws before
+   * touching anything, which is what the caller promises to the listener.
+   */
+  const recover = useCallback(async (): Promise<RecoveryResult> => {
+    const result = await recoverBooks(unclaimed, {
+      db: localDb,
+      files: deviceFiles,
+      fetchBook: async (bookId) => {
+        const response = await boundedFetch(apiUrl(`/api/audiobooks/${bookId}`), {
+          credentials: "include",
+          headers: profileHeaders(),
+        });
+        // 404 is the one answer that means "this folder is not a book any
+        // more". Every other failure is "could not ask", which must not be
+        // mistaken for a deleted book -- nothing is removed either way.
+        if (response.status === 404) return "missing";
+        if (!response.ok) throw new Error(copy.offline.recoverFailed);
+        return (await response.json()) as Audiobook;
+      },
+    });
+    await refresh();
+    return result;
+  }, [unclaimed, refresh]);
+
   const localUrlForTrack = useCallback(
     async (bookId: number, trackId: number) => {
       const row = rows[bookId];
@@ -152,6 +219,9 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
     books: Object.values(rows).map((row) => row.book),
     rows,
     loading,
+    libraryReadError,
+    unclaimed,
+    recover,
     usedBytes: Object.values(rows).reduce((total, row) => total + bookBytes(row), 0),
     refresh,
     isDownloaded,

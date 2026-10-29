@@ -482,6 +482,14 @@ export const copy = {
     passkeyGone: "That passkey isn't saved any more. Use your password.",
     deviceGone: "That device isn't signed in any more. Use your password.",
     deviceFailed: "Fingerprint or face unlock didn't work. Use your password.",
+    /** The saved value can never be opened again (a new fingerprint invalidates it). */
+    deviceNeedsSetup:
+      "Device sign-in no longer works on this phone. Sign in with your password, then set it up again in Settings.",
+    /** The saved value belongs to another profile on this phone. */
+    deviceOtherProfile:
+      "This phone's device sign-in belongs to a different profile. Sign in with your password.",
+    deviceLocked:
+      "Too many tries with fingerprint or face. Wait a moment, or sign in with your password.",
   },
 
   /**
@@ -544,6 +552,12 @@ export const copy = {
     deviceRemoved: "Fingerprint or face unlock is turned off on this device.",
     deviceNeedsPassword: "Sign in with your profile password before enabling this.",
     deviceSignIn: "Unlock with fingerprint or face",
+    /**
+     * Shown where the control would be, instead of hiding it. A missing button
+     * teaches nobody why it is missing; "enrol a fingerprint" is the one thing
+     * the listener can actually do about it.
+     */
+    deviceUnavailable: "Enrol a fingerprint in Android Settings to use device sign-in here.",
     thisDevice: "This device",
     vaultPromptTitle: "Open your profile",
     vaultPromptSubtitle: "Use your fingerprint or face to continue.",
@@ -596,6 +610,40 @@ export const copy = {
       "These books are on this phone. Reconnect to the server to choose a profile for offline listening.",
     withoutBooks:
       "Nothing has been downloaded to this phone yet. Connect to the home WiFi, open the app and download a book — then it will play with no network at all.",
+    /**
+     * Spec 29. The replica threw, so the app does not know what is on the
+     * device. Saying "nothing has been downloaded" here was a lie, and it is
+     * the lie that made a phone full of audio look empty.
+     */
+    libraryReadFailed:
+      "The app couldn't read its on-device library, so what is downloaded is unknown. The audio may still be here. Reconnect and try again.",
+    /** The offline shelf when the device really does hold nothing. */
+    emptyHeading: "No books downloaded",
+    emptyIntro:
+      "Books you download while the server is reachable play here with no network at all.",
+    /**
+     * Shown in the shell when the listener chose to listen without unlocking.
+     * Deliberately not a prompt: asking again on every track would be nagging.
+     */
+    progressNotSaved:
+      "Progress isn't being saved while this phone stays locked. Unlock it to keep your place.",
+    /** The escape from the unlock screen for a listener who just wants to listen. */
+    listenWithoutProgress: "Listen without progress",
+    /**
+     * Spec 29 recovery. Audio can outlive the database row that described it
+     * (the WebView origin change did exactly that), so the app offers to adopt
+     * it rather than pretending it was never downloaded.
+     */
+    unclaimed: (books: number) =>
+      `Audio for ${plural(books, "book")} is already on this phone, but the app has lost track of which books they are.`,
+    unclaimedOffline:
+      "Reconnect to the server and they can be restored. The files will not be touched until then.",
+    unclaimedAction: "Find them",
+    unclaimedFinding: "Looking…",
+    unclaimedRestored: (books: number) =>
+      `Restored ${plural(books, "book")} from the audio already on this phone.`,
+    unclaimedNothing: "Nothing could be restored. The audio is still on the phone.",
+    recoverFailed: "Could not look for the books on this phone. Check the connection and try again.",
     tryAgain: "Try again",
     checking: "Checking…",
     connecting: "Connecting…",
@@ -606,6 +654,8 @@ export const copy = {
     noCache:
       "This device has downloads but no protected profile data yet. Connect to the home WiFi and sign in once to set it up.",
     unlockFailed: "Could not open your saved profile data. Try again.",
+    unlockIntroNoKey:
+      "This phone holds no saved key for your profile. Sign in with your password, or use a different server address.",
   },
 
   /**

@@ -279,6 +279,24 @@ export async function hasProfileCache(
   return (await db.keyEnvelopes.get(profileId)) !== undefined;
 }
 
+/**
+ * Whether this device can prove it holds a usable cache for a profile.
+ *
+ * There are **two** ways a device proves it: the password-wrapped envelope in
+ * `keyEnvelopes`, or the native biometric Vault, which holds the DEK itself
+ * (there is no password to derive a KEK from on that path, so no envelope is
+ * ever written for it).
+ *
+ * Checking only the envelope was a real dead end: a listener who signed in with
+ * a fingerprint got "this device has downloads but no protected profile data
+ * yet" even though the books and the key were both on the phone. The flip side
+ * matters as much -- neither proof means "unlocked", because a DEK still has to
+ * be brought into memory before private rows can be read.
+ */
+export function offlineCacheState(hasEnvelope: boolean, vaultSaved: boolean): "present" | "absent" {
+  return hasEnvelope || vaultSaved ? "present" : "absent";
+}
+
 /** Profiles that have an encrypted cache envelope on this device. */
 export async function listCachedProfileIds(
   db: LocalLibraryDatabase = localDb,

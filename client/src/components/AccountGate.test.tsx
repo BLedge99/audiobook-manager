@@ -237,7 +237,9 @@ describe("AccountGate", () => {
     vaultMocks.unlock.mockImplementation(async () => {
       unlockCalls += 1;
       if (unlockCalls === 1) {
-        throw new Error("Biometric prompt error code 1: sensor temporarily unavailable");
+        // androidx code 3 is ERROR_TIMEOUT -- a genuinely transient failure,
+        // which is the only kind worth retrying (spec 29).
+        throw new Error("Biometric prompt error code 3: sensor timed out");
       }
       return { profileId: 7, secret: "saved-secret", key: "c2VjcmV0" };
     });

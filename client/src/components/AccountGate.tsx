@@ -11,6 +11,12 @@ import { isNativeShell } from "../lib/platform";
 import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
 import { deleteProfileCache, fromBase64, lockOfflineCache, rememberProfileKey, unlockProfileCacheWithKey } from "../local/privateCache";
 import { biometricVault } from "../lib/biometricVault";
+import {
+  biometricFailureMessage,
+  classifyBiometricFailure,
+  shouldClearSavedKey,
+  shouldRetryBiometricUnlock,
+} from "../lib/biometricFailure";
 import { Btn, Field, FullScreen, Wordmark, cn } from "../ui/primitives";
 
 interface Account {
@@ -29,17 +35,6 @@ type Mode =
   | { kind: "password"; account: Account }
   | { kind: "setup"; account: Account }
   | { kind: "household" };
-
-function shouldRetryBiometricUnlock(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : "";
-  const nativeCode = message.match(/biometric prompt error code\s+(\d+)/i);
-  if (nativeCode) {
-    // User cancellation, lockout, and missing hardware should return to the
-    // password path without opening another prompt.
-    return [1, 2, 5, 8].includes(Number(nativeCode[1]));
-  }
-  return !/cancel/i.test(message);
-}
 
 const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
 const PENDING_PROFILE_KEY = "pendingProfileId";
@@ -189,26 +184,59 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
 
   const biometricSignIn = async () => {
     if (mode.kind !== "password") return;
+    const accountId = mode.account.id;
     setBusy(true); setError(undefined);
     try {
-      // The first biometric prompt after launch can fail transiently on some
-      // devices (keystore / sensor warm-up). Retry once so a single finger or
-      // face press unlocks instead of requiring two. An intentional cancel is
-      // not retried: the caller falls back to the password screen.
-      let saved: { profileId: number; secret: string; key: string } | undefined;
-      let lastError: unknown;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          saved = await biometricVault.unlock<{ profileId: number; secret: string; key: string }>();
-          break;
-        } catch (error) {
-          lastError = error;
-          if (attempt === 0 && shouldRetryBiometricUnlock(error)) continue;
-          throw error;
+      /*
+       * The first biometric prompt after launch can fail transiently on some
+       * devices (keystore / sensor warm-up), so a transient failure is retried
+       * once. Everything else is classified rather than guessed at
+       * (`lib/biometricFailure.ts`): the old table retried cancellation, which
+       * re-opened the prompt after someone had already chosen the password.
+       */
+      let saved: { profileId: number; secret: string; key: string };
+      try {
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            saved = await biometricVault.unlock<{
+              profileId: number;
+              secret: string;
+              key: string;
+            }>();
+            break;
+          } catch (promptError) {
+            if (attempt === 0 && shouldRetryBiometricUnlock(promptError)) continue;
+            throw promptError;
+          }
         }
+      } catch (promptError) {
+        const failure = classifyBiometricFailure(promptError);
+        if (shouldClearSavedKey(failure)) {
+          /*
+           * The Keystore key can never open this value again (enrolling a new
+           * fingerprint invalidates it). Drop it so device sign-in can be set
+           * up again, and say so once -- this is self-healing, not an error the
+           * listener has to work around.
+           */
+          await biometricVault.clear().catch(() => undefined);
+        }
+        const sentence = biometricFailureMessage(failure, {
+          failed: copy.login.deviceFailed,
+          locked: copy.login.deviceLocked,
+          needsSetup: copy.login.deviceNeedsSetup,
+        });
+        // A cancellation is a choice, not a failure: stay silent and leave the
+        // password form exactly where it is.
+        if (sentence) setError(sentence);
+        return;
       }
-      if (!saved) throw lastError ?? new Error(copy.login.deviceFailed);
-      if (saved.profileId !== mode.account.id) throw new Error(copy.login.deviceFailed);
+
+      if (saved.profileId !== accountId) {
+        // The value is valid, just for another profile on this phone. Clearing
+        // it would destroy that profile's device sign-in.
+        setError(copy.login.deviceOtherProfile);
+        return;
+      }
       let token: string | undefined;
       let response: Response | undefined;
       try {
@@ -223,17 +251,17 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
         if (response.status === 401 || response.status === 404) {
           await biometricVault.clear();
           await deleteProfileCache(saved.profileId);
-          throw new Error(copy.login.deviceGone);
+          setError(copy.login.deviceGone);
+          return;
         }
-        throw new Error(copy.login.deviceFailed);
+        setError(copy.login.deviceFailed);
+        return;
       }
       if (response) token = ((await response.json()) as { token?: string }).token;
       await unlockProfileCacheWithKey(saved.profileId, fromBase64(saved.key));
       finish(saved.profileId, token);
-    } catch (error) {
-      setError(error instanceof Error && error.message === copy.login.deviceGone
-        ? copy.login.deviceGone
-        : copy.login.deviceFailed);
+    } catch {
+      setError(copy.login.deviceFailed);
     } finally { setBusy(false); }
   };
 
@@ -439,6 +467,14 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
                 <Btn type="button" variant="quiet" disabled={busy} onClick={() => void biometricSignIn()} className="w-full">
                   <Fingerprint size={17} aria-hidden="true" /> {copy.security.deviceSignIn}
                 </Btn>
+              )}
+              {/* Spec 29: a control that silently disappears teaches nobody why
+                  it is gone. This profile has device sign-in set up, so the one
+                  thing the listener can do about it is enrol a fingerprint. */}
+              {!biometricsAvailable && mode.account.hasDeviceUnlock && isNativeShell() && (
+                <p className="text-center text-[12.5px] leading-relaxed text-ink3">
+                  {copy.security.deviceUnavailable}
+                </p>
               )}
               <button
                 type="button"
