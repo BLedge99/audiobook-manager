@@ -26,10 +26,8 @@ if (typeof HTMLMediaElement !== "undefined") {
   const noop = () => {};
   const props: Array<keyof HTMLMediaElement> = ["play", "pause", "load", "canPlayType", "addTextTrack"];
   for (const prop of props) {
-    if (typeof HTMLMediaElement.prototype[prop] === "undefined") {
-      // @ts-expect-error - polyfilling unimplemented methods
-      HTMLMediaElement.prototype[prop] = noop;
-    }
+    // @ts-expect-error - polyfilling unimplemented methods
+    HTMLMediaElement.prototype[prop] = noop;
   }
   // Mock properties that are read
   Object.defineProperty(HTMLMediaElement.prototype, "duration", { value: 0, writable: true });
