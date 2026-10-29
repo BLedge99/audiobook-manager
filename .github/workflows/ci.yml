@@ -58,6 +58,7 @@ jobs:
         working-directory: server
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/audiobook_test?schema=public
+          CI: "true"
 
   client:
     name: Client tests and copy
