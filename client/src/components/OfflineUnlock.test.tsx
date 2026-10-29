@@ -18,7 +18,7 @@ const vaultMocks = vi.hoisted(() => ({
 
 vi.mock("../lib/biometricVault", () => ({
   biometricVault: {
-    hasSavedValue: vaultMocks.hasSavedValue,
+    hasSavedValue: (profileId: number) => vaultMocks.hasSavedValue(profileId),
     unlock: vaultMocks.unlock,
     clear: vaultMocks.clear,
   },
@@ -168,6 +168,7 @@ describe("OfflineUnlock", () => {
   });
 
   it("keeps both exits usable while a prompt is still open", async () => {
+    window.localStorage.setItem("profileId", "7");
     vaultMocks.hasSavedValue.mockResolvedValue(true);
     vaultMocks.unlock.mockReturnValue(new Promise(() => undefined));
 

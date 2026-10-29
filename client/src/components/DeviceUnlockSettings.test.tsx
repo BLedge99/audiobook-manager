@@ -55,9 +55,10 @@ describe("DeviceUnlockSettings", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceEnable }));
 
-    await waitFor(() => expect(mocks.save).toHaveBeenCalledWith({
-      profileId: 7, secret: "secret-value", key: "dGVzdC1rZXk=",
-    }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(
+      7,
+      { profileId: 7, secret: "secret-value", key: "dGVzdC1rZXk=" }
+    ));
     expect(mocks.fetch).toHaveBeenCalledWith("/api/auth/devices", expect.objectContaining({ method: "POST" }));
     expect(await screen.findByRole("status")).toHaveTextContent(copy.security.deviceReady);
   });
@@ -74,13 +75,14 @@ describe("DeviceUnlockSettings", () => {
     await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith(
       "/api/auth/devices/device-1", { method: "DELETE" },
     ));
-    expect(mocks.clear).toHaveBeenCalledOnce();
+    expect(mocks.clear).toHaveBeenCalledWith(7);
     expect(await screen.findByRole("status")).toHaveTextContent(copy.security.deviceRemoved);
   });
 
-  it("hides enrollment while offline", () => {
-    const { container } = render(<DeviceUnlockSettings offline />);
-    expect(container).toBeEmptyDOMElement();
+  it("shows offline enrollment UI when offline", async () => {
+    render(<DeviceUnlockSettings offline />);
+    expect(await screen.findByText(copy.security.deviceIntroOffline)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: copy.security.deviceEnableOffline })).toBeInTheDocument();
   });
 
   it("explains that a fingerprint must be enrolled when none is available", async () => {
