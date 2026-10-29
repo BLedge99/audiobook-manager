@@ -194,15 +194,15 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
        * (`lib/biometricFailure.ts`): the old table retried cancellation, which
        * re-opened the prompt after someone had already chosen the password.
        */
-      let saved: { profileId: number; secret: string; key: string };
+      let saved: { profileId: number; secret?: string; key: string };
       try {
         for (let attempt = 0; ; attempt += 1) {
           try {
             saved = await biometricVault.unlock<{
               profileId: number;
-              secret: string;
+              secret?: string;
               key: string;
-            }>();
+            }>(accountId);
             break;
           } catch (promptError) {
             if (attempt === 0 && shouldRetryBiometricUnlock(promptError)) continue;
@@ -218,12 +218,14 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
            * up again, and say so once -- this is self-healing, not an error the
            * listener has to work around.
            */
-          await biometricVault.clear().catch(() => undefined);
+          await biometricVault.clear(accountId).catch(() => undefined);
         }
         const sentence = biometricFailureMessage(failure, {
           failed: copy.login.deviceFailed,
           locked: copy.login.deviceLocked,
           needsSetup: copy.login.deviceNeedsSetup,
+          unavailable: copy.login.deviceUnavailable,
+          transient: copy.login.deviceTransient,
         });
         // A cancellation is a choice, not a failure: stay silent and leave the
         // password form exactly where it is.
@@ -239,25 +241,30 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
       }
       let token: string | undefined;
       let response: Response | undefined;
-      try {
-        response = await boundedFetch("/api/auth/devices/session", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ secret: saved.secret }),
-        });
-      } catch {
-        // The DEK can open this profile offline; no server session is invented.
-      }
-      if (response && !response.ok) {
-        if (response.status === 401 || response.status === 404) {
-          await biometricVault.clear();
-          await deleteProfileCache(saved.profileId);
-          setError(copy.login.deviceGone);
+      
+      // Only try server authentication if we have a secret (online-registered mode)
+      if (saved.secret) {
+        try {
+          response = await boundedFetch("/api/auth/devices/session", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ secret: saved.secret }),
+          });
+        } catch {
+          // The DEK can open this profile offline; no server session is invented.
+        }
+        if (response && !response.ok) {
+          if (response.status === 401 || response.status === 404) {
+            await biometricVault.clear(accountId);
+            await deleteProfileCache(saved.profileId);
+            setError(copy.login.deviceGone);
+            return;
+          }
+          setError(copy.login.deviceFailed);
           return;
         }
-        setError(copy.login.deviceFailed);
-        return;
+        if (response) token = ((await response.json()) as { token?: string }).token;
       }
-      if (response) token = ((await response.json()) as { token?: string }).token;
+      // Unlock with the saved key (works for both offline-only and online-registered modes)
       await unlockProfileCacheWithKey(saved.profileId, fromBase64(saved.key));
       finish(saved.profileId, token);
     } catch {

@@ -541,7 +541,7 @@ function App() {
       // stays true even for a value the Keystore can no longer decrypt. That is
       // still enough to *offer* the unlock screen: OfflineUnlock classifies the
       // failure and offers two exits, so a stale value is recoverable there.
-      biometricVault.hasSavedValue().catch(() => false),
+      biometricVault.hasSavedValue(id).catch(() => false),
     ]).then(([hasEnvelope, vaultSaved]) => {
       if (!alive) return;
       setCacheState(offlineCacheState(hasEnvelope, vaultSaved));

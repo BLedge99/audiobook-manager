@@ -100,7 +100,13 @@ export function shouldClearSavedKey(failure: BiometricFailure): boolean {
 /** The listener-facing sentence for a failure, or undefined when it is silent. */
 export function biometricFailureMessage(
   failure: BiometricFailure,
-  messages: { failed: string; locked: string; needsSetup: string },
+  messages: { 
+    failed: string; 
+    locked: string; 
+    needsSetup: string;
+    unavailable?: string;
+    transient?: string;
+  },
 ): string | undefined {
   switch (failure) {
     case "cancelled":
@@ -109,6 +115,10 @@ export function biometricFailureMessage(
       return messages.locked;
     case "key-invalid":
       return messages.needsSetup;
+    case "unavailable":
+      return messages.unavailable || messages.failed;
+    case "transient":
+      return messages.transient || messages.failed;
     default:
       return messages.failed;
   }

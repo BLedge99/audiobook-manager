@@ -482,6 +482,9 @@ export const copy = {
     passkeyGone: "That passkey isn't saved any more. Use your password.",
     deviceGone: "That device isn't signed in any more. Use your password.",
     deviceFailed: "Fingerprint or face unlock didn't work. Use your password.",
+    deviceUnavailable: "Biometric sensor is not available. Use your password.",
+    deviceNotEnrolled: "No fingerprints or face data enrolled on this device. Enroll in Android Settings, then set up device unlock in app Settings.",
+    deviceTransient: "Biometric sensor is not responding. Try again, or use your password.",
     /** The saved value can never be opened again (a new fingerprint invalidates it). */
     deviceNeedsSetup:
       "Device sign-in no longer works on this phone. Sign in with your password, then set it up again in Settings.",
@@ -547,10 +550,13 @@ export const copy = {
       "The saved data on this device was out of step with the new password, so it will be downloaded again the next time you open this profile.",
     deviceHeading: "Fingerprint or face",
     deviceIntro: "Use this device's screen lock to open your profile. The profile password still protects it on other devices.",
+    deviceIntroOffline: "Use this device's screen lock to open your profile offline. This stores your profile key securely on this device.",
     deviceEnable: "Enable fingerprint or face",
+    deviceEnableOffline: "Enable offline fingerprint or face",
     deviceReady: "Fingerprint or face unlock is ready on this device.",
     deviceRemoved: "Fingerprint or face unlock is turned off on this device.",
     deviceNeedsPassword: "Sign in with your profile password before enabling this.",
+    deviceNeedsPasswordOffline: "Unlock your profile with your password before enabling this.",
     deviceSignIn: "Unlock with fingerprint or face",
     /**
      * Shown where the control would be, instead of hiding it. A missing button

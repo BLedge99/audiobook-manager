@@ -57,7 +57,12 @@ export function OfflineUnlock({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [hasBiometric, setHasBiometric] = useState(false);
-  useEffect(() => { void biometricVault.hasSavedValue().then(setHasBiometric); }, []);
+  useEffect(() => { 
+    const profileId = Number(window.localStorage.getItem("profileId"));
+    if (Number.isInteger(profileId) && profileId > 0) {
+      void biometricVault.hasSavedValue(profileId).then(setHasBiometric);
+    }
+  }, []);
 
   const unlockBiometric = async () => {
     setBusy(true); setError(undefined);
@@ -69,10 +74,10 @@ export function OfflineUnlock({
        * failure worth asking a second time. A cancellation is not retried --
        * re-opening the prompt is exactly how biometrics traps a person.
        */
-      let saved: { profileId: number; key: string };
+      let saved: { profileId: number; key: string; secret?: string };
       for (let attempt = 0; ; attempt += 1) {
         try {
-          saved = await biometricVault.unlock<{ profileId: number; key: string }>();
+          saved = await biometricVault.unlock<{ profileId: number; key: string; secret?: string }>(profileId);
           break;
         } catch (promptError) {
           if (attempt === 0 && shouldRetryBiometricUnlock(promptError)) continue;
@@ -85,6 +90,7 @@ export function OfflineUnlock({
         setError(copy.login.deviceOtherProfile);
         return;
       }
+      // Unlock with the saved key (works for both offline-only and online-registered modes)
       await unlockProfileCacheWithKey(profileId, fromBase64(saved.key));
       onUnlocked();
     } catch (failure) {
@@ -92,13 +98,16 @@ export function OfflineUnlock({
       if (kind === "key-invalid") {
         // The Keystore key is gone for good. Drop the ciphertext so the device
         // can be set up again, and fall back to the password.
-        await biometricVault.clear().catch(() => undefined);
+        const profileId = Number(window.localStorage.getItem("profileId"));
+        await biometricVault.clear(profileId).catch(() => undefined);
         setHasBiometric(false);
       }
       setError(biometricFailureMessage(kind, {
         failed: copy.login.deviceFailed,
         locked: copy.login.deviceLocked,
         needsSetup: copy.login.deviceNeedsSetup,
+        unavailable: copy.login.deviceUnavailable,
+        transient: copy.login.deviceTransient,
       }));
     } finally { setBusy(false); }
   };

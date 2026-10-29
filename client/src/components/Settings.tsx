@@ -210,6 +210,13 @@ export function Settings({
         <PasswordSettings offline={offline} />
         <PasskeySettings />
         <DeviceUnlockSettings offline={offline} />
+        
+        {/* Build version indicator */}
+        <section className="mt-6 border-t-2 border-dashed border-ink/20 pt-5">
+          <p className="text-center text-xs text-ink3">
+            Build: 2026-10-29 11:31 UTC
+          </p>
+        </section>
       </div>
     </div>
   );

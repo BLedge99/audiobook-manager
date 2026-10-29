@@ -20,7 +20,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
   const refresh = async () => {
     if (!biometricVault.supported() || !Number.isInteger(profileId) || profileId < 1) return;
     setAvailable(await biometricVault.available());
-    setVaultSaved(await biometricVault.hasSavedValue());
+    setVaultSaved(await biometricVault.hasSavedValue(profileId));
     setChecked(true);
     try {
       const response = await boundedFetch("/api/auth/devices");
@@ -34,7 +34,17 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
     let id: string | undefined;
     try {
       const key = await exportActiveProfileKey(profileId);
-      if (!key) throw new Error(copy.security.deviceNeedsPassword);
+      if (!key) throw new Error(offline ? copy.security.deviceNeedsPasswordOffline : copy.security.deviceNeedsPassword);
+      
+      // Offline mode: save key directly without server registration
+      if (offline) {
+        await biometricVault.save(profileId, { profileId, key: toBase64(key) });
+        setMessage(copy.security.deviceReady);
+        await refresh();
+        return;
+      }
+      
+      // Online mode: register device with server and save both secret and key
       const response = await boundedFetch("/api/auth/devices", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label: copy.security.thisDevice }),
@@ -42,7 +52,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
       if (!response.ok) throw new Error(copy.login.deviceFailed);
       const created = (await response.json()) as { id: string; secret: string };
       id = created.id;
-      await biometricVault.save({ profileId, secret: created.secret, key: toBase64(key) });
+      await biometricVault.save(profileId, { profileId, secret: created.secret, key: toBase64(key) });
       setMessage(copy.security.deviceReady);
       await refresh();
     } catch (error) {
@@ -56,14 +66,14 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
     try {
       const response = await boundedFetch(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!response.ok) throw new Error(copy.login.deviceFailed);
-      await biometricVault.clear();
+      await biometricVault.clear(profileId);
       await refresh();
       setMessage(copy.security.deviceRemoved);
     } catch (error) { setMessage(error instanceof Error ? error.message : copy.login.deviceFailed); }
     finally { setBusy(false); }
   };
 
-  if (offline || !biometricVault.supported() || !checked) return null;
+  if (!biometricVault.supported() || !checked) return null;
 
   /*
    * The sensor is missing or nothing is enrolled. The old code returned null
@@ -83,13 +93,13 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
   return (
     <section className="mt-6 border-t-2 border-dashed border-ink/20 pt-5" aria-labelledby="device-unlock-heading">
       <h2 id="device-unlock-heading" className="font-display text-xl font-semibold text-ink">{copy.security.deviceHeading}</h2>
-      <p className="mt-1 text-sm text-ink2">{copy.security.deviceIntro}</p>
+      <p className="mt-1 text-sm text-ink2">{offline ? copy.security.deviceIntroOffline : copy.security.deviceIntro}</p>
       {devices.map((device) => <div key={device.id} className="mt-3 flex items-center justify-between gap-3 rounded-xl border-2 border-ink/20 p-3">
         <span>{device.label || copy.security.deviceHeading}</span>
         <Btn size="sm" variant="quiet" disabled={busy} onClick={() => void remove(device.id)}>{copy.security.remove}</Btn>
       </div>)}
       {!vaultSaved && <Btn className="mt-3" disabled={busy || !activeCacheKey(profileId)} onClick={() => void enable()}>
-        <Fingerprint size={16} aria-hidden="true" /> {busy ? copy.security.adding : copy.security.deviceEnable}
+        <Fingerprint size={16} aria-hidden="true" /> {busy ? copy.security.adding : (offline ? copy.security.deviceEnableOffline : copy.security.deviceEnable)}
       </Btn>}
       {message && <Notice className="mt-3" role="status">{message}</Notice>}
     </section>
