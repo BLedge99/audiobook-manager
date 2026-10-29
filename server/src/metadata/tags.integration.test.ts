@@ -33,7 +33,7 @@ let nextBook = 0;
 const profiles: number[] = [];
 
 beforeAll(async () => {
-  execSync("npx prisma migrate deploy", {
+  execSync(`npx prisma db push --accept-data-loss --schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`, {
     cwd: path.join(__dirname, "..", ".."),
     env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
     stdio: "ignore",

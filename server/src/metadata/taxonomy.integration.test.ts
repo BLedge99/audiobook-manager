@@ -31,7 +31,7 @@ const prisma = new PrismaClient();
 let libraryRootId = 0;
 
 beforeAll(async () => {
-  execSync("npx prisma migrate deploy", {
+  execSync(`npx prisma db push --accept-data-loss --schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`, {
     // This file lives in src/metadata/, so the server root is two levels up.
     cwd: path.join(__dirname, "..", ".."),
     env: { ...process.env, DATABASE_URL: dbUrl },

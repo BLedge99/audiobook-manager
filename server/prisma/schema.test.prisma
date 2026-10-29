@@ -1,0 +1,492 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model LibraryRoot {
+  id        Int    @id @default(autoincrement())
+  path      String @unique
+  label     String?
+  createdAt DateTime @default(now())
+
+  mediaItems MediaItem[]
+  scanState  ScanState?
+}
+
+model MediaItem {
+  id                Int       @id @default(autoincrement())
+  title             String
+  author            String
+  narrator          String?
+  description       String?
+  coverImagePath    String?
+  coverImageUrl     String?
+  releaseDate       DateTime?
+  genre             String?   // comma-separated genres until a normalized genre model is needed
+  isbn              String?
+  asin              String?
+  filePath          String
+  fileFormat        String   // mp3, m4b, flac, ogg, wav, etc.
+  duration          Float    @default(0) // in seconds
+  chapters          String?  // JSON-encoded array of { start, end, title }
+  metadataSource    String?  // provenance: embedded, librivox, audnexus, googlebooks, openlibrary, manual
+  metadataConfidence Float?  // 0-1 confidence score
+  enrichmentStatus  String?  // null | pending | applied | review | skipped | failed (spec 16)
+  enrichedAt        DateTime?
+  subtitle          String?  // spec 17
+  seriesId          Int?
+  seriesPosition    Float?   // spec 17; fractional (1.5) for interstitials
+  publisher         String?  // spec 17
+  publishedYear     Int?     // spec 17
+  language          String?  // spec 17
+  unabridged        Boolean  @default(false) // spec 17
+  libraryRootId     Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tracks             Track[]
+  contributors       ContributorMediaItem[]
+  candidates         MetadataCandidate[]
+  listeningHistory   ListeningHistory[]
+  playSessions       PlaySession[]
+  enrichmentItems    EnrichmentItem[]
+  genres             MediaItemGenre[]
+  overrides          FieldOverride[]
+  customTags        MediaItemTag[]
+  favourites        Favourite[]
+  wishlistSeeds     WishlistItem[]
+  libraryEntries    ProfileLibraryEntry[]
+
+  series Series?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+
+  libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id], onDelete: Cascade)
+
+  @@unique([libraryRootId, filePath])
+}
+
+model Track {
+  id          Int    @id @default(autoincrement())
+  mediaItemId Int
+  filePath    String
+  title       String?
+  duration    Float
+  trackNumber Int
+  sizeBytes   BigInt?
+
+  // Cascade: removing a book must take its tracks with it. The original
+  // migration omitted onDelete, which SQLite applies as RESTRICT, so deleting a
+  // book whose files left the disk failed with a foreign-key error.
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+}
+
+model Contributor {
+  id          Int    @id @default(autoincrement())
+  name        String
+  role        String // author, narrator, actor, etc.
+  createdAt   DateTime @default(now())
+
+  mediaItems ContributorMediaItem[]
+
+  @@unique([name, role])
+}
+
+model ContributorMediaItem {
+  contributorId Int
+  mediaItemId   Int
+
+  contributor Contributor @relation(fields: [contributorId], references: [id])
+  mediaItem   MediaItem   @relation(fields: [mediaItemId], references: [id])
+
+  @@id([contributorId, mediaItemId])
+}
+
+model MetadataCandidate {
+  id             Int    @id @default(autoincrement())
+  mediaItemId    Int
+  source         String // librivox, audnexus, googlebooks, openlibrary
+  title          String
+  author         String?
+  coverUrl       String?
+  description    String?
+  confidence     Float?
+  raw            String? // JSON-encoded provider response
+  narrators      String? // JSON array of strings
+  seriesName     String?
+  seriesPosition Float?
+  publisher      String?
+  publishedYear  Int?
+  language       String?
+  genres         String? // JSON array of raw provider genre strings
+  providerKey    String? // ASIN, LibriVox project id, etc.
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  // A provider re-asked for the same title must update in place, not stack
+  // duplicate rows for the same result.
+  @@unique([mediaItemId, source, providerKey])
+}
+
+// Spec 17 / ADR 009: per-field user overrides. Replaces the all-or-nothing
+// `metadataSource = "user"` sentinel that froze six fields together.
+model FieldOverride {
+  id          Int      @id @default(autoincrement())
+  mediaItemId Int
+  field       String
+  value       String
+  createdAt   DateTime @default(now())
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  // One override per field per book; re-setting replaces it.
+  @@unique([mediaItemId, field])
+  @@index([mediaItemId])
+}
+
+// Spec 17: curated two-level genre taxonomy. A real table, not JSON, so
+// "every book in this genre" is a join and it ports to PostgreSQL unchanged.
+model Genre {
+  id         Int     @id @default(autoincrement())
+  slug       String  @unique
+  name       String
+  parentId   Int?
+  sortOrder  Int     @default(0)
+  isCatchAll Boolean @default(false)
+
+  parent   Genre?          @relation("GenreTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Genre[]         @relation("GenreTree")
+  items    MediaItemGenre[]
+  mappings GenreMapping[]
+
+  @@index([parentId])
+}
+
+// Correctable without a code change: maps a provider's raw string to a genre.
+model GenreMapping {
+  id       Int    @id @default(autoincrement())
+  provider String
+  rawValue String
+  genreId  Int
+
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, rawValue])
+}
+
+model MediaItemGenre {
+  mediaItemId Int
+  genreId     Int
+  source      String    @default("provider") // provider | user
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  genre     Genre     @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([mediaItemId, genreId])
+  @@index([genreId])
+}
+
+// Spec 17: series with reading order, normalised so spelling variants group.
+// Spec 18: per-profile favourites. The unique constraint makes favouriting
+// idempotent and stops a double-tap creating two rows.
+model Favourite {
+  id          Int      @id @default(autoincrement())
+  profileId   Int
+  mediaItemId Int
+  createdAt   DateTime @default(now())
+
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, mediaItemId])
+  @@index([profileId])
+  @@index([mediaItemId])
+}
+
+// Spec 27: per-profile library membership.
+//
+// A membership row is the reason a book appears in one profile's library and
+// not another's. It is a *row*, not a copy: the audio file stays where it is
+// and two profiles can hold the same book.
+//
+// The same shape as Favourite, and for the same reason: the unique constraint
+// makes adding a book twice idempotent rather than an error.
+model ProfileLibraryEntry {
+  id          Int      @id @default(autoincrement())
+  profileId   Int
+  mediaItemId Int
+  createdAt   DateTime @default(now())
+
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, mediaItemId])
+  @@index([profileId])
+  @@index([mediaItemId])
+}
+
+// Spec 18: custom tags are a household-wide managed vocabulary, not free
+// text. Created once, assigned to many books.
+model Tag {
+  id        Int      @id @default(autoincrement())
+  name      String
+  // Lowercased name: case-insensitive uniqueness without PostgreSQL-only
+  // filters, matching Series.key.
+  key       String   @unique
+  createdBy Int?
+  createdAt DateTime @default(now())
+
+  createdByProfile Profile?      @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  items            MediaItemTag[]
+
+  @@index([key])
+}
+
+model MediaItemTag {
+  mediaItemId Int
+  tagId       Int
+  source      String   @default("user")
+  createdAt   DateTime @default(now())
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([mediaItemId, tagId])
+  @@index([tagId])
+}
+
+// Spec 19: books the household does NOT own. Metadata-only by construction --
+// there is no filePath, no Track and no playback route, because media is a
+// read-only mount and these books have no audio.
+model WishlistItem {
+  id              Int      @id @default(autoincrement())
+  profileId       Int
+  title           String
+  author          String?
+  narrators       String?  // JSON array of strings
+  description     String?
+  coverPath       String?
+  coverUrl        String?
+  genres          String?  // JSON array of taxonomy slugs
+  seriesName      String?
+  publisher       String?
+  publishedYear   Int?
+  provider        String?
+  providerKey     String?
+  seedMediaItemId Int?
+  owned           Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  profile       Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  seedMediaItem MediaItem? @relation(fields: [seedMediaItemId], references: [id], onDelete: SetNull)
+
+  // One row per external book per profile, not one per refresh or per seed.
+  @@unique([profileId, provider, providerKey])
+  @@index([profileId])
+  @@index([seedMediaItemId])
+}
+
+model Series {
+  id   Int    @id @default(autoincrement())
+  name String
+  // Lowercased, punctuation-stripped name. Prisma's case-insensitive filter is
+  // PostgreSQL-only, so case folding is a stored column rather than a query.
+  key  String @unique
+
+  books MediaItem[]
+}
+
+// Spec 16: a resumable post-scan enrichment pass. Progress is persisted so a
+// restart mid-run resumes rather than restarts.
+model EnrichmentRun {
+  id         Int       @id @default(autoincrement())
+  status     String    @default("pending") // pending | running | complete | error
+  queued     Int       @default(0)
+  processed  Int       @default(0)
+  applied    Int       @default(0)
+  review     Int       @default(0)
+  failed     Int       @default(0)
+  skipped    Int       @default(0)
+  message    String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  items EnrichmentItem[]
+}
+
+model EnrichmentItem {
+  id          Int      @id @default(autoincrement())
+  runId       Int
+  mediaItemId Int
+  status      String   @default("pending") // pending | applied | review | skipped | failed
+  provider    String?
+  confidence  Float?
+  message     String?
+  createdAt   DateTime @default(now())
+
+  run       EnrichmentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  mediaItem MediaItem     @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([mediaItemId])
+}
+
+model ListeningHistory {
+  id          Int       @id @default(autoincrement())
+  mediaItemId Int
+  profileId   Int?
+  position    Float    // seconds into the audiobook
+  completed   Boolean  @default(false)
+  lastPlayed  DateTime @updatedAt
+  playedAt    DateTime @default(now())
+
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  profile   Profile?  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // One resume point per (book, profile). Without this, concurrent saves
+  // could each create a row and resume would read an arbitrary one.
+  @@unique([mediaItemId, profileId])
+}
+
+model Profile {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  color     String?
+  createdAt DateTime @default(now())
+
+  // Spec 28 / ADR 016: a profile is an account.
+  passwordHash      String?
+  passwordUpdatedAt DateTime?
+  role              String    @default("member") // admin | member
+  disabled          Boolean   @default(false)
+  failedLoginCount  Int       @default(0)
+  lockedUntil       DateTime?
+  lastLoginAt       DateTime?
+
+  // Spec 27: does this profile receive newly scanned books automatically?
+  //
+  // The existing-vs-new distinction from the spec, made explicit. Profiles
+  // that existed when the feature shipped are set to true, so shipping it
+  // changes nothing for a household that already has the app -- including
+  // books scanned later. A profile created afterwards starts false and stays
+  // empty until someone adds something to it.
+  //
+  // Removing a book does NOT clear this. "Archie should not have that one
+  // book" is not "Archie should stop getting new books".
+  followsServerLibrary Boolean @default(false)
+
+  listeningHistory ListeningHistory[]
+  playSessions     PlaySession[]
+  favourites       Favourite[]
+  createdTags      Tag[]
+  wishlist         WishlistItem[]
+  libraryEntries   ProfileLibraryEntry[]
+  sessions            Session[]
+  deviceCredentials   DeviceCredential[]
+  webauthnCredentials WebAuthnCredential[]
+  webauthnChallenges  WebAuthnChallenge[]
+}
+
+// Spec 28: a database-backed sign-in, not an in-memory Set.
+//
+// `profileId` is nullable only for the break-glass household session, which is
+// an admin session with no profile. Every normal, device or passkey session has
+// a profile.
+model Session {
+  id          String    @id
+  tokenHash   String    @unique
+  profileId   Int?
+  via         String // profile | household | device
+  userAgent   String?
+  deviceLabel String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@index([expiresAt])
+}
+
+// Spec 28: Android biometric unlock. The server stores only a hash of the
+// random secret; the secret lives in the device's biometric-protected Vault.
+model DeviceCredential {
+  id         String    @id
+  profileId  Int
+  secretHash String    @unique
+  label      String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+// Spec 28: Windows Hello / WebAuthn. Web-only and additive; never the only
+// way into a profile.
+model WebAuthnCredential {
+  id           String    @id
+  profileId    Int
+  credentialId String    @unique // base64url
+  publicKey    String // base64url
+  counter      Int       @default(0)
+  transports   String? // JSON array
+  backedUp     Boolean   @default(false)
+  label        String?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+// Spec 28: one-time ceremony state. The challenge is random and expires in
+// five minutes; consumed rows are deleted rather than reused.
+model WebAuthnChallenge {
+  id        String   @id
+  profileId Int?
+  challenge String   @unique
+  type      String // registration | authentication
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model PlaySession {
+  id           Int      @id @default(autoincrement())
+  profileId    Int
+  mediaItemId  Int
+  startedAt    DateTime @default(now())
+  endedAt      DateTime?
+  fromPosition Float    @default(0)
+  toPosition   Float    @default(0)
+  speed        Float    @default(1)
+
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, mediaItemId])
+}
+
+model ScanState {
+  id          Int       @id @default(autoincrement())
+  libraryRootId Int     @unique
+  lastScanAt  DateTime?
+  filesFound  Int      @default(0)
+  status      String   // idle, scanning, complete, error
+  message     String?
+
+  libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id], onDelete: Cascade)
+}

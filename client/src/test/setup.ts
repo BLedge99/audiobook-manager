@@ -16,3 +16,27 @@
  */
 import "@testing-library/jest-dom/vitest";
 import "fake-indexeddb/auto";
+
+/**
+ * Polyfill HTMLMediaElement methods that jsdom doesn't implement.
+ * This prevents "Not implemented: HTMLMediaElement.prototype.pause/load" errors
+ * in tests that render audio/video elements.
+ */
+if (typeof HTMLMediaElement !== "undefined") {
+  const noop = () => {};
+  const props = ["play", "pause", "load", "canPlayType", "addTextTrack"];
+  for (const prop of props) {
+    if (typeof HTMLMediaElement.prototype[prop] === "undefined") {
+      HTMLMediaElement.prototype[prop] = noop;
+    }
+  }
+  // Mock properties that are read
+  Object.defineProperty(HTMLMediaElement.prototype, "duration", { value: 0, writable: true });
+  Object.defineProperty(HTMLMediaElement.prototype, "currentTime", { value: 0, writable: true });
+  Object.defineProperty(HTMLMediaElement.prototype, "paused", { value: true, writable: true });
+  Object.defineProperty(HTMLMediaElement.prototype, "ended", { value: false, writable: true });
+  Object.defineProperty(HTMLMediaElement.prototype, "readyState", { value: 4, writable: true });
+  Object.defineProperty(HTMLMediaElement.prototype, "networkState", { value: 0, writable: true });
+  Object.defineProperty(HTMLMediaElement.prototype, "volume", { value: 1, writable: true });
+  Object.defineProperty(HTMLMediaElement.prototype, "muted", { value: false, writable: true });
+}
