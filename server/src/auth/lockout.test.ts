@@ -17,7 +17,6 @@ import { hashPassword } from "./password";
  */
 const dir = mkdtempSync(path.join(tmpdir(), "audiobook-lockout-test-"));
 const dbFile = path.join(dir, "test.db");
-process.env.DATABASE_URL = `file:${dbFile}`;
 
 const PASSWORD = "correct-horse-9";
 const WRONG = "wrong-password-9";
@@ -26,7 +25,7 @@ let clock = new Date("2026-01-01T00:00:00.000Z");
 const now = () => clock;
 
 let app: Awaited<ReturnType<typeof buildApp>>;
-const prisma = new PrismaClient();
+let prisma: PrismaClient;
 let profileId: number;
 
 async function login(password: string) {
@@ -57,11 +56,18 @@ function advance(seconds: number) {
 }
 
 beforeAll(async () => {
-  execSync(`npx prisma db push --accept-data-loss --schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`, {
+  const isCI = process.env.CI === "true";
+  if (!isCI) {
+    process.env.DATABASE_URL = `file:${dbFile}`;
+  }
+  const isPostgresUrl = (process.env.DATABASE_URL ?? "").startsWith("postgresql://") || (process.env.DATABASE_URL ?? "").startsWith("postgres://");
+  const schemaFlag = isPostgresUrl ? "" : `--schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`;
+  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
     cwd: path.join(__dirname, "..", ".."),
-    env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
+    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
     stdio: "ignore",
   });
+  prisma = new PrismaClient();
   app = await buildApp({
     logger: false,
     appPassword: "household",

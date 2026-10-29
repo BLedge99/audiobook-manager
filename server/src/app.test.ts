@@ -8,19 +8,27 @@ import { buildApp, SESSION_HEADER } from "./app";
 
 const dir = mkdtempSync(path.join(tmpdir(), "audiobook-test-"));
 const dbFile = path.join(dir, "test.db");
-process.env.DATABASE_URL = `file:${dbFile}`;
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 // Only for arranging rows the API cannot create itself -- books arrive via a
 // filesystem scan, which is not something these route tests should drive.
-const prisma = new PrismaClient();
+let prisma: PrismaClient;
 
 beforeAll(async () => {
-  execSync(`npx prisma db push --accept-data-loss --schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`, {
+  // In CI (GitHub Actions), CI=true is set and DATABASE_URL points to PostgreSQL.
+  // Locally, always use a temp SQLite file for test isolation.
+  const isCI = process.env.CI === "true";
+  if (!isCI) {
+    process.env.DATABASE_URL = `file:${dbFile}`;
+  }
+  const isPostgresUrl = (process.env.DATABASE_URL ?? "").startsWith("postgresql://") || (process.env.DATABASE_URL ?? "").startsWith("postgres://");
+  const schemaFlag = isPostgresUrl ? "" : `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
+  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
     cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
+    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
     stdio: "ignore",
   });
+  prisma = new PrismaClient();
   app = await buildApp({ logger: false, appPassword: "household" });
 }, 120_000);
 

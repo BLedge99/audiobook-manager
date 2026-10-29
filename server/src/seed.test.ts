@@ -19,17 +19,23 @@ import { DEFAULT_PROFILES, TEST_PROFILES, seedDefaultProfiles } from "./seed";
 
 const dir = mkdtempSync(path.join(tmpdir(), "audiobook-seed-"));
 const dbFile = path.join(dir, "test.db");
-process.env.DATABASE_URL = `file:${dbFile}`;
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient;
 const TEST_PASSWORD = "correct-horse-9";
 
 beforeAll(async () => {
-  execSync(`npx prisma db push --accept-data-loss --schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`, {
+  const isCI = process.env.CI === "true";
+  if (!isCI) {
+    process.env.DATABASE_URL = `file:${dbFile}`;
+  }
+  const isPostgresUrl = (process.env.DATABASE_URL ?? "").startsWith("postgresql://") || (process.env.DATABASE_URL ?? "").startsWith("postgres://");
+  const schemaFlag = isPostgresUrl ? "" : `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
+  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
     cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: `file:${dbFile}` },
+    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
     stdio: "ignore",
   });
+  prisma = new PrismaClient();
 }, 120_000);
 
 afterAll(async () => {

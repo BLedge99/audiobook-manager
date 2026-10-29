@@ -25,18 +25,24 @@ const dir = mkdtempSync(path.join(tmpdir(), "audiobook-taxonomy-"));
 const dbFile = path.join(dir, "test.db");
 // Matches the temp-SQLite pattern used by the other integration suites.
 const dbUrl = `file:${dbFile}`;
-process.env.DATABASE_URL = dbUrl;
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient;
 let libraryRootId = 0;
 
 beforeAll(async () => {
-  execSync(`npx prisma db push --accept-data-loss --schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`, {
+  const isCI = process.env.CI === "true";
+  if (!isCI) {
+    process.env.DATABASE_URL = dbUrl;
+  }
+  const isPostgresUrl = (process.env.DATABASE_URL ?? "").startsWith("postgresql://") || (process.env.DATABASE_URL ?? "").startsWith("postgres://");
+  const schemaFlag = isPostgresUrl ? "" : `--schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`;
+  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
     // This file lives in src/metadata/, so the server root is two levels up.
     cwd: path.join(__dirname, "..", ".."),
-    env: { ...process.env, DATABASE_URL: dbUrl },
+    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
     stdio: "ignore",
   });
+  prisma = new PrismaClient();
   await seedGenres(prisma);
   await seedGenreMappings(prisma);
   const root = await prisma.libraryRoot.create({ data: { path: "/test/library", label: "Test" } });
