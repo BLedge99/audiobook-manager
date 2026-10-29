@@ -15,7 +15,7 @@
  * | Shell | Server URL | Result |
  * |---|---|---|
  * | Browser / dev | unset | `/api/audiobooks` (unchanged) |
- * | Android | `http://192.168.1.203:3000` | `http://192.168.1.203:3000/api/audiobooks` |
+ * | Android | `http://your-server:3000` | `http://your-server:3000/api/audiobooks` |
  *
  * Empty means "relative", which keeps every existing browser test and the PWA
  * exactly as they were. This is also what replaces the hardcoded `server.url`
@@ -185,7 +185,7 @@ function hasHeader(headers: unknown, name: string): boolean {
  * nothing usable.
  *
  * Forgiving about the trailing slash and a missing scheme, because on a phone
- * the realistic typo is `192.168.1.203:3000` with no `http://`, and rejecting
+ * the realistic typo is `your-server:3000` with no `http://`, and rejecting
  * that with a validation error would be unhelpful for a household user.
  *
  * Returns "" for input that cannot be repaired into a URL. Callers treat "" as
@@ -272,8 +272,8 @@ export function needsServerUrl(): boolean {
  *
  * The strictness matters: `apiUrl` would happily prepend the server origin to
  * an already-absolute URL, so a naive wrapper would turn
- * `fetch("http://192.168.1.203:3000/api/x")` into
- * `http://192.168.1.203:3000/http://192.168.1.203:3000/api/x`. Anything with a
+ * `fetch("http://your-server:3000/api/x")` into
+ * `http://your-server:3000/http://your-server:3000/api/x`. Anything with a
  * scheme is therefore passed through untouched.
  */
 export function resolveApiRequest(input: RequestInfo | URL): RequestInfo | URL {

@@ -793,7 +793,7 @@ export const copy = {
      * the Settings field's placeholder -- and the two must not drift apart
      * into two different "example" addresses.
      */
-    serverExample: "http://192.168.1.203:3000",
+    serverExample: "http://your-server:3000",
     /** The label for the server-address field, in both places it appears. */
     serverAddressLabel: "Server address",
     /**
@@ -939,7 +939,7 @@ export const copy = {
        */
       exampleLead: "For example",
       addressLabel: "Server address",
-      addressPlaceholder: "192.168.1.203:3000",
+      addressPlaceholder: "your-server:3000",
       submit: "Connect",
       changeAddress: "Change server address",
       continueOffline: "Continue offline",

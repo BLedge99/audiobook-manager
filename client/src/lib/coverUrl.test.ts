@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { clearServerUrl, coverUrl, setServerUrl, setSessionToken } from "./api";
+import { TEST_SERVER_URL } from "../test/constants";
 
 /**
  * Covers were silently broken in the Android shell for two independent reasons,
@@ -20,15 +21,15 @@ describe("coverUrl", () => {
   });
 
   it("points at the configured server in the Android shell", async () => {
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     setSessionToken(undefined);
-    expect(await coverUrl(7)).toBe("http://192.168.1.203:3000/api/audiobooks/7/cover");
+    expect(await coverUrl(7)).toBe(`${TEST_SERVER_URL}/api/audiobooks/7/cover`);
   });
 
   it("does not put a browser session token in the cover URL", async () => {
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     setSessionToken("tok-123");
-    expect(await coverUrl(7)).toBe("http://192.168.1.203:3000/api/audiobooks/7/cover");
+    expect(await coverUrl(7)).toBe(`${TEST_SERVER_URL}/api/audiobooks/7/cover`);
   });
 
   it("stays relative in the browser", async () => {
@@ -39,13 +40,13 @@ describe("coverUrl", () => {
 
   it("uses a scoped media token in native image URLs", async () => {
     Object.defineProperty(window, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     setSessionToken("session-secret");
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token: "scoped-token" }) });
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(await coverUrl(7)).toBe("http://192.168.1.203:3000/api/audiobooks/7/cover?media=scoped-token");
-    expect(fetchMock).toHaveBeenCalledWith("http://192.168.1.203:3000/api/auth/media-token", expect.objectContaining({
+    expect(await coverUrl(7)).toBe(`${TEST_SERVER_URL}/api/audiobooks/7/cover?media=scoped-token`);
+    expect(fetchMock).toHaveBeenCalledWith(`${TEST_SERVER_URL}/api/auth/media-token`, expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ kind: "cover", id: 7 }),
     }));

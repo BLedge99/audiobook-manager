@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installApiBaseUrl, onServerUnreachable, resolveApiRequest, setServerUrl, setSessionToken } from "./api";
+import { TEST_SERVER_URL } from "../test/constants";
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -14,8 +15,8 @@ afterEach(() => {
 
 describe("resolveApiRequest", () => {
   it("rewrites a bare API path against the configured server", () => {
-    setServerUrl("http://192.168.1.203:3000");
-    expect(resolveApiRequest("/api/audiobooks")).toBe("http://192.168.1.203:3000/api/audiobooks");
+    setServerUrl(TEST_SERVER_URL);
+    expect(resolveApiRequest("/api/audiobooks")).toBe(`${TEST_SERVER_URL}/api/audiobooks`);
   });
 
   it("leaves the path alone when no server is configured", () => {
@@ -26,33 +27,33 @@ describe("resolveApiRequest", () => {
   it("never rewrites an absolute http URL", () => {
     // The dangerous case: a naive wrapper turns this into
     // "<server>http://<server>/api/x" and every call 404s.
-    setServerUrl("http://192.168.1.203:3000");
-    const url = "http://192.168.1.203:3000/api/audiobooks";
+    setServerUrl(TEST_SERVER_URL);
+    const url = `${TEST_SERVER_URL}/api/audiobooks`;
     expect(resolveApiRequest(url)).toBe(url);
   });
 
   it("never rewrites a capacitor-file URL for local audio", () => {
     // A downloaded track's playable URL is not an API call. Prefixing it would
     // point <audio> at the server and break offline playback entirely.
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     const url = "capacitor-file://_capacitor_file_/books%2F7%2F70.mp3";
     expect(resolveApiRequest(url)).toBe(url);
   });
 
   it("leaves blob and data URLs alone", () => {
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     expect(resolveApiRequest("blob:capacitor://localhost/abc")).toBe("blob:capacitor://localhost/abc");
     expect(resolveApiRequest("data:audio/mp3;base64,AA")).toBe("data:audio/mp3;base64,AA");
   });
 
   it("leaves a protocol-relative URL alone", () => {
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     expect(resolveApiRequest("//example.com/x")).toBe("//example.com/x");
   });
 
   it("resolves a URL object", () => {
-    setServerUrl("http://192.168.1.203:3000");
-    const url = new URL("http://192.168.1.203:3000/api/audiobooks");
+    setServerUrl(TEST_SERVER_URL);
+    const url = new URL(`${TEST_SERVER_URL}/api/audiobooks`);
     expect(resolveApiRequest(url)).toBe(url);
   });
 });
@@ -67,10 +68,10 @@ describe("installApiBaseUrl", () => {
     }) as typeof fetch;
 
     try {
-      setServerUrl("http://192.168.1.203:3000");
+      setServerUrl(TEST_SERVER_URL);
       installApiBaseUrl();
       await fetch("/api/audiobooks");
-      expect(calls[0]).toBe("http://192.168.1.203:3000/api/audiobooks");
+      expect(calls[0]).toBe(`${TEST_SERVER_URL}/api/audiobooks`);
     } finally {
       window.fetch = original;
     }

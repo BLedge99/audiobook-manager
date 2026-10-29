@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Settings } from "./Settings";
+import { TEST_SERVER_URL } from "../test/constants";
 
 /**
  * Spec 26 — the save-server button had no test coverage, which is how a
@@ -53,11 +54,11 @@ describe("Settings save server", () => {
     renderSettings({ onSaved });
 
     const input = screen.getByLabelText("Server address");
-    fireEvent.change(input, { target: { value: "http://192.168.1.203:3000" } });
+    fireEvent.change(input, { target: { value: TEST_SERVER_URL } });
     fireEvent.click(screen.getByRole("button", { name: /Save and test/ }));
 
     await waitFor(() => expect(screen.getByText("Connected.")).toBeInTheDocument());
-    expect(fetchMock).toHaveBeenCalledWith("http://192.168.1.203:3000/api/health");
+    expect(fetchMock).toHaveBeenCalledWith(`${TEST_SERVER_URL}/api/health`);
     expect(onSaved).toHaveBeenCalled();
   });
 
@@ -66,7 +67,7 @@ describe("Settings save server", () => {
     renderSettings();
 
     const input = screen.getByLabelText("Server address");
-    fireEvent.change(input, { target: { value: "http://192.168.1.203:3000" } });
+    fireEvent.change(input, { target: { value: TEST_SERVER_URL } });
     fireEvent.click(screen.getByRole("button", { name: /Save and test/ }));
 
     await waitFor(() => expect(screen.getByText(/Could not reach/)).toBeInTheDocument());
@@ -78,7 +79,7 @@ describe("Settings save server", () => {
     renderSettings();
 
     const input = screen.getByLabelText("Server address");
-    fireEvent.change(input, { target: { value: "http://192.168.1.203:3000" } });
+    fireEvent.change(input, { target: { value: TEST_SERVER_URL } });
     fireEvent.click(screen.getByRole("button", { name: /Save and test/ }));
 
     await waitFor(() => expect(screen.getByText(/Could not reach/)).toBeInTheDocument());
@@ -101,7 +102,7 @@ describe("Settings save server", () => {
     const input = screen.getByLabelText("Server address");
     const button = screen.getByRole("button", { name: /Save and test/ });
 
-    fireEvent.change(input, { target: { value: "http://192.168.1.203:3000" } });
+    fireEvent.change(input, { target: { value: TEST_SERVER_URL } });
     fireEvent.click(button);
     await waitFor(() => expect(screen.getByText(/Could not reach/)).toBeInTheDocument());
 

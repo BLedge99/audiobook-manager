@@ -98,17 +98,17 @@ describe("isDirectoryExists", () => {
 });
 
 describe("isSameDownload", () => {
-  const url = "http://192.168.1.203:3000/api/tracks/42/stream?media=abc";
+  const url = "http://test-server:3000/api/tracks/42/stream?media=abc";
 
   it("matches the same URL", () => {
     expect(isSameDownload(url, url)).toBe(true);
   });
 
   it("tolerates the plugin normalising the URL", () => {
-    expect(isSameDownload(`HTTP://192.168.1.203:3000/api/tracks/42/stream?media=a%62c`, url)).toBe(true);
+    expect(isSameDownload(`HTTP://test-server:3000/api/tracks/42/stream?media=a%62c`, url)).toBe(true);
   });
 
   it("separates concurrent downloads of different tracks", () => {
-    expect(isSameDownload("http://192.168.1.203:3000/api/tracks/43/stream?media=abc", url)).toBe(false);
+    expect(isSameDownload("http://test-server:3000/api/tracks/43/stream?media=abc", url)).toBe(false);
   });
 });

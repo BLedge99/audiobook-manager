@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   The household's own setting is the server's address on the home network --
-  `http://192.168.1.203:3000` -- and that is the right one. But the phone can
+  `http://<your-lan-ip>:3000` -- and that is the right one. But the phone can
   end up on a WiFi segment that cannot reach the home LAN at all: `ping` to the
   host is 100% lost, and the app reports "failed to connect to server" for
   every request, including a download.
@@ -74,7 +74,7 @@ Write-Host ""
 Write-Host "The phone's server address has to match the tunnel for this to help."
 Write-Host "It is currently whatever it was last set to -- Settings, Server address."
 Write-Host "  http://localhost:$Port  reaches the server through the tunnel"
-Write-Host "  http://192.168.1.203:$Port  reaches the server over the home network"
+Write-Host "  http://<your-lan-ip>:$Port  reaches the server over the home network"
 Write-Host ""
 Write-Host "Check it from the phone:"
 Write-Host "  adb reverse --list        # the tunnel is up"

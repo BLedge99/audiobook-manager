@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { OfflineNotice, Splash } from "./OfflineNotice";
 import { ServerSetup } from "./ServerSetup";
+import { TEST_SERVER_URL } from "../test/constants";
 
 /**
  * The bug these cover: an unreachable server was indistinguishable from being
@@ -64,25 +65,25 @@ describe("ServerSetup", () => {
     const onDone = vi.fn();
     render(<ServerSetup onDone={onDone} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/192\.168/), { target: { value: "192.168.1.203:3000" } });
+    fireEvent.change(screen.getByPlaceholderText(/your-server/), { target: { value: "test-server:3000" } });
     fireEvent.click(screen.getByRole("button", { name: /connect/i }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     // Normalised with a scheme, so the user need not type one.
-    expect(window.localStorage.getItem("serverUrl")).toBe("http://192.168.1.203:3000");
+    expect(window.localStorage.getItem("serverUrl")).toBe(TEST_SERVER_URL);
   });
 
   it("prefills the saved address so it can be corrected", () => {
-    window.localStorage.setItem("serverUrl", "http://192.168.1.203:3000");
+    window.localStorage.setItem("serverUrl", TEST_SERVER_URL);
     render(<ServerSetup onDone={() => {}} />);
-    expect(screen.getByLabelText(/server address/i)).toHaveValue("http://192.168.1.203:3000");
+    expect(screen.getByLabelText(/server address/i)).toHaveValue(TEST_SERVER_URL);
   });
 
   it("rejects nonsense without persisting it", async () => {
     const onDone = vi.fn();
     render(<ServerSetup onDone={onDone} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/192\.168/), { target: { value: "   " } });
+    fireEvent.change(screen.getByLabelText(/server address/i), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: /connect/i }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
@@ -95,7 +96,7 @@ describe("ServerSetup", () => {
     const onDone = vi.fn();
     render(<ServerSetup onDone={onDone} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/192\.168/), { target: { value: "192.168.1.203:3000" } });
+    fireEvent.change(screen.getByPlaceholderText(/your-server/), { target: { value: "test-server:3000" } });
     fireEvent.click(screen.getByRole("button", { name: /connect/i }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument(), { timeout: 5000 });
@@ -125,7 +126,7 @@ describe("ServerSetup", () => {
     const onContinueOffline = vi.fn();
     render(<ServerSetup onDone={() => {}} onContinueOffline={onContinueOffline} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/192\.168/), { target: { value: "192.168.1.203:3000" } });
+    fireEvent.change(screen.getByPlaceholderText(/your-server/), { target: { value: "test-server:3000" } });
     fireEvent.click(screen.getByRole("button", { name: /connect/i }));
 
     // Spec 29: a health check that hangs must not be the reason someone cannot

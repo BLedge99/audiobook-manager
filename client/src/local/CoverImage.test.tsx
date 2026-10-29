@@ -242,7 +242,7 @@ describe("cover cache", () => {
   });
 
   it("resolves a provider URL the same way as a book cover", async () => {
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl("http://test-server:3000");
     cache = await startSession();
     fetchMock.mockResolvedValue(imageResponse());
     const href = "https://covers.openlibrary.org/b/id/1-L.jpg";

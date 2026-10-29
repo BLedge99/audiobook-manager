@@ -13,6 +13,7 @@ import {
   SERVER_URL_KEY,
   setServerUrl,
 } from "./api";
+import { TEST_SERVER_URL, TEST_SERVER_HOST } from "../test/constants";
 
 /** Simulate the Capacitor bridge, which App.tsx reads defensively. */
 function setNativeShell(isNative: boolean) {
@@ -23,13 +24,13 @@ function setNativeShell(isNative: boolean) {
 
 describe("normaliseServerUrl", () => {
   it("keeps a well-formed URL but drops the trailing slash", () => {
-    expect(normaliseServerUrl("http://192.168.1.203:3000/")).toBe("http://192.168.1.203:3000");
+    expect(normaliseServerUrl(`${TEST_SERVER_URL}/`)).toBe(TEST_SERVER_URL);
   });
 
   it("supplies http:// when the user omits the scheme", () => {
     // The realistic phone typo. Rejecting it would be user-hostile for a
     // household tool where the address is typed by hand.
-    expect(normaliseServerUrl("192.168.1.203:3000")).toBe("http://192.168.1.203:3000");
+    expect(normaliseServerUrl(TEST_SERVER_HOST)).toBe(TEST_SERVER_URL);
   });
 
   it("trims surrounding whitespace", () => {
@@ -66,19 +67,19 @@ describe("apiUrl", () => {
   });
 
   it("prefixes the configured server when there is one", () => {
-    setServerUrl("http://192.168.1.203:3000");
-    expect(apiUrl("/api/audiobooks")).toBe("http://192.168.1.203:3000/api/audiobooks");
+    setServerUrl(TEST_SERVER_URL);
+    expect(apiUrl("/api/audiobooks")).toBe(`${TEST_SERVER_URL}/api/audiobooks`);
   });
 
   it("adds the missing slash for a bare path", () => {
-    setServerUrl("http://192.168.1.203:3000");
-    expect(apiUrl("api/audiobooks")).toBe("http://192.168.1.203:3000/api/audiobooks");
+    setServerUrl(TEST_SERVER_URL);
+    expect(apiUrl("api/audiobooks")).toBe(`${TEST_SERVER_URL}/api/audiobooks`);
   });
 
   it("round-trips through storage", () => {
-    setServerUrl("192.168.1.203:3000/");
-    expect(getServerUrl()).toBe("http://192.168.1.203:3000");
-    expect(window.localStorage.getItem(SERVER_URL_KEY)).toBe("http://192.168.1.203:3000");
+    setServerUrl(`${TEST_SERVER_HOST}/`);
+    expect(getServerUrl()).toBe(TEST_SERVER_URL);
+    expect(window.localStorage.getItem(SERVER_URL_KEY)).toBe(TEST_SERVER_URL);
   });
 
   it("refuses to store an unusable URL", () => {
@@ -86,7 +87,7 @@ describe("apiUrl", () => {
   });
 
   it("clears back to relative URLs", () => {
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     clearServerUrl();
     expect(apiUrl("/api/audiobooks")).toBe("/api/audiobooks");
   });
@@ -100,12 +101,12 @@ describe("apiAssetUrl", () => {
   it("points cover art at the configured server", () => {
     // The server returns "/api/covers/1.jpg", which in the Android shell would
     // otherwise resolve against the phone's own https://localhost origin.
-    setServerUrl("http://192.168.1.203:3000");
-    expect(apiAssetUrl("/api/covers/1.jpg")).toBe("http://192.168.1.203:3000/api/covers/1.jpg");
+    setServerUrl(TEST_SERVER_URL);
+    expect(apiAssetUrl("/api/covers/1.jpg")).toBe(`${TEST_SERVER_URL}/api/covers/1.jpg`);
   });
 
   it("leaves an already-absolute URL alone", () => {
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     expect(apiAssetUrl("https://covers.example.com/a.jpg")).toBe("https://covers.example.com/a.jpg");
   });
 });
@@ -122,7 +123,7 @@ describe("needsServerUrl", () => {
 
   it("is false on Android once a server is set", () => {
     setNativeShell(true);
-    setServerUrl("http://192.168.1.203:3000");
+    setServerUrl(TEST_SERVER_URL);
     expect(needsServerUrl()).toBe(false);
   });
 

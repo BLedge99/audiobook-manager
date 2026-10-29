@@ -8,7 +8,7 @@
 
       wslrelay.exe  127.0.0.1:3000  and  [::1]:3000
 
-  So `http://192.168.1.203:3000` gets "connection refused" and an Android phone
+  So `http://<your-lan-ip>:3000` gets "connection refused" and an Android phone
   cannot download anything. This adds a Windows port proxy from the LAN address
   to the WSL guest address, plus a firewall rule, then probes the result.
 
