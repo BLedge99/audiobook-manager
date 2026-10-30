@@ -14,6 +14,7 @@
 param()
 
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $false
 
 function Get-Adb {
   $candidates = @()
