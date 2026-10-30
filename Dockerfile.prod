@@ -1,12 +1,12 @@
 # Production image: builds the client and serves everything from the Fastify server.
-FROM node:24-bookworm-slim AS client-build
+FROM node:25-bookworm-slim AS client-build
 WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
 RUN npm run build
 
-FROM node:24-bookworm-slim AS server-build
+FROM node:25-bookworm-slim AS server-build
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./
@@ -19,7 +19,7 @@ RUN npx prisma generate --schema prisma/schema.prisma \
     && npm run build
 RUN npm prune --omit=dev
 
-FROM node:24-bookworm-slim
+FROM node:25-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000
