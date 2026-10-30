@@ -109,6 +109,12 @@ export interface RecoveryDeps {
   fetchBook: BookLookup;
   /** Injected for stable timestamps in tests. */
   now?: () => Date;
+  /**
+   * The server the adoption is run against, and the shelf the adopted rows are
+   * tagged into (spec 30). Defaults to the empty string for callers that manage
+   * provenance themselves.
+   */
+  sourceServer?: string;
 }
 
 export interface RecoveryResult {
@@ -164,7 +170,10 @@ export async function recoverBooks(
       continue;
     }
 
-    await putReplicaBook(deps.db, book);
+    // Adopt: the metadata row first, then the matched tracks against it. The
+    // adoption is tagged with the server it ran against (spec 30), so the audio
+    // now lives in that server's shelf.
+    await putReplicaBook(deps.db, book, {}, deps.sourceServer ?? "");
     const downloadedAt = now().toISOString();
     for (const match of matches) {
       const path = trackPath(bookId, match.trackId, match.extension);
@@ -176,7 +185,7 @@ export async function recoverBooks(
         // abandon the book. It simply reports zero bytes until re-downloaded.
       }
       const track: DownloadedTrack = { trackId: match.trackId, path, bytes, downloadedAt };
-      await putDownloadedTrack(deps.db, bookId, track);
+      await putDownloadedTrack(deps.db, bookId, track, deps.sourceServer ?? "");
     }
 
     result.recovered.push({ bookId, title: book.title, tracks: matches.length });

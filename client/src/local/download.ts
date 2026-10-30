@@ -56,6 +56,12 @@ export interface DownloadDeps {
   headers?: Record<string, string>;
   /** Injected for deterministic timestamps in tests. */
   now?: () => Date;
+  /**
+   * The server this download belongs to (spec 30: per-server shelves). Tagged
+   * onto the replica row so the offline library can hold books from more than
+   * one server at once.
+   */
+  sourceServer?: string;
 }
 
 /**
@@ -115,7 +121,7 @@ export async function downloadBook(
     STEP_BUDGETS.replicaWrite,
     async () => {
       // Metadata first: every track below is recorded against this row.
-      await putReplicaBook(deps.db, book);
+      await putReplicaBook(deps.db, book, {}, deps.sourceServer ?? "");
       return { now: deps.now ?? (() => new Date()), extension: extensionFor(book.fileFormat) };
     },
   );
@@ -178,7 +184,7 @@ async function downloadTrack(
       path,
       bytes,
       downloadedAt: now().toISOString(),
-    }),
+    }, deps.sourceServer ?? ""),
   );
 
   onProgress?.({

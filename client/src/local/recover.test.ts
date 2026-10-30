@@ -9,7 +9,7 @@ import {
   parseTrackFile,
   recoverBooks,
 } from "./recover";
-import { downloadedTracks, isFullyDownloaded, trackPath, type FileSystemPort } from "./replica";
+import { downloadedTracks, isFullyDownloaded, trackPath, replicaBookKey, type FileSystemPort } from "./replica";
 
 /**
  * Spec 29, phase 5 -- recovering audio that outlived its database row.
@@ -54,6 +54,9 @@ function fakeFiles(directories: Record<string, string[]>) {
   };
   return { files, removed };
 }
+
+/** Local composite key (`<serverId>#<bookId>`) for the default-server shelf. */
+const key = (bookId: number) => replicaBookKey("", bookId);
 
 let db: LocalLibraryDatabase;
 let counter = 0;
@@ -146,7 +149,7 @@ describe("recoverBooks", () => {
     expect(result.recovered).toEqual([
       { bookId: 7, title: "The Left Hand of Darkness", tracks: 2 },
     ]);
-    const row = await db.books.get(7);
+    const row = await db.books.get(key(7));
     expect(isFullyDownloaded(row)).toBe(true);
     expect(downloadedTracks(row).map((track) => track.path)).toEqual([
       trackPath(7, 70, "mp3"),
@@ -160,7 +163,7 @@ describe("recoverBooks", () => {
     const result = await recoverBooks([7], { db, files, fetchBook: async () => book() });
 
     expect(result.recovered[0].tracks).toBe(1);
-    const row = await db.books.get(7);
+    const row = await db.books.get(key(7));
     expect(downloadedTracks(row).map((track) => track.trackId)).toEqual([70]);
     // A partial book must not claim to be complete: playback would stop halfway.
     expect(isFullyDownloaded(row)).toBe(false);
@@ -171,7 +174,7 @@ describe("recoverBooks", () => {
     const result = await recoverBooks([7], { db, files, fetchBook: async () => "missing" });
 
     expect(result.missing).toEqual([7]);
-    expect(await db.books.get(7)).toBeUndefined();
+    expect(await db.books.get(key(7))).toBeUndefined();
     expect(files.remove).not.toHaveBeenCalled();
     expect(removed).toEqual([]);
   });
@@ -181,7 +184,7 @@ describe("recoverBooks", () => {
     const result = await recoverBooks([7], { db, files, fetchBook: async () => book() });
 
     expect(result.unmatched).toEqual([7]);
-    expect(await db.books.get(7)).toBeUndefined();
+    expect(await db.books.get(key(7))).toBeUndefined();
   });
 
   it("does not mistake an unreachable server for a deleted book", async () => {
@@ -197,7 +200,7 @@ describe("recoverBooks", () => {
     expect(result.unreadable).toEqual([7]);
     expect(result.missing).toEqual([]);
     expect(removed).toEqual([]);
-    expect(await db.books.get(7)).toBeUndefined();
+    expect(await db.books.get(key(7))).toBeUndefined();
   });
 
   it("is idempotent: running it twice does not duplicate or lose tracks", async () => {

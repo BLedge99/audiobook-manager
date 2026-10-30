@@ -45,15 +45,22 @@ export interface DownloadedTrack {
 
 export interface ReplicaBook {
   /**
-   * The server's `Audiobook.id`, duplicated at the top level.
+   * Local primary key: `<serverId>#<bookId>`.
    *
-   * Not redundant: the table is declared `books: "id"`, an *inbound* primary
-   * key, so IndexedDB reads the key off the stored object itself. Without this
-   * field every write fails with a DataError. Keeping it explicit also means the
-   * row is identifiable without unpacking `book`.
+   * Composite rather than a bare server book id so two servers can hold books
+   * that both happen to be numbered 5 without colliding. The offline library is
+   * a set of per-server shelves (spec 30), so a row's identity is its shelf and
+   * its book within that shelf, not the book id alone.
    */
-  id: number;
-  /** The server's `Audiobook` row, verbatim. */
+  bookKey: string;
+  /**
+   * Server origin this download or adoption belongs to, normalised
+   * (`https://audiobook-manager.onrender.com`, or `http://192.168.x.x:3000`).
+   * Empty for legacy rows written before the per-server shelf (they are treated
+   * as belonging to the server the device was pointed at when they were read).
+   */
+  serverId: string;
+  /** The server-side book this row describes. */
   book: Audiobook;
   /** When this replica entry was last refreshed from the server. */
   fetchedAt: string;
@@ -125,7 +132,7 @@ export interface CoverRecord {
 }
 
 export class LocalLibraryDatabase extends Dexie {
-  books!: Table<ReplicaBook, number>;
+  books!: Table<ReplicaBook, string>;
   covers!: Table<CoverRecord, string>;
   keyEnvelopes!: Table<KeyEnvelopeRecord, number>;
   privateRows!: Table<PrivateRowRecord, string>;
@@ -146,6 +153,15 @@ export class LocalLibraryDatabase extends Dexie {
     // admin reset can delete one profile's cache without touching shared data.
     this.version(3).stores({
       books: "id",
+      covers: "&key",
+      keyEnvelopes: "&profileId",
+      privateRows: "&id, [profileId+table]",
+    });
+    // Spec 30: the downloaded-book table is keyed by `<serverId>#<bookId>` so a
+    // device can hold more than one server's shelf. Key path renamed from `id`
+    // to `bookKey` because the key is now a composite string, not a bare book id.
+    this.version(4).stores({
+      books: "bookKey",
       covers: "&key",
       keyEnvelopes: "&profileId",
       privateRows: "&id, [profileId+table]",

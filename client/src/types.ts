@@ -80,6 +80,13 @@ export interface Audiobook {
    * definition.
    */
   inLibrary?: boolean;
+  /**
+   * Spec 30: the server origin this book belongs to, when it came from the
+   * device's offline library (a per-server shelf) rather than from the
+   * currently connected server. Absent for books read from the connected
+   * server's catalogue, which belong to that server by construction.
+   */
+  serverId?: string;
 }
 
 export interface LibraryRoot {

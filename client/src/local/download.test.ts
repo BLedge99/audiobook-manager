@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Audiobook } from "../types";
 import { LocalLibraryDatabase } from "./db";
 import { downloadBook, type DownloadProgress } from "./download";
-import { downloadedTracks, isFullyDownloaded, type FileSystemPort } from "./replica";
+import { downloadedTracks, isFullyDownloaded, replicaBookKey, type FileSystemPort } from "./replica";
 
 function book(overrides: Partial<Audiobook> = {}): Audiobook {
   return {
@@ -48,10 +48,12 @@ function fakeFiles(options: { bytes?: number; failOn?: Set<string>; reportBytes?
 let db: LocalLibraryDatabase;
 let counter = 0;
 
+/** Local composite key (`<serverId>#<bookId>`) for the default-server shelf. */
+const key = (bookId: number) => replicaBookKey("", bookId);
+
 beforeEach(() => {
   db = new LocalLibraryDatabase(`download-test-${counter++}`);
 });
-
 afterEach(() => {
   db.close();
 });
@@ -61,7 +63,7 @@ describe("downloadBook", () => {
     const { files } = fakeFiles();
     await downloadBook(book(), { db, files, trackUrl: (id) => `/api/tracks/${id}/stream` });
 
-    const row = await db.books.get(7);
+    const row = await db.books.get(key(7));
     expect(isFullyDownloaded(row)).toBe(true);
     expect(downloadedTracks(row).map((t) => t.trackId)).toEqual([70, 71]);
   });
@@ -75,7 +77,7 @@ describe("downloadBook", () => {
   it("records the byte size so the storage screen is accurate", async () => {
     const { files } = fakeFiles({ bytes: 4096 });
     await downloadBook(book(), { db, files, trackUrl: (id) => `url/${id}` });
-    const row = await db.books.get(7);
+    const row = await db.books.get(key(7));
     expect(downloadedTracks(row).map((t) => t.bytes)).toEqual([4096, 4096]);
   });
 
@@ -84,7 +86,7 @@ describe("downloadBook", () => {
     // screen, which is the one place the user checks before deleting things.
     const { files } = fakeFiles({ bytes: 1500, reportBytes: false });
     await downloadBook(book(), { db, files, trackUrl: (id) => `url/${id}` });
-    const row = await db.books.get(7);
+    const row = await db.books.get(key(7));
     expect(downloadedTracks(row).map((t) => t.bytes)).toEqual([1500, 1500]);
   });
 
@@ -103,7 +105,7 @@ describe("downloadBook", () => {
       downloadBook(book(), { db, files, trackUrl: (id) => `url/${id}` }),
     ).rejects.toThrow("network died");
 
-    const row = await db.books.get(7);
+    const row = await db.books.get(key(7));
     expect(row?.book.title).toBe("The Left Hand of Darkness");
   });
 
@@ -113,7 +115,7 @@ describe("downloadBook", () => {
       downloadBook(book(), { db, files, trackUrl: (id) => `url/${id}` }),
     ).rejects.toThrow("network died");
 
-    const row = await db.books.get(7);
+    const row = await db.books.get(key(7));
     expect(downloadedTracks(row).map((t) => t.trackId)).toEqual([70]);
     expect(isFullyDownloaded(row)).toBe(false);
   });
@@ -144,7 +146,7 @@ describe("downloadBook", () => {
     await expect(
       downloadBook(book({ tracks: [] }), { db, files, trackUrl: (id) => `url/${id}` }),
     ).rejects.toThrow(/no tracks/i);
-    expect(await db.books.get(7)).toBeUndefined();
+    expect(await db.books.get(key(7))).toBeUndefined();
   });
 
   it("stamps tracks with the injected clock", async () => {
@@ -155,7 +157,7 @@ describe("downloadBook", () => {
       trackUrl: (id) => `url/${id}`,
       now: () => new Date("2026-10-13T12:00:00.000Z"),
     });
-    const row = await db.books.get(7);
+    const row = await db.books.get(key(7));
     expect(downloadedTracks(row)[0].downloadedAt).toBe("2026-10-13T12:00:00.000Z");
   });
 });

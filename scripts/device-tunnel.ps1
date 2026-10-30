@@ -50,7 +50,10 @@ function Get-Adb {
 }
 
 $adb = Get-Adb
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 $devices = & $adb devices | Select-Object -Skip 1 | Where-Object { $_ -match '\sdevice$' }
+$ErrorActionPreference = $previousErrorActionPreference
 if (-not $devices) {
   throw "no device is connected. Plug the phone in and unlock it, then run `adb devices`."
 }
@@ -58,13 +61,19 @@ $serial = ($devices | Select-Object -First 1) -split '\s+' | Select-Object -Firs
 Write-Host "device: $serial"
 
 if ($Remove) {
-  & $adb reverse --remove "tcp:$Port" 2>&1 | Out-Null
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  & $adb reverse --remove "tcp:$Port" | Out-Null
+  $ErrorActionPreference = $previousErrorActionPreference
   Write-Host "tunnel on port $Port removed."
   exit 0
 }
 
-& $adb reverse "tcp:$Port" "tcp:$Port" 2>&1 | Out-Null
-$list = & $adb reverse --list 2>&1
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+& $adb reverse "tcp:$Port" "tcp:$Port" | Out-Null
+$list = & $adb reverse --list
+$ErrorActionPreference = $previousErrorActionPreference
 if ($list -notmatch "tcp:$Port") {
   throw "the tunnel did not take. Is the device still connected?"
 }

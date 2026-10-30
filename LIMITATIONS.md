@@ -127,6 +127,14 @@ made downloads look lost, and are now addressed:
   tap. **This restores the audio and catalogue metadata; it does not restore the
   old progress or favourites**, which were encrypted under the previous origin.
 
+**Cross-server offline library — fixed in progress (2026-10-30, spec 30).** The
+offline library is now a set of per-server shelves (ADR 020): downloads and
+adoptions are tagged with their source server and keyed `<serverId>#<bookId>`, and
+the offline shelf is the union across shelves. The 2026-10-30 incident — audio
+downloaded from the local server later being unrestorable after switching to the
+production server address — is the motivating case; see
+[`specs/30-offline-library-per-server.md`](specs/30-offline-library-per-server.md).
+
 Device verification of these four items is still outstanding; the checklist is
 in `specs/29-offline-resilience.md`.
 

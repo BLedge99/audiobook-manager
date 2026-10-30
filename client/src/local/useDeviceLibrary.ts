@@ -14,27 +14,32 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Audiobook } from "../types";
-import { apiUrl, boundedFetch, profileHeaders } from "../lib/api";
+import { apiUrl, boundedFetch, getServerUrl, profileHeaders } from "../lib/api";
 import { copy } from "../copy";
 import { deviceFiles, localDb } from "./device";
 import { downloadBook as runDownload, trackStreamUrl, type DownloadProgress } from "./download";
-import { listUnclaimedOnDevice, recoverBooks, type RecoveryResult } from "./recover";
 import {
   bookBytes,
   downloadedTracks,
   isFullyDownloaded,
-  listReplicaAudiobooks,
+  listReplicaBooks,
   removeDownloadedBook,
+  replicaBookKey,
   totalReplicaBytes,
 } from "./replica";
+import { listUnclaimedOnDevice, recoverBooks, type RecoveryResult } from "./recover";
 import { readProgress } from "./privateCache";
 import type { ReplicaBook } from "./db";
 
 export interface DeviceLibrary {
-  /** Downloaded books, as plain `Audiobook[]` for the existing grid/search. */
+  /** Downloaded books, as plain `Audiobook[]` for the existing grid/search.
+   *
+   * The union across the device's per-server shelves (spec 30): every book the
+   * device downloaded or adopted, whatever server it belongs to.
+   */
   books: Audiobook[];
-  /** Raw replica rows, for download state and byte counts. */
-  rows: Record<number, ReplicaBook>;
+  /** Raw replica rows, keyed by local composite key (`<serverId>#<bookId>`). */
+  rows: Record<string, ReplicaBook>;
   loading: boolean;
   /**
    * Why the replica could not be read, or null when it was read fine.
@@ -51,7 +56,9 @@ export interface DeviceLibrary {
    *
    * Detection only: nothing is adopted until `recover` runs, and that needs the
    * server to confirm the catalogue entry. Empty when the filesystem cannot be
-   * listed, so detection never becomes a visible failure.
+   * listed, so detection never becomes a visible failure. Ids are the connected
+   * server's books, because detection maps orphan folders onto the catalogue it
+   * can confirm (spec 30's shelves make the mapping per-server).
    */
   unclaimed: number[];
   /** Rebuild replica rows for `unclaimed` from the server, then refresh. */
@@ -59,21 +66,21 @@ export interface DeviceLibrary {
   usedBytes: number;
   /** Reload from IndexedDB. */
   refresh: () => Promise<void>;
-  isDownloaded: (bookId: number) => boolean;
+  isDownloaded: (bookId: number, serverId?: string) => boolean;
   /** Fraction downloaded, 0..1. Partial downloads report their real progress. */
-  progressOf: (bookId: number) => number;
-  bytesFor: (bookId: number) => number;
+  progressOf: (bookId: number, serverId?: string) => number;
+  bytesFor: (bookId: number, serverId?: string) => number;
   download: (book: Audiobook, onProgress?: (p: DownloadProgress) => void) => Promise<void>;
-  remove: (bookId: number) => Promise<{ failed: string[] }>;
+  remove: (bookId: number, serverId?: string) => Promise<{ failed: string[] }>;
   /**
    * A playable URL for a downloaded track, or undefined when it is not on the
    * device. The caller falls back to streaming.
    */
-  localUrlForTrack: (bookId: number, trackId: number) => Promise<string | undefined>;
+  localUrlForTrack: (bookId: number, trackId: number, serverId?: string) => Promise<string | undefined>;
 }
 
 export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
-  const [rows, setRows] = useState<Record<number, ReplicaBook>>({});
+  const [rows, setRows] = useState<Record<string, ReplicaBook>>({});
   // Start "loading" whenever the library is enabled: the first paint must not
   // claim the device is empty before IndexedDB has been asked.
   const [loading, setLoading] = useState(enabled);
@@ -91,28 +98,31 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
     setLoading(true);
     setLibraryReadError(null);
     try {
-      const list = await listReplicaAudiobooks(localDb);
-      // Re-read the rows rather than rebuilding them from the projection, so
-      // `tracks` and `fetchedAt` stay available to the UI.
-      const raw = await Promise.all(list.map((book) => localDb.books.get(book.id)));
-      const next: Record<number, ReplicaBook> = {};
-      for (const row of raw) {
-        if (!row) continue;
+      // The offline library is the union of the device's per-server shelves
+      // (spec 30): every downloaded or adopted book, whatever server it belongs
+      // to. Rows are keyed by `<serverId>#<bookId>`, so shelves do not collide.
+      const all = await listReplicaBooks(localDb);
+      const next: Record<string, ReplicaBook> = {};
+      for (const row of all) {
         // The replica stores only shared metadata. Progress is private and
         // comes back from the encrypted rows when the profile key is unlocked;
         // without a key the book is still playable, just with no resume point.
-        const progress = await readProgress(row.id);
-        next[row.id] = progress
-          ? { ...row, book: { ...row.book, progress } }
-          : row;
+        const progress = await readProgress(row.book.id);
+        next[row.bookKey] = progress ? { ...row, book: { ...row.book, progress } } : row;
       }
       setRows(next);
       // Files that outlived their row: audio from before an origin change, or
       // from a database that was cleared. Read after the rows so `known` is
-      // exactly what the app can currently see.
-      setUnclaimed(await listUnclaimedOnDevice(deviceFiles, Object.keys(next).map(Number)));
-    } catch (error) {
-      // A replica that will not open must not break the app -- but it must not
+      // exactly what the app can currently see. Detection maps orphan folders
+      // onto the *connected* server's shelf and adoption confirms through that
+      // same server (spec 30), so the mapping is per-server by construction.
+      const claimed = new Set(
+        Object.values(next)
+          .filter((row) => row.serverId === getServerUrl())
+          .map((row) => row.book.id),
+      );
+      setUnclaimed(await listUnclaimedOnDevice(deviceFiles, claimed));
+    } catch (error) {      // A replica that will not open must not break the app -- but it must not
       // be reported as an empty library either. Keep the server view usable and
       // remember why the device view is missing, so the offline screen can say
       // so instead of pretending there is nothing here.
@@ -129,13 +139,14 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
   }, [refresh]);
 
   const isDownloaded = useCallback(
-    (bookId: number) => isFullyDownloaded(rows[bookId]),
+    (bookId: number, serverId?: string) =>
+      isFullyDownloaded(rows[replicaBookKey(serverId ?? getServerUrl(), bookId)]),
     [rows],
   );
 
   const progressOf = useCallback(
-    (bookId: number) => {
-      const row = rows[bookId];
+    (bookId: number, serverId?: string) => {
+      const row = rows[replicaBookKey(serverId ?? getServerUrl(), bookId)];
       if (!row) return 0;
       const expected = row.book.tracks?.length ?? 0;
       if (expected === 0) return 0;
@@ -152,6 +163,7 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
           db: localDb,
           files: deviceFiles,
           trackUrl: trackStreamUrl,
+          sourceServer: getServerUrl(),
         },
         onProgress,
       );
@@ -161,8 +173,8 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
   );
 
   const remove = useCallback(
-    async (bookId: number) => {
-      const result = await removeDownloadedBook(localDb, deviceFiles, bookId);
+    async (bookId: number, serverId?: string) => {
+      const result = await removeDownloadedBook(localDb, deviceFiles, bookId, serverId ?? getServerUrl());
       await refresh();
       return { failed: result.failed };
     },
@@ -170,7 +182,7 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
   );
 
   /**
-   * Adopt the audio that is already here (spec 29).
+   * Adopt the audio that is already here (spec 29, per-server shelf in spec 30).
    *
    * The server is the authority on what the files are: a folder is only a book
    * if `GET /api/audiobooks/:id` confirms it. Offline this throws before
@@ -180,6 +192,7 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
     const result = await recoverBooks(unclaimed, {
       db: localDb,
       files: deviceFiles,
+      sourceServer: getServerUrl(),
       fetchBook: async (bookId) => {
         const response = await boundedFetch(apiUrl(`/api/audiobooks/${bookId}`), {
           credentials: "include",
@@ -198,8 +211,8 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
   }, [unclaimed, refresh]);
 
   const localUrlForTrack = useCallback(
-    async (bookId: number, trackId: number) => {
-      const row = rows[bookId];
+    async (bookId: number, trackId: number, serverId?: string) => {
+      const row = rows[replicaBookKey(serverId ?? getServerUrl(), bookId)];
       const track = row?.tracks[String(trackId)];
       if (!track) return undefined;
       try {
@@ -213,7 +226,10 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
     [rows],
   );
 
-  const bytesFor = useCallback((bookId: number) => bookBytes(rows[bookId]), [rows]);
+  const bytesFor = useCallback(
+    (bookId: number, serverId?: string) => bookBytes(rows[replicaBookKey(serverId ?? getServerUrl(), bookId)]),
+    [rows],
+  );
 
   return {
     books: Object.values(rows).map((row) => row.book),

@@ -44,6 +44,16 @@ export interface FileSystemPort {
 export const BOOK_DIR = "books";
 
 /**
+ * Local primary key for one downloaded book: `<serverId>#<bookId>`.
+ *
+ * Composite because the offline library is a set of per-server shelves (spec
+ * 30) and two different servers can both number their books from 1.
+ */
+export function replicaBookKey(serverId: string, bookId: number): string {
+  return `${serverId}#${bookId}`;
+}
+
+/**
  * Where one track is stored.
  *
  * Keyed by book and track id rather than the track's filename: filenames come
@@ -66,8 +76,13 @@ function key(trackId: number): string {
 }
 
 /** Every downloaded book, newest metadata fetch first is not guaranteed. */
-export async function listReplicaBooks(db: LocalLibraryDatabase): Promise<ReplicaBook[]> {
-  return db.books.toArray();
+export async function listReplicaBooks(
+  db: LocalLibraryDatabase,
+  serverId?: string,
+): Promise<ReplicaBook[]> {
+  const rows = await db.books.toArray();
+  const list = serverId ? rows.filter((row) => row.serverId === serverId) : rows;
+  return list;
 }
 
 /**
@@ -75,15 +90,22 @@ export async function listReplicaBooks(db: LocalLibraryDatabase): Promise<Replic
  *
  * Projects out the replica bookkeeping so nothing downstream can mistake a
  * stale local copy for live server state.
+ *
+ * When `serverId` is given only that server's shelf is returned; otherwise the
+ * union across shelves is (the offline shelf is the union, spec 30).
  */
-export async function listReplicaAudiobooks(db: LocalLibraryDatabase): Promise<Audiobook[]> {
-  const rows = await db.books.toArray();
+export async function listReplicaAudiobooks(
+  db: LocalLibraryDatabase,
+  serverId?: string,
+): Promise<Audiobook[]> {
+  const rows = await listReplicaBooks(db, serverId);
   return rows.map((row) => row.book);
 }
 
 /** How many books are available offline. */
-export async function countReplicaBooks(db: LocalLibraryDatabase): Promise<number> {
-  return db.books.count();
+export async function countReplicaBooks(db: LocalLibraryDatabase, serverId?: string): Promise<number> {
+  const rows = await listReplicaBooks(db, serverId);
+  return rows.length;
 }
 
 /**
@@ -109,10 +131,13 @@ export async function putReplicaBook(
   db: LocalLibraryDatabase,
   book: Audiobook,
   tracks: Record<number, DownloadedTrack> = {},
+  serverId = "",
 ): Promise<void> {
-  const existing = await db.books.get(book.id);
+  const key = replicaBookKey(serverId, book.id);
+  const existing = await db.books.get(key);
   await db.books.put({
-    id: book.id,
+    bookKey: key,
+    serverId,
     book: sharedReplicaBook(book),
     fetchedAt: new Date().toISOString(),
     // Preserve tracks already downloaded when only the metadata is refreshed,
@@ -126,8 +151,10 @@ export async function putDownloadedTrack(
   db: LocalLibraryDatabase,
   bookId: number,
   track: DownloadedTrack,
+  serverId = "",
 ): Promise<void> {
-  const existing = await db.books.get(bookId);
+  const bookKey = replicaBookKey(serverId, bookId);
+  const existing = await db.books.get(bookKey);
   if (!existing) throw new Error(`No replica entry for book ${bookId}`);
   await db.books.put({
     ...existing,
@@ -178,8 +205,9 @@ export async function removeDownloadedBook(
   db: LocalLibraryDatabase,
   files: FileSystemPort,
   bookId: number,
+  serverId = "",
 ): Promise<{ removed: boolean; failed: string[] }> {
-  const row = await db.books.get(bookId);
+  const row = await db.books.get(replicaBookKey(serverId, bookId));
   if (!row) return { removed: false, failed: [] };
 
   const failed: string[] = [];
@@ -191,7 +219,7 @@ export async function removeDownloadedBook(
     }
   }
 
-  await db.books.delete(bookId);
+  await db.books.delete(replicaBookKey(serverId, bookId));
   return { removed: true, failed };
 }
 
@@ -201,7 +229,7 @@ export async function removeDownloadedBook(
  * Summed from the replica rather than from `stat`, so it is available before
  * any filesystem permission is needed and costs no native calls.
  */
-export async function totalReplicaBytes(db: LocalLibraryDatabase): Promise<number> {
-  const rows = await db.books.toArray();
+export async function totalReplicaBytes(db: LocalLibraryDatabase, serverId?: string): Promise<number> {
+  const rows = await listReplicaBooks(db, serverId);
   return rows.reduce((total, row) => total + bookBytes(row), 0);
 }

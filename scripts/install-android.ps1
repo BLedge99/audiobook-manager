@@ -36,7 +36,15 @@ $adb = Get-Adb
 $sdkRoot = Split-Path -Parent (Split-Path -Parent $adb)
 $env:ANDROID_HOME = $sdkRoot
 $env:ANDROID_SDK_ROOT = $sdkRoot
-$deviceOutput = @(& $adb devices 2>&1)
+# `adb` writes daemon lifecycle messages ("* daemon not running; starting now
+# at tcp:5037") to stderr. Under Windows PowerShell 5.1, `2>&1` wraps native
+# stderr in ErrorRecords, and with $ErrorActionPreference = 'Stop' the first
+# one terminates the script. Relax the preference around the invocation and
+# stringify the output so the device-list parsing sees plain strings.
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$deviceOutput = @(& $adb devices 2>&1) | ForEach-Object { "$_" }
+$ErrorActionPreference = $previousErrorActionPreference
 if ($LASTEXITCODE -ne 0) {
   throw "Could not query ADB devices: $($deviceOutput -join [Environment]::NewLine)"
 }
@@ -94,7 +102,10 @@ if (-not (Test-Path $apkPath)) {
 $failedDevices = [System.Collections.Generic.List[string]]::new()
 foreach ($serial in $devices) {
   Write-Host "Installing APK on $serial..."
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
   & $adb -s $serial install -r $apkPath
+  $ErrorActionPreference = $previousErrorActionPreference
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "APK installation failed on $serial (exit code $LASTEXITCODE)."
     $failedDevices.Add($serial)

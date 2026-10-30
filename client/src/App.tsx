@@ -1125,15 +1125,15 @@ function App() {
         onBookUpdated={() => { void refresh(); void browse.refresh(); }}
         /* Spec 27: removing a book from this profile's library. */
         onRemoveFromLibrary={library.removeFromLibrary}
-        isDownloaded={isNativeShell() ? device.isDownloaded(selectedBook.id) : false}
+        isDownloaded={isNativeShell() ? device.isDownloaded(selectedBook.id, selectedBook.serverId) : false}
         onDeleteDownload={isNativeShell() ? device.remove : undefined}
         deviceAction={
           isNativeShell() ? (
             <DownloadButton
               book={selectedBook}
-              fraction={device.progressOf(selectedBook.id)}
-              isDownloaded={device.isDownloaded(selectedBook.id)}
-              bytes={device.bytesFor(selectedBook.id)}
+              fraction={device.progressOf(selectedBook.id, selectedBook.serverId)}
+              isDownloaded={device.isDownloaded(selectedBook.id, selectedBook.serverId)}
+              bytes={device.bytesFor(selectedBook.id, selectedBook.serverId)}
               onDownload={device.download}
               onRemove={device.remove}
             />

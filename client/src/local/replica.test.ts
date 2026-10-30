@@ -13,8 +13,12 @@ import {
   removeDownloadedBook,
   totalReplicaBytes,
   trackPath,
+  replicaBookKey,
   type FileSystemPort,
 } from "./replica";
+
+/** Local composite key (`<serverId>#<bookId>`) for the default-server shelf. */
+const key = (bookId: number) => replicaBookKey("", bookId);
 
 function book(overrides: Partial<Audiobook> = {}): Audiobook {
   return {
@@ -111,7 +115,7 @@ describe("replica storage", () => {
     await putDownloadedTrack(db, 1, track(10));
     await putReplicaBook(db, book({ title: "Earthsea (retitled)" }));
 
-    const row = await db.books.get(1);
+    const row = await db.books.get(key(1));
     expect(row?.book.title).toBe("Earthsea (retitled)");
     expect(row?.tracks[10]).toBeDefined();
   });
@@ -121,7 +125,7 @@ describe("replica storage", () => {
     await putDownloadedTrack(db, 1, track(10));
     await putDownloadedTrack(db, 1, track(11, 2048));
 
-    const row = await db.books.get(1);
+    const row = await db.books.get(key(1));
     expect(Object.keys(row!.tracks)).toHaveLength(2);
     expect(bookBytes(row)).toBe(3072);
   });
@@ -136,7 +140,7 @@ describe("replica storage", () => {
 describe("isFullyDownloaded", () => {
   it("is false when nothing is downloaded", async () => {
     await putReplicaBook(db, book());
-    expect(isFullyDownloaded(await db.books.get(1))).toBe(false);
+    expect(isFullyDownloaded(await db.books.get(key(1)))).toBe(false);
   });
 
   it("is false for a partial download", async () => {
@@ -144,14 +148,14 @@ describe("isFullyDownloaded", () => {
     // which is worse than it being plainly unavailable.
     await putReplicaBook(db, book());
     await putDownloadedTrack(db, 1, track(10));
-    expect(isFullyDownloaded(await db.books.get(1))).toBe(false);
+    expect(isFullyDownloaded(await db.books.get(key(1)))).toBe(false);
   });
 
   it("is true once every track is present", async () => {
     await putReplicaBook(db, book());
     await putDownloadedTrack(db, 1, track(10));
     await putDownloadedTrack(db, 1, track(11));
-    expect(isFullyDownloaded(await db.books.get(1))).toBe(true);
+    expect(isFullyDownloaded(await db.books.get(key(1)))).toBe(true);
   });
 
   it("is false for an unknown book", () => {
@@ -161,7 +165,7 @@ describe("isFullyDownloaded", () => {
   it("is false for a book the server reports no tracks for", async () => {
     // Otherwise a zero-track book would look downloaded with nothing to play.
     await putReplicaBook(db, book({ tracks: [] }));
-    expect(isFullyDownloaded(await db.books.get(1))).toBe(false);
+    expect(isFullyDownloaded(await db.books.get(key(1)))).toBe(false);
   });
 });
 
@@ -172,7 +176,7 @@ describe("downloadedTracks", () => {
     await putDownloadedTrack(db, 1, track(11));
     await putDownloadedTrack(db, 1, track(10));
 
-    expect(downloadedTracks(await db.books.get(1)).map((t) => t.trackId)).toEqual([10, 11]);
+    expect(downloadedTracks(await db.books.get(key(1))).map((t) => t.trackId)).toEqual([10, 11]);
   });
 
   it("is empty for an unknown book", () => {
@@ -213,7 +217,7 @@ describe("removeDownloadedBook", () => {
 
     expect(result).toEqual({ removed: true, failed: [] });
     expect(removed).toEqual(["books/1/10.mp3", "books/1/11.mp3"]);
-    expect(await db.books.get(1)).toBeUndefined();
+    expect(await db.books.get(key(1))).toBeUndefined();
   });
 
   it("deletes files before forgetting the record", async () => {
@@ -227,13 +231,13 @@ describe("removeDownloadedBook", () => {
 
     const rowPresentDuringDelete: boolean[] = [];
     const { files } = fakeFiles(async () => {
-      rowPresentDuringDelete.push((await db.books.get(1)) !== undefined);
+      rowPresentDuringDelete.push((await db.books.get(key(1))) !== undefined);
     });
 
     await removeDownloadedBook(db, files, 1);
 
     expect(rowPresentDuringDelete).toEqual([true, true]);
-    expect(await db.books.get(1)).toBeUndefined();
+    expect(await db.books.get(key(1))).toBeUndefined();
   });
 
   it("still forgets the book when one file cannot be deleted", async () => {
@@ -249,12 +253,54 @@ describe("removeDownloadedBook", () => {
 
     expect(result.removed).toBe(true);
     expect(result.failed).toEqual(["books/1/10.mp3"]);
-    expect(await db.books.get(1)).toBeUndefined();
+    expect(await db.books.get(key(1))).toBeUndefined();
   });
 
   it("is a no-op for a book that is not on the device", async () => {
     const { files } = fakeFiles();
     expect(await removeDownloadedBook(db, files, 404)).toEqual({ removed: false, failed: [] });
     expect(files.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe("per-server shelves (spec 30)", () => {
+  it("keeps books from two servers in separate shelves", async () => {
+    const LOCAL = "http://localhost:3000";
+    const PROD = "https://audiobook-manager.onrender.com";
+    await putReplicaBook(db, book({ id: 7, title: "Local Book" }), {}, LOCAL);
+    // The same numeric book id on the other server must not collide with the
+    // first shelf -- that is the whole point of the composite key.
+    await putReplicaBook(db, book({ id: 7, title: "Prod Book" }), {}, PROD);
+
+    // The union across shelves holds both.
+    expect(await countReplicaBooks(db)).toBe(2);
+    expect((await listReplicaAudiobooks(db)).map((b) => b.title).sort()).toEqual(["Local Book", "Prod Book"]);
+
+    // Each shelf is queryable on its own and does not bleed into the other.
+    expect((await listReplicaAudiobooks(db, LOCAL)).map((b) => b.title)).toEqual(["Local Book"]);
+    expect((await listReplicaAudiobooks(db, PROD)).map((b) => b.title)).toEqual(["Prod Book"]);
+  });
+
+  it("scopes download state and byte counts to the requested shelf", async () => {
+    const LOCAL = "http://localhost:3000";
+    const PROD = "https://audiobook-manager.onrender.com";
+    await putReplicaBook(db, book({ id: 7, title: "Local Book" }), {}, LOCAL);
+    await putDownloadedTrack(db, 7, track(10, 100), LOCAL);
+    await putDownloadedTrack(db, 7, track(11, 250), LOCAL);
+    await putReplicaBook(
+      db,
+      book({ id: 2, title: "Prod Book", tracks: [{ id: 20, duration: 100, trackNumber: 1 }, { id: 21, duration: 100, trackNumber: 2 }] }),
+      {},
+      PROD,
+    );
+    await putDownloadedTrack(db, 2, track(20, 50, 2), PROD);
+
+    expect(isFullyDownloaded(await db.books.get(replicaBookKey(LOCAL, 7)))).toBe(true);
+    expect(isFullyDownloaded(await db.books.get(replicaBookKey(PROD, 2)))).toBe(false);
+    expect(bookBytes(await db.books.get(replicaBookKey(LOCAL, 7)))).toBe(350);
+    expect(bookBytes(await db.books.get(replicaBookKey(PROD, 2)))).toBe(50);
+    expect(await totalReplicaBytes(db, LOCAL)).toBe(350);
+    expect(await totalReplicaBytes(db, PROD)).toBe(50);
+    expect(await totalReplicaBytes(db)).toBe(400);
   });
 });
