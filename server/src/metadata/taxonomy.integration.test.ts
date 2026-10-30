@@ -1,8 +1,4 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import {
   mapGenreString,
@@ -12,6 +8,7 @@ import {
   seedGenres,
   upsertSeries,
 } from "./taxonomy-service";
+import { createTestDatabase } from "../test-support/database";
 
 /**
  * Spec 17 — taxonomy service integration tests.
@@ -21,25 +18,12 @@ import {
  * user-vs-provider genre precedence.
  */
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-taxonomy-"));
-const dbFile = path.join(dir, "test.db");
-// Matches the temp-SQLite pattern used by the other integration suites.
-const dbUrl = `file:${dbFile}`;
+const db = createTestDatabase("audiobook-taxonomy-");
 
 let prisma: PrismaClient;
 let libraryRootId = 0;
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = dbUrl;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    // This file lives in src/metadata/, so the server root is two levels up.
-    cwd: path.join(__dirname, "..", ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
   await seedGenres(prisma);
   await seedGenreMappings(prisma);
@@ -49,13 +33,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.$disconnect();
-  // Windows keeps a handle on the SQLite file briefly; a failed cleanup must
-  // not fail the suite.
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* best effort */
-  }
+  db.cleanup();
 });
 
 async function makeBook(title = "Dune") {

@@ -1,15 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient, type Profile } from "@prisma/client";
 import { buildApp, SESSION_HEADER } from "./app";
 import { hashPassword } from "./auth/password";
 import { hashSessionToken } from "./auth/session";
+import { createTestDatabase } from "./test-support/database";
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-auth-test-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-auth-test-");
+const dir = db.dir;
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 let prisma: PrismaClient;
@@ -50,27 +48,14 @@ function tokenOf(response: Awaited<ReturnType<typeof login>>): string {
 }
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
-  app = await buildApp({ logger: false, appPassword: "household", mediaTokenSecret: "m".repeat(32) });
+  app = await buildApp({ logger: false, appPassword: "household", mediaTokenSecret: "m".repeat(32), prisma });
 }, 120_000);
 
 afterAll(async () => {
   await app.close();
   await prisma.$disconnect();
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* Windows can hold the SQLite handle briefly */
-  }
+  db.cleanup();
 });
 
 describe("account list", () => {

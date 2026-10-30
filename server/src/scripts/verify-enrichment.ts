@@ -38,10 +38,19 @@ async function main() {
   const { seedGenres, seedGenreMappings } = await import("../metadata/taxonomy-service");
 
   console.log(`[verify] scratch db: ${dbFile}`);
+  const sqliteSchema = path.join(__dirname, "..", "..", "prisma", "sqlite", "schema.prisma");
+  // The scratch database is SQLite even in production-like runs. Both commands
+  // must name the SQLite schema: the generated client's provider is baked in,
+  // and the default migration history is PostgreSQL.
+  execSync(`npx prisma generate --schema "${sqliteSchema}"`, {
+    cwd: path.join(__dirname, "..", ".."),
+    env: { ...process.env },
+    stdio: "ignore",
+  });
   // `migrate deploy`, not `db push`: the scratch database is built from the
   // real migrations, so this script cannot pass against a schema the
   // migrations would not produce.
-  execSync("npx prisma migrate deploy", {
+  execSync(`npx prisma migrate deploy --schema "${sqliteSchema}"`, {
     cwd: path.join(__dirname, "..", ".."),
     env: { ...process.env },
     stdio: "ignore",

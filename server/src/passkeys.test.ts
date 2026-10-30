@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { PrismaClient, type Profile } from "@prisma/client";
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { buildApp, SESSION_HEADER } from "./app";
@@ -15,9 +11,9 @@ import {
   passkeyConfigFromEnv,
   type PasskeyConfig,
 } from "./auth/passkeys";
+import { createTestDatabase } from "./test-support/database";
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-passkey-test-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-passkey-test-");
 
 const CONFIG: PasskeyConfig = {
   rpId: "books.home.arpa",
@@ -73,7 +69,7 @@ function registrationResponse(challenge: string): RegistrationResponseJSON {
       transports: ["internal"],
     },
     clientExtensionResults: {},
-    type: "public_key",
+    type: "public-key",
   } as RegistrationResponseJSON;
 }
 
@@ -90,7 +86,7 @@ function authenticationResponse(credentialId: string, challenge: string): Authen
       userHandle: undefined,
     },
     clientExtensionResults: {},
-    type: "public_key",
+    type: "public-key",
   } as AuthenticationResponseJSON;
 }
 
@@ -109,21 +105,13 @@ async function storeCredential(profileId: number, credentialId = randomUUID()) {
 }
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
-  app = await buildApp({ logger: false, appPassword: "household", passkeyConfig: CONFIG });
+  app = await buildApp({ logger: false, appPassword: "household", passkeyConfig: CONFIG, prisma });
   unconfiguredApp = await buildApp({
     logger: false,
     appPassword: "household",
     passkeyConfig: null,
+    prisma,
   });
 }, 120_000);
 
@@ -131,11 +119,7 @@ afterAll(async () => {
   await app.close();
   await unconfiguredApp.close();
   await prisma.$disconnect();
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* Windows can hold the SQLite handle briefly */
-  }
+  db.cleanup();
 });
 
 describe("passkey configuration", () => {

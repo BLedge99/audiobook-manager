@@ -1,8 +1,4 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import {
   createTag,
@@ -14,6 +10,7 @@ import {
   RESERVED_TAG_NAMES,
 } from "./tags";
 import { seedGenres } from "./taxonomy-service";
+import { createTestDatabase } from "../test-support/database";
 
 /**
  * Spec 18 — favourites & custom tag vocabulary.
@@ -23,8 +20,7 @@ import { seedGenres } from "./taxonomy-service";
  * assignment -- all of which are relational, so a real database is required.
  */
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-tags-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-tags-");
 
 let prisma: PrismaClient;
 let libraryRootId = 0;
@@ -32,15 +28,6 @@ let nextBook = 0;
 const profiles: number[] = [];
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, "..", ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
   await seedGenres(prisma);
   const root = await prisma.libraryRoot.create({ data: { path: "/lib", label: "Test" } });
@@ -53,11 +40,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.$disconnect();
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* best effort */
-  }
+  db.cleanup();
 });
 
 async function makeBook(title: string) {

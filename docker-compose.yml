@@ -21,18 +21,19 @@ services:
       context: .
       dockerfile: .devcontainer/Dockerfile.server
     working_dir: /app/server
-    # `prisma migrate deploy`, NOT `prisma db push`.
+    # Local development uses SQLite; production uses PostgreSQL. Prisma bakes
+    # the datasource provider into the generated client, so both the generate
+    # and the migrate command must name the SQLite schema explicitly. Running
+    # the bare commands would generate a PostgreSQL client and try to replay
+    # PostgreSQL SQL against the SQLite file.
     #
-    # `db push` creates the schema but records no migration history and
-    # **cannot run a data migration** -- and spec 27's migration has to move
-    # data (every existing profile is given every book). Production has always
-    # used `migrate deploy` (Dockerfile.prod); using `db push` here meant dev
-    # and production disagreed about what the database contained, which is the
-    # worst possible place for that to show up.
+    # `prisma migrate deploy`, NOT `prisma db push`: db push records no
+    # migration history and cannot run a data migration, so dev and production
+    # would disagree about what the database contained.
     #
-    # The exit code is echoed rather than checked, as before, so a failure is
-    # visible in the logs without taking the whole stack down.
-    command: sh -c "echo '[compose] starting prisma generate'; npx prisma generate; echo '[compose] prisma generate exited with code '$$?; echo '[compose] applying migrations'; npx prisma migrate deploy; echo '[compose] prisma migrate deploy exited with code '$$?; echo '[compose] starting Fastify'; npm run dev"
+    # The exit code is echoed rather than checked, so a failure is visible in
+    # the logs without taking the whole stack down.
+    command: sh -c "echo '[compose] generating the SQLite Prisma client'; npx prisma generate --schema prisma/sqlite/schema.prisma; echo '[compose] prisma generate exited with code '$$?; echo '[compose] applying SQLite migrations'; npx prisma migrate deploy --schema prisma/sqlite/schema.prisma; echo '[compose] prisma migrate deploy exited with code '$$?; echo '[compose] starting Fastify'; npm run dev"
     volumes:
       - ./server:/app/server
       - server_node_modules:/app/server/node_modules

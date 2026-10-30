@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { buildApp } from "./app";
 import { SESSION_HEADER } from "./auth/session";
+import { createTestDatabase } from "./test-support/database";
 
 /**
  * Spec 28, acceptance: "Static `/` and `/assets/*` load without a session;
@@ -16,9 +15,8 @@ import { SESSION_HEADER } from "./auth/session";
  * and the login screen could not load. The dev server hides that because Vite
  * serves the assets, so the test supplies its own built `dist`.
  */
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-static-test-"));
-const dbFile = path.join(dir, "test.db");
-const clientDist = path.join(dir, "dist");
+const db = createTestDatabase("audiobook-static-test-");
+const clientDist = path.join(db.dir, "dist");
 mkdirSync(path.join(clientDist, "assets"), { recursive: true });
 writeFileSync(path.join(clientDist, "index.html"), "<!doctype html><title>Bookle shell</title>");
 writeFileSync(path.join(clientDist, "assets", "app.js"), "console.log('bookle');");
@@ -27,29 +25,16 @@ let app: Awaited<ReturnType<typeof buildApp>>;
 let prisma: PrismaClient;
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
   process.env.CLIENT_DIST = clientDist;
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
-  app = await buildApp({ logger: false, appPassword: "household" });
+  app = await buildApp({ logger: false, appPassword: "household", prisma });
 }, 120_000);
 
 afterAll(async () => {
   await app.close();
   await prisma.$disconnect();
   delete process.env.CLIENT_DIST;
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* Windows can hold the SQLite handle briefly */
-  }
+  db.cleanup();
 });
 
 describe("the production single-origin build", () => {

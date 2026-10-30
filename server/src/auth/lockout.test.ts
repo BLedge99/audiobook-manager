@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../app";
 import { hashPassword } from "./password";
+import { createTestDatabase } from "../test-support/database";
 
 /**
  * Spec 28: "Five consecutive failures in fifteen minutes lock the profile for
@@ -15,8 +12,7 @@ import { hashPassword } from "./password";
  * Driven through the real route with a fake clock, so the retry-after the
  * client renders is the same number the service computed.
  */
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-lockout-test-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-lockout-test-");
 
 const PASSWORD = "correct-horse-9";
 const WRONG = "wrong-password-9";
@@ -56,21 +52,13 @@ function advance(seconds: number) {
 }
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, "..", ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
   app = await buildApp({
     logger: false,
     appPassword: "household",
     mediaTokenSecret: "m".repeat(32),
     now,
+    prisma,
   });
   const profile = await prisma.profile.create({
     data: {
@@ -85,11 +73,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   await prisma.$disconnect();
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* Windows can hold the SQLite handle briefly */
-  }
+  db.cleanup();
 });
 
 describe("profile lockout backoff", () => {

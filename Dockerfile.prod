@@ -13,8 +13,10 @@ COPY server/package.json server/package-lock.json ./
 COPY server/prisma ./prisma
 RUN npm ci
 COPY server/ ./
-RUN DATABASE_URL=file:/tmp/build.db npx prisma generate \
-    && DATABASE_URL=file:/tmp/build.db npm run build
+# Production is PostgreSQL. `prisma generate` needs no live database, so no
+# placeholder DATABASE_URL is required.
+RUN npx prisma generate --schema prisma/schema.prisma \
+    && npm run build
 RUN npm prune --omit=dev
 
 FROM node:24-bookworm-slim
@@ -31,4 +33,4 @@ ENV CLIENT_DIST=/app/client/dist
 WORKDIR /app/server
 EXPOSE 3000
 USER node
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]

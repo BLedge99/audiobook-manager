@@ -49,8 +49,10 @@ same change. Never silently diverge.
   state, and history live in the DB so they sync across devices.
 - **Prefer small, reviewable changes.** One feature per change, matching a spec.
 - **Every feature ships with tests.** See Testing rules and `specs/02-test-infrastructure.md`.
-- **Migrations stay additive.** SQLite now, PostgreSQL-compatible later; don't
-  use SQLite-only SQL that would block that move.
+- **Migrations stay additive.** Production is PostgreSQL; local development
+  and tests are SQLite. Both histories are Prisma-managed, so a model change
+  needs a migration in each. Keep SQL portable: no SQLite- or PostgreSQL-only
+  SQL in application queries. See `server/prisma/README.md` and ADR 019.
 
 ## How to run things
 

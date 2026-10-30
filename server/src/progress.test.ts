@@ -1,12 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { PrismaClient } from "@prisma/client";
 import { buildApp } from "./app";
+import { createTestDatabase } from "./test-support/database";
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-progress-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-progress-");
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 let cookie: string;
@@ -17,23 +14,14 @@ let bookId: number;
 let prisma: import("@prisma/client").PrismaClient;
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
-  app = await buildApp({ logger: false, appPassword: "household" });
+  const { PrismaClient } = await import("@prisma/client");
+  prisma = new PrismaClient();
+  app = await buildApp({ logger: false, appPassword: "household", prisma });
   const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
   cookie = login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
   const profile = await app.inject({ method: "POST", url: "/api/profiles", payload: { name: "Sam" }, headers: { cookie } });
   profileId = profile.json().id;
 
-  const { PrismaClient } = await import("@prisma/client");
-  prisma = new PrismaClient();
   const root = await prisma.libraryRoot.create({ data: { path: "/tmp/lib" } });
   const book = await prisma.mediaItem.create({
     data: { title: "Test Book", author: "Author", filePath: "/tmp/lib/book.m4b", fileFormat: "m4b", duration: 1000, libraryRootId: root.id },
@@ -48,13 +36,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
-  // Windows can still hold the SQLite handle briefly; a failed temp cleanup
-  // must not fail an otherwise-green suite.
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* best effort */
-  }
+  await prisma.$disconnect();
+  db.cleanup();
 });
 
 const profileHeaders = () => ({ cookie, "x-profile-id": String(profileId) });

@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { buildApp } from "./app";
 import { DEFAULT_PROFILES, TEST_PROFILES, seedDefaultProfiles } from "./seed";
+import { createTestDatabase } from "./test-support/database";
 
 /**
  * Spec 28 — seeding accounts.
@@ -17,32 +14,18 @@ import { DEFAULT_PROFILES, TEST_PROFILES, seedDefaultProfiles } from "./seed";
  *    being stored (or being skipped when it is valid).
  */
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-seed-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-seed-");
 
 let prisma: PrismaClient;
 const TEST_PASSWORD = "correct-horse-9";
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
 }, 120_000);
 
 afterAll(async () => {
   await prisma.$disconnect();
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* best effort */
-  }
+  db.cleanup();
 });
 
 beforeEach(async () => {

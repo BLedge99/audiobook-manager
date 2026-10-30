@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { execSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
@@ -15,12 +15,14 @@ import { PrismaClient } from "@prisma/client";
  * would look, then applies the real migration with `prisma migrate deploy`.
  * The manual live-database rehearsal is still recorded in the spec.
  *
- * SKIPPED: the spec 28 migration (20261023120000_spec28_accounts) does not exist
- * in the current migration history, and the existing migrations are PostgreSQL-specific
- * and cannot run on SQLite. This test would need a PostgreSQL test database to run.
+ * SKIPPED: the spec 28 migration (20261023120000_spec28_accounts) is no longer
+ * in the squashed migration history, so there is no "before spec 28" state to
+ * build. Re-enable this against the PostgreSQL history when that migration is
+ * restored; the SQLite history is a single baseline and cannot express it.
  */
 const SERVER_ROOT = path.join(__dirname, "..");
-const REAL_MIGRATIONS = path.join(SERVER_ROOT, "prisma", "migrations");
+const SQLITE_PRISMA = path.join(SERVER_ROOT, "prisma", "sqlite");
+const REAL_MIGRATIONS = path.join(SQLITE_PRISMA, "migrations");
 const SPEC28 = "20261023120000_spec28_accounts";
 
 const tempDirs: string[] = [];
@@ -46,18 +48,18 @@ function legacyProject() {
   const migrationsDir = path.join(prismaDir, "migrations");
   mkdirSync(migrationsDir, { recursive: true });
 
-  // Copy the test schema (sqlite provider) instead of the real one
-  cpSync(path.join(SERVER_ROOT, "prisma", "schema.test.prisma"), path.join(prismaDir, "schema.prisma"));
+  // The SQLite schema is derived from the canonical PostgreSQL model.
+  cpSync(path.join(SQLITE_PRISMA, "schema.prisma"), path.join(prismaDir, "schema.prisma"));
 
   for (const entry of readdirSync(REAL_MIGRATIONS)) {
     if (entry === SPEC28) continue;
     cpSync(path.join(REAL_MIGRATIONS, entry), path.join(migrationsDir, entry), { recursive: true });
   }
 
-  // Also copy migration_lock.toml but fix the provider
-  const lockFile = readFileSync(path.join(REAL_MIGRATIONS, "migration_lock.toml"), "utf8");
-  const sqliteLock = lockFile.replace('provider = "postgresql"', 'provider = "sqlite"');
-  writeFileSync(path.join(migrationsDir, "migration_lock.toml"), sqliteLock);
+  cpSync(
+    path.join(REAL_MIGRATIONS, "migration_lock.toml"),
+    path.join(migrationsDir, "migration_lock.toml"),
+  );
 
   const dbFile = path.join(dir, "legacy.db");
   deploy(prismaDir, dbFile);

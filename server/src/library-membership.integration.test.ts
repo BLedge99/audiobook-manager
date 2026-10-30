@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { buildApp, SESSION_HEADER } from "./app";
 import { addBookToFollowingProfiles, giveProfileEveryBook } from "./library-membership";
+import { createTestDatabase } from "./test-support/database";
 
 /**
  * Spec 27 — per-profile library membership.
@@ -18,25 +15,15 @@ import { addBookToFollowingProfiles, giveProfileEveryBook } from "./library-memb
  * still on the server, and the Server library tab still lists it.
  */
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-membership-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-membership-");
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 let prisma: PrismaClient;
 let token = "";
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
-  app = await buildApp({ logger: false, appPassword: "household" });
+  app = await buildApp({ logger: false, appPassword: "household", prisma });
   const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
   token = login.json().token;
 }, 120_000);
@@ -44,11 +31,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   await prisma.$disconnect();
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* best effort */
-  }
+  db.cleanup();
 });
 
 /** Authenticated headers for a given profile. */

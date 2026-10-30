@@ -1,10 +1,9 @@
 import { describe, it, test, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { createScanManager } from "./scanner";
+import { createTestDatabase } from "./test-support/database";
 
 /**
  * Scanner integration tests.
@@ -16,11 +15,10 @@ import { createScanManager } from "./scanner";
  * error out. Unit tests over `scan-utils` could never have caught it.
  */
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-scanner-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-scanner-");
 
 let prisma: PrismaClient;
-const library = path.join(dir, "library");
+const library = path.join(db.dir, "library");
 let libraryRootId = 0;
 
 /** A real LibriVox fixture, so tags and durations behave as they do in life. */
@@ -40,16 +38,6 @@ function sampleLibrary(): string | null {
 }
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
-
   prisma = new PrismaClient();
   const source = sampleLibrary();
   if (source) {
@@ -67,11 +55,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.$disconnect();
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* best effort */
-  }
+  db.cleanup();
 });
 
 /**
@@ -166,7 +150,7 @@ describe("scanner reconciliation", () => {
 describe("scanner: a single-file book", () => {
   it.skipIf(!HAS_FIXTURES)("still gets a track, so it can be downloaded", async () => {
     const source = sampleLibrary();
-    const singleRoot = path.join(dir, "single-root");
+    const singleRoot = path.join(db.dir, "single-root");
     const bookFolder = path.join(singleRoot, "OneBook");
     mkdirSync(bookFolder, { recursive: true });
     const file = readdirSync(source!).find((entry) => entry.toLowerCase().endsWith(".mp3"));

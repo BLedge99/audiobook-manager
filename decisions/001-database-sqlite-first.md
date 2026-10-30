@@ -1,7 +1,8 @@
 # ADR 001 — SQLite first, PostgreSQL-compatible schema
 
 ## Status
-Accepted
+Superseded by ADR 019. Production is PostgreSQL; SQLite remains the local and
+test database.
 
 ## Context
 The app stores library metadata, progress, history, and candidates. It should

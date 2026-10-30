@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { EnrichmentManager, buildQuery } from "./run";
 import { UNKNOWN_AUTHOR } from "./chain";
+import { createTestDatabase } from "../test-support/database";
 
 /**
  * Spec 16 — enrichment run integration tests.
@@ -14,23 +11,13 @@ import { UNKNOWN_AUTHOR } from "./chain";
  * Provider HTTP is stubbed so the run is deterministic and offline.
  */
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-run-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-run-");
 
 let prisma: PrismaClient;
 let libraryRootId = 0;
 let nextId = 0;
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, "..", ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
   const root = await prisma.libraryRoot.create({ data: { path: "/lib", label: "Test" } });
   libraryRootId = root.id;
@@ -38,11 +25,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.$disconnect();
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* best effort */
-  }
+  db.cleanup();
 });
 
 async function makeBook(title: string, enrichmentStatus?: string | null) {

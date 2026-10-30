@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { buildApp, SESSION_HEADER } from "./app";
+import { createTestDatabase } from "./test-support/database";
 
-const dir = mkdtempSync(path.join(tmpdir(), "audiobook-test-"));
-const dbFile = path.join(dir, "test.db");
+const db = createTestDatabase("audiobook-test-");
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 // Only for arranging rows the API cannot create itself -- books arrive via a
@@ -15,30 +14,14 @@ let app: Awaited<ReturnType<typeof buildApp>>;
 let prisma: PrismaClient;
 
 beforeAll(async () => {
-  // Tests always use SQLite for isolation. CI sets file:./test.db, locally we create a temp file.
-  if (!process.env.DATABASE_URL?.startsWith("file:")) {
-    process.env.DATABASE_URL = `file:${dbFile}`;
-  }
-  const schemaFlag = `--schema "${path.join(__dirname, "..", "prisma", "schema.test.prisma")}"`;
-  execSync(`npx prisma db push --accept-data-loss ${schemaFlag}`.trim(), {
-    cwd: path.join(__dirname, ".."),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL! },
-    stdio: "ignore",
-  });
   prisma = new PrismaClient();
-  app = await buildApp({ logger: false, appPassword: "household" });
+  app = await buildApp({ logger: false, appPassword: "household", prisma });
 }, 120_000);
 
 afterAll(async () => {
   await app.close();
   await prisma.$disconnect();
-  // Windows can still hold the SQLite handle briefly; a failed temp cleanup
-  // must not fail an otherwise-green suite.
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* best effort */
-  }
+  db.cleanup();
 });
 
 describe("auth gate", () => {
