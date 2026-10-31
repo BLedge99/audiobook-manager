@@ -284,7 +284,7 @@ export function AudiobookDetail({
           )}
           {deviceAction && <div className="mt-5">{deviceAction}</div>}
 
-          <ChapterPlayer key={book.id} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} profileId={profileId} />
+          <ChapterPlayer key={`${book.serverId ?? ""}#${book.id}`} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} profileId={profileId} />
 
           {/* Spec 18/19/20: favourite and find-more-like actions on the book.
               Above the fold, because both are things a listener does next. */}

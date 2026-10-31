@@ -11,6 +11,7 @@ import { isNativeShell } from "../lib/platform";
 import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
 import { deleteProfileCache, fromBase64, lockOfflineCache, rememberProfileKey, unlockProfileCacheWithKey } from "../local/privateCache";
 import { biometricVault } from "../lib/biometricVault";
+import { toBase64, exportActiveProfileKey } from "../local/privateCache";
 import {
   biometricFailureMessage,
   classifyBiometricFailure,
@@ -53,7 +54,7 @@ function errorSentence(error: unknown): string {
  * The household password is still reachable, but it is a separate mode with its
  * own explanation: it is for setup and recovery, not the daily sign-in.
  */
-export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
+export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<void> }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [loading, setLoading] = useState(true);
@@ -101,12 +102,12 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
     };
   }, []);
 
-  const finish = (profileId: number | null, token: string | undefined) => {
+  const finish = async (profileId: number | null, token: string | undefined) => {
     setSessionToken(token);
     setActiveProfileId(profileId);
     if (profileId === null) lockOfflineCache();
     window.localStorage.removeItem(PENDING_PROFILE_KEY);
-    onSuccess();
+    await onSuccess();
   };
 
   /**
@@ -119,6 +120,32 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
       await rememberProfileKey(profileId, password);
     } catch {
       // Encryption unavailable (old WebView, private mode). Online still works.
+    }
+  };
+
+  const enrollDeviceUnlock = async (profileId: number) => {
+    if (!biometricsAvailable || mode.kind !== "password" || mode.account.hasDeviceUnlock) return;
+    let deviceId: string | undefined;
+    try {
+      const key = await exportActiveProfileKey(profileId);
+      if (!key) return;
+      const response = await boundedFetch("/api/auth/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: copy.security.thisDevice }),
+      });
+      if (!response.ok) return;
+      const created = (await response.json()) as { id: string; secret: string };
+      deviceId = created.id;
+      await biometricVault.save(profileId, {
+        profileId,
+        secret: created.secret,
+        key: toBase64(key),
+      });
+    } catch {
+      if (deviceId) {
+        await boundedFetch(`/api/auth/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" }).catch(() => undefined);
+      }
     }
   };
 
@@ -145,11 +172,12 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
       if (body.authDisabled || body.token === "disabled") {
         // Development with no APP_PASSWORD: the header path still chooses the
         // profile, and there is no password to collect.
-        finish(mode.account.id, undefined);
+        await finish(mode.account.id, undefined);
         return;
       }
       await rememberKey(mode.account.id, password);
-      finish(body.profile?.id ?? mode.account.id, body.token);
+      if (isNativeShell()) await enrollDeviceUnlock(mode.account.id);
+      await finish(body.profile?.id ?? mode.account.id, body.token);
     } catch (submitError) {
       setError(errorSentence(submitError));
     } finally {
@@ -166,7 +194,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
       // No password is in hand, so the previous profile's key must not stay
       // unlocked. Offline data asks for the password separately.
       lockOfflineCache();
-      finish(
+      await finish(
         result.profile?.id ?? mode.account.id,
         result.authDisabled ? undefined : result.token,
       );
@@ -266,7 +294,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
       }
       // Unlock with the saved key (works for both offline-only and online-registered modes)
       await unlockProfileCacheWithKey(saved.profileId, fromBase64(saved.key));
-      finish(saved.profileId, token);
+      await finish(saved.profileId, token);
     } catch {
       setError(copy.login.deviceFailed);
     } finally { setBusy(false); }
@@ -297,7 +325,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
       }
       const body = (await res.json()) as { token?: string; profile?: { id: number } };
       await rememberKey(mode.account.id, newPassword);
-      finish(body.profile?.id ?? mode.account.id, body.token);
+      await finish(body.profile?.id ?? mode.account.id, body.token);
     } catch (submitError) {
       setError(errorSentence(submitError));
     } finally {
@@ -320,7 +348,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
         return;
       }
       const body = (await res.json()) as { token?: string; authDisabled?: boolean };
-      finish(null, body.authDisabled || body.token === "disabled" ? undefined : body.token);
+      await finish(null, body.authDisabled || body.token === "disabled" ? undefined : body.token);
     } catch (submitError) {
       setError(errorSentence(submitError));
     } finally {
@@ -481,6 +509,11 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void }) {
               {!biometricsAvailable && mode.account.hasDeviceUnlock && isNativeShell() && (
                 <p className="text-center text-[12.5px] leading-relaxed text-ink3">
                   {copy.security.deviceUnavailable}
+                </p>
+              )}
+              {biometricsAvailable && !mode.account.hasDeviceUnlock && isNativeShell() && (
+                <p className="text-center text-[12.5px] leading-relaxed text-ink3">
+                  {copy.security.deviceNeedsPassword}
                 </p>
               )}
               <button

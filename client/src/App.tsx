@@ -44,6 +44,7 @@ import {
 } from "./lib/browse";
 import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { isNativeShell } from "./lib/platform";
+import { getServerUrl } from "./lib/api";
 import { probeServer as probeServerRequest } from "./lib/reachability";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
 import { useDeviceLibrary } from "./local/useDeviceLibrary";
@@ -173,14 +174,14 @@ function App() {
    * unreachable but silent never answers, and an unbounded request left the
    * app on the splash for good.
    */
-  const probeServer = useCallback(() => {
+  const probeServer = useCallback(async (): Promise<void> => {
     // One probe at a time. The probe is itself a request, and a request that
     // fails reports the server as unreachable -- so without this guard a
     // failing probe would trigger another probe, for ever.
     if (probeInFlight.current) return;
     probeInFlight.current = true;
-    void probeServerRequest()
-      .then(async (probe) => {
+    try {
+      const probe = await probeServerRequest();
         setServerReachable(probe.reachable);
         if (probe.reachable) {
           setBypassServerSetup(false);
@@ -217,10 +218,9 @@ function App() {
         } else if (info.via === "household") {
           setProfileId(getActiveProfileId());
         }
-      })
-      .finally(() => {
-        probeInFlight.current = false;
-      });
+    } finally {
+      probeInFlight.current = false;
+    }
   }, []);
 
   useEffect(() => {
@@ -331,7 +331,16 @@ function App() {
    * the library tab shows an honest empty state (spec 29).
    */
   const offline = serverReachable === false;
-  const libraryBooks = offline ? device.books : audiobooks;
+  const libraryBooks = useMemo(() => {
+    if (offline) return device.books;
+    const books = new Map<string, Audiobook>();
+    for (const book of audiobooks) books.set(`${getServerUrl()}#${book.id}`, book);
+    for (const book of device.books) {
+      const key = `${book.serverId ?? getServerUrl()}#${book.id}`;
+      if (!books.has(key)) books.set(key, book);
+    }
+    return [...books.values()];
+  }, [offline, audiobooks, device.books]);
 
   const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);
   // Search narrows the chip-filtered result rather than replacing it, so both
@@ -695,7 +704,7 @@ function App() {
           setProfileId(getActiveProfileId());
           void (async () => {
             await refresh();
-            probeServer();
+            await probeServer();
           })();
         }}
       />

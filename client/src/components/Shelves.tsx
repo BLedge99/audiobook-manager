@@ -108,7 +108,7 @@ export function ShelfRow({
         tabIndex={0}
       >
         {shelf.books.map((book, index) => (
-          <div key={book.id} className="contents">
+          <div key={`${book.serverId ?? ""}#${book.id}`} className="contents">
             <ShelfCard
               book={book}
               index={index}

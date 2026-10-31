@@ -214,7 +214,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
           const isFeatured = index === 0;
           return (
             <button
-              key={book.id}
+              key={`${book.serverId ?? ""}#${book.id}`}
               onClick={() => onSelect(book)}
               className={cn(
                 "capsule flex shrink-0 snap-start items-center gap-3 p-3 text-left",
@@ -299,7 +299,7 @@ export function AudiobookGrid({
         const percent = showProgress ? describeBookProgress(book).percent : 0;
         return (
           <LibraryCard
-            key={book.id}
+            key={`${book.serverId ?? ""}#${book.id}`}
             book={book}
             onSelect={onSelect}
             showProgress={showProgress}
