@@ -160,6 +160,24 @@ export async function lockSession(): Promise<void> {
   lockOfflineCache();
 }
 
+/**
+ * Local-only lock: forget the in-memory session token and clear the offline
+ * DEK, without revoking anything server-side.
+ *
+ * Used by the background lock. That is a *local* privacy action -- clear the
+ * keys the app holds in memory -- and must not also sign the listener out of
+ * the app. Revoking the server session from a timer, or flipping the app into
+ * a signed-out state, turned a privacy behaviour into a "random logout on a
+ * timeout" for anyone who happened to leave an audiobook playing with the
+ * screen off.
+ */
+export async function lockLocal(): Promise<void> {
+  setSessionToken(null);
+  // A lock also clears the in-memory DEK. Without this, hiding the account
+  // picker over the still-rendered app would leave decrypted rows in reach.
+  lockOfflineCache();
+}
+
 function readSessionToken(): string {
   return isNativeShell() ? nativeSessionToken : "";
 }

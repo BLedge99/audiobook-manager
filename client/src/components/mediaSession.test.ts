@@ -4,6 +4,7 @@ import {
   publishPosition,
   registerMediaSessionHandlers,
   setMediaMetadata,
+  type PlaybackStateName,
 } from "./mediaSession";
 
 /**
@@ -19,6 +20,7 @@ function stubWebSession() {
   const handlers = new Map<string, unknown>();
   const session = {
     metadata: null as unknown,
+    playbackState: "none" as PlaybackStateName,
     setActionHandler: vi.fn((action: string, handler: unknown) => {
       handlers.set(action, handler);
     }),
@@ -82,11 +84,14 @@ describe("registerMediaSessionHandlers", () => {
     const { handlers } = stubWebSession();
     stubPlugin();
     const seekBackward = vi.fn();
+    const seekTo = vi.fn();
 
-    registerMediaSessionHandlers({ play: () => {}, pause: () => {}, seekBackward, seekForward: () => {} });
+    registerMediaSessionHandlers({ play: () => {}, pause: () => {}, seekBackward, seekForward: () => {}, seekTo });
     (handlers.get("seekbackward") as () => void)();
+    (handlers.get("seekto") as (details: { seekTime: number }) => void)({ seekTime: 42 });
 
     expect(seekBackward).toHaveBeenCalledOnce();
+    expect(seekTo).toHaveBeenCalledWith({ seekTime: 42 });
   });
 
   it("removes every handler on cleanup", () => {
@@ -170,11 +175,15 @@ describe("publishPlaybackState", () => {
   // (MediaSessionService.update skips "play" unless state == STATE_PAUSED, and
   // "pause" unless STATE_PLAYING). Without it the lock screen shows no transport
   // buttons at all -- `dumpsys` gave `state=0, actions=120`, seek bits only.
-  it("sends each state the plugin understands", () => {
+  it("sends each state the plugin understands and updates the web media session", () => {
+    const { session } = stubWebSession();
     const { plugin } = stubPlugin();
     publishPlaybackState("playing");
+    expect(session.playbackState).toBe("playing");
     publishPlaybackState("paused");
+    expect(session.playbackState).toBe("paused");
     publishPlaybackState("none");
+    expect(session.playbackState).toBe("none");
 
     const sent = plugin.setPlaybackState.mock.calls.map((call) => (call[0] as { playbackState: string }).playbackState);
     expect(sent).toEqual(["playing", "paused", "none"]);

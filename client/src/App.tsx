@@ -11,7 +11,7 @@ import {
   getActiveProfileId,
   setActiveProfileId,
   setSessionToken,
-  lockSession,
+  lockLocal,
   type SessionInfo,
 } from "./lib/api";
 import { AccountGate } from "./components/AccountGate";
@@ -265,14 +265,17 @@ function App() {
   // Keep the native shell private when it has been out of view for five
   // minutes. Mobile timers can be throttled in the background, so check the
   // elapsed wall time on return as well as using the timer.
+  //
+  // This is a *local* lock: clear the in-memory token and offline DEK. It must
+  // not revoke the server session or sign the listener out of the app -- the
+  // listening position lives in the local state and syncs on the next connect,
+  // so a backgrounded player should never be logged out by a timer.
   useEffect(() => {
     if (!isNativeShell()) return;
     let hiddenAt: number | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const lock = () => {
-      void lockSession();
-      setAuthed(false);
-      setSession(null);
+      void lockLocal();
       setOfflineUnlocked(false);
     };
     const onVisibility = () => {

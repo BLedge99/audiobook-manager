@@ -432,4 +432,36 @@ describe("ChapterPlayer", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/could not start/i));
   });
+
+  /**
+   * Regression: a source reload during live playback -- the media token
+   * expiring and the client retrying -- used to leave the element at zero, so
+   * the book stopped and restarted from the top instead of resuming.
+   *
+   * `loadedmetadata` must fall back to the live position when no seek is
+   * pending; a cross-file seek still wins through `pending`.
+   */
+  it("resumes at the live position when a source reloads without a pending seek", async () => {
+    window.localStorage.setItem("profileId", "42");
+    // Faithful to a real element: metadata has not landed yet, so the load
+    // effect cannot apply a seek itself and must rely on `loadedmetadata`.
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get: () => 0 });
+
+    render(<ChapterPlayer book={chapterBook} />);
+    const audio = audioOf();
+    await waitForSource("/api/audiobooks/1/stream");
+
+    // The listener got going; they are 10 seconds into chapter 2.
+    tick(310);
+    expect(Number(sliderOf().value)).toBeCloseTo(310, 0);
+
+    // The token expired and the retry reloaded the element; the browser resets
+    // the playhead on load and the player must seek back to where they were.
+    act(() => {
+      audio.currentTime = 0;
+      audio.dispatchEvent(new Event("loadedmetadata"));
+    });
+
+    await waitFor(() => expect(audio.currentTime).toBeCloseTo(310, 0));
+  });
 });

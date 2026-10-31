@@ -29,6 +29,8 @@ export type MediaHandlers = {
   seekBackward: () => void;
   /** Seek forwards from the current position, in seconds. */
   seekForward: () => void;
+  /** Seek to a specific timestamp, in seconds. */
+  seekTo?: (details: { seekTime?: number; fastSeek?: boolean }) => void;
   /** Previous chapter/track. */
   previousTrack?: () => void;
   /** Next chapter/track. */
@@ -63,11 +65,12 @@ export function registerMediaSessionHandlers(handlers: MediaHandlers): () => voi
   const web = webSession();
   const native = nativePlugin();
 
-  const map: Array<[string, () => void]> = [
+  const map: Array<[string, (details?: unknown) => void]> = [
     ["play", handlers.play],
     ["pause", handlers.pause],
     ["seekbackward", handlers.seekBackward],
     ["seekforward", handlers.seekForward],
+    ["seekto", handlers.seekTo ? (details) => handlers.seekTo!(details as { seekTime?: number; fastSeek?: boolean }) : () => {}],
     ["previoustrack", handlers.previousTrack ?? (() => {})],
     ["nexttrack", handlers.nextTrack ?? (() => {})],
   ];
@@ -148,6 +151,14 @@ export type PlaybackStateName = "none" | "paused" | "playing";
  * is.
  */
 export function publishPlaybackState(state: PlaybackStateName): void {
+  const session = webSession();
+  if (session) {
+    try {
+      session.playbackState = state;
+    } catch {
+      /* noop */
+    }
+  }
   try {
     void nativePlugin()?.setPlaybackState?.({ playbackState: state });
   } catch {

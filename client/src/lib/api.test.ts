@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { copy } from "../copy";
 import {
   apiAssetUrl,
@@ -8,12 +8,16 @@ import {
   describeFailure,
   getServerUrl,
   isNetworkFailure,
+  lockLocal,
   needsServerUrl,
   normaliseServerUrl,
   SERVER_URL_KEY,
   setServerUrl,
 } from "./api";
+import { lockOfflineCache } from "../local/privateCache";
 import { TEST_SERVER_URL, TEST_SERVER_HOST } from "../test/constants";
+
+vi.mock("../local/privateCache", () => ({ lockOfflineCache: vi.fn() }));
 
 /** Simulate the Capacitor bridge, which App.tsx reads defensively. */
 function setNativeShell(isNative: boolean) {
@@ -251,5 +255,28 @@ describe("apiFetch", () => {
     } finally {
       globalThis.fetch = original;
     }
+  });
+});
+
+describe("lockLocal", () => {
+  beforeEach(() => {
+    vi.mocked(lockOfflineCache).mockClear();
+  });
+
+  it("clears the local token and offline cache without calling the server", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response("{}", { status: 200 })));
+    const original = globalThis.fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    try {
+      await lockLocal();
+    } finally {
+      globalThis.fetch = original;
+    }
+
+    // The local lock is not a sign-out: it must not talk to the server at all.
+    expect(fetchMock).not.toHaveBeenCalled();
+    // The offline DEK is locked without revoking anything server-side.
+    expect(lockOfflineCache).toHaveBeenCalled();
   });
 });

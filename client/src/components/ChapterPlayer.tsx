@@ -540,8 +540,13 @@ export function ChapterPlayer({
     const onPause = () => setPlaying(false);
 
     const onLoadedMetadata = () => {
-      const target = pendingRef.current;
-      if (target === null) return;
+      // A pending seek (cross-file) wins; otherwise fall back to the position
+      // the element was at. The fallback is what makes a source reload that
+      // happens during live playback safe: a media token that expired and was
+      // retried reloads the element, and the browser resets the playhead on
+      // `load()` -- without this the book restarted from the top instead of
+      // resuming where the listener was.
+      const target = pendingRef.current ?? positionRef.current;
       const base = loadedRef.current?.base ?? 0;
       const time = Math.max(0, target - base);
       if (Math.abs(audio.currentTime - time) > 0.5) audio.currentTime = time;
@@ -692,10 +697,22 @@ export function ChapterPlayer({
   // and no buttons at all. See mediaSession.ts.
   useEffect(() => {
     return registerMediaSessionHandlers({
-      play: () => actionsRef.current?.togglePlayback(true),
-      pause: () => actionsRef.current?.togglePlayback(false),
+      play: () => {
+        publishPlaybackState("playing");
+        actionsRef.current?.togglePlayback(true);
+      },
+      pause: () => {
+        publishPlaybackState("paused");
+        actionsRef.current?.togglePlayback(false);
+      },
       seekBackward: () => actionsRef.current?.skipSeconds(-SKIP_SECONDS),
       seekForward: () => actionsRef.current?.skipSeconds(SKIP_SECONDS),
+      seekTo: (details) => {
+        if (typeof details?.seekTime === "number" && Number.isFinite(details.seekTime)) {
+          const base = loadedRef.current?.base ?? 0;
+          actionsRef.current?.goTo(base + details.seekTime);
+        }
+      },
       // Chapter navigation, which is what prev/next mean in an audiobook.
       previousTrack: () => actionsRef.current?.skipSegment(-1),
       nextTrack: () => actionsRef.current?.skipSegment(1),
