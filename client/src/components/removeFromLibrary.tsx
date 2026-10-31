@@ -33,6 +33,15 @@ export interface RemoveFromLibraryOptions {
   /** The book to remove. */
   bookId: number;
   /**
+   * The server shelf the book belongs to (spec 30).
+   *
+   * Removal is shelf-scoped: a book adopted or downloaded from another server
+   * lives in that server's shelf, so deleting it has to ask there. Absent for
+   * books from the connected server's catalogue, which belong to it by
+   * construction.
+   */
+  serverId?: string;
+  /**
    * Whether the book is downloaded to this device.
    *
    * It decides whether the question is asked at all.
@@ -45,7 +54,7 @@ export interface RemoveFromLibraryOptions {
    *
    * Optional: there is no device library in the browser or the PWA.
    */
-  onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
+  onDeleteDownload?: (bookId: number, serverId?: string) => Promise<{ failed: string[] }>;
   /** Called once the removal is done, so the caller can close its question. */
   onDone?: () => void;
 }
@@ -102,7 +111,7 @@ export function useRemoveFromLibrary(options: RemoveFromLibraryOptions): RemoveF
     setError(undefined);
     try {
       if (deleteDownload && options.onDeleteDownload) {
-        const result = await options.onDeleteDownload(options.bookId);
+        const result = await options.onDeleteDownload(options.bookId, options.serverId);
         await options.onRemove(options.bookId);
         if (result.failed.length > 0) setError(copy.removeBook.deleteFailed);
       } else {

@@ -124,7 +124,7 @@ describe("the Server library tab", () => {
     // removes itself never finishes.
     fireEvent.click(screen.getByRole("button", { name: "Delete it" }));
 
-    await waitFor(() => expect(onDeleteDownload).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(onDeleteDownload).toHaveBeenCalledWith(1, undefined));
     expect(onRemove).toHaveBeenCalledWith(1);
   });
 
@@ -200,7 +200,7 @@ describe("the Server library tab", () => {
  * needs no server at all. The household asked for exactly this.
  */
 describe("the Server library tab, offline", () => {
-  const onDevice = [book(9, "Downloaded book", true)];
+  const onDevice = [{ ...book(9, "Downloaded book", true), serverId: "http://localhost:3000" }];
 
   it("shows the books on this device rather than an error", () => {
     renderTab({ offline: true, offlineBooks: onDevice, error: "Could not reach the server." });
@@ -213,7 +213,7 @@ describe("the Server library tab, offline", () => {
     const onRemoveDevice = vi.fn(async () => ({ failed: [] }));
     renderTab({ offline: true, offlineBooks: onDevice, onRemoveDevice });
     fireEvent.click(screen.getByRole("button", { name: /remove from device: downloaded book/i }));
-    await waitFor(() => expect(onRemoveDevice).toHaveBeenCalledWith(9));
+    await waitFor(() => expect(onRemoveDevice).toHaveBeenCalledWith(9, "http://localhost:3000"));
   });
 
   it("does not offer to add anything, because the server is out of reach", () => {

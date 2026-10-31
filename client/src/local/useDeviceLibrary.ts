@@ -113,16 +113,16 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
       setRows(next);
       // Files that outlived their row: audio from before an origin change, or
       // from a database that was cleared. Read after the rows so `known` is
-      // exactly what the app can currently see. Detection maps orphan folders
-      // onto the *connected* server's shelf and adoption confirms through that
-      // same server (spec 30), so the mapping is per-server by construction.
-      const claimed = new Set(
-        Object.values(next)
-          .filter((row) => row.serverId === getServerUrl())
-          .map((row) => row.book.id),
-      );
+      // exactly what the app can currently see.
+      //
+      // The claimed set is the union across the device's shelves (spec 30): a
+      // file under `books/<id>/` belongs to whichever shelf holds a row for
+      // that id, even one whose server the app is no longer pointed at. Only
+      // when no row anywhere claims a folder is it orphan audio worth adopting.
+      const claimed = new Set(Object.values(next).map((row) => row.book.id));
       setUnclaimed(await listUnclaimedOnDevice(deviceFiles, claimed));
-    } catch (error) {      // A replica that will not open must not break the app -- but it must not
+    } catch (error) {
+      // A replica that will not open must not break the app -- but it must not
       // be reported as an empty library either. Keep the server view usable and
       // remember why the device view is missing, so the offline screen can say
       // so instead of pretending there is nothing here.
@@ -163,7 +163,10 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
           db: localDb,
           files: deviceFiles,
           trackUrl: trackStreamUrl,
-          sourceServer: getServerUrl(),
+          // The book carries its shelf (spec 30); a book adopted or downloaded
+          // from another server must land there, not in whatever shelf the app
+          // is currently pointed at.
+          sourceServer: book.serverId ?? getServerUrl(),
         },
         onProgress,
       );
@@ -232,7 +235,7 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
   );
 
   return {
-    books: Object.values(rows).map((row) => row.book),
+    books: Object.values(rows).map((row) => ({ ...row.book, serverId: row.serverId })),
     rows,
     loading,
     libraryReadError,

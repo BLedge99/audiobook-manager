@@ -129,7 +129,7 @@ describe("DownloadButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /remove from device/i }));
 
     await waitFor(() => expect(screen.getByText(/could not be deleted/i)).toBeInTheDocument());
-    expect(onRemove).toHaveBeenCalledWith(7);
+    expect(onRemove).toHaveBeenCalledWith(7, book.serverId);
   });
 
   it("says nothing about size for an unknown byte count", () => {

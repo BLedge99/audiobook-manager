@@ -13,7 +13,7 @@ export interface DownloadButtonProps {
   isDownloaded: boolean;
   bytes: number;
   onDownload: (book: Audiobook, onProgress: (p: DownloadProgress) => void) => Promise<void>;
-  onRemove: (bookId: number) => Promise<{ failed: string[] }>;
+  onRemove: (bookId: number, serverId?: string) => Promise<{ failed: string[] }>;
 }
 
 /**
@@ -74,7 +74,7 @@ export function DownloadButton({
     setBusy(true);
     setError(undefined);
     try {
-      const result = await onRemove(book.id);
+      const result = await onRemove(book.id, book.serverId);
       if (result.failed.length > 0) {
         setError(copy.download.removedWithErrors(result.failed.length));
       }

@@ -101,7 +101,7 @@ export function ChapterPlayer({
 }: {
   book: Audiobook;
   onProgressSaved?: () => void;
-  localUrlForTrack?: (bookId: number, trackId: number) => Promise<string | undefined>;
+  localUrlForTrack?: (bookId: number, trackId: number, serverId?: string) => Promise<string | undefined>;
   profileId?: string | number | null;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -198,6 +198,10 @@ export function ChapterPlayer({
     bookId: book.id,
     source: plan.source,
     localUrlForTrack,
+    // Spec 30: an offline book adopted or downloaded from another server lives
+    // in that server's shelf, so the local copy is looked up there -- not in
+    // whatever shelf the app is currently pointed at.
+    serverId: book.serverId,
   });
   const resolved = sourceState.resolved;
   const resolvedRef = useRef(resolved);

@@ -99,7 +99,9 @@ export async function listReplicaAudiobooks(
   serverId?: string,
 ): Promise<Audiobook[]> {
   const rows = await listReplicaBooks(db, serverId);
-  return rows.map((row) => row.book);
+  // Stamp the shelf onto the book so callers holding an offline book (spec 30)
+  // can act on the right server without threading the key themselves.
+  return rows.map((row) => ({ ...row.book, serverId: row.serverId }));
 }
 
 /** How many books are available offline. */

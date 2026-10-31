@@ -166,8 +166,11 @@ export function AudiobookDetail({
   /**
    * Resolve a downloaded track to a playable local URL, so playback works with
    * the network off (spec 26). Optional for the same reason as `deviceAction`.
+   *
+   * The third `serverId` is the shelf the book belongs to (spec 30) and is how
+   * an offline book adopted from another server still resolves its local copy.
    */
-  localUrlForTrack?: (bookId: number, trackId: number) => Promise<string | undefined>;
+  localUrlForTrack?: (bookId: number, trackId: number, serverId?: string) => Promise<string | undefined>;
   /**
    * The signed-in profile, passed down to the player.
    *
@@ -202,6 +205,7 @@ export function AudiobookDetail({
     isDownloaded: Boolean(isDownloaded),
     onRemove: onRemoveFromLibrary ?? (async () => undefined),
     onDeleteDownload,
+    serverId: book.serverId,
   });
 
   return (

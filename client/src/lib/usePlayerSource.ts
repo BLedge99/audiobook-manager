@@ -55,7 +55,15 @@ export type UsePlayerSourceOptions = {
   /** The media the current listening position needs. */
   source: PlaybackSource | null;
   /** Resolve a downloaded track to a playable URL, if this device has one. */
-  localUrlForTrack?: (bookId: number, trackId: number) => Promise<string | undefined>;
+  localUrlForTrack?: (bookId: number, trackId: number, serverId?: string) => Promise<string | undefined>;
+  /**
+   * Spec 30: the server shelf this book belongs to, when it came from the
+   * device's offline library. The local copy lives in that shelf's folder, so
+   * resolution has to ask the shelf, not merely "the server we are pointed at".
+   * Absent for books that came from the connected server's catalogue, which
+   * belong to it by construction.
+   */
+  serverId?: string;
 };
 
 export type PlayerSourceState = {
@@ -127,6 +135,7 @@ export function usePlayerSource({
   bookId,
   source,
   localUrlForTrack,
+  serverId,
 }: UsePlayerSourceOptions): PlayerSourceState {
   const [resolved, setResolved] = useState<PlayerSource | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -155,7 +164,7 @@ export function usePlayerSource({
     void (async () => {
       if (!skipLocal) {
         try {
-          const local = await localFnRef.current?.(bookId, localTrackId as number);
+          const local = await localFnRef.current?.(bookId, localTrackId as number, serverId);
           if (cancelled) return;
           if (local) {
             setResolved({ key: `${key}|local`, sourceKey: key, url: local, local: true });
@@ -185,7 +194,7 @@ export function usePlayerSource({
     // The `source` object is rebuilt on every position tick by `planPosition`,
     // so depend on its fields, not on the object.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId, source?.key, source?.path, source?.id, source?.kind, source?.localTrackId, localUrlForTrack, failedLocal, attempt]);
+  }, [bookId, source?.key, source?.path, source?.id, source?.kind, source?.localTrackId, localUrlForTrack, serverId, failedLocal, attempt]);
 
   const markLocalFailed = useCallback(() => {
     const current = sourceRef.current;

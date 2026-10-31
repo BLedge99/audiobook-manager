@@ -141,6 +141,44 @@ describe("usePlayerSource", () => {
     expect(result.current.resolved?.url).toBe(streamFor(1));
   });
 
+  /**
+   * Spec 30: an offline book adopted or downloaded from another server lives
+   * in that server's shelf, so the local copy is resolved through the shelf,
+   * not merely through "the server we are pointed at".
+   */
+  it("resolves the local copy through the book's server shelf", async () => {
+    const resolver = vi.fn(async (_bookId: number, _trackId: number, serverId?: string) =>
+      serverId === "http://localhost:3000" ? "capacitor-file://book/41.mp3" : undefined,
+    );
+    const { result } = renderHook(() =>
+      usePlayerSource({
+        bookId: 1,
+        source: chapterBookSource,
+        localUrlForTrack: resolver,
+        serverId: "http://localhost:3000",
+      }));
+
+    await waitFor(() => expect(result.current.resolved?.local).toBe(true));
+    expect(result.current.resolved?.url).toBe("capacitor-file://book/41.mp3");
+    expect(resolver).toHaveBeenCalledWith(1, 41, "http://localhost:3000");
+  });
+
+  it("streams when the local copy lives in a different server shelf", async () => {
+    const resolver = vi.fn(async (_bookId: number, _trackId: number, serverId?: string) =>
+      serverId === "http://localhost:3000" ? "capacitor-file://book/41.mp3" : undefined,
+    );
+    const { result } = renderHook(() =>
+      usePlayerSource({
+        bookId: 1,
+        source: chapterBookSource,
+        localUrlForTrack: resolver,
+        serverId: "https://audiobook-manager.onrender.com",
+      }));
+
+    await waitFor(() => expect(result.current.resolved?.local).toBe(false));
+    expect(result.current.resolved?.url).toBe(streamFor(1));
+  });
+
   it("keeps the local failure scoped to the source that failed", async () => {
     const { result, rerender } = renderHook(
       ({ source }: { source: PlaybackSource }) =>

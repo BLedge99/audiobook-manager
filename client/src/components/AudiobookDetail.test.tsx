@@ -249,7 +249,7 @@ describe("AudiobookDetail", () => {
       // leaves the document's pointer state dirty for every later click.
       fireEvent.click(screen.getByRole("button", { name: /delete it/i }));
 
-      await waitFor(() => expect(onDeleteDownload).toHaveBeenCalledWith(7));
+      await waitFor(() => expect(onDeleteDownload).toHaveBeenCalledWith(7, book().serverId));
       expect(onRemoveFromLibrary).toHaveBeenCalledWith(7);
     });
 

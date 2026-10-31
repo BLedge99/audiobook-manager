@@ -49,10 +49,14 @@ export function ServerLibrary({
   /**
    * Whether a book is downloaded to this device, which decides whether the
    * removal asks about deleting it.
+   *
+   * Shelf-scoped (spec 30): the second parameter names the server shelf the
+   * book belongs to, so a device book adopted from another server is checked
+   * in that shelf.
    */
-  isDownloaded?: (bookId: number) => boolean;
+  isDownloaded?: (bookId: number, serverId?: string) => boolean;
   /** Delete the device copy, freeing the space. */
-  onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
+  onDeleteDownload?: (bookId: number, serverId?: string) => Promise<{ failed: string[] }>;
   /** Open the book, the way every other surface does. */
   onOpen?: (book: Audiobook) => void;
   /**
@@ -66,7 +70,7 @@ export function ServerLibrary({
   /** The books on this device, shown instead of the shelf while offline. */
   offlineBooks?: Audiobook[];
   /** Remove a book from this device. The only removal available offline. */
-  onRemoveDevice?: (bookId: number) => Promise<{ failed: string[] }>;
+  onRemoveDevice?: (bookId: number, serverId?: string) => Promise<{ failed: string[] }>;
 }) {
   const [pending, setPending] = useState<number>();
   const [failed, setFailed] = useState<string>();
@@ -194,17 +198,17 @@ function OfflineServerLibrary({
   onOpen,
 }: {
   books: Audiobook[];
-  onRemove?: (bookId: number) => Promise<{ failed: string[] }>;
+  onRemove?: (bookId: number, serverId?: string) => Promise<{ failed: string[] }>;
   onOpen?: (book: Audiobook) => void;
 }) {
   const [busy, setBusy] = useState<number>();
   const [failed, setFailed] = useState<string>();
 
-  const remove = async (bookId: number) => {
+  const remove = async (bookId: number, serverId?: string) => {
     setBusy(bookId);
     setFailed(undefined);
     try {
-      const result = await onRemove?.(bookId);
+      const result = await onRemove?.(bookId, serverId);
       if (result && result.failed.length > 0) {
         setFailed(copy.download.removedWithErrors(result.failed.length));
       }
@@ -266,7 +270,7 @@ function OfflineServerLibrary({
                       size="sm"
                       variant="quiet"
                       className="shrink-0 text-rasp-ink"
-                      onClick={() => void remove(book.id)}
+                      onClick={() => void remove(book.id, book.serverId)}
                       disabled={busy === book.id}
                       aria-label={`${copy.download.removeFromDevice}: ${book.title}`}
                     >
@@ -300,13 +304,13 @@ function ServerLibraryRow({
   book: Audiobook;
   pending: boolean;
   onAdd: () => void;
-  onRemove: (bookId: number) => Promise<void>;
-  isDownloaded?: (bookId: number) => boolean;
-  onDeleteDownload?: (bookId: number) => Promise<{ failed: string[] }>;
+  onRemove: (bookId: number, serverId?: string) => Promise<void>;
+  isDownloaded?: (bookId: number, serverId?: string) => boolean;
+  onDeleteDownload?: (bookId: number, serverId?: string) => Promise<{ failed: string[] }>;
   onOpen?: (book: Audiobook) => void;
 }) {
   const inLibrary = Boolean(book.inLibrary);
-  const downloaded = Boolean(isDownloaded?.(book.id));
+  const downloaded = Boolean(isDownloaded?.(book.id, book.serverId));
 
   // The same removal question the book page asks, from the same code. A list
   // that shows which books you have has to let you change that, or it is a
@@ -316,6 +320,7 @@ function ServerLibraryRow({
     isDownloaded: downloaded,
     onRemove,
     onDeleteDownload,
+    serverId: book.serverId,
   });
 
   return (

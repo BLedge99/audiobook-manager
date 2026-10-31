@@ -65,8 +65,11 @@ actually hears from.
 
 ### Recovery
 
-- Detection (`Find them`) compares orphan folders against the **connected
-  server's** shelf, as before, and adoption runs against the connected server.
+- Detection (`Find them`) compares orphan folders against **every shelf the
+  device holds rows for** — the union of the device's per-server shelves — so an
+  adopted book from another server is not re-flagged as orphan after the
+  listener switches to that server. Adoption still runs against the *connected*
+  server, which remains the authority it can confirm through.
 - Adopted rows are tagged with the connected server, so the audio now belongs to
   a shelf the device can name.
 - A 404 on the connected server remains "this server does not have it" (missing);
