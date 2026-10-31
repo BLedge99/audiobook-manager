@@ -15,19 +15,53 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const profileId = Number(getActiveProfileId());
+  const [profileId, setProfileId] = useState(() => Number(getActiveProfileId()));
 
   const refresh = async () => {
-    if (!biometricVault.supported() || !Number.isInteger(profileId) || profileId < 1) return;
+    const currentProfileId = Number(getActiveProfileId());
+    if (Number.isInteger(currentProfileId) && currentProfileId > 0) setProfileId(currentProfileId);
+    if (!biometricVault.supported() || !Number.isInteger(currentProfileId) || currentProfileId < 1) {
+      setChecked(true);
+      return;
+    }
     setAvailable(await biometricVault.available());
-    setVaultSaved(await biometricVault.hasSavedValue(profileId));
+    setVaultSaved(await biometricVault.hasSavedValue(currentProfileId));
     setChecked(true);
     try {
       const response = await boundedFetch("/api/auth/devices");
       if (response.ok) setDevices(((await response.json()) as { devices: DeviceRecord[] }).devices);
     } catch { /* The password route remains available offline. */ }
   };
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const currentProfileId = Number(getActiveProfileId());
+      if (!biometricVault.supported()) return;
+      setAvailable(await biometricVault.available());
+      if (!alive) return;
+      if (!Number.isInteger(currentProfileId) || currentProfileId < 1) {
+        setChecked(true);
+        return;
+      }
+      setProfileId(currentProfileId);
+      setVaultSaved(await biometricVault.hasSavedValue(currentProfileId));
+      if (!alive) return;
+      setChecked(true);
+      try {
+        const response = await boundedFetch("/api/auth/devices");
+        if (response.ok && alive) setDevices(((await response.json()) as { devices: DeviceRecord[] }).devices);
+      } catch { /* The password route remains available offline. */ }
+    };
+    void load();
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (Number(getActiveProfileId()) !== profileId) void refresh();
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [profileId]);
 
   const enable = async () => {
     setBusy(true); setMessage("");
@@ -90,6 +124,15 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
     );
   }
 
+  if (!Number.isInteger(profileId) || profileId < 1) {
+    return (
+      <section className="mt-6 border-t-2 border-dashed border-ink/20 pt-5" aria-labelledby="device-unlock-heading">
+        <h2 id="device-unlock-heading" className="font-display text-xl font-semibold text-ink">{copy.security.deviceHeading}</h2>
+        <p className="mt-1 text-sm text-ink2">{copy.security.deviceNeedsPassword}</p>
+      </section>
+    );
+  }
+
   return (
     <section className="mt-6 border-t-2 border-dashed border-ink/20 pt-5" aria-labelledby="device-unlock-heading">
       <h2 id="device-unlock-heading" className="font-display text-xl font-semibold text-ink">{copy.security.deviceHeading}</h2>
@@ -98,7 +141,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
         <span>{device.label || copy.security.deviceHeading}</span>
         <Btn size="sm" variant="quiet" disabled={busy} onClick={() => void remove(device.id)}>{copy.security.remove}</Btn>
       </div>)}
-      {!vaultSaved && <Btn className="mt-3" disabled={busy || !activeCacheKey(profileId)} onClick={() => void enable()}>
+      {(!vaultSaved || (!offline && devices.length === 0)) && <Btn className="mt-3" disabled={busy || !activeCacheKey(profileId)} onClick={() => void enable()}>
         <Fingerprint size={16} aria-hidden="true" /> {busy ? copy.security.adding : (offline ? copy.security.deviceEnableOffline : copy.security.deviceEnable)}
       </Btn>}
       {message && <Notice className="mt-3" role="status">{message}</Notice>}

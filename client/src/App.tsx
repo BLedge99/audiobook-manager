@@ -218,6 +218,11 @@ function App() {
         } else if (info.via === "household") {
           setProfileId(getActiveProfileId());
         }
+    } catch (error) {
+      console.error("Could not complete server probe.", error);
+      setServerReachable(false);
+      setAuthed(false);
+      setProfileId(getActiveProfileId());
     } finally {
       probeInFlight.current = false;
     }
@@ -332,9 +337,10 @@ function App() {
    */
   const offline = serverReachable === false;
   const libraryBooks = useMemo(() => {
-    if (offline) return device.books;
     const books = new Map<string, Audiobook>();
-    for (const book of audiobooks) books.set(`${getServerUrl()}#${book.id}`, book);
+    if (!offline) {
+      for (const book of audiobooks) books.set(`${getServerUrl()}#${book.id}`, book);
+    }
     for (const book of device.books) {
       const key = `${book.serverId ?? getServerUrl()}#${book.id}`;
       if (!books.has(key)) books.set(key, book);
@@ -655,7 +661,7 @@ function App() {
       })
     : null;
 
-  if (screen?.kind === "waiting") return <Splash />;
+  if (screen?.kind === "waiting" && device.loading) return <Splash />;
 
   if (screen?.kind === "libraryReadFailed") {
     return (
@@ -668,7 +674,7 @@ function App() {
     );
   }
 
-  if (screen?.kind === "unlock") {
+  if (screen?.kind === "unlock" && device.books.length === 0) {
     return (
       <OfflineUnlock
         onUnlocked={() => {

@@ -94,4 +94,12 @@ describe("DeviceUnlockSettings", () => {
     expect(await screen.findByText(copy.security.deviceUnavailable)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: copy.security.deviceEnable })).not.toBeInTheDocument();
   });
+
+  it("offers enrollment again when the local Vault exists but the server has no device credential", async () => {
+    mocks.hasSavedValue.mockResolvedValue(true);
+    mocks.fetch.mockResolvedValue(response(200, { devices: [] }));
+    render(<DeviceUnlockSettings />);
+
+    expect(await screen.findByRole("button", { name: copy.security.deviceEnable })).toBeInTheDocument();
+  });
 });

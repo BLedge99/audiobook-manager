@@ -117,6 +117,16 @@ describe("AccountGate biometric sign-in", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("explains device setup when the account has no enrolled credential", async () => {
+    mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"
+      ? response(200, [{ id: 7, name: "Ben", role: "member", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: false }])
+      : response(200, {}));
+    render(<AccountGate onSuccess={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+
+    expect(await screen.findByText(copy.security.deviceNeedsPassword)).toBeInTheDocument();
+  });
+
   it("clears a revoked device secret and its stale offline private data", async () => {    mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"
       ? response(200, [{ id: 7, name: "Ben", role: "member", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: true }])
       : response(401, { code: "device_auth_failed" }));
