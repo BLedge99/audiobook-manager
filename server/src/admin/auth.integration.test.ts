@@ -8,6 +8,7 @@ import { buildAdminApp } from "./app";
 import { buildApp } from "../app";
 import { createTestDatabase } from "../test-support/database";
 import { createScanManager } from "../scanner";
+import { executeReadOnlyQuery, validateReadOnlySql } from "./read-only-sql";
 
 const db = createTestDatabase("audiobook-admin-auth-");
 let prisma: PrismaClient;
@@ -124,5 +125,45 @@ describe("admin panel authentication", () => {
     expect(status.statusCode).toBe(200);
     expect(status.json().some((entry: { rootId: number }) => entry.rootId === root.id)).toBe(true);
     await prisma.libraryRoot.delete({ where: { id: root.id } });
+  });
+
+  it("exposes only authenticated schema-derived database and API documentation", async () => {
+    const deniedTables = await adminApp.inject({ url: "/api/admin/db/tables" });
+    const deniedDocs = await adminApp.inject({ url: "/api/admin/api-docs" });
+    expect(deniedTables.statusCode).toBe(401);
+    expect(deniedDocs.statusCode).toBe(401);
+    const token = await auth.login("dedicated-admin-password", "192.0.2.16");
+    const tables = await adminApp.inject({ url: "/api/admin/db/tables", cookies: { admin_panel_session: token! } });
+    expect(tables.statusCode).toBe(200);
+    expect(tables.json().tables).toEqual(expect.arrayContaining([expect.objectContaining({ name: "MediaItem" })]));
+    const docs = await adminApp.inject({ url: "/api/admin/api-docs", cookies: { admin_panel_session: token! } });
+    expect(docs.statusCode).toBe(200);
+    expect(docs.json().admin).toEqual(expect.arrayContaining([expect.objectContaining({ url: "/api/admin/db/query" })]));
+    const familyApp = await buildApp({ prisma, logger: false, appPassword: "household-password", scanner: createScanManager(prisma) });
+    const familyAdminApp = await buildAdminApp({ prisma, auth, scanner: createScanManager(prisma), familyApp });
+    const connectedDocs = await familyAdminApp.inject({ url: "/api/admin/api-docs", cookies: { admin_panel_session: token! } });
+    expect(connectedDocs.json().family.some((route: { url: string }) => route.url === "/api/health")).toBe(true);
+    await familyAdminApp.close();
+    await familyApp.close();
+  });
+
+  it("paginates allowlisted tables and permits only read-only SQL", async () => {
+    const token = await auth.login("dedicated-admin-password", "192.0.2.17");
+    const page = await adminApp.inject({ url: "/api/admin/db/tables/MediaItem?page=1&pageSize=5", cookies: { admin_panel_session: token! } });
+    expect(page.statusCode).toBe(200);
+    expect(page.json().pageSize).toBe(5);
+    expect(page.json().columns.length).toBeGreaterThan(0);
+    const query = await adminApp.inject({ method: "POST", url: "/api/admin/db/query", cookies: { admin_panel_session: token! }, payload: { sql: "SELECT COUNT(*) AS count FROM MediaItem" } });
+    expect(query.statusCode).toBe(200);
+    expect(query.json().rows[0].count).toBeDefined();
+    for (const sql of ["UPDATE MediaItem SET title = 'x'", "DELETE FROM MediaItem", "SELECT 1; DELETE FROM MediaItem", "PRAGMA user_version = 1"]) {
+      expect(validateReadOnlySql(sql)).toBeTruthy();
+      const response = await adminApp.inject({ method: "POST", url: "/api/admin/db/query", cookies: { admin_panel_session: token! }, payload: { sql } });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe("admin_query_rejected");
+    }
+    const before = await prisma.mediaItem.count();
+    await expect(executeReadOnlyQuery("sqlite", "DELETE FROM MediaItem")).rejects.toThrow();
+    expect(await prisma.mediaItem.count()).toBe(before);
   });
 });

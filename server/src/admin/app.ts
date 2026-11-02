@@ -8,6 +8,15 @@ import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
 import { EnrichmentManager } from "../metadata/run";
 import type { ScanManager } from "../scanner";
+import { ADMIN_DB_TABLES, executeReadOnlyQuery, validateReadOnlySql, type AdminDbTable } from "./read-only-sql";
+import { fileURLToPath } from "node:url";
+
+function routeDocs(app: FastifyInstance): { method: string | string[]; url: string; schema: unknown }[] {
+  return ((app as FastifyInstance & { apiDocs?: { method: string | string[]; url: string; schema: unknown }[] }).apiDocs ?? []).map((route) => ({
+    ...route,
+    schema: route.schema && typeof route.schema === "object" ? route.schema : {},
+  }));
+}
 
 export async function buildAdminApp(options: {
   prisma: PrismaClient;
@@ -17,8 +26,14 @@ export async function buildAdminApp(options: {
   startedAt?: number;
   networkMode?: string;
   scanner: ScanManager;
+  familyApp?: FastifyInstance;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false });
+  const apiDocs: { method: string | string[]; url: string; schema: unknown }[] = [];
+  app.decorate("apiDocs", apiDocs);
+  app.addHook("onRoute", (route) => {
+    if (route.url.startsWith("/api/")) apiDocs.push({ method: route.method, url: route.url, schema: route.schema ?? {} });
+  });
   await app.register(cookie);
   await registerAdminAuth(app, options.auth, options.secureCookie ?? false);
   app.get("/api/health", async () => ({ ok: true, adminConfigured: await options.auth.isConfigured() }));
@@ -120,9 +135,74 @@ export async function buildAdminApp(options: {
     return roots.map((root) => ({
       rootId: root.id,
       label: root.label,
-      path: root.path,
       status: options.scanner.getProgress(root.id) || root.scanState || { status: "idle", filesFound: 0 },
     }));
+  });
+  app.get("/api/admin/db/tables", { preHandler: requireAdminSession(options.auth) }, async () => {
+    const provider = (process.env.DATABASE_URL ?? "").startsWith("file:") ? "sqlite" : "postgresql";
+    const sqliteUrl = process.env.DATABASE_URL ?? "";
+    const driver = provider === "sqlite" ? await import("better-sqlite3") : null;
+    const db = driver ? new driver.default(fileURLToPath(sqliteUrl.split("?")[0]), { readonly: true, fileMustExist: true }) : null;
+    let tables: { name: AdminDbTable; count: number }[];
+    try {
+      tables = await Promise.all(ADMIN_DB_TABLES.map(async (table) => ({
+        name: table,
+        count: db ? Number((db.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get() as { count: number }).count) : Number((await options.prisma.$queryRawUnsafe<[{ count: bigint | number }]>(`SELECT COUNT(*) AS count FROM "${table}"`))[0].count),
+      })));
+    } finally { db?.close(); }
+    return { tables };
+  });
+  app.get<{ Params: { table: string }; Querystring: { page?: number; pageSize?: number } }>("/api/admin/db/tables/:table", {
+    preHandler: requireAdminSession(options.auth),
+    schema: {
+      params: { type: "object", properties: { table: { type: "string", enum: [...ADMIN_DB_TABLES] } }, required: ["table"], additionalProperties: false },
+      querystring: { type: "object", properties: { page: { type: "integer", minimum: 1, maximum: 100000 }, pageSize: { type: "integer", minimum: 1, maximum: 100 } }, additionalProperties: false },
+    },
+  }, async (request) => {
+    const table = request.params.table as AdminDbTable;
+    const page = request.query.page ?? 1;
+    const pageSize = request.query.pageSize ?? 25;
+    const provider = (process.env.DATABASE_URL ?? "").startsWith("file:") ? "sqlite" : "postgresql";
+    const sqliteUrl = process.env.DATABASE_URL ?? "";
+    const driver = provider === "sqlite" ? await import("better-sqlite3") : null;
+    const db = driver ? new driver.default(fileURLToPath(sqliteUrl.split("?")[0]), { readonly: true, fileMustExist: true }) : null;
+    let columns: unknown[];
+    let rows: unknown[];
+    try {
+      if (db) {
+        columns = db.pragma(`table_info("${table}")`) as unknown[];
+        rows = db.prepare(`SELECT * FROM "${table}" ORDER BY 1 LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize);
+      } else {
+        columns = await options.prisma.$queryRawUnsafe("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position", table);
+        rows = await options.prisma.$queryRawUnsafe(`SELECT * FROM "${table}" ORDER BY 1 LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`);
+      }
+    } catch (error) {
+      db?.close();
+      throw error;
+    }
+    const total = db ? Number((db.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get() as { count: number } | undefined)?.count ?? 0) : Number((await options.prisma.$queryRawUnsafe<[{ count: bigint | number }]>(`SELECT COUNT(*) AS count FROM "${table}"`))[0].count);
+    db?.close();
+    return { table, columns, rows, page, pageSize, total };
+  });
+  app.get("/api/admin/api-docs", { preHandler: requireAdminSession(options.auth) }, async () => ({
+    admin: routeDocs(app),
+    family: options.familyApp ? routeDocs(options.familyApp) : [],
+  }));
+  app.post<{ Body: { sql?: string } }>("/api/admin/db/query", {
+    preHandler: requireAdminSession(options.auth),
+    schema: { body: { type: "object", properties: { sql: { type: "string", maxLength: 10_000 } }, required: ["sql"], additionalProperties: false } },
+  }, async (request, reply) => {
+    const sql = request.body.sql ?? "";
+    const invalid = validateReadOnlySql(sql);
+    if (invalid) return reply.code(400).send({ code: "admin_query_rejected", reason: invalid });
+    try {
+      const provider = (process.env.DATABASE_URL ?? "").startsWith("file:") ? "sqlite" : "postgresql";
+      const rows = await executeReadOnlyQuery(provider, sql);
+      return { rows: rows.slice(0, 500), truncated: rows.length > 500, rowCount: Math.min(rows.length, 500) };
+    } catch (error) {
+      request.log.warn({ error }, "admin read-only query failed");
+      return fail(reply, 400, "admin_query_failed");
+    }
   });
   const clientDist = process.env.ADMIN_CLIENT_DIST ?? (process.env.NODE_ENV === "production"
     ? "/app/client/admin-dist"

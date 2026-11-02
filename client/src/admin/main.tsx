@@ -62,6 +62,7 @@ function StatusCard({ title, children }: { title: string; children: React.ReactN
 }
 
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
+  const [section, setSection] = React.useState<"overview" | "database" | "api">("overview");
   const [status, setStatus] = React.useState<Status | null>(null);
   const [roots, setRoots] = React.useState<Status["library"]["roots"]>([]);
   const [error, setError] = React.useState("");
@@ -119,9 +120,10 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     return () => window.clearInterval(id);
   }, []);
   return <main className="dashboard">
-    <header className="topbar"><div><h1>Server status</h1><p>Read-only system and library report · refreshes every 15 seconds</p></div><div className="actions"><button className="secondary" onClick={() => void load()}>Refresh</button><button onClick={onSignOut}>Sign out</button></div></header>
+    <header className="topbar"><div><h1>Admin panel</h1><p>Read-only system and library report · refreshes every 15 seconds</p></div><div className="actions"><button className="secondary" onClick={() => void load()}>Refresh</button><button onClick={onSignOut}>Sign out</button></div></header>
+    <nav className="admin-nav" aria-label="Admin sections"><button className={section === "overview" ? "selected" : "secondary"} onClick={() => setSection("overview")}>Overview</button><button className={section === "database" ? "selected" : "secondary"} onClick={() => setSection("database")}>Database</button><button className={section === "api" ? "selected" : "secondary"} onClick={() => setSection("api")}>API docs</button></nav>
     {error && <p role="alert" className="error">{error}</p>}
-    {!status ? <p>Loading server status…</p> : <>
+    {section === "database" ? <DatabaseExplorer /> : section === "api" ? <ApiDocs /> : !status ? <p>Loading server status…</p> : <>
       <div className="grid">
         <StatusCard title="Environment"><dl><dt>Mode</dt><dd>{status.mode}</dd><dt>Remote access</dt><dd>{status.remoteAccess}</dd><dt>Reported</dt><dd>{formatDate(status.generatedAt)}</dd></dl></StatusCard>
         <StatusCard title="Server"><dl><dt>Health</dt><dd><span className="good">{status.server.health}</span></dd><dt>Node</dt><dd>{status.server.nodeVersion}</dd><dt>Platform</dt><dd>{status.server.platform}</dd><dt>Uptime</dt><dd>{Math.floor(status.server.uptimeSeconds / 3600)}h {Math.floor((status.server.uptimeSeconds % 3600) / 60)}m</dd></dl></StatusCard>
@@ -133,6 +135,49 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       <StatusCard title="Library folders"><div className="library-actions"><button disabled={working || roots.length === 0} onClick={() => void mutate("/api/admin/scan", "POST", {})}>Scan all folders</button><button className="secondary" disabled={working} onClick={() => setAdding((value) => !value)}>Add folder</button></div>{adding && <form className="root-form" onSubmit={(event) => void addRoot(event)}><label>Folder path<input value={path} onChange={(event) => setPath(event.target.value)} required maxLength={4096} placeholder="/data/audiobooks" /></label><label>Label (optional)<input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={200} placeholder="Audiobooks" /></label><button type="submit" disabled={working}>Add folder</button></form>}<div className="root-list">{roots.length ? roots.map((root) => <article key={root.id} className="root"><div><strong>{root.label || root.path}</strong><p><code>{root.path}</code></p></div><span className={root.accessible ? "good" : "bad"}>{root.accessible ? "Accessible" : "Unavailable"}</span><span>{root.itemCount} books</span><span>Scan: {root.scan?.status ?? "Never scanned"}</span><span>{root.scan?.filesFound ?? 0} files · {formatDate(root.scan?.lastScanAt ?? null)}</span><div className="root-buttons"><button className="secondary" disabled={working} onClick={() => void mutate("/api/admin/scan", "POST", { rootId: root.id })}>Scan</button><button className="danger" disabled={working} onClick={() => { if (window.confirm(`Remove folder configuration for “${root.label || root.path}”? The audio files will not be deleted.`)) void mutate(`/api/admin/library-roots/${root.id}`, "DELETE"); }}>Remove</button></div>{root.scan?.message && <p className="error">{root.scan.message}</p>}</article>) : <p>No folders configured.</p>}</div></StatusCard>
     </>}
   </main>;
+}
+
+type TableInfo = { name: string; count: number };
+function DatabaseExplorer() {
+  const [tables, setTables] = React.useState<TableInfo[]>([]);
+  const [selected, setSelected] = React.useState("");
+  const [page, setPage] = React.useState(1);
+  const [tableData, setTableData] = React.useState<{ columns: { name: string }[]; rows: Record<string, unknown>[]; total: number } | null>(null);
+  const [sql, setSql] = React.useState("SELECT * FROM \"MediaItem\" LIMIT 25");
+  const [queryResult, setQueryResult] = React.useState<{ rows: Record<string, unknown>[]; truncated: boolean } | null>(null);
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => { void fetch("/api/admin/db/tables", { credentials: "include" }).then(async (response) => { if (!response.ok) throw new Error("Unable to list tables."); const result = await response.json() as { tables: TableInfo[] }; setTables(result.tables); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Unable to list tables.")); }, []);
+  async function openTable(name: string, nextPage = 1) {
+    setSelected(name); setPage(nextPage); setBusy(true); setError("");
+    try { const response = await fetch(`/api/admin/db/tables/${encodeURIComponent(name)}?page=${nextPage}&pageSize=25`, { credentials: "include" }); if (!response.ok) throw new Error("Unable to load table."); setTableData(await response.json()); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load table."); }
+    finally { setBusy(false); }
+  }
+  async function runQuery(event: React.FormEvent) {
+    event.preventDefault(); setBusy(true); setError(""); setQueryResult(null);
+    try { const response = await fetch("/api/admin/db/query", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ sql }) }); const data = await response.json(); if (!response.ok) throw new Error(data.reason || data.code || "Query failed."); setQueryResult(data); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Query failed."); }
+    finally { setBusy(false); }
+  }
+  return <section className="card"><h2>Read-only database explorer</h2><p>Browse tables or run one SELECT, EXPLAIN, or approved read-only PRAGMA. Results are capped at 500 rows.</p>{error && <p className="error" role="alert">{error}</p>}<div className="db-layout"><aside><h3>Tables</h3>{tables.map((table) => <button className="table-choice secondary" key={table.name} onClick={() => void openTable(table.name)}>{table.name}<span>{table.count}</span></button>)}</aside><div className="db-content">{selected && <><h3>{selected} · {tableData?.total ?? "…"} rows</h3>{tableData && <DataTable columns={tableData.columns.map((column) => column.name)} rows={tableData.rows} />}{tableData && <div className="pagination"><button className="secondary" disabled={page <= 1 || busy} onClick={() => void openTable(selected, page - 1)}>Previous</button><span>Page {page}</span><button className="secondary" disabled={page * 25 >= tableData.total || busy} onClick={() => void openTable(selected, page + 1)}>Next</button></div>}</>}<form className="sql-form" onSubmit={(event) => void runQuery(event)}><label htmlFor="sql-query">SQL query</label><textarea id="sql-query" value={sql} onChange={(event) => setSql(event.target.value)} rows={5} maxLength={10000} spellCheck={false} /><button disabled={busy}>Run read-only query</button></form>{queryResult && <><h3>Query results{queryResult.truncated ? " · first 500 rows shown" : ""}</h3><DataTable columns={Object.keys(queryResult.rows[0] ?? {})} rows={queryResult.rows} /></>}</div></div></section>;
+}
+
+function DataTable({ columns, rows }: { columns: string[]; rows: Record<string, unknown>[] }) {
+  if (!columns.length) return <p>No rows returned.</p>;
+  return <div className="table-scroll"><table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((column) => <td key={column}><code>{formatCell(row[column])}</code></td>)}</tr>)}</tbody></table></div>;
+}
+function formatCell(value: unknown): string { if (value === null || value === undefined) return "NULL"; if (typeof value === "object") return JSON.stringify(value); return String(value); }
+
+type ApiRoute = { method: string | string[]; url: string; schema: Record<string, unknown> };
+function ApiDocs() {
+  const [docs, setDocs] = React.useState<{ admin: ApiRoute[]; family: ApiRoute[] } | null>(null);
+  const [error, setError] = React.useState("");
+  React.useEffect(() => { void fetch("/api/admin/api-docs", { credentials: "include" }).then(async (response) => { if (!response.ok) throw new Error("Unable to load API documentation."); setDocs(await response.json()); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Unable to load API documentation.")); }, []);
+  return <section className="card"><h2>Live API documentation</h2><p>Generated from the registered Fastify route definitions and schemas at runtime.</p>{error && <p className="error">{error}</p>}{!docs ? <p>Loading routes…</p> : <><RouteList title="Admin API" routes={docs.admin} /><RouteList title="Family API" routes={docs.family} /></>}</section>;
+}
+function RouteList({ title, routes }: { title: string; routes: ApiRoute[] }) {
+  return <div className="route-group"><h3>{title} · {routes.length} routes</h3>{routes.map((route, index) => <details key={`${route.url}-${index}`}><summary><strong>{Array.isArray(route.method) ? route.method.join(", ") : route.method}</strong><code>{route.url}</code></summary><pre>{JSON.stringify(route.schema, null, 2)}</pre></details>)}</div>;
 }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><AdminLogin /></React.StrictMode>);

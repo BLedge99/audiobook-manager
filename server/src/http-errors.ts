@@ -23,6 +23,8 @@ export type ApiErrorCode =
   | "auth_required"
   | "admin_not_configured"
   | "admin_auth_required"
+  | "admin_query_rejected"
+  | "admin_query_failed"
   | "password_must_be_string"
   | "incorrect_password"
   | "profile_unclaimed"

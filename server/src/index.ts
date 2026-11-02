@@ -5,7 +5,6 @@ import { buildAdminApp } from "./admin/app";
 import { AdminAuth } from "./admin/auth";
 import { PrismaClient } from "@prisma/client";
 import { createScanManager } from "./scanner";
-import { EnrichmentManager } from "./metadata/run";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const ADMIN_PORT = parseInt(process.env.ADMIN_PORT || "3100", 10);
@@ -19,7 +18,7 @@ async function main() {
     await adminAuth.seed(process.env.ADMIN_PANEL_PASSWORD);
     console.log("[server] admin-panel credential seeded");
   }
-  const adminApp = await buildAdminApp({ prisma, auth: adminAuth, scanner, logger: true, startedAt: Date.now() });
+  const adminApp = await buildAdminApp({ prisma, auth: adminAuth, scanner, familyApp: app, logger: true, startedAt: Date.now() });
   // First launch: create the default household profiles so progress
   // is profile-scoped from the very first play. No-op once seeded.
   try {

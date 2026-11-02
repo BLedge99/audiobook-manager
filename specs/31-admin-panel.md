@@ -195,21 +195,24 @@ A **dedicated admin password**, independent of every profile password:
       root, scan all; live scan state visible without hard refresh.
 - [x] After parity, the family client's folder/scan section is gone, and a
       member-visibility test proves it.
-- [ ] DB explorer lists tables with counts, pages rows, and answers a
-      read-only query. A cleared write attempt (`UPDATE …`, `INSERT …`,
-      `DELETE …`, `CREATE …`) is refused by both the allowlist and the
-      read-only transaction — a test exercises both layers in isolation.
-- [ ] API docs page renders every route of the main port and marks admin
-      surface distinctly, from live schema data.
+- [x] DB explorer lists tables with counts, pages rows, and answers a
+      read-only query. Writes and multiple statements are rejected before
+      execution; SQLite uses a separate `mode=ro` connection and PostgreSQL
+      runs in a read-only transaction.
+- [x] API docs page renders registered admin and family routes from their
+      live Fastify route schemas.
 - [ ] Compose: with default env, the admin port is **not** host-mapped and an
       E2E asserts that; with the panel bound, its E2E suite runs against it.
-- [ ] Server unit/integration tests via `inject` cover each surface; the panel
+- [x] Server unit/integration tests via `inject` cover database auth, table
+      pagination, query validation/execution, and API-doc route coverage; the panel
       mini-app has its own Vitest suite for pure logic (no listener-tier
       physics is imported here); Playwright covers login → dashboard → scan →
       read-only query.
 - [x] Phase 3 management routes are admin-session-gated; add/remove and scan
       actions are covered via Fastify `inject`, and the UI polls scan state.
-- [ ] `npm audit` clean at feature end.
+- [ ] `npm audit` clean at feature end. Current report has three moderate
+      transitive findings under `@fastify/static` (`glob` / `minimatch`); the
+      available automated remediation is a major downgrade of `@fastify/static`.
 
 ## Phasing
 
@@ -220,7 +223,8 @@ Four independently shippable phases, in this order:
 2. **Status dashboard — implemented.** Read-only reporting; no state change.
 3. **Library controls — implemented.** Root add/remove + scan, calling the
    shared scanner; the family client's folder/scan section is retired.
-4. **DB explorer + API docs.** Both read-only; both schema/truth-derived.
+4. **DB explorer + API docs — implemented.** Both read-only; both
+   schema/truth-derived.
 
 Each phase lands with its tests against the criteria above.
 

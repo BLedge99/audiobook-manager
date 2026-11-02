@@ -87,6 +87,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     trustProxy,
   });
+  const apiDocs: { method: string | string[]; url: string; schema: unknown }[] = [];
+  app.decorate("apiDocs", apiDocs);
+  app.addHook("onRoute", (route) => {
+    if (route.url.startsWith("/api/")) apiDocs.push({ method: route.method, url: route.url, schema: route.schema ?? {} });
+  });
   const scanner = options.scanner ?? createScanManager(prisma);
   const enrichment = new EnrichmentManager(prisma);
   const recommendations = new RecommendationService(prisma);
