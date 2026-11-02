@@ -16,7 +16,7 @@ async function main() {
     await adminAuth.seed(process.env.ADMIN_PANEL_PASSWORD);
     console.log("[server] admin-panel credential seeded");
   }
-  const adminApp = await buildAdminApp({ prisma, auth: adminAuth, logger: true });
+  const adminApp = await buildAdminApp({ prisma, auth: adminAuth, logger: true, startedAt: Date.now() });
   // First launch: create the default household profiles so progress
   // is profile-scoped from the very first play. No-op once seeded.
   try {

@@ -31,7 +31,7 @@ COPY --from=server-build /app/server/prisma ./server/prisma
 COPY server/package.json ./server/package.json
 COPY --from=client-build /app/client/dist ./client/dist
 COPY --from=client-build /app/client/admin-dist ./client/admin-dist
-ENV CLIENT_DIST=/app/client/dist
+ENV CLIENT_DIST=/app/client/dist ADMIN_CLIENT_DIST=/app/client/admin-dist
 WORKDIR /app/server
 EXPOSE 3000 3100
 USER node

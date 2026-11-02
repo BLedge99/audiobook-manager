@@ -19,8 +19,10 @@ home for three reasons:
    *profile*, meaning the same password that unlocks the household unlocks the
    DB and server state.
 
-This spec is **planned, not started**. It is written before the code, per
-`AGENTS.md`. ADR 022 records the architecture decision this spec follows.
+This spec was written before implementation, per `AGENTS.md`. Phase 1 (admin
+listener, credential, separate session and lock screen) is implemented. Phase 2
+(read-only status dashboard) is now implemented; phases 3–4 remain planned. ADR
+022 records the architecture decision this spec follows.
 
 ## The decision
 
@@ -52,12 +54,12 @@ is no second thing to keep in sync.
 A **dedicated admin password**, independent of every profile password:
 
 - `ADMIN_PANEL_PASSWORD` **seeds** it at boot: if the env var is set, its
-  bcrypt hash is upserted into an `AdminCredential` row. The plain text lives
+  scrypt hash is upserted into an `AdminCredential` row. The plain text lives
   only in the private `.env`, never in the DB, never in an API response,
   never in any log.
 - Logins are **rate-limited** (at least 10 attempts / 5 min / IP) and failures
-  are logged without echoing back which (password vs user) was wrong, because
-  there is only one factor.
+  return the same code without echoing back which (password vs user) was wrong,
+  because there is only one factor.
 - Sessions are **separate from profile sessions**: an `AdminSession` table and
   its own cookie name. Holding a family-client session confers zero admin
   capability, and holding an admin session confers zero listener access; the
@@ -126,9 +128,6 @@ A **dedicated admin password**, independent of every profile password:
   `followsServerLibrary`, fixing a title — is instead a first-class panel
   action that calls the same application function the app itself uses, so the
   derived state stays consistent.
-- Everything an operator *would* write by hand (flip `followsServerLibrary`,
-  fix a title) is a first-class panel action built on the same app functions
-  the app itself uses, rather than a raw UPDATE.
 
 **4. API documentation.**
 
@@ -144,10 +143,8 @@ A **dedicated admin password**, independent of every profile password:
 
 ### Compose / configuration
 
-- `docker-compose.yml` maps `ADMIN_PORT` to the host only when an env knob
-  says so (`ADMIN_BIND=host`, or the port mapping simply commented out by
-  default); the panel is unreachable from the LAN by default, reachable for
-  the session an operator wants it, with no code change.
+- The base `docker-compose.yml` does not publish `ADMIN_PORT`; the operator
+  opts in by adding `docker-compose.admin.yml` to the compose command.
 - `ADMIN_PANEL_PASSWORD` joins `APP_PASSWORD` in the documented private
   `.env` set.
 - The panel's client build is a separate Vite entry (`client/admin/`), built
@@ -169,7 +166,7 @@ A **dedicated admin password**, independent of every profile password:
 
 - Every admin route is behind the admin session. There is **no** pre-auth
   admin endpoint except the login and its rate limiter, and a static
-  `GET /api/health` mirroring the main port's.
+  `GET /api/health` reporting only whether the admin credential is configured.
 - All route inputs validated with Fastify schemas (house rule, unchanged).
 - The DB console takes SQL from the operator by definition; the protections
   are the allowlist + the read-only transaction + the `ADMIN_PANEL_PASSWORD`
@@ -181,17 +178,19 @@ A **dedicated admin password**, independent of every profile password:
 
 ## Acceptance criteria
 
-- [ ] The main port returns 404 for every panel route and serves no admin
+- [x] The main port returns 404 for every panel route and serves no admin
       session cookie.
-- [ ] With `ADMIN_PANEL_PASSWORD` unset, the panel boots into a locked state
+- [x] With `ADMIN_PANEL_PASSWORD` unset, the panel boots into a locked state
       saying exactly that, and nothing but `GET /api/health` answers.
-- [ ] Login accepts the seeded password, is rate-limited, and every panel page
+- [x] Login accepts the seeded password, is rate-limited, and every panel page
       redirects to it when the session is absent or expired.
 - [ ] Changing the password from the panel invalidates every admin session,
       including the changing one.
-- [ ] Status dashboard shows: mode (local/prod/tunnel-absent), DB type, node
+- [x] Status dashboard shows: mode (local/prod/tunnel-absent), DB type, node
       version, CORS origins, WebAuthn pair, media-token state, root health,
       last scans, enrichment queue state, data freshness.
+- [x] Dashboard endpoint requires an admin session and returns no configured
+      secret values.
 - [ ] Library controls: add root, remove root with confirmation, scan one
       root, scan all; live scan state visible without hard refresh.
 - [ ] After parity, the family client's folder/scan section is gone, and a
@@ -214,10 +213,9 @@ A **dedicated admin password**, independent of every profile password:
 
 Four independently shippable phases, in this order:
 
-1. **Admin surface + auth.** Second listener, credential, session, lock
-   screen, health. Shipped alone this is already a feature: the admin API
-   exists and the port is honest about it.
-2. **Status dashboard.** Read-only reporting; no state change at all.
+1. **Admin surface + auth — implemented.** Second listener, credential,
+   session, lock screen, health.
+2. **Status dashboard — implemented.** Read-only reporting; no state change.
 3. **Library controls.** Root add/remove + scan, calling existing modules;
    family client's operator section retired the same day.
 4. **DB explorer + API docs.** Both read-only; both schema/truth-derived.

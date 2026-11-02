@@ -80,4 +80,19 @@ describe("admin panel authentication", () => {
     await lockedApp.close();
     await auth.seed("dedicated-admin-password");
   });
+
+  it("reports status only to a valid admin session and avoids returning secret values", async () => {
+    const appWithStatus = await buildAdminApp({ prisma, auth });
+    const unauthorized = await appWithStatus.inject({ url: "/api/admin/status" });
+    expect(unauthorized.statusCode).toBe(401);
+    const token = await auth.login("dedicated-admin-password", "192.0.2.13");
+    const session = await appWithStatus.inject({ url: "/api/admin/status", cookies: { admin_panel_session: token! } });
+    expect(session.statusCode).toBe(200);
+    const payload = session.json();
+    expect(payload.database.type).toBe("SQLite");
+    expect(payload.server.nodeVersion).toBe(process.version);
+    expect(payload.library.roots).toEqual(expect.any(Array));
+    expect(JSON.stringify(payload)).not.toContain("dedicated-admin-password");
+    await appWithStatus.close();
+  });
 });
