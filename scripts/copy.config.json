@@ -15,5 +15,9 @@
       ]
     }
   },
-  "ignoreKeys": []
+  "ignoreKeys": [
+    "copyAdmin.db.nullDisplay",
+    "copyAdmin.fields.yes",
+    "copyAdmin.fields.no"
+  ]
 }

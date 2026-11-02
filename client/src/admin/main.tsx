@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { copyAdmin } from "./copy";
 import "./style.css";
 
 function AdminLogin() {
@@ -30,14 +31,14 @@ function AdminLogin() {
     } else {
       const result = await response.json().catch(() => ({}));
       if (result.code === "admin_not_configured") setConfigured(false);
-      setError(result.code === "auth_required" ? "The password was not accepted." : "Unable to sign in.");
+      setError(result.code === "auth_required" ? copyAdmin.signIn.rejected : copyAdmin.signIn.unavailable);
     }
   }
 
-  if (authenticated === null) return <main><p>Checking admin session…</p></main>;
-  if (!configured) return <main><h1>Admin panel locked</h1><p>Set ADMIN_PANEL_PASSWORD in the server environment, then restart the server.</p></main>;
+  if (authenticated === null) return <main><p>{copyAdmin.session.checking}</p></main>;
+  if (!configured) return <main><h1>{copyAdmin.locked.heading}</h1><p>{copyAdmin.locked.body}</p></main>;
   if (authenticated) return <AdminDashboard onSignOut={async () => { await fetch("/api/admin/logout", { method: "POST", credentials: "include" }); setAuthenticated(false); }} />;
-  return <main><h1>Admin sign in</h1><p>Separate from your household account.</p><form onSubmit={login}><label htmlFor="password">Admin password</label><input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" /><button type="submit">Sign in</button>{error && <p role="alert">{error}</p>}</form></main>;
+  return <main><h1>{copyAdmin.signIn.heading}</h1><p>{copyAdmin.signIn.hint}</p><form onSubmit={login}><label htmlFor="password">{copyAdmin.signIn.passwordLabel}</label><input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" /><button type="submit">{copyAdmin.signIn.submit}</button>{error && <p role="alert">{error}</p>}</form></main>;
 }
 
 type Status = {
@@ -54,7 +55,7 @@ type Status = {
 };
 
 function formatDate(value: string | null) {
-  return value ? new Date(value).toLocaleString() : "Never";
+  return value ? new Date(value).toLocaleString() : copyAdmin.dates.never;
 }
 
 function StatusCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -74,7 +75,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     try {
       const response = await fetch("/api/admin/status", { credentials: "include" });
       if (response.status === 401) { onSignOut(); return; }
-      if (!response.ok) throw new Error("Status request failed.");
+      if (!response.ok) throw new Error(copyAdmin.shell.statusRequestFailed);
       const rootResponse = await fetch("/api/admin/library-roots", { credentials: "include" });
       const rootData = rootResponse.ok ? await rootResponse.json() as Status["library"]["roots"] : [];
       const scanResponse = await fetch("/api/admin/scan/status", { credentials: "include" });
@@ -85,7 +86,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       setRoots(rootData.map((root) => ({ ...root, scan: scanStates.find((scan) => scan.rootId === root.id)?.status ?? root.scan })));
       setStatus(await response.json() as Status);
       setError("");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load server status."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : copyAdmin.shell.loadFailed); }
   }, [onSignOut]);
   React.useEffect(() => { void load(); const id = window.setInterval(() => void load(), 15000); return () => window.clearInterval(id); }, [load]);
   async function mutate(url: string, method: string, body?: unknown) {
@@ -94,10 +95,10 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       const response = await fetch(url, { method, credentials: "include", headers: { "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
-        throw new Error(result.code || "Request failed.");
+        throw new Error(result.code || copyAdmin.shell.requestFailed);
       }
       await load();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Request failed."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : copyAdmin.shell.requestFailed); }
     finally { setWorking(false); }
   }
   async function addRoot(event: React.FormEvent) {
@@ -120,19 +121,19 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     return () => window.clearInterval(id);
   }, []);
   return <main className="dashboard">
-    <header className="topbar"><div><h1>Admin panel</h1><p>Read-only system and library report · refreshes every 15 seconds</p></div><div className="actions"><button className="secondary" onClick={() => void load()}>Refresh</button><button onClick={onSignOut}>Sign out</button></div></header>
-    <nav className="admin-nav" aria-label="Admin sections"><button className={section === "overview" ? "selected" : "secondary"} onClick={() => setSection("overview")}>Overview</button><button className={section === "database" ? "selected" : "secondary"} onClick={() => setSection("database")}>Database</button><button className={section === "api" ? "selected" : "secondary"} onClick={() => setSection("api")}>API docs</button></nav>
+    <header className="topbar"><div><h1>{copyAdmin.shell.title}</h1><p>{copyAdmin.shell.subtitle}</p></div><div className="actions"><button className="secondary" onClick={() => void load()}>{copyAdmin.shell.refresh}</button><button onClick={onSignOut}>{copyAdmin.shell.signOut}</button></div></header>
+    <nav className="admin-nav" aria-label={copyAdmin.nav.label}><button className={section === "overview" ? "selected" : "secondary"} onClick={() => setSection("overview")}>{copyAdmin.nav.overview}</button><button className={section === "database" ? "selected" : "secondary"} onClick={() => setSection("database")}>{copyAdmin.nav.database}</button><button className={section === "api" ? "selected" : "secondary"} onClick={() => setSection("api")}>{copyAdmin.nav.apiDocs}</button></nav>
     {error && <p role="alert" className="error">{error}</p>}
-    {section === "database" ? <DatabaseExplorer /> : section === "api" ? <ApiDocs /> : !status ? <p>Loading server status…</p> : <>
+    {section === "database" ? <DatabaseExplorer /> : section === "api" ? <ApiDocs /> : !status ? <p>{copyAdmin.shell.loading}</p> : <>
       <div className="grid">
-        <StatusCard title="Environment"><dl><dt>Mode</dt><dd>{status.mode}</dd><dt>Remote access</dt><dd>{status.remoteAccess}</dd><dt>Reported</dt><dd>{formatDate(status.generatedAt)}</dd></dl></StatusCard>
-        <StatusCard title="Server"><dl><dt>Health</dt><dd><span className="good">{status.server.health}</span></dd><dt>Node</dt><dd>{status.server.nodeVersion}</dd><dt>Platform</dt><dd>{status.server.platform}</dd><dt>Uptime</dt><dd>{Math.floor(status.server.uptimeSeconds / 3600)}h {Math.floor((status.server.uptimeSeconds % 3600) / 60)}m</dd></dl></StatusCard>
-        <StatusCard title="Database"><dl><dt>Type</dt><dd>{status.database.type}</dd><dt>Configured</dt><dd>{status.database.configured ? "Yes" : "No"}</dd></dl></StatusCard>
-        <StatusCard title="Library"><dl><dt>Books</dt><dd>{status.library.bookCount}</dd><dt>Profiles</dt><dd>{status.library.profileCount}</dd><dt>Folders</dt><dd>{status.library.rootCount}</dd><dt>Latest scan</dt><dd>{formatDate(status.scans.newestScanAt)}</dd><dt>Newest shelf addition</dt><dd>{formatDate(status.freshness.newestProfileLibraryEntryAt)}</dd></dl></StatusCard>
-        <StatusCard title="Network configuration"><dl><dt>Family API port</dt><dd>{status.network.port}</dd><dt>Admin port</dt><dd>{status.network.adminPort}</dd><dt>WebAuthn RP</dt><dd>{status.network.webauthn.rpId ?? "Not configured"}</dd><dt>WebAuthn origin</dt><dd>{status.network.webauthn.origin ?? "Not configured"}</dd><dt>Media signing key</dt><dd>{status.network.mediaTokenSecretConfigured ? "Configured" : "Missing / too short"}</dd><dt>Tunnel</dt><dd>{status.network.tunnel}</dd></dl><h3>Allowed client origins</h3><ul>{status.network.corsOrigins.map((origin) => <li key={origin}><code>{origin}</code></li>)}</ul></StatusCard>
-        <StatusCard title="Enrichment"><dl><dt>Status</dt><dd>{status.enrichment.status}</dd><dt>Queued</dt><dd>{status.enrichment.queued}</dd><dt>Processed</dt><dd>{status.enrichment.processed}</dd><dt>Applied / review</dt><dd>{status.enrichment.applied} / {status.enrichment.review}</dd><dt>Failed / skipped</dt><dd>{status.enrichment.failed} / {status.enrichment.skipped}</dd><dt>Last finished</dt><dd>{formatDate(status.enrichment.finishedAt)}</dd></dl>{status.enrichment.message && <p>{status.enrichment.message}</p>}</StatusCard>
+        <StatusCard title={copyAdmin.cards.env}><dl><dt>{copyAdmin.fields.mode}</dt><dd>{status.mode}</dd><dt>{copyAdmin.fields.remoteAccess}</dt><dd>{status.remoteAccess}</dd><dt>{copyAdmin.fields.reported}</dt><dd>{formatDate(status.generatedAt)}</dd></dl></StatusCard>
+        <StatusCard title={copyAdmin.cards.server}><dl><dt>{copyAdmin.fields.health}</dt><dd><span className="good">{status.server.health}</span></dd><dt>{copyAdmin.fields.node}</dt><dd>{status.server.nodeVersion}</dd><dt>{copyAdmin.fields.platform}</dt><dd>{status.server.platform}</dd><dt>{copyAdmin.fields.uptime}</dt><dd>{Math.floor(status.server.uptimeSeconds / 3600)}h {Math.floor((status.server.uptimeSeconds % 3600) / 60)}m</dd></dl></StatusCard>
+        <StatusCard title={copyAdmin.cards.db}><dl><dt>{copyAdmin.fields.type}</dt><dd>{status.database.type}</dd><dt>{copyAdmin.fields.configured}</dt><dd>{status.database.configured ? copyAdmin.fields.yes : copyAdmin.fields.no}</dd></dl></StatusCard>
+        <StatusCard title={copyAdmin.cards.library}><dl><dt>{copyAdmin.fields.books}</dt><dd>{status.library.bookCount}</dd><dt>{copyAdmin.fields.profiles}</dt><dd>{status.library.profileCount}</dd><dt>{copyAdmin.fields.folders}</dt><dd>{status.library.rootCount}</dd><dt>{copyAdmin.fields.latestScan}</dt><dd>{formatDate(status.scans.newestScanAt)}</dd><dt>{copyAdmin.fields.newestShelfAddition}</dt><dd>{formatDate(status.freshness.newestProfileLibraryEntryAt)}</dd></dl></StatusCard>
+        <StatusCard title={copyAdmin.cards.network}><dl><dt>{copyAdmin.fields.familyPort}</dt><dd>{status.network.port}</dd><dt>{copyAdmin.fields.adminPort}</dt><dd>{status.network.adminPort}</dd><dt>{copyAdmin.fields.webauthnRp}</dt><dd>{status.network.webauthn.rpId ?? copyAdmin.fields.notConfigured}</dd><dt>{copyAdmin.fields.webauthnOrigin}</dt><dd>{status.network.webauthn.origin ?? copyAdmin.fields.notConfigured}</dd><dt>{copyAdmin.fields.mediaSigningKey}</dt><dd>{status.network.mediaTokenSecretConfigured ? copyAdmin.fields.configured : copyAdmin.fields.signingKeyMissing}</dd><dt>{copyAdmin.fields.tunnel}</dt><dd>{status.network.tunnel}</dd></dl><h3>{copyAdmin.fields.allowedOrigins}</h3><ul>{status.network.corsOrigins.map((origin) => <li key={origin}><code>{origin}</code></li>)}</ul></StatusCard>
+        <StatusCard title={copyAdmin.cards.enrichment}><dl><dt>{copyAdmin.fields.status}</dt><dd>{status.enrichment.status}</dd><dt>{copyAdmin.fields.queued}</dt><dd>{status.enrichment.queued}</dd><dt>{copyAdmin.fields.processed}</dt><dd>{status.enrichment.processed}</dd><dt>{copyAdmin.fields.appliedReview}</dt><dd>{status.enrichment.applied} / {status.enrichment.review}</dd><dt>{copyAdmin.fields.failedSkipped}</dt><dd>{status.enrichment.failed} / {status.enrichment.skipped}</dd><dt>{copyAdmin.fields.lastFinished}</dt><dd>{formatDate(status.enrichment.finishedAt)}</dd></dl>{status.enrichment.message && <p>{status.enrichment.message}</p>}</StatusCard>
       </div>
-      <StatusCard title="Library folders"><div className="library-actions"><button disabled={working || roots.length === 0} onClick={() => void mutate("/api/admin/scan", "POST", {})}>Scan all folders</button><button className="secondary" disabled={working} onClick={() => setAdding((value) => !value)}>Add folder</button></div>{adding && <form className="root-form" onSubmit={(event) => void addRoot(event)}><label>Folder path<input value={path} onChange={(event) => setPath(event.target.value)} required maxLength={4096} placeholder="/data/audiobooks" /></label><label>Label (optional)<input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={200} placeholder="Audiobooks" /></label><button type="submit" disabled={working}>Add folder</button></form>}<div className="root-list">{roots.length ? roots.map((root) => <article key={root.id} className="root"><div><strong>{root.label || root.path}</strong><p><code>{root.path}</code></p></div><span className={root.accessible ? "good" : "bad"}>{root.accessible ? "Accessible" : "Unavailable"}</span><span>{root.itemCount} books</span><span>Scan: {root.scan?.status ?? "Never scanned"}</span><span>{root.scan?.filesFound ?? 0} files · {formatDate(root.scan?.lastScanAt ?? null)}</span><div className="root-buttons"><button className="secondary" disabled={working} onClick={() => void mutate("/api/admin/scan", "POST", { rootId: root.id })}>Scan</button><button className="danger" disabled={working} onClick={() => { if (window.confirm(`Remove folder configuration for “${root.label || root.path}”? The audio files will not be deleted.`)) void mutate(`/api/admin/library-roots/${root.id}`, "DELETE"); }}>Remove</button></div>{root.scan?.message && <p className="error">{root.scan.message}</p>}</article>) : <p>No folders configured.</p>}</div></StatusCard>
+      <StatusCard title={copyAdmin.folders.heading}><div className="library-actions"><button disabled={working || roots.length === 0} onClick={() => void mutate("/api/admin/scan", "POST", {})}>{copyAdmin.folders.scanAll}</button><button className="secondary" disabled={working} onClick={() => setAdding((value) => !value)}>{copyAdmin.folders.addFolder}</button></div>{adding && <form className="root-form" onSubmit={(event) => void addRoot(event)}><label>{copyAdmin.folders.pathLabel}<input value={path} onChange={(event) => setPath(event.target.value)} required maxLength={4096} placeholder={copyAdmin.folders.pathPlaceholder} /></label><label>{copyAdmin.folders.labelOptional}<input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={200} placeholder={copyAdmin.folders.labelPlaceholder} /></label><button type="submit" disabled={working}>{copyAdmin.folders.addFolder}</button></form>}<div className="root-list">{roots.length ? roots.map((root) => <article key={root.id} className="root"><div><strong>{root.label || root.path}</strong><p><code>{root.path}</code></p></div><span className={root.accessible ? "good" : "bad"}>{root.accessible ? copyAdmin.folders.accessible : copyAdmin.folders.unavailable}</span><span>{copyAdmin.folders.bookCount(root.itemCount)}</span><span>{copyAdmin.folders.scanState(root.scan?.status ?? copyAdmin.folders.neverScanned)}</span><span>{copyAdmin.folders.scanSummary(root.scan?.filesFound ?? 0, formatDate(root.scan?.lastScanAt ?? null))}</span><div className="root-buttons"><button className="secondary" disabled={working} onClick={() => void mutate("/api/admin/scan", "POST", { rootId: root.id })}>{copyAdmin.folders.scanOne}</button><button className="danger" disabled={working} onClick={() => { if (window.confirm(copyAdmin.folders.removeConfirm(root.label || root.path))) void mutate(`/api/admin/library-roots/${root.id}`, "DELETE"); }}>{copyAdmin.folders.remove}</button></div>{root.scan?.message && <p className="error">{root.scan.message}</p>}</article>) : <p>{copyAdmin.folders.empty}</p>}</div></StatusCard>
     </>}
   </main>;
 }
@@ -147,37 +148,37 @@ function DatabaseExplorer() {
   const [queryResult, setQueryResult] = React.useState<{ rows: Record<string, unknown>[]; truncated: boolean } | null>(null);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  React.useEffect(() => { void fetch("/api/admin/db/tables", { credentials: "include" }).then(async (response) => { if (!response.ok) throw new Error("Unable to list tables."); const result = await response.json() as { tables: TableInfo[] }; setTables(result.tables); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Unable to list tables.")); }, []);
+  React.useEffect(() => { void fetch("/api/admin/db/tables", { credentials: "include" }).then(async (response) => { if (!response.ok) throw new Error(copyAdmin.db.listTablesFailed); const result = await response.json() as { tables: TableInfo[] }; setTables(result.tables); }).catch((cause) => setError(cause instanceof Error ? cause.message : copyAdmin.db.listTablesFailed)); }, []);
   async function openTable(name: string, nextPage = 1) {
     setSelected(name); setPage(nextPage); setBusy(true); setError("");
-    try { const response = await fetch(`/api/admin/db/tables/${encodeURIComponent(name)}?page=${nextPage}&pageSize=25`, { credentials: "include" }); if (!response.ok) throw new Error("Unable to load table."); setTableData(await response.json()); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load table."); }
+    try { const response = await fetch(`/api/admin/db/tables/${encodeURIComponent(name)}?page=${nextPage}&pageSize=25`, { credentials: "include" }); if (!response.ok) throw new Error(copyAdmin.db.loadTableFailed); setTableData(await response.json()); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : copyAdmin.db.loadTableFailed); }
     finally { setBusy(false); }
   }
   async function runQuery(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setQueryResult(null);
-    try { const response = await fetch("/api/admin/db/query", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ sql }) }); const data = await response.json(); if (!response.ok) throw new Error(data.reason || data.code || "Query failed."); setQueryResult(data); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Query failed."); }
+    try { const response = await fetch("/api/admin/db/query", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ sql }) }); const data = await response.json(); if (!response.ok) throw new Error(data.reason || data.code || copyAdmin.db.queryFailed); setQueryResult(data); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : copyAdmin.db.queryFailed); }
     finally { setBusy(false); }
   }
-  return <section className="card"><h2>Read-only database explorer</h2><p>Browse tables or run one SELECT, EXPLAIN, or approved read-only PRAGMA. Results are capped at 500 rows.</p>{error && <p className="error" role="alert">{error}</p>}<div className="db-layout"><aside><h3>Tables</h3>{tables.map((table) => <button className="table-choice secondary" key={table.name} onClick={() => void openTable(table.name)}>{table.name}<span>{table.count}</span></button>)}</aside><div className="db-content">{selected && <><h3>{selected} · {tableData?.total ?? "…"} rows</h3>{tableData && <DataTable columns={tableData.columns.map((column) => column.name)} rows={tableData.rows} />}{tableData && <div className="pagination"><button className="secondary" disabled={page <= 1 || busy} onClick={() => void openTable(selected, page - 1)}>Previous</button><span>Page {page}</span><button className="secondary" disabled={page * 25 >= tableData.total || busy} onClick={() => void openTable(selected, page + 1)}>Next</button></div>}</>}<form className="sql-form" onSubmit={(event) => void runQuery(event)}><label htmlFor="sql-query">SQL query</label><textarea id="sql-query" value={sql} onChange={(event) => setSql(event.target.value)} rows={5} maxLength={10000} spellCheck={false} /><button disabled={busy}>Run read-only query</button></form>{queryResult && <><h3>Query results{queryResult.truncated ? " · first 500 rows shown" : ""}</h3><DataTable columns={Object.keys(queryResult.rows[0] ?? {})} rows={queryResult.rows} /></>}</div></div></section>;
+  return <section className="card"><h2>{copyAdmin.db.heading}</h2><p>{copyAdmin.db.explainer}</p>{error && <p className="error" role="alert">{error}</p>}<div className="db-layout"><aside><h3>{copyAdmin.db.tables}</h3>{tables.map((table) => <button className="table-choice secondary" key={table.name} onClick={() => void openTable(table.name)}>{table.name}<span>{table.count}</span></button>)}</aside><div className="db-content">{selected && <><h3>{copyAdmin.db.tableHeading(selected, tableData?.total ?? null)}</h3>{tableData && <DataTable columns={tableData.columns.map((column) => column.name)} rows={tableData.rows} />}{tableData && <div className="pagination"><button className="secondary" disabled={page <= 1 || busy} onClick={() => void openTable(selected, page - 1)}>{copyAdmin.pagination.previous}</button><span>{copyAdmin.pagination.page(page)}</span><button className="secondary" disabled={page * 25 >= tableData.total || busy} onClick={() => void openTable(selected, page + 1)}>{copyAdmin.pagination.next}</button></div>}</>}<form className="sql-form" onSubmit={(event) => void runQuery(event)}><label htmlFor="sql-query">{copyAdmin.db.queryLabel}</label><textarea id="sql-query" value={sql} onChange={(event) => setSql(event.target.value)} rows={5} maxLength={10000} spellCheck={false} /><button disabled={busy}>{copyAdmin.db.querySubmit}</button></form>{queryResult && <><h3>{copyAdmin.db.resultsHeading}{queryResult.truncated ? ` · ${copyAdmin.db.resultSuffix}` : ""}</h3><DataTable columns={Object.keys(queryResult.rows[0] ?? {})} rows={queryResult.rows} /></>}</div></div></section>;
 }
 
 function DataTable({ columns, rows }: { columns: string[]; rows: Record<string, unknown>[] }) {
-  if (!columns.length) return <p>No rows returned.</p>;
+  if (!columns.length) return <p>{copyAdmin.db.noRows}</p>;
   return <div className="table-scroll"><table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((column) => <td key={column}><code>{formatCell(row[column])}</code></td>)}</tr>)}</tbody></table></div>;
 }
-function formatCell(value: unknown): string { if (value === null || value === undefined) return "NULL"; if (typeof value === "object") return JSON.stringify(value); return String(value); }
+function formatCell(value: unknown): string { if (value === null || value === undefined) return copyAdmin.db.nullDisplay; if (typeof value === "object") return JSON.stringify(value); return String(value); }
 
 type ApiRoute = { method: string | string[]; url: string; schema: Record<string, unknown> };
 function ApiDocs() {
   const [docs, setDocs] = React.useState<{ admin: ApiRoute[]; family: ApiRoute[] } | null>(null);
   const [error, setError] = React.useState("");
-  React.useEffect(() => { void fetch("/api/admin/api-docs", { credentials: "include" }).then(async (response) => { if (!response.ok) throw new Error("Unable to load API documentation."); setDocs(await response.json()); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Unable to load API documentation.")); }, []);
-  return <section className="card"><h2>Live API documentation</h2><p>Generated from the registered Fastify route definitions and schemas at runtime.</p>{error && <p className="error">{error}</p>}{!docs ? <p>Loading routes…</p> : <><RouteList title="Admin API" routes={docs.admin} /><RouteList title="Family API" routes={docs.family} /></>}</section>;
+  React.useEffect(() => { void fetch("/api/admin/api-docs", { credentials: "include" }).then(async (response) => { if (!response.ok) throw new Error(copyAdmin.docs.loadFailed); setDocs(await response.json()); }).catch((cause) => setError(cause instanceof Error ? cause.message : copyAdmin.docs.loadFailed)); }, []);
+  return <section className="card"><h2>{copyAdmin.docs.heading}</h2><p>{copyAdmin.docs.explainer}</p>{error && <p className="error">{error}</p>}{!docs ? <p>{copyAdmin.docs.loading}</p> : <><RouteList title={copyAdmin.docs.adminApi} routes={docs.admin} /><RouteList title={copyAdmin.docs.familyApi} routes={docs.family} /></>}</section>;
 }
 function RouteList({ title, routes }: { title: string; routes: ApiRoute[] }) {
-  return <div className="route-group"><h3>{title} · {routes.length} routes</h3>{routes.map((route, index) => <details key={`${route.url}-${index}`}><summary><strong>{Array.isArray(route.method) ? route.method.join(", ") : route.method}</strong><code>{route.url}</code></summary><pre>{JSON.stringify(route.schema, null, 2)}</pre></details>)}</div>;
+  return <div className="route-group"><h3>{copyAdmin.docs.routeSummary(title, routes.length)}</h3>{routes.map((route, index) => <details key={`${route.url}-${index}`}><summary><strong>{Array.isArray(route.method) ? route.method.join(", ") : route.method}</strong><code>{route.url}</code></summary><pre>{JSON.stringify(route.schema, null, 2)}</pre></details>)}</div>;
 }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><AdminLogin /></React.StrictMode>);
