@@ -36,6 +36,12 @@ services:
     command: sh -c "echo '[compose] generating the SQLite Prisma client'; npx prisma generate --schema prisma/sqlite/schema.prisma; echo '[compose] prisma generate exited with code '$$?; echo '[compose] applying SQLite migrations'; npx prisma migrate deploy --schema prisma/sqlite/schema.prisma; echo '[compose] prisma migrate deploy exited with code '$$?; echo '[compose] starting Fastify'; npm run dev"
     volumes:
       - ./server:/app/server
+      # server_node_modules holds Linux-compatible node_modules for the dev
+      # container. Named volumes persist across `docker compose up -d --build`,
+      # so adding or removing a dependency in package.json does NOT refresh it.
+      # If a dependency is added/removed, run `make reset-server-modules` to
+      # recreate this volume, otherwise the container will use stale modules
+      # and fail to start (e.g. "Cannot find module 'better-sqlite3'").
       - server_node_modules:/app/server/node_modules
       - ./test:/test:ro
       - audiobook_data:/data/audiobooks

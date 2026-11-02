@@ -54,8 +54,21 @@ stop:
 # `docker compose up -d` reuses an existing container, and although the source
 # directory is bind-mounted and tsx watch should reload, a stale process is a
 # confusing way to lose an afternoon. Use this after changing server code.
+#
+# NOTE: `restart` does NOT refresh named volumes. If you added or removed a
+# dependency in server/package.json, `server_node_modules` may be stale and the
+# server will crash on startup (e.g. "Cannot find module 'better-sqlite3'").
+# Run `make reset-server-modules` first in that case.
 restart:
 	docker compose up -d --force-recreate
+
+## Remove and recreate the server node_modules volume.
+# Use this after adding or removing dependencies in server/package.json, since
+# the named volume is not refreshed by `docker compose up -d --build`.
+reset-server-modules:
+	docker compose stop server
+	docker volume rm audiobook-manager-server_node_modules
+	docker compose up -d --build server
 
 logs:
 	docker compose logs -f
