@@ -1,0 +1,13 @@
+To fix:
+
+-Lack of books +- inprog ?
+-Book stopping & logout - ?
+-Install script +
+-Make start +
+
+To add:
+ 
+-Admin panel
+-Inspect DB
+-Decouple server DB from Offline DB ?
+

@@ -46,6 +46,8 @@ export interface BuildAppOptions {
   mediaTokenSecret?: string;
 }
 
+/** Test seam for proving that the family listener has no admin surface. */
+
 /** Public API paths; everything else under `/api/` needs a session. */
 function isPublicApiPath(path: string): boolean {
   return (
@@ -206,6 +208,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const path = request.url.split("?")[0];
     if (!path.startsWith("/api/")) return;
     if (request.method === "OPTIONS") return;
+    // The admin panel has a separate listener and route table. Do not let the
+    // household auth gate turn its absent routes into a misleading 401.
+    if (path === "/api/admin" || path.startsWith("/api/admin/")) return fail(reply, 404, "not_found");
     if (!authEnabled) return;
 
     const mediaResource = mediaResourceFromPath(path);

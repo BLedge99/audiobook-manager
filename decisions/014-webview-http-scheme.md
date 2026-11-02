@@ -126,6 +126,10 @@ burden. Recorded as the destination if the app ever leaves a trusted LAN.
 
 The earlier HTTP-origin build was verified on a Motorola Defy. This
 storage-preserving configuration still requires a physical-device check with
-`adb reverse` disabled. The handoff records client isolation on the Cisco AP as
-a separate, known network blocker; verify on a network that permits
-device-to-device traffic before attributing a failed request to the app.
+`adb reverse` disabled. The handoff initially recorded "client isolation on
+the Cisco AP" as a separate known network blocker; that was corrected on
+2026-11-02 (decisions/021) -- the traffic was swallowed by a rogue always-on
+VPN on the phones, not by the access point (the network is a Linksys toob
+fibre router with no isolation setting), and the WiFi path is proven working
+end to end. Before attributing a failed request to the app, rule out a VPN on
+the device.

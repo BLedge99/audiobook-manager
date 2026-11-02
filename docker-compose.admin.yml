@@ -1,0 +1,6 @@
+# Opt-in admin-panel port publishing for the local stack.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.admin.yml up -d
+services:
+  server:
+    ports:
+      - "3100:3100"

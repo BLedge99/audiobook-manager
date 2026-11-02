@@ -605,25 +605,31 @@ the Internet.
     and the library said "still here", and *that* is what made the removal
     look like it had done nothing.
 
-- **The phones cannot reach the LAN at all.** Both are on the Cisco AP
-  `toob-9F4CE1`, with a normal DHCP lease (192.168.1.93, gateway 192.168.1.1)
-  and a link speed of 780 Mbps -- and every packet to another device on the
-  network is blackholed: the router and the host both answer nothing, and a
-  connection to the host's port 3000 *hangs* rather than being refused. That
-  is client isolation on the access point, not a firewall on the host (the
-  host has an inbound allow rule for TCP 3000 from the local subnet, and its
-  Ethernet profile is Private).
+- **The phones could not reach the LAN at all — a rogue VPN, not the network.**
+  (Measured 2026-10-21; root cause corrected 2026-11-02, decisions/021.) The
+  phones had an always-on VPN app that black-holes outbound traffic it does
+  not proxy: a phone could not even ping the *router* (`192.168.1.1`), while
+  the PC pinged the phone normally. An earlier entry blamed client isolation
+  on the access point; that was wrong — the network is a Linksys toob fibre
+  router (`toob-9F4CE1`), there is no Cisco hardware and no isolation setting,
+  and the network itself was innocent. Two things made the wrong theory
+  plausible:
 
-  So the household's own server address, `http://192.168.1.203:3000`, works
-  for a laptop on the LAN and **not** for either phone: with the Pixel
-  pointed at it, the app showed the offline banner and the request never
-  completed. The only route from a phone to the server is the `adb reverse`
-  tunnel, which means the phone has to be plugged into the machine running
-  the server.
+  - Windows blocks inbound pings by default, so the phone→PC ping dies on a
+    perfectly healthy network. The reverse (PC→phone) worked and supported
+    "isolation is asymmetric" thinking.
+  - The app's server check *hangs* rather than refusing when packets vanish:
+    greyed-out "checking" for minutes, then a timeout. A refusal (fast fail)
+    would have pointed away from the network immediately.
 
-  **This is a household network problem, not an app problem**, and it is the
-  reason the phones need the tunnel at all. Fixing it means putting the
-  phones on the main SSID, or turning off client isolation on that AP.
+  So the household's own server address, `http://192.168.1.203:3000`, works on
+  the home network — provided the phone has no VPN running. The `adb reverse`
+  tunnel (`make device-tunnel`) remains the fallback only for networks that
+  genuinely cannot route device-to-device.
+
+  **First diagnostic step whenever a phone "cannot connect": Settings → VPN on
+  the phone.** The tell-tale symptom is the indefinite "checking" state, not
+  an error message.
 
 - **A tab that cannot be reached offline is a tab that has failed.** The "All
   books" tab showed the fetch error and an empty list when the server was

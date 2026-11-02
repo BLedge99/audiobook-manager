@@ -60,6 +60,7 @@ Use the Makefile. `make` works in WSL (where Docker runs) and in Git Bash.
 
 ```bash
 make start      # docker compose up (server :3000, client :5173)
+make local      # start + expose the server on the LAN for phones (http://<lan-ip>:3000, one UAC prompt)
 make stop
 make logs
 make restart    # recreate containers, so changed server code is picked up

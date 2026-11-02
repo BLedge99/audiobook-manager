@@ -10,8 +10,15 @@ COPY server/prisma /app/server/prisma
 WORKDIR /app/server
 RUN npm ci
 # The development image is SQLite-only; production generates the PostgreSQL
-# client in Dockerfile.prod.
+# client in Dockerfile.prod. The admin mini-app is a separate Vite entry.
 RUN npx prisma generate --schema prisma/sqlite/schema.prisma
+
+WORKDIR /app/client
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
+COPY client/ ./
+RUN npm run build:admin
+WORKDIR /app/server
 
 ENV NODE_ENV=development
 

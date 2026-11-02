@@ -437,17 +437,17 @@ scripts/e2e-wsl.sh e2e/playback.spec.ts   # 1 passed
     all (ping to the host is 100% lost). The household's own setting is
     `http://192.168.1.203:3000`, and it is the right one on the normal
     network.
-  - **Both phones cannot reach the LAN at all** (measured 2026-10-21). The
-    Cisco AP `toob-9F4CE1` hands out a normal lease on 192.168.1.0/24 and
-    then blackholes every packet to another device: the router and the host
-    both answer nothing, and a connection to the host's port 3000 *hangs*
-    rather than being refused. It is client isolation on the AP -- the host's
-    firewall allows inbound TCP 3000 from the local subnet. So
-    `http://192.168.1.203:3000` works for a laptop on the LAN and not for
-    either phone, and the only route from a phone to the server is the
-    `adb reverse` tunnel. **A household network problem, not an app
-    problem**: put the phones on the main SSID, or turn client isolation off
-    on that AP.
+  - **[CORRECTED 2026-11-02] The phones could not reach the LAN, and the
+    access point was never the cause.** The network is a Linksys toob fibre
+    router (`toob-9F4CE1`) handing out normal leases on 192.168.1.0/24 -- not
+    a Cisco AP, and no client isolation exists. What black-holed the traffic
+    (measured 2026-10-21) was an always-on VPN app on the phones: the phone
+    could not even ping the router, and a connection to the host's port 3000
+    *hung* rather than being refused. Windows' own default inbound-ICMP block
+    made the phone→PC ping look dead as well. So
+    `http://192.168.1.203:3000` works normally on the home network, and the
+    check to do first on a phone that "cannot connect" is Settings → VPN
+    (decisions/021, LIMITATIONS §1.6).
   - **The Defy** is with the household user. Its server address is
     `http://localhost:3000` (it needs the tunnel), and the app on it now says
     so plainly: "Could not reach the server. Check the phone is on the home
@@ -2029,12 +2029,20 @@ This matches spec 28's designed behavior: "cancelling falls back to the password
 **Finding: there are two independent gates.** The app must permit HTTP LAN
 requests, and the WiFi must permit devices to reach one another.
 
-Both phones are on Cisco AP `toob-9F4CE1` (192.168.1.0/24, normal DHCP lease) with **client isolation**: every packet to another device is blackholed. The router and host answer nothing; connections to port 3000 *hang* rather than being refused. The host firewall *does* allow inbound TCP 3000 from the local subnet. `http://192.168.1.203:3000` works from a laptop on the LAN but not from either phone.
+Both phones are on the Linksys toob fibre router `toob-9F4CE1`
+(192.168.1.0/24, normal DHCP lease). The original read was **client
+isolation** on the access point; that was wrong (**corrected 2026-11-02**,
+decisions/021): the phones had a rogue always-on VPN black-holing outbound
+traffic it did not proxy -- a phone could not even ping the router, while the
+PC pinged the phone normally. Connections to port 3000 *hang* rather than
+being refused because the packets vanish, and the host firewall does allow
+inbound TCP 3000 from the local subnet. Windows' default inbound-ICMP block
+made the phone→PC ping look dead too.
 
-The only route measured from a phone to the server on this AP is
-`adb reverse tcp:3000 tcp:3000` (USB tunnel). The app has no server
-auto-discovery — the URL is manually configured in Settings — and even with
-the correct URL configured, client isolation blocks the connection.
+The only route measured from a phone to the server while that VPN ran was
+`adb reverse tcp:3000 tcp:3000` (USB tunnel) -- with the VPN off, plain WiFi
+works. The app has no server auto-discovery; the URL is manually configured in
+Settings, and with the correct URL configured the connection goes through.
 
 **App-side configuration:** retain Capacitor's default `https://localhost`
 origin to preserve localStorage and IndexedDB, and set
@@ -2042,15 +2050,18 @@ origin to preserve localStorage and IndexedDB, and set
 `androidScheme: "http"` workaround changed the storage origin and hid the
 existing downloaded-book catalogue. See ADR 014 and LIMITATIONS 1.6.
 
-The current report says the phone is on WiFi, but whether it can reach the
-server from that network is unverified. The older measurements found client
-isolation on `toob-9F4CE1`; test the updated app on a network that permits
-device-to-device traffic before concluding the WebView fix failed. This work
-has not been installed or tested on a phone.
+The current report says the phone is on WiFi, and the WiFi path is now proven
+working end to end (a phone connected to `http://192.168.1.203:3000` once its
+rogue VPN was off -- decisions/021). The original measurements that found
+"isolation" on `toob-9F4CE1` were evidence of the VPN, not the access point;
+conclude the WebView fix failed only if the phone still cannot reach the
+server with the VPN off. This work has not been installed or tested on a
+phone.
 
-If the phone still cannot reach the server from that SSID, put both devices on
-the main SSID or disable client isolation on `toob-9F4CE1`. Do not work around
-AP isolation with mDNS discovery; that is outside spec scope.
+If the phone still cannot reach the server, check for a VPN app running on
+that phone before touching any network setting; the network has no isolation
+option. Do not work around reachability with mDNS discovery; that is outside
+spec scope.
 
 **Storage recovery decision (2026-10-27):** the owner confirmed that the
 downloads to preserve were saved before the HTTP-origin change. The Android

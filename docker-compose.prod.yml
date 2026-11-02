@@ -41,10 +41,12 @@ services:
       - "3000:3000"
     environment:
       PORT: 3000
+      ADMIN_PORT: 3100
       # Production is PostgreSQL (e.g. a managed Supabase database). The
       # server applies prisma/schema.prisma's migrations on startup.
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the production PostgreSQL connection string}
       APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD before deploying}
+      ADMIN_PANEL_PASSWORD: ${ADMIN_PANEL_PASSWORD:-}
       MEDIA_TOKEN_SECRET: ${MEDIA_TOKEN_SECRET:?Set MEDIA_TOKEN_SECRET before deploying}
       COOKIE_SECURE: "true"
       TRUST_PROXY: 172.30.28.2

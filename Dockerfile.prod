@@ -5,6 +5,7 @@ COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
 RUN npm run build
+RUN npm run build:admin
 
 FROM node:24-bookworm-slim AS server-build
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg openssl && rm -rf /var/lib/apt/lists/*
@@ -29,8 +30,9 @@ COPY --from=server-build /app/server/dist ./server/dist
 COPY --from=server-build /app/server/prisma ./server/prisma
 COPY server/package.json ./server/package.json
 COPY --from=client-build /app/client/dist ./client/dist
+COPY --from=client-build /app/client/admin-dist ./client/admin-dist
 ENV CLIENT_DIST=/app/client/dist
 WORKDIR /app/server
-EXPOSE 3000
+EXPOSE 3000 3100
 USER node
 CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]

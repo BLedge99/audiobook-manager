@@ -177,6 +177,14 @@ Write-Host ''
 if ($reachable) {
   Write-Host "The phone can reach the server at:  http://${LanAddress}:$Port"
   Write-Host 'Set that as the server URL in the app''s settings screen.'
+  Write-Host ''
+  Write-Host 'If this probe passes but a phone still cannot connect:'
+  Write-Host '  - Check for a VPN app on the phone (Settings, VPN). An always-on'
+  Write-Host '    VPN black-holes the LAN traffic it does not proxy, and the app'
+  Write-Host '    sits in "checking" rather than reporting refused.'
+  Write-Host '  - Earlier sessions blamed client isolation on the access point;'
+  Write-Host '    that was wrong -- it was the VPN (ADR 021). The AP is a Linksys'
+  Write-Host '    router; there is no isolation option to hunt for.'
   Exit-WithTranscript 0
 }
 

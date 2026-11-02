@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:admin": "vite build --config vite.admin.config.ts",
     "build:android": "tsc -b && vite build --mode android",
     "preview": "vite preview",
     "test": "vitest run",

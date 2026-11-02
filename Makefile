@@ -1,4 +1,4 @@
-.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client check-copy test-e2e capture device-tunnel verify lan
+.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client check-copy test-e2e capture device-tunnel verify lan local
 
 ## Expose the server on the LAN so a phone can reach it.
 # The whole stack runs inside WSL, and WSL's NAT mode only relays the server to
@@ -18,6 +18,31 @@ lan:
 		script=$$(wslpath -w "$$script"); \
 	fi; \
 	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$$script"
+
+## Bring the stack up AND expose it to the LAN, in one command.
+# The way phones reach the server is `http://<lan-ip>:3000`, and the server is
+# only published on the LAN by the scripts/expose-lan.ps1 portproxy+firewall
+# work -- which needs re-running after every WSL restart because the WSL guest
+# IP changes. This is the normal bring-up: container up, wait for health (so
+# the reachability probe is not measuring a cold container), then expose.
+#
+# The whole stack runs inside WSL even though `make` works from Git Bash: the
+# health wait curls localhost, which the WSL relay answers, but `powershell.exe`
+# runs the exposure duties on the Windows side where netsh/firewall live.
+#
+# Expect one UAC prompt (the script re-launches itself elevated). Safe to
+# re-run at any time; re-run it after restarting WSL or Docker.
+local:
+	@$(MAKE) start
+	@healthy=""; \
+	for i in $$(seq 1 90); do \
+		if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then \
+			healthy=1; echo "server healthy after $${i}s"; break; \
+		fi; \
+		sleep 1; \
+	done; \
+	[ -n "$$healthy" ] || { echo "server not healthy after 90s -- not exposing the LAN. Check: make logs"; exit 1; }
+	@$(MAKE) lan
 
 start:
 	docker compose up -d

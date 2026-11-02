@@ -37,7 +37,16 @@ export default defineConfig(({ mode }) => ({
       : [
           VitePWA({
             registerType: 'autoUpdate',
-            devOptions: { enabled: true, type: 'module' },
+              // No dev service worker. `devOptions.enabled` registered a SW on
+              // every dev load, and it cached the app-shell navigation while
+              // the dev server's module graph kept changing underneath it --
+              // a stale cache then served half the app: a grey shell, missing
+              // assets, and a tab Chrome reported as unresponsive. Nothing
+              // depends on a SW in dev (the E2E suite even block-lists them),
+              // so the SW ships only in production builds. Turning SW dev
+              // preview back on? Then first unregister the old one in the
+              // browser: DevTools > Application > Service workers.
+              devOptions: { enabled: false, type: 'module' },
             manifest: {
               name: 'Audiobook Manager',
               short_name: 'Audiobooks',

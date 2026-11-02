@@ -1,15 +1,24 @@
 import "dotenv/config";
 import { buildApp } from "./app";
 import { seedDefaultProfiles } from "./seed";
+import { buildAdminApp } from "./admin/app";
+import { AdminAuth } from "./admin/auth";
+import { PrismaClient } from "@prisma/client";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
+const ADMIN_PORT = parseInt(process.env.ADMIN_PORT || "3100", 10);
 
 async function main() {
-  const app = await buildApp({ logger: true });
+  const prisma = new PrismaClient();
+  const app = await buildApp({ logger: true, prisma });
+  const adminAuth = new AdminAuth(prisma);
+  if (process.env.ADMIN_PANEL_PASSWORD) {
+    await adminAuth.seed(process.env.ADMIN_PANEL_PASSWORD);
+    console.log("[server] admin-panel credential seeded");
+  }
+  const adminApp = await buildAdminApp({ prisma, auth: adminAuth, logger: true });
   // First launch: create the default household profiles so progress
   // is profile-scoped from the very first play. No-op once seeded.
-  const { PrismaClient } = await import("@prisma/client");
-  const prisma = new PrismaClient();
   try {
     if ((await prisma.profile.count()) === 0) {
       const created = await seedDefaultProfiles(prisma);
@@ -17,19 +26,14 @@ async function main() {
     }
   } catch (err) {
     console.error("[server] profile seeding skipped:", err);
-  } finally {
-    await prisma.$disconnect();
   }
 
   // Spec 28: expired and revoked auth rows are cleared at startup as well as
   // on login. Best effort by design -- `validate` already rejects them, so a
   // failure here must not stop the server from serving.
   try {
-    const { PrismaClient } = await import("@prisma/client");
     const { AuthService } = await import("./auth/service");
-    const cleanupClient = new PrismaClient();
-    await new AuthService({ prisma: cleanupClient }).cleanupExpired();
-    await cleanupClient.$disconnect();
+    await new AuthService({ prisma }).cleanupExpired();
     console.log("[server] cleaned up expired auth rows");
   } catch (err) {
     console.error("[server] auth cleanup skipped:", err);
@@ -37,17 +41,16 @@ async function main() {
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`[server] listening on 0.0.0.0:${PORT}`);
+  await adminApp.listen({ port: ADMIN_PORT, host: "0.0.0.0" });
+  console.log(`[admin] listening on 0.0.0.0:${ADMIN_PORT}`);
 
   // Spec 17: seed the genre taxonomy and provider mappings. Idempotent, and
   // must run before any enrichment pass so provider genres have somewhere to
   // map to.
   try {
-    const { PrismaClient } = await import("@prisma/client");
     const { seedGenreMappings, seedGenres } = await import("./metadata/taxonomy-service");
-    const seedClient = new PrismaClient();
-    const genres = await seedGenres(seedClient);
-    const mappings = await seedGenreMappings(seedClient);
-    await seedClient.$disconnect();
+    const genres = await seedGenres(prisma);
+    const mappings = await seedGenreMappings(prisma);
     if (genres > 0 || mappings > 0) {
       console.log(`[server] seeded taxonomy: ${genres} genres, ${mappings} provider mappings`);
     }
@@ -58,11 +61,8 @@ async function main() {
   // Spec 16: pick up an enrichment run that a previous process left mid-flight
   // rather than leaving the library permanently half-enriched.
   try {
-    const { PrismaClient } = await import("@prisma/client");
     const { EnrichmentManager } = await import("./metadata/run");
-    const resumeClient = new PrismaClient();
-    await new EnrichmentManager(resumeClient).resumeIncomplete();
-    await resumeClient.$disconnect();
+    await new EnrichmentManager(prisma).resumeIncomplete();
     console.log("[server] checked for a resumable enrichment run");
   } catch (err) {
     console.error("[server] enrichment resume skipped:", err);

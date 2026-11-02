@@ -413,6 +413,23 @@ model Session {
   @@index([expiresAt])
 }
 
+// Spec 31 / ADR 022: admin-panel login is independent of every profile session.
+model AdminCredential {
+  id           Int      @id @default(1)
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+}
+
+model AdminSession {
+  id        String    @id
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@index([expiresAt])
+}
+
 // Spec 28: Android biometric unlock. The server stores only a hash of the
 // random secret; the secret lives in the device's biometric-protected Vault.
 model DeviceCredential {

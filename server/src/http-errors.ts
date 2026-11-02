@@ -21,6 +21,8 @@ import type { FastifyReply } from "fastify";
  */
 export type ApiErrorCode =
   | "auth_required"
+  | "admin_not_configured"
+  | "admin_auth_required"
   | "password_must_be_string"
   | "incorrect_password"
   | "profile_unclaimed"
