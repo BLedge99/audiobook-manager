@@ -7,6 +7,7 @@ import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
+import type { ScanManager } from "./scanner";
 import { addBookToProfile, libraryEntriesFor, removeBookFromProfile } from "./library-membership";
 import { LMStudioAdapter } from "./ai/llm";
 import { COVER_DIR } from "./enrichment";
@@ -34,6 +35,7 @@ const MAX_PAGE_SIZE = 20;
 
 export interface BuildAppOptions {
   prisma?: PrismaClient;
+  scanner?: ScanManager;
   logger?: boolean;
   appPassword?: string;
   /** Test seam; production leaves the clock alone. */
@@ -85,7 +87,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     trustProxy,
   });
-  const scanner = createScanManager(prisma);
+  const scanner = options.scanner ?? createScanManager(prisma);
   const enrichment = new EnrichmentManager(prisma);
   const recommendations = new RecommendationService(prisma);
   const appPassword = options.appPassword ?? process.env.APP_PASSWORD;

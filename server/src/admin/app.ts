@@ -7,6 +7,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
 import { EnrichmentManager } from "../metadata/run";
+import type { ScanManager } from "../scanner";
 
 export async function buildAdminApp(options: {
   prisma: PrismaClient;
@@ -15,6 +16,7 @@ export async function buildAdminApp(options: {
   secureCookie?: boolean;
   startedAt?: number;
   networkMode?: string;
+  scanner: ScanManager;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false });
   await app.register(cookie);
@@ -67,6 +69,60 @@ export async function buildAdminApp(options: {
       enrichment,
       freshness: { newestProfileLibraryEntryAt: newestEntry?.createdAt ?? null },
     };
+  });
+  app.get("/api/admin/library-roots", { preHandler: requireAdminSession(options.auth) }, async () => {
+    return options.prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { createdAt: "asc" } });
+  });
+  app.post<{ Body: { path?: string; label?: string } }>("/api/admin/library-roots", {
+    preHandler: requireAdminSession(options.auth),
+    schema: { body: { type: "object", properties: { path: { type: "string", maxLength: 4096 }, label: { type: "string", maxLength: 200 } }, additionalProperties: false } },
+  }, async (request, reply) => {
+    const rootPath = request.body.path?.trim();
+    if (!rootPath) return fail(reply, 400, "library_path_required");
+    try { await access(rootPath); } catch { return fail(reply, 400, "library_path_inaccessible"); }
+    const resolved = path.resolve(rootPath);
+    const root = await options.prisma.libraryRoot.upsert({
+      where: { path: resolved },
+      create: { path: resolved, label: request.body.label?.trim() || path.basename(resolved) },
+      update: { label: request.body.label?.trim() || path.basename(resolved) },
+    });
+    return reply.code(201).send(root);
+  });
+  app.delete<{ Params: { id: string } }>("/api/admin/library-roots/:id", {
+    preHandler: requireAdminSession(options.auth),
+    schema: { params: { type: "object", properties: { id: { type: "string", pattern: "^[1-9][0-9]*$", maxLength: 10 } }, required: ["id"], additionalProperties: false } },
+  }, async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isSafeInteger(id)) return fail(reply, 400, "invalid_id");
+    const exists = await options.prisma.libraryRoot.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) return fail(reply, 404, "library_root_required");
+    await options.prisma.libraryRoot.delete({ where: { id } });
+    return reply.code(204).send();
+  });
+  app.post<{ Body: { rootId?: number } }>("/api/admin/scan", {
+    preHandler: requireAdminSession(options.auth),
+    schema: { body: { type: "object", properties: { rootId: { type: "integer", minimum: 1 } }, additionalProperties: false } },
+  }, async (request, reply) => {
+    const roots = request.body.rootId
+      ? await options.prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
+      : await options.prisma.libraryRoot.findMany();
+    if (!roots.length) return fail(reply, 400, "library_root_required");
+    for (const root of roots) {
+      void options.scanner.scanRoot(root.id).then(async () => {
+        try { await new EnrichmentManager(options.prisma).enqueue(); }
+        catch (error) { app.log.error({ error }, "admin scan enrichment enqueue failed"); }
+      }).catch((error) => app.log.error({ error }, "admin scan failed"));
+    }
+    return reply.code(202).send({ status: "started", rootIds: roots.map(({ id }) => id) });
+  });
+  app.get("/api/admin/scan/status", { preHandler: requireAdminSession(options.auth) }, async () => {
+    const roots = await options.prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { id: "asc" } });
+    return roots.map((root) => ({
+      rootId: root.id,
+      label: root.label,
+      path: root.path,
+      status: options.scanner.getProgress(root.id) || root.scanState || { status: "idle", filesFound: 0 },
+    }));
   });
   const clientDist = process.env.ADMIN_CLIENT_DIST ?? (process.env.NODE_ENV === "production"
     ? "/app/client/admin-dist"

@@ -22,8 +22,15 @@ dd { margin: 0; overflow-wrap: anywhere; font-weight: 600; }
 ul { margin: 0; padding-left: 1.2rem; overflow-wrap: anywhere; }
 .root-list { display: grid; gap: .7rem; }
 .root { display: grid; grid-template-columns: minmax(10rem, 2fr) repeat(4, minmax(6rem, 1fr)); align-items: center; gap: .7rem; padding: .8rem; background: #f5f7fa; border-radius: .4rem; }
+.library-actions, .root-buttons { display: flex; align-items: center; gap: .5rem; }
+.library-actions { margin-bottom: 1rem; }
+.root-form { display: grid; grid-template-columns: 2fr 1fr auto; align-items: end; gap: .75rem; margin-bottom: 1rem; padding: 1rem; background: #f5f7fa; border-radius: .4rem; }
+.root-form label { display: grid; gap: .3rem; font-size: .9rem; font-weight: 650; }
+.root-form input { width: 100%; }
+.root-buttons { grid-column: 1 / -1; }
+.danger { background: #8c2942; }
 .root p { margin: .25rem 0 0; overflow-wrap: anywhere; font-size: .85rem; }
 .good { color: #12653f; font-weight: 700; }
 .bad, .error { color: #a21c3d; font-weight: 600; }
 code { font: .85em ui-monospace, monospace; }
-@media (max-width: 760px) { .dashboard { padding: .5rem; } .topbar { align-items: flex-start; } .root { grid-template-columns: 1fr 1fr; } .root > div { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .dashboard { padding: .5rem; } .topbar { align-items: flex-start; } .root { grid-template-columns: 1fr 1fr; } .root > div { grid-column: 1 / -1; } .root-form { grid-template-columns: 1fr; } }

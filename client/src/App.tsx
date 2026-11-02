@@ -1,5 +1,5 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass, FolderPlus, Heart, Library, LayoutGrid, LoaderCircle, RefreshCw, ScanLine, Trash2, WifiOff, Server, Settings as GearIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Compass, Heart, Library, LayoutGrid, RefreshCw, WifiOff, Server, Settings as GearIcon } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
@@ -85,7 +85,7 @@ function App() {
   /** The server-derived identity (spec 28); null until the probe resolves. */
   const [session, setSession] = useState<SessionInfo | null>(null);
   const canManageLibrary = session?.role === "admin";
-  const library = useLibrary(canManageLibrary);
+  const library = useLibrary();
   const {
     audiobooks,
     roots,
@@ -94,9 +94,6 @@ function App() {
     error,
     refresh,
     refreshForProfile,
-    addRoot,
-    removeRoot,
-    scan,
   } = library;
   const device = useDeviceLibrary(isNativeShell());
   const browse = useBrowse();
@@ -110,10 +107,6 @@ function App() {
   }, []);
 
   const [selectedBook, setSelectedBook] = useState<Audiobook>();
-  const [path, setPath] = useState("");
-  const [label, setLabel] = useState("");
-  const [showRootForm, setShowRootForm] = useState(false);
-  const [working, setWorking] = useState(false);
   const [authed, setAuthed] = useState<boolean>();
   const [showServerSetup, setShowServerSetup] = useState(false);
   const [bypassServerSetup, setBypassServerSetup] = useState(false);
@@ -727,26 +720,6 @@ function App() {
     return <ProfileGate onSuccess={() => setProfileId(getActiveProfileId())} />;
   }
 
-  const submitRoot = async (event: FormEvent) => {
-    event.preventDefault();
-    setWorking(true);
-    try {
-      await addRoot(path, label);
-      setPath("");
-      setLabel("");
-      setShowRootForm(false);
-    } catch (requestError) {
-      window.alert(requestError instanceof Error ? requestError.message : copy.operator.libraryFolders.addFolderFailed);
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  const runScan = async (rootId?: number) => {
-    setWorking(true);
-    try { await scan(rootId); } catch (requestError) { window.alert(requestError instanceof Error ? requestError.message : copy.operator.libraryFolders.scanFailed); } finally { setWorking(false); }
-  };
-
   return (
     <div className="relative min-h-dvh bg-ground text-ink">
       <Specks />
@@ -918,7 +891,6 @@ function App() {
                     : copy.library.countInLibrary(searchedBooks.length)
                 }
               >
-                {working ? <LoaderCircle className="animate-spin text-rasp" size={20} /> : null}
                 {/*
                   The books stay on screen while a refresh is in flight, so
                   something has to say the numbers are about to change.
@@ -972,80 +944,18 @@ function App() {
               )}
             </section>
 
-            {canManageLibrary && (
-              <>
-            <section className="mt-12">
-              <MachineHead title={copy.operator.libraryFolders.heading} />
-              <p className="text-[13.5px] text-ink2">{copy.operator.libraryFolders.intro}</p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Btn
-                  variant="primary"
-                  onClick={() => void runScan()}
-                  disabled={working || !roots.length}
-                >
-                  <ScanLine size={18} aria-hidden="true" /> {copy.operator.libraryFolders.scanLibrary}
-                </Btn>
-                <Btn variant="quiet" size="sm" onClick={() => setShowRootForm((visible) => !visible)}>
-                  <FolderPlus size={17} aria-hidden="true" /> {copy.operator.libraryFolders.addFolder}
-                </Btn>
-              </div>
-              {showRootForm && (
-                <form onSubmit={submitRoot} className="panel mb-4 grid gap-3 p-4 sm:grid-cols-[1fr_180px_auto]">
-                  <input value={path} onChange={(event) => setPath(event.target.value)} placeholder={copy.operator.libraryFolders.folderPathPlaceholder} required className="field" aria-label={copy.operator.libraryFolders.folderPathLabel} />
-                  <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder={copy.operator.libraryFolders.folderLabelPlaceholder} className="field" aria-label={copy.operator.libraryFolders.folderLabelLabel} />
-                  <Btn type="submit" disabled={working}>{copy.operator.libraryFolders.addFolder}</Btn>
-                </form>
-              )}
-              {roots.length ? (
-                /* `min-w-0` on each panel is load-bearing. A grid item defaults to
-                   `min-width: auto`, so a single unbreakable value -- a Windows
-                   path like C:\Users\...\audiobook-manager\test -- sets the
-                   panel's min-content width and the grid blows out sideways.
-                   `min-w-0` on the inner flex child is not enough on its own; it
-                   lowers the child's minimum, not the track's. */
-                <div className="grid gap-3 md:grid-cols-2">
-                  {roots.map((root, index) => (
-                    <div key={root.id} className={cn("panel flex min-w-0 items-center justify-between gap-3 px-4 py-3", index % 2 && "rotate-[0.6deg]")}>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-bold">{root.label || root.path}</p>
-                        <p className="truncate text-[12px] text-ink3">
-                          {root.path} {root.scanState?.status && `· ${root.scanState.status}`}
-                        </p>
-                        {root.scanState?.message && <p className="mt-1 text-[12px] text-rasp-ink">{root.scanState.message}</p>}
-                      </div>
-                      <div className="ml-2 flex shrink-0 items-center gap-1">
-                        <IconBtn label={copy.operator.libraryFolders.scanFolder(root.label || root.path)} onClick={() => void runScan(root.id)} disabled={working}>
-                          <ScanLine size={16} aria-hidden="true" />
-                        </IconBtn>
-                        <IconBtn label={copy.operator.libraryFolders.removeFolder(root.label || root.path)} onClick={() => void removeRoot(root.id)}>
-                          <Trash2 size={16} aria-hidden="true" />
-                        </IconBtn>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="panel panel--sunk px-4 py-5 text-sm text-ink2">{copy.operator.libraryFolders.noFolders}</p>
-              )}
-            </section>
-
-            <div className="mt-8">
-              {browse.enrichment && browse.enrichment.status !== "idle" && (
-                <Notice className="mb-4">
-                  {copy.operator.enrichment.notice(
-                    browse.enrichment.status,
-                    browse.enrichment.processed,
-                    browse.enrichment.queued,
-                    browse.enrichment.applied,
-                    browse.enrichment.review,
-                  )}
-                </Notice>
-              )}
-
-              <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh(); void browse.refresh(); }} />
-            </div>
-              </>
+            {canManageLibrary && browse.enrichment && browse.enrichment.status !== "idle" && (
+              <Notice className="mb-4">
+                {copy.operator.enrichment.notice(
+                  browse.enrichment.status,
+                  browse.enrichment.processed,
+                  browse.enrichment.queued,
+                  browse.enrichment.applied,
+                  browse.enrichment.review,
+                )}
+              </Notice>
             )}
+            {canManageLibrary && <ReviewQueue books={browse.reviewQueue} onResolved={() => { void refresh(); void browse.refresh(); }} />}
           </>
         )}
 

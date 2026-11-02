@@ -63,17 +63,61 @@ function StatusCard({ title, children }: { title: string; children: React.ReactN
 
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [status, setStatus] = React.useState<Status | null>(null);
+  const [roots, setRoots] = React.useState<Status["library"]["roots"]>([]);
   const [error, setError] = React.useState("");
+  const [path, setPath] = React.useState("");
+  const [label, setLabel] = React.useState("");
+  const [adding, setAdding] = React.useState(false);
+  const [working, setWorking] = React.useState(false);
   const load = React.useCallback(async () => {
     try {
       const response = await fetch("/api/admin/status", { credentials: "include" });
       if (response.status === 401) { onSignOut(); return; }
       if (!response.ok) throw new Error("Status request failed.");
+      const rootResponse = await fetch("/api/admin/library-roots", { credentials: "include" });
+      const rootData = rootResponse.ok ? await rootResponse.json() as Status["library"]["roots"] : [];
+      const scanResponse = await fetch("/api/admin/scan/status", { credentials: "include" });
+      let scanStates: { rootId: number; status: Status["library"]["roots"][number]["scan"] }[] = [];
+      if (scanResponse.ok) {
+        scanStates = await scanResponse.json() as typeof scanStates;
+      }
+      setRoots(rootData.map((root) => ({ ...root, scan: scanStates.find((scan) => scan.rootId === root.id)?.status ?? root.scan })));
       setStatus(await response.json() as Status);
       setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load server status."); }
   }, [onSignOut]);
   React.useEffect(() => { void load(); const id = window.setInterval(() => void load(), 15000); return () => window.clearInterval(id); }, [load]);
+  async function mutate(url: string, method: string, body?: unknown) {
+    setWorking(true);
+    try {
+      const response = await fetch(url, { method, credentials: "include", headers: { "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.code || "Request failed.");
+      }
+      await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Request failed."); }
+    finally { setWorking(false); }
+  }
+  async function addRoot(event: React.FormEvent) {
+    event.preventDefault();
+    if (!path.trim()) return;
+    await mutate("/api/admin/library-roots", "POST", { path: path.trim(), label: label.trim() || undefined });
+    setPath(""); setLabel(""); setAdding(false);
+  }
+  const rootsRef = React.useRef(roots);
+  React.useEffect(() => { rootsRef.current = roots; }, [roots]);
+  React.useEffect(() => {
+    const id = window.setInterval(async () => {
+      try {
+        const response = await fetch("/api/admin/scan/status", { credentials: "include" });
+        if (!response.ok) return;
+        const states = await response.json() as { rootId: number; status: Status["library"]["roots"][number]["scan"] }[];
+        setRoots(rootsRef.current.map((root) => ({ ...root, scan: states.find((entry) => entry.rootId === root.id)?.status ?? root.scan })));
+      } catch { /* transient polling failures leave the last known state visible */ }
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, []);
   return <main className="dashboard">
     <header className="topbar"><div><h1>Server status</h1><p>Read-only system and library report · refreshes every 15 seconds</p></div><div className="actions"><button className="secondary" onClick={() => void load()}>Refresh</button><button onClick={onSignOut}>Sign out</button></div></header>
     {error && <p role="alert" className="error">{error}</p>}
@@ -86,7 +130,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
         <StatusCard title="Network configuration"><dl><dt>Family API port</dt><dd>{status.network.port}</dd><dt>Admin port</dt><dd>{status.network.adminPort}</dd><dt>WebAuthn RP</dt><dd>{status.network.webauthn.rpId ?? "Not configured"}</dd><dt>WebAuthn origin</dt><dd>{status.network.webauthn.origin ?? "Not configured"}</dd><dt>Media signing key</dt><dd>{status.network.mediaTokenSecretConfigured ? "Configured" : "Missing / too short"}</dd><dt>Tunnel</dt><dd>{status.network.tunnel}</dd></dl><h3>Allowed client origins</h3><ul>{status.network.corsOrigins.map((origin) => <li key={origin}><code>{origin}</code></li>)}</ul></StatusCard>
         <StatusCard title="Enrichment"><dl><dt>Status</dt><dd>{status.enrichment.status}</dd><dt>Queued</dt><dd>{status.enrichment.queued}</dd><dt>Processed</dt><dd>{status.enrichment.processed}</dd><dt>Applied / review</dt><dd>{status.enrichment.applied} / {status.enrichment.review}</dd><dt>Failed / skipped</dt><dd>{status.enrichment.failed} / {status.enrichment.skipped}</dd><dt>Last finished</dt><dd>{formatDate(status.enrichment.finishedAt)}</dd></dl>{status.enrichment.message && <p>{status.enrichment.message}</p>}</StatusCard>
       </div>
-      <StatusCard title="Library folders"><div className="root-list">{status.library.roots.length ? status.library.roots.map((root) => <article key={root.id} className="root"><div><strong>{root.label || root.path}</strong><p><code>{root.path}</code></p></div><span className={root.accessible ? "good" : "bad"}>{root.accessible ? "Accessible" : "Unavailable"}</span><span>{root.itemCount} books</span><span>Scan: {root.scan?.status ?? "Never scanned"}</span><span>{root.scan?.filesFound ?? 0} files · {formatDate(root.scan?.lastScanAt ?? null)}</span>{root.scan?.message && <p className="error">{root.scan.message}</p>}</article>) : <p>No folders configured.</p>}</div></StatusCard>
+      <StatusCard title="Library folders"><div className="library-actions"><button disabled={working || roots.length === 0} onClick={() => void mutate("/api/admin/scan", "POST", {})}>Scan all folders</button><button className="secondary" disabled={working} onClick={() => setAdding((value) => !value)}>Add folder</button></div>{adding && <form className="root-form" onSubmit={(event) => void addRoot(event)}><label>Folder path<input value={path} onChange={(event) => setPath(event.target.value)} required maxLength={4096} placeholder="/data/audiobooks" /></label><label>Label (optional)<input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={200} placeholder="Audiobooks" /></label><button type="submit" disabled={working}>Add folder</button></form>}<div className="root-list">{roots.length ? roots.map((root) => <article key={root.id} className="root"><div><strong>{root.label || root.path}</strong><p><code>{root.path}</code></p></div><span className={root.accessible ? "good" : "bad"}>{root.accessible ? "Accessible" : "Unavailable"}</span><span>{root.itemCount} books</span><span>Scan: {root.scan?.status ?? "Never scanned"}</span><span>{root.scan?.filesFound ?? 0} files · {formatDate(root.scan?.lastScanAt ?? null)}</span><div className="root-buttons"><button className="secondary" disabled={working} onClick={() => void mutate("/api/admin/scan", "POST", { rootId: root.id })}>Scan</button><button className="danger" disabled={working} onClick={() => { if (window.confirm(`Remove folder configuration for “${root.label || root.path}”? The audio files will not be deleted.`)) void mutate(`/api/admin/library-roots/${root.id}`, "DELETE"); }}>Remove</button></div>{root.scan?.message && <p className="error">{root.scan.message}</p>}</article>) : <p>No folders configured.</p>}</div></StatusCard>
     </>}
   </main>;
 }

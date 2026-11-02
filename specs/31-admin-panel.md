@@ -191,9 +191,9 @@ A **dedicated admin password**, independent of every profile password:
       last scans, enrichment queue state, data freshness.
 - [x] Dashboard endpoint requires an admin session and returns no configured
       secret values.
-- [ ] Library controls: add root, remove root with confirmation, scan one
+- [x] Library controls: add root, remove root with confirmation, scan one
       root, scan all; live scan state visible without hard refresh.
-- [ ] After parity, the family client's folder/scan section is gone, and a
+- [x] After parity, the family client's folder/scan section is gone, and a
       member-visibility test proves it.
 - [ ] DB explorer lists tables with counts, pages rows, and answers a
       read-only query. A cleared write attempt (`UPDATE …`, `INSERT …`,
@@ -207,6 +207,8 @@ A **dedicated admin password**, independent of every profile password:
       mini-app has its own Vitest suite for pure logic (no listener-tier
       physics is imported here); Playwright covers login → dashboard → scan →
       read-only query.
+- [x] Phase 3 management routes are admin-session-gated; add/remove and scan
+      actions are covered via Fastify `inject`, and the UI polls scan state.
 - [ ] `npm audit` clean at feature end.
 
 ## Phasing
@@ -216,8 +218,8 @@ Four independently shippable phases, in this order:
 1. **Admin surface + auth — implemented.** Second listener, credential,
    session, lock screen, health.
 2. **Status dashboard — implemented.** Read-only reporting; no state change.
-3. **Library controls.** Root add/remove + scan, calling existing modules;
-   family client's operator section retired the same day.
+3. **Library controls — implemented.** Root add/remove + scan, calling the
+   shared scanner; the family client's folder/scan section is retired.
 4. **DB explorer + API docs.** Both read-only; both schema/truth-derived.
 
 Each phase lands with its tests against the criteria above.

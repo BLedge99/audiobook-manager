@@ -18,6 +18,7 @@ COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./
 RUN npm run build:admin
+ENV ADMIN_CLIENT_DIST=/app/client/admin-dist
 WORKDIR /app/server
 
 ENV NODE_ENV=development
