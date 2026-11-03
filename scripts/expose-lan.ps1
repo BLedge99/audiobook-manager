@@ -31,14 +31,35 @@
 
 [CmdletBinding()]
 param(
-  # Port the phone connects to. Keep in sync with docker-compose.yml.
-  [int]$Port = 3000,
+  # Port the phone connects to. Defaults to the PORT in the repo's .env -- the
+  # same file docker-compose reads -- so the proxy and firewall always follow
+  # the port the server actually listens on. An explicit -Port still overrides.
+  [int]$Port,
 
   # Passed in by the elevated child. When null, this script is the first pass
   # and resolves both addresses itself.
   [string]$WslAddress,
   [string]$LanAddress
 )
+
+if (-not $Port) {
+  # Auto-adapt: when no port was passed, read the configured port out of the
+  # repo's .env so the LAN proxy/firewall can never drift behind the server.
+  # NB: build the path via Split-Path so it is fully normalized -- a Join-Path
+  # with '..' segments does not resolve under Test-Path, and the auto-detect
+  # would silently fall through to the default.
+  $repoRoot = Split-Path -Parent $PSScriptRoot
+  $envFile = Join-Path $repoRoot '.env'
+  if (Test-Path -LiteralPath $envFile) {
+    foreach ($line in (Get-Content -LiteralPath $envFile)) {
+      if ($line -match '^\s*PORT\s*=\s*(\d+)\s*$') {
+        $Port = [int]$Matches[1]
+        break
+      }
+    }
+  }
+}
+if (-not $Port) { $Port = 3000 }
 
 $ErrorActionPreference = 'Stop'
 

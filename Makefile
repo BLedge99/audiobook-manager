@@ -35,8 +35,9 @@ lan:
 local:
 	@$(MAKE) start
 	@healthy=""; \
+	port=$$(grep -E '^PORT=' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]'); \
 	for i in $$(seq 1 90); do \
-		if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then \
+		if curl -sf http://localhost:$${port:-3000}/api/health > /dev/null 2>&1; then \
 			healthy=1; echo "server healthy after $${i}s"; break; \
 		fi; \
 		sleep 1; \
