@@ -40,6 +40,8 @@ type ScanProgress = {
 
 type MetadataParser = typeof import("music-metadata");
 
+type AudioMetadata = Awaited<ReturnType<typeof parseAudioFile>>;
+
 async function parseAudioFile(filePath: string) {
   const parser = musicMetadata as MetadataParser & { default?: MetadataParser };
   const parseFile = parser.parseFile || parser.default?.parseFile;
@@ -114,8 +116,40 @@ function cleanTrackTitle(title: string): string {
 }
 
 async function readAudioFile(filePath: string): Promise<AudioFile> {
-  const metadata = await parseAudioFile(filePath);
+  let metadata: AudioMetadata | undefined;
+  try {
+    metadata = await parseAudioFile(filePath);
+  } catch {
+    // The audio may be perfectly playable while the embedded tags are not.
+    // The known failure mode is a truncated ID3v2 chapter TOC -- the parser
+    // throws "Truncated CTOC child element ID" from a corrupt `CTOC` frame --
+    // which used to abort the entire library scan, taking the book out of the
+    // library with it. Degrade instead: keep the file in the library under a
+    // filename-derived title, with no enrichment data, and one whole-file
+    // chapter.
+    metadata = undefined;
+  }
   const fileStats = await stat(filePath);
+
+  if (metadata === undefined) {
+    const duration = (await probeDuration(filePath)) || 0;
+    const title = titleFromFilename(filePath);
+    return {
+      filePath,
+      format: path.extname(filePath).slice(1).toLowerCase(),
+      title,
+      author: "Unknown author",
+      narrator: undefined,
+      narrators: undefined,
+      duration,
+      sizeBytes: fileStats.size,
+      // A book whose chapter data is corrupt should still be *listened to*:
+      // fall back to a single chapter covering the whole file rather than
+      // failing the scan (and with it, the book).
+      chapters: duration > 0 ? [{ start: 0, end: duration, title }] : undefined,
+    };
+  }
+
   const common = metadata.common;
   const picture = common.picture?.[0];
   const date = common.date?.trim();
@@ -223,8 +257,19 @@ export function createScanManager(prisma: PrismaClient) {
     try {
       const files = await walkAudioFiles(root.path);
       const audioFiles: AudioFile[] = [];
+      const skippedFiles: string[] = [];
       for (const filePath of files) {
-        audioFiles.push(await readAudioFile(filePath));
+        try {
+          audioFiles.push(await readAudioFile(filePath));
+        } catch {
+          // A single unreadable file must not fail the whole scan run. The
+          // known bad-file case (corrupt embedded tags) is already tolerated
+          // inside `readAudioFile`; this guard is the last resort for anything
+          // else that throws while reading one file, so the rest of the library
+          // still gets scanned.
+          skippedFiles.push(filePath);
+          continue;
+        }
         progress.set(rootId, { status: "scanning", filesFound: audioFiles.length });
         await prisma.scanState.update({ where: { libraryRootId: rootId }, data: { filesFound: audioFiles.length } });
       }
@@ -378,7 +423,15 @@ export function createScanManager(prisma: PrismaClient) {
       await prisma.scanState.upsert({
         where: { libraryRootId: rootId },
         create: { libraryRootId: rootId, status: "complete", filesFound: audioFiles.length, lastScanAt: completedAt },
-        update: { status: "complete", filesFound: audioFiles.length, lastScanAt: completedAt, message: null },
+        update: {
+          status: "complete",
+          filesFound: audioFiles.length,
+          lastScanAt: completedAt,
+          // Files that could not be read are skipped, not fatal: report how
+          // many so the operator can tell a clean scan from a partially skipped
+          // one without the run failing.
+          message: skippedFiles.length > 0 ? `Skipped ${skippedFiles.length} file(s) that could not be read` : null,
+        },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Scan failed";

@@ -168,3 +168,42 @@ describe("scanner: a single-file book", () => {
     expect(tracks[0].trackNumber).toBe(1);
   });
 });
+
+/**
+ * A book whose embedded chapter TOC is corrupt used to kill the whole scan --
+ * `music-metadata` throws "Truncated CTOC child element ID" from a truncated
+ * `CTOC` frame, the scanner had no per-file handling, and the single scan-wide
+ * try/catch turned that into a failed scan in which the book never appeared.
+ *
+ * The fix degrades: the file is kept in the library, with a single chapter that
+ * covers the whole file, rather than being dropped with the scan.
+ */
+describe("scanner: a book with corrupt embedded chapter data", () => {
+  it.skipIf(!HAS_FIXTURES)("degrades to a whole-file chapter instead of failing the scan", async () => {
+    const skelligSource = path.join(__dirname, "..", "..", "test", "Skellig");
+    const skelligFile = readdirSync(skelligSource).find((entry) => entry.toLowerCase().endsWith(".mp3"));
+    if (!skelligFile) throw new Error("The Skellig fixture should hold an mp3");
+    const skelligRoot = path.join(db.dir, "skellig-corrupt-toc");
+    const bookFolder = path.join(skelligRoot, "Skellig");
+    mkdirSync(bookFolder, { recursive: true });
+    cpSync(path.join(skelligSource, skelligFile), path.join(bookFolder, skelligFile));
+
+    const root = await prisma.libraryRoot.create({ data: { path: skelligRoot, label: "Skellig" } });
+    // Before the degradation fix this scan rejected with "Truncated CTOC child
+    // element ID" and nothing was written to the library.
+    await expect(createScanManager(prisma).scanRoot(root.id)).resolves.toBeUndefined();
+
+    const items = await prisma.mediaItem.findMany({ where: { libraryRootId: root.id } });
+    expect(items).toHaveLength(1);
+
+    const item = items[0];
+    const chapters: { start: number; end: number; title: string }[] | null = item.chapters ? JSON.parse(item.chapters) : null;
+    // A corrupt chapter list degrades to a single whole-file chapter once a
+    // duration is known; without one there is nothing to anchor a chapter to.
+    if ((item.duration ?? 0) > 0 && chapters) {
+      expect(chapters).toHaveLength(1);
+      expect(chapters[0]?.start).toBe(0);
+      expect(chapters[0]?.end).toBe(item.duration);
+    }
+  });
+});
