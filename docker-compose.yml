@@ -14,7 +14,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://server:3000
+      - VITE_API_URL=${VITE_API_URL:-http://server:3000}
 
   server:
     build:
@@ -47,9 +47,10 @@ services:
       - audiobook_data:/data/audiobooks
       - app_data:/app/data
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:${PORT:-3000}"
+      - "${ADMIN_PORT:-3100}:${ADMIN_PORT:-3100}"
     environment:
-      - PORT=3000
+      - PORT=${PORT:-3000}
       - DATABASE_URL=file:/app/data/library.db
       - LIBRARY_ROOT=/data/audiobooks
       # The E2E security suite asserts that unauthenticated API calls are
@@ -66,7 +67,7 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
       - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:5173}
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:${PORT:-3000}/api/health"]
       interval: 5s
       timeout: 3s
       retries: 12
