@@ -128,6 +128,9 @@ function App() {
   const activeProfileId = accountExperience === "demo"
     ? (session?.profile?.id ? String(session.profile.id) : null)
     : session?.profile?.id ? String(session.profile.id) : profileId;
+  const playerProfileId = accountExperience === "demo"
+    ? (session?.profile ? "demo-account" : null)
+    : activeProfileId;
   /** A probe in flight, so a failing probe cannot trigger another one. */
   const probeInFlight = useRef(false);
   /**
@@ -1084,7 +1087,7 @@ function App() {
           ) : undefined
         }
         localUrlForTrack={isNativeShell() ? device.localUrlForTrack : undefined}
-        profileId={activeProfileId}
+        profileId={playerProfileId}
       />}
 
       {showSettings && (

@@ -103,6 +103,12 @@ describe("ChapterPlayer", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("allows a signed-in demo account without exposing its profile id", () => {
+    render(<ChapterPlayer book={book} profileId="demo-account" />);
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("never leaves the media element without a source", async () => {
     window.localStorage.setItem("profileId", "42");
     render(<ChapterPlayer book={chapterBook} />);
