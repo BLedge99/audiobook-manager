@@ -48,11 +48,9 @@ the bucket.
 
 1. Unzip the LibriVox book on your computer first.
 2. Open `/admin` on the production host and sign in.
-3. In **Upload audiobook folders**, enter the book name. Brave/Chromium may
-   only offer file selection instead of a folder picker; in that case choose
-   the book's audio tracks together using **Or choose audio files**. They will
-   be stored together under the entered book name. Alternatively, choose the
-   extracted folder to preserve its subfolder layout.
+3. In **Upload audiobook tracks**, enter the book name, then choose its audio
+   tracks together. The upload puts them in one folder named after the book,
+   regardless of the local folder-picker behavior.
 4. Confirm the selected audio files, then choose **Upload selected files**.
    Files are uploaded one by one; each must be 50 MB or smaller.
 5. The server syncs the private bucket to its cache and scans it. The book

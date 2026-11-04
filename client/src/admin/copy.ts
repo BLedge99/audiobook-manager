@@ -134,11 +134,10 @@ export const copyAdmin = {
   },
 
   storage: {
-    heading: "Upload audiobook folders",
-    explainer: "Choose an extracted book folder, or select its audio files and enter the book name. Files are stored together and scanned into the library.",
+    heading: "Upload audiobook tracks",
+    explainer: "Enter the book name, then select its extracted audio tracks. The tracks are stored together in a folder named after the book and scanned into the library.",
     notConfigured: "Supabase Storage is not configured on this server.",
-    chooseFolder: "Choose extracted folder",
-    chooseFiles: "Or choose audio files",
+    chooseFiles: "Choose audio files",
     bookNameLabel: "Book name",
     bookNameRequired: "Enter the book name before uploading.",
     upload: "Upload selected files",

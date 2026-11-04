@@ -77,12 +77,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [uploadFiles, setUploadFiles] = React.useState<File[]>([]);
   const [bookName, setBookName] = React.useState("");
   const [uploadNotice, setUploadNotice] = React.useState("");
-  const folderInput = React.useRef<HTMLInputElement>(null);
   const filesInput = React.useRef<HTMLInputElement>(null);
-  React.useEffect(() => {
-    folderInput.current?.setAttribute("webkitdirectory", "");
-    folderInput.current?.setAttribute("directory", "");
-  }, []);
   const load = React.useCallback(async () => {
     try {
       const response = await fetch("/api/admin/status", { credentials: "include" });
@@ -131,9 +126,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       for (const [index, file] of uploadFiles.entries()) {
         setUploadNotice(copyAdmin.storage.uploading(file.name, index + 1, uploadFiles.length));
         if (file.size > 50 * 1024 * 1024) throw new Error(copyAdmin.storage.fileTooLarge(file.name));
-        const relativePath = file.webkitRelativePath
-          ? file.webkitRelativePath.split("/").slice(1).join("/") || file.name
-          : file.name;
+        const relativePath = file.name;
         const signedResponse = await fetch("/api/admin/storage/upload-url", {
           method: "POST",
           credentials: "include",
@@ -155,7 +148,6 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       setUploadNotice(copyAdmin.storage.syncStarted);
       setUploadFiles([]);
       setBookName("");
-      if (folderInput.current) folderInput.current.value = "";
       if (filesInput.current) filesInput.current.value = "";
       await load();
     } catch (cause) {
@@ -197,21 +189,10 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
         {!status.storage.configured ? <p>{copyAdmin.storage.notConfigured}</p> : <>
           <p>{copyAdmin.storage.fileLimit}</p>
           <label>{copyAdmin.storage.bookNameLabel}<input value={bookName} onChange={(event) => setBookName(event.target.value)} required maxLength={120} /></label>
-          <label>{copyAdmin.storage.chooseFolder}<input ref={folderInput} type="file" multiple accept=".mp3,.m4a,.m4b,.flac,.ogg,.wav,.aac" onChange={(event) => {
-            const selected = Array.from(event.currentTarget.files ?? []);
-            const files = selected.filter((file) => uploadAudioExtensions.has(file.name.split(".").pop()?.toLowerCase() ?? ""));
-            setUploadFiles(files);
-            const names = new Set(files.map((file) => file.webkitRelativePath.split("/")[0]).filter(Boolean));
-            if (names.size === 1) setBookName([...names][0]);
-            if (filesInput.current) filesInput.current.value = "";
-            setUploadNotice("");
-            setError(files.length ? "" : copyAdmin.storage.noAudioFiles);
-          }} /></label>
           <label>{copyAdmin.storage.chooseFiles}<input ref={filesInput} type="file" multiple accept=".mp3,.m4a,.m4b,.flac,.ogg,.wav,.aac" onChange={(event) => {
             const selected = Array.from(event.currentTarget.files ?? []);
             const files = selected.filter((file) => uploadAudioExtensions.has(file.name.split(".").pop()?.toLowerCase() ?? ""));
             setUploadFiles(files);
-            if (folderInput.current) folderInput.current.value = "";
             setUploadNotice("");
             setError(files.length ? "" : copyAdmin.storage.noAudioFiles);
           }} /></label>
