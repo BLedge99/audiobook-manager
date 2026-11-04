@@ -183,6 +183,7 @@ export class EnrichmentManager {
       OR: [
         { enrichmentStatus: null },
         { enrichmentStatus: { in: ["pending", "review", "skipped", "failed", ""] } },
+        { coverImagePath: null },
       ],
     };
 

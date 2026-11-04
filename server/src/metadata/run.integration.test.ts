@@ -37,6 +37,7 @@ async function makeBook(title: string, enrichmentStatus?: string | null) {
       author: "Author",
       filePath: `/lib/${nextId}/${title}.mp3`,
       fileFormat: "mp3",
+      coverImagePath: "/existing-cover.jpg",
       enrichmentStatus: enrichmentStatus ?? null,
     },
   });
@@ -113,6 +114,20 @@ describe("EnrichmentManager queue selection", () => {
       where: { mediaItem: { id: book.id } },
     });
     expect(items).toHaveLength(0);
+  });
+
+  it("re-enqueues an applied book when it has no cover", async () => {
+    const book = await makeBook(`Missing Cover ${nextId + 1}`, "applied");
+    await prisma.mediaItem.update({ where: { id: book.id }, data: { coverImagePath: null } });
+    await prisma.enrichmentItem.deleteMany({});
+    const manager = new EnrichmentManager(prisma);
+
+    await manager.enqueue();
+
+    const items = await prisma.enrichmentItem.findMany({
+      where: { mediaItem: { id: book.id } },
+    });
+    expect(items.length).toBeGreaterThan(0);
   });
 
   it("re-enqueues an applied book when forced", async () => {

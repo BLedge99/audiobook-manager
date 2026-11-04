@@ -201,6 +201,16 @@ async function saveCover(file: AudioFile, coverDirectory: string): Promise<strin
   return coverPath;
 }
 
+async function coverFileExists(filePath: string): Promise<boolean> {
+  try {
+    return (await stat(filePath)).isFile();
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return false;
+    throw error;
+  }
+}
+
 async function syncContributors(
   prisma: PrismaClient,
   mediaItemId: number,
@@ -280,8 +290,11 @@ export function createScanManager(prisma: PrismaClient) {
         const coverImagePath = await saveCover(primary, coverDir);
         const existingRow = await prisma.mediaItem.findUnique({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
-          select: { id: true, metadataSource: true },
+          select: { id: true, metadataSource: true, coverImagePath: true },
         });
+        const staleCover = existingRow?.coverImagePath
+          ? !(await coverFileExists(existingRow.coverImagePath))
+          : false;
         // Spec 17 / ADR 009: per-field overrides replace the spec 07 all-or-nothing
         // `metadataSource === "user"` sentinel. Fixing only a narrator must no
         // longer freeze the title against rescans.
@@ -314,7 +327,9 @@ export function createScanManager(prisma: PrismaClient) {
         }
         if (writable("releaseDate")) embedded.releaseDate = primary.releaseDate;
         if (writable("genre")) embedded.genre = primary.genre;
-        if (writable("coverImagePath")) embedded.coverImagePath = coverImagePath;
+        if (writable("coverImagePath") || staleCover) {
+          embedded.coverImagePath = staleCover ? null : coverImagePath;
+        }
         const item = await prisma.mediaItem.upsert({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
           create: {

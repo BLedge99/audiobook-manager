@@ -79,6 +79,22 @@ describe("scanner reconciliation", () => {
     }
   });
 
+  it.skipIf(!HAS_FIXTURES)("clears a cover path whose file disappeared before rescanning", async () => {
+    const scanner = createScanManager(prisma);
+    await scanner.scanRoot(libraryRootId);
+    const item = await prisma.mediaItem.findFirstOrThrow();
+    const missingCover = path.join(db.dir, "missing-cover.jpg");
+    await prisma.mediaItem.update({
+      where: { id: item.id },
+      data: { coverImagePath: missingCover },
+    });
+
+    await scanner.scanRoot(libraryRootId);
+
+    const rescanned = await prisma.mediaItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(rescanned.coverImagePath).not.toBe(missingCover);
+  });
+
   it.skipIf(!HAS_FIXTURES)("creates Track rows, which reference MediaItem with a foreign key", async () => {
     expect(await prisma.track.count()).toBeGreaterThan(0);
   });

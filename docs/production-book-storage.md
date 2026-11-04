@@ -44,6 +44,12 @@ disk for a complete local copy of the library, and a restart may take longer
 while audio is downloaded. The app does not automatically delete objects from
 the bucket.
 
+If the Render service has a persistent disk mounted at `/data`, add
+`COVER_DIR=/data/covers` to keep covers there too. Without a persistent disk,
+covers saved only on the instance can disappear on deploy; startup scanning
+clears missing cover-file references and retries enrichment for books that
+still have no cover.
+
 ## Upload a book
 
 1. Unzip the LibriVox book on your computer first.
