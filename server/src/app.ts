@@ -67,6 +67,7 @@ function isPublicApiPath(path: string): boolean {
   return (
     path === "/api/health" ||
     path === "/api/config" ||
+    path === "/api/test-oauth-enabled" ||
     path === "/api/auth/login" ||
     path === "/api/auth/signup" ||
     path === "/api/auth/providers" ||
@@ -279,7 +280,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     accountExperienceResolver: () => accountExperience,
     emailSignUpAllowed: accountExperience === "demo",
   });
-  app.get("/test-oauth-enabled", async () => ({
+  app.get("/api/test-oauth-enabled", async () => ({
     oauth_enabled: auth.oauth.enabled,
     providers: auth.oauth.providers.map(p => p.id),
   }));
