@@ -89,7 +89,7 @@ function App() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [accountExperience, setAccountExperience] = useState<"household" | "demo">("household");
   const canManageLibrary = session?.role === "admin";
-  const library = useLibrary();
+  const library = useLibrary(canManageLibrary);
   const {
     audiobooks,
     roots,
