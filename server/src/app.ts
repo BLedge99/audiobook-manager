@@ -2,7 +2,7 @@ import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import { PrismaClient } from "@prisma/client";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import path from "node:path";
@@ -27,7 +27,7 @@ import { PasskeyService, passkeyConfigFromEnv, registerPasskeyRoutes, type Passk
 import { registerAuthRoutes } from "./auth/routes";
 import { SESSION_HEADER, sessionTokenFromRequest } from "./auth/session";
 import { issueMediaToken, mediaResourceFromPath, verifyMediaToken } from "./auth/media-token";
-import { oauthConfigFromEnv, type OAuthConfig } from "./auth/oauth";
+import { oauthConfigFromEnv, type OAuthConfig, buildAuthorizeUrl, createPkcePair, oauthProviderById } from "./auth/oauth";
 
 export { SESSION_HEADER };
 
@@ -68,6 +68,7 @@ function isPublicApiPath(path: string): boolean {
     path === "/api/health" ||
     path === "/api/config" ||
     path === "/api/test-oauth-enabled" ||
+    path === "/api/test-authorize" ||
     path === "/api/auth/login" ||
     path === "/api/auth/signup" ||
     path === "/api/auth/providers" ||
@@ -284,6 +285,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     oauth_enabled: auth.oauth.enabled,
     providers: auth.oauth.providers.map(p => p.id),
   }));
+
+  // Test the authorize endpoint directly
+  app.get("/api/test-authorize", async (request, reply) => {
+    const provider = oauthProviderById(auth.oauth, "google");
+    if (!provider) {
+      return { error: "provider not found" };
+    }
+    const { codeVerifier, codeChallenge } = createPkcePair();
+    const state = randomBytes(16).toString("hex");
+    const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/google/callback`;
+    const url = buildAuthorizeUrl(provider, { redirectUri, state, codeChallenge });
+    return { url, redirectUri, state: state.slice(0, 8), codeChallenge: codeChallenge.slice(0, 8) };
+  });
   await registerPasskeyRoutes(app, passkeys, auth, {
     secureCookie,
     accountExperience,
