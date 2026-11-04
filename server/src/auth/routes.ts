@@ -443,8 +443,8 @@ export async function registerAuthRoutes(
     const state = randomBytes(16).toString("hex");
     const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
     return reply
-      .setCookie(OAUTH_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/api/auth", maxAge: 600 })
-      .setCookie("oauth_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/api/auth", maxAge: 600 })
+      .setCookie(OAUTH_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/", maxAge: 600 })
+      .setCookie("oauth_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/", maxAge: 600 })
       .redirect(buildAuthorizeUrl(provider, { redirectUri, state, codeChallenge }));
   });
 
@@ -464,8 +464,8 @@ export async function registerAuthRoutes(
     const codeVerifier = request.cookies?.["oauth_code_verifier"] ?? null;
 
     if (!provider || !code || !state || !codeVerifier) {
-      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/api/auth" });
-      reply.clearCookie("oauth_code_verifier", { path: "/api/auth" });
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
+      reply.clearCookie("oauth_code_verifier", { path: "/" });
       return reply.redirect("/?auth_error=oauth_state_mismatch");
     }
 
@@ -481,14 +481,14 @@ export async function registerAuthRoutes(
         meta: metadata(request),
         ip: request.ip,
       });
-      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/api/auth" });
-      reply.clearCookie("oauth_code_verifier", { path: "/api/auth" });
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
+      reply.clearCookie("oauth_code_verifier", { path: "/" });
       setSessionCookie(reply, result.token, options);
       await cleanupAfterLogin(auth);
       return reply.redirect("/");
     } catch (error) {
-      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/api/auth" });
-      reply.clearCookie("oauth_code_verifier", { path: "/api/auth" });
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
+      reply.clearCookie("oauth_code_verifier", { path: "/" });
       if (error instanceof AuthFailure) {
         return reply.redirect(`/?auth_error=${error.code}`);
       }
