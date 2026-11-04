@@ -58,8 +58,13 @@ export function setSessionCookie(
   });
 }
 
-function clearSessionCookie(reply: FastifyReply): void {
-  reply.clearCookie(SESSION_COOKIE, { path: "/" });
+function clearSessionCookie(reply: FastifyReply, options?: RegisterAuthOptions): void {
+  reply.clearCookie(SESSION_COOKIE, {
+    path: "/",
+    httpOnly: true,
+    sameSite: options?.secureCookie ? "none" : "lax",
+    secure: options?.secureCookie,
+  });
 }
 
 function metadata(request: FastifyRequest) {
@@ -293,7 +298,7 @@ export async function registerAuthRoutes(
   app.post("/api/auth/logout", async (request, reply) => {
     const token = sessionTokenFromRequest(request);
     if (token) await auth.revokeToken(token);
-    clearSessionCookie(reply);
+    clearSessionCookie(reply, options);
     return { ok: true };
   });
 
