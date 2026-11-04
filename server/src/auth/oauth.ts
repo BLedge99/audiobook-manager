@@ -131,7 +131,10 @@ export async function exchangeAuthorizationCode(
   });
   const response = await fetch(provider.tokenUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
     body,
   });
   if (!response.ok) throw new Error("oauth_code_exchange_failed");

@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createHash } from "node:crypto";
 import {
   OAUTH_STATE_COOKIE,
   buildAuthorizeUrl,
   createPkcePair,
+  exchangeAuthorizationCode,
   oauthConfigFromEnv,
   oauthProviderById,
   safeEqualStrings,
@@ -83,6 +84,35 @@ describe("buildAuthorizeUrl", () => {
     expect(parsed.searchParams.get("state")).toBe("state-1");
     expect(parsed.searchParams.get("code_challenge")).toBe("challenge");
     expect(parsed.searchParams.get("code_challenge_method")).toBe("S256");
+  });
+});
+
+describe("exchangeAuthorizationCode", () => {
+  it("requests a JSON token response from GitHub", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
+      expect(new Headers(init?.headers).get("accept")).toBe("application/json");
+      return new Response(JSON.stringify({ access_token: "access-token", token_type: "bearer" }), {
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const token = await exchangeAuthorizationCode({
+      id: "github",
+      clientId: "github-client-id",
+      clientSecret: "github-client-secret",
+      authorizationUrl: "https://github.com/login/oauth/authorize",
+      tokenUrl: "https://github.com/login/oauth/access_token",
+      userInfoUrl: "https://api.github.com/user",
+      scope: "read:user user:email",
+    }, {
+      code: "authorization-code",
+      redirectUri: "https://example.com/api/auth/github/callback",
+      codeVerifier: "verifier",
+    });
+
+    expect(token.accessToken).toBe("access-token");
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
 

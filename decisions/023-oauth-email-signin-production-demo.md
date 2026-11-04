@@ -75,9 +75,9 @@ keep the admin-managed household model.
   error codes, new copy, new client actions.
 - Additive Prisma migration (Postgres + SQLite histories), session `via` extension.
 - Ops: Google Cloud OAuth client (Web application type, redirect URI
-  `https://books.home.arpa/api/auth/callback/google`) and GitHub OAuth app
-  (callback `https://books.home.arpa/api/auth/callback/github`) must exist before
-  the production stack can exercise the flow.
+  `https://<production-host>/api/auth/google/callback`) and GitHub OAuth app
+  (callback `https://<production-host>/api/auth/github/callback`) must exist
+  before the production stack can exercise the flow.
 - Tests: mocked IdP flows, route tests, client tests; real IdP flows are
   manual/ops checklist.
 - Limitations accepted for this release: no email verification/reset yet, no
