@@ -437,12 +437,9 @@ export async function registerAuthRoutes(
    * touching browser-accessible storage.
    */
   app.get<{ Params: { provider: string } }>("/api/auth/:provider/authorize", async (request, reply) => {
-    app.log.info({ oauth_enabled: auth.oauth.enabled, provider_param: request.params.provider, oauth_providers: auth.oauth.providers.map(p => p.id) }, "authorize endpoint called");
+    console.error("OAUTH AUTHORIZE CALLED", { enabled: auth.oauth.enabled, provider: request.params.provider });
     const provider = auth.oauth.enabled ? oauthProviderById(auth.oauth, request.params.provider) : null;
-    if (!provider) {
-      app.log.warn({ provider_param: request.params.provider, oauth_enabled: auth.oauth.enabled }, "provider not found");
-      return fail(reply, 404, "not_found");
-    }
+    if (!provider) return fail(reply, 404, "not_found");
     const { codeVerifier, codeChallenge } = createPkcePair();
     const state = randomBytes(16).toString("hex");
     const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
