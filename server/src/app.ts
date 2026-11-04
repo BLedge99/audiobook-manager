@@ -27,6 +27,7 @@ import { PasskeyService, passkeyConfigFromEnv, registerPasskeyRoutes, type Passk
 import { registerAuthRoutes } from "./auth/routes";
 import { SESSION_HEADER, sessionTokenFromRequest } from "./auth/session";
 import { issueMediaToken, mediaResourceFromPath, verifyMediaToken } from "./auth/media-token";
+import { oauthConfigFromEnv, type OAuthConfig } from "./auth/oauth";
 
 export { SESSION_HEADER };
 
@@ -46,12 +47,21 @@ export interface BuildAppOptions {
   passkeyConfig?: PasskeyConfig | null;
   /** Test seam; production configures a separate 256-bit media signing key. */
   mediaTokenSecret?: string;
+  /** External OAuth providers for production sign-in (spec 32 / ADR 023). */
+  oauth?: OAuthConfig;
 }
 
 /** Test seam for proving that the family listener has no admin surface. */
 
 /** Public API paths; everything else under `/api/` needs a session. */
 function isPublicApiPath(path: string): boolean {
+  // `/api/auth/:provider/authorize` and `/api/auth/:provider/callback` are the
+  // two legs of an OAuth flow that must complete before a session exists
+  // (spec 32 / ADR 023). They carry no credentials; the authorize leg redirects
+  // away to the provider and the callback leg answers the provider.
+  const rest = path.slice("/api/auth".length);
+  const segments = rest.split("/").filter(Boolean);
+  const isOAuthFlowPath = segments.length === 2 && (segments[1] === "authorize" || segments[1] === "callback");
   return (
     path === "/api/health" ||
     path === "/api/auth/login" ||
@@ -59,7 +69,8 @@ function isPublicApiPath(path: string): boolean {
     path === "/api/auth/claim" ||
     path === "/api/auth/logout" ||
     path === "/api/auth/devices/session" ||
-    path.startsWith("/api/auth/passkeys/login/")
+    path.startsWith("/api/auth/passkeys/login/") ||
+    isOAuthFlowPath
   );
 }
 
@@ -96,7 +107,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const enrichment = new EnrichmentManager(prisma);
   const recommendations = new RecommendationService(prisma);
   const appPassword = options.appPassword ?? process.env.APP_PASSWORD;
-  const auth = new AuthService({ prisma, appPassword, now: options.now });
+  const auth = new AuthService({ prisma, appPassword, oauth: options.oauth ?? oauthConfigFromEnv(), now: options.now });
   const passkeys = new PasskeyService({
     prisma,
     config: options.passkeyConfig ?? passkeyConfigFromEnv(),

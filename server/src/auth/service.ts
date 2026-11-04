@@ -15,9 +15,11 @@ import {
   newSessionId,
   newSessionToken,
 } from "./session";
+import type { OAuthConfig, OAuthIdentity, OAuthProvider } from "./oauth";
+import { exchangeAuthorizationCode, fetchOAuthIdentity, safeEqualStrings } from "./oauth";
 
 export type AuthRole = "admin" | "member";
-export type AuthVia = "profile" | "household" | "device";
+export type AuthVia = "profile" | "household" | "device" | "oauth";
 
 export interface AuthContext {
   token: string;
@@ -53,6 +55,8 @@ export class AuthFailure extends Error {
 export interface AuthServiceOptions {
   prisma: PrismaClient;
   appPassword?: string;
+  /** External OAuth providers for the production demo (spec 32 / ADR 023). */
+  oauth?: OAuthConfig;
   /** Test seam for expiry and lockout. */
   now?: () => Date;
 }
@@ -60,6 +64,8 @@ export interface AuthServiceOptions {
 const IP_WINDOW_MS = 10 * 60 * 1000;
 const IP_MAX_FAILURES = 20;
 const LOCK_AFTER = 5;
+/** Per-IP ceiling on failed OAuth callback attempts before the flow is throttled (spec 32). */
+const OAUTH_MAX_ATTEMPTS = 10;
 
 /**
  * All authentication state and rules in one place.
@@ -71,14 +77,17 @@ const LOCK_AFTER = 5;
  */
 export class AuthService {
   readonly enabled: boolean;
+  readonly oauth: OAuthConfig;
   private readonly prisma: PrismaClient;
   private readonly appPassword: string | undefined;
   private readonly now: () => Date;
   private readonly ipFailures = new Map<string, { count: number; resetAt: number }>();
+  private readonly oauthFailures = new Map<string, { count: number; resetAt: number }>();
 
   constructor(options: AuthServiceOptions) {
     this.prisma = options.prisma;
     this.appPassword = options.appPassword;
+    this.oauth = options.oauth ?? { enabled: false, providers: [] };
     this.enabled = Boolean(options.appPassword);
     this.now = options.now ?? (() => new Date());
   }
@@ -169,6 +178,136 @@ export class AuthService {
       data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now() },
     });
     return this.createSession(profile.id, "profile", meta);
+  }
+
+  /**
+   * External sign-in via OAuth (spec 32 / ADR 023): authorize → callback →
+   * token exchange → identity → profile → session.
+   *
+   * The state in the callback must match the value the authorize step wrote to
+   * the `oauth_state` cookie; the comparison is hashed and constant-time. The
+   * PKCE verifier was generated server-side at authorize time and travels with
+   * the token exchange, so the client never holds OAuth secrets.
+   */
+  async signInWithOAuth(input: {
+    provider: OAuthProvider;
+    code: string;
+    state: string;
+    stateCookieValue: string | null;
+    codeVerifier: string;
+    redirectUri: string;
+    meta: SessionMetadata;
+    ip: string;
+  }): Promise<LoginResult> {
+    if (!this.oauth.enabled || !input.provider) throw new AuthFailure(503, "oauth_not_configured");
+    this.checkOAuthRate(input.ip);
+    try {
+      if (!input.stateCookieValue || !safeEqualStrings(input.state, input.stateCookieValue)) {
+        throw new AuthFailure(400, "oauth_state_mismatch");
+      }
+
+      const token = await exchangeAuthorizationCode(input.provider, {
+        code: input.code,
+        redirectUri: input.redirectUri,
+        codeVerifier: input.codeVerifier,
+      });
+
+      const identity = await fetchOAuthIdentity(input.provider, token.accessToken);
+      if (input.provider.id === "google" && !identity.emailVerified) {
+        throw new AuthFailure(403, "oauth_email_not_verified");
+      }
+
+      const profile = await this.resolveOAuthProfile(input.provider, identity);
+      if (profile.disabled) throw new AuthFailure(403, "account_disabled");
+      this.clearOAuthRate(input.ip);
+      return this.createSession(profile.id, "oauth", input.meta);
+    } catch (error) {
+      this.recordOAuthFailure(input.ip);
+      throw error;
+    }
+  }
+
+  /**
+   * Email + password sign-in (spec 32): the same password posture as a profile
+   * sign-in, resolved by email instead of profile id. Unknown email answers the
+   * same `incorrect_password` as a wrong password, so the endpoint does not
+   * become an account-enumeration oracle.
+   */
+  async signInWithEmail(input: {
+    email: string;
+    password: string;
+    meta: SessionMetadata;
+    ip: string;
+  }): Promise<LoginResult> {
+    this.checkIp(input.ip);
+    const email = input.email.trim().toLowerCase();
+    const profile = email ? await this.prisma.profile.findFirst({ where: { email } }) : null;
+    if (!profile) {
+      this.recordIpFailure(input.ip);
+      throw new AuthFailure(401, "incorrect_password");
+    }
+    if (profile.disabled) throw new AuthFailure(403, "account_disabled");
+    if (!profile.passwordHash) throw new AuthFailure(409, "profile_unclaimed");
+
+    const lockedFor = this.lockedSeconds(profile);
+    if (lockedFor > 0) {
+      throw new AuthFailure(429, "account_locked", { retryAfterSeconds: lockedFor });
+    }
+    const ok = await verifyPassword(input.password, profile.passwordHash);
+    if (!ok) {
+      const lockedUntil = await this.recordProfileFailure(profile);
+      this.recordIpFailure(input.ip);
+      if (lockedUntil) {
+        throw new AuthFailure(429, "account_locked", {
+          retryAfterSeconds: this.secondsUntil(lockedUntil),
+        });
+      }
+      throw new AuthFailure(401, "incorrect_password");
+    }
+
+    this.clearIp(input.ip);
+    await this.prisma.profile.update({
+      where: { id: profile.id },
+      data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now() },
+    });
+    return this.createSession(profile.id, "profile", input.meta);
+  }
+
+  /**
+   * Resolve an OAuth identity to a profile (spec 32): by provider + provider
+   * user id first, then by verified email, else create a new member profile
+   * against the hosted library (the production demo audience).
+   */
+  private async resolveOAuthProfile(provider: OAuthProvider, identity: OAuthIdentity): Promise<Profile> {
+    const byProvider = await this.prisma.profile.findFirst({
+      where: { oauthProvider: provider.id, oauthProviderId: identity.sub },
+    });
+    if (byProvider) return byProvider;
+
+    const byEmail = identity.email
+      ? await this.prisma.profile.findFirst({ where: { email: identity.email.toLowerCase() } })
+      : null;
+    if (byEmail) return byEmail;
+
+    const baseName = (identity.name ?? "").trim() || identity.email?.split("@")[0] || `Listener ${provider.id}`;
+    let name = baseName;
+    for (let attempt = 2; ; attempt += 1) {
+      const clash = await this.prisma.profile.findUnique({ where: { name } });
+      if (!clash) break;
+      name = `${baseName} ${attempt}`;
+    }
+
+    const profile = await this.prisma.profile.create({
+      data: {
+        name,
+        role: "member",
+        followsServerLibrary: true,
+        email: identity.email,
+        oauthProvider: provider.id,
+        oauthProviderId: identity.sub,
+      },
+    });
+    return profile;
   }
 
   /**
@@ -538,5 +677,35 @@ export class AuthService {
 
   private clearIp(ip: string): void {
     this.ipFailures.delete(ip);
+  }
+
+  /** Per-IP ceiling on failed external sign-in attempts before throttling (spec 32). */
+  private checkOAuthRate(ip: string): void {
+    const entry = this.oauthFailures.get(ip);
+    if (!entry) return;
+    const now = this.now().getTime();
+    if (now >= entry.resetAt) {
+      this.oauthFailures.delete(ip);
+      return;
+    }
+    if (entry.count >= OAUTH_MAX_ATTEMPTS) {
+      throw new AuthFailure(429, "oauth_rate_limited", {
+        retryAfterSeconds: Math.ceil((entry.resetAt - now) / 1000),
+      });
+    }
+  }
+
+  private recordOAuthFailure(ip: string): void {
+    const now = this.now().getTime();
+    const entry = this.oauthFailures.get(ip);
+    if (!entry || now >= entry.resetAt) {
+      this.oauthFailures.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
+      return;
+    }
+    entry.count += 1;
+  }
+
+  private clearOAuthRate(ip: string): void {
+    this.oauthFailures.delete(ip);
   }
 }

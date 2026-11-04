@@ -8,6 +8,51 @@
 > [`LIMITATIONS.md`](LIMITATIONS.md)** — broken features, caps with reasons,
 > security debt, and a suggested order of work. Read it first.
 
+## Current task — production external sign-in (2026-11-04)
+
+Uncommitted work on `master`. Spec:
+[`specs/32-oauth-email_signin.md`](specs/32-oauth-email_signin.md); ADR:
+[`decisions/023-oauth-email_signin-production-demo.md`](decisions/023-oauth-email_signin-production-demo.md).
+
+The production deployment now has an external sign-in surface for the demo
+audience (2026-11-04): real people sign in over the web with Google/GitHub OAuth
+or email+password against the hosted library. Local environments keep the
+admin-managed household model and leave external sign-in off.
+
+### Implemented
+
+- Server: `Profile` gains nullable `oauthProvider` / `oauthProviderId` / `email`
+  (additive; pg + sqlite migrations). `AuthVia` gains `"oauth"`. Service:
+  `signInWithOAuth` (PKCE S256 + server-held state + token exchange + identity
+  validation, per-IP rate limit on failed callback attempts) and
+  `signInWithEmail`. Routes: `GET /api/auth/:provider/authorize` and
+  `.../callback`; the public-path allowlist extends to the OAuth flow legs.
+  New error codes: `oauth_not_configured`, `oauth_state_mismatch`,
+  `oauth_code_exchange_failed`, `oauth_email_not_verified`, `oauth_rate_limited`.
+  `oauthConfigFromEnv` reads `OAUTH_ENABLED` + provider credentials.
+- Client: `AccountGate` list mode gains Google/GitHub/email sign-in buttons;
+  new email sign-in mode; `?auth_error=<code>` → `errorSentenceForCode`; session
+  `via` gains `"oauth"`.
+- Ops: `.env.production.example` + `docker-compose.prod.yml` gain the OAuth env
+  block.
+
+### Verification
+
+- Server: `tsc --noEmit` clean; auth + app suites green including the new OAuth
+  module, flow and rate-limit tests; full server suite green (527 passed, 3
+  skipped).
+- Client: `tsc --noEmit` clean; full suite green (552 passed); copy gate clean
+  (553 strings, 0 errors).
+- Real IdP flows remain a manual/ops checklist (Google Cloud OAuth client with
+  redirect URI `https://books.home.arpa/api/auth/callback/google`, GitHub OAuth
+  app with callback `https://books.home.arpa/api/auth/callback/github`).
+
+### Not done
+
+- Email verification / password reset end-to-end (deferred; minimal email
+  sign-in wiring shipped).
+- Caddy/CA deployment and real Google/GitHub IdP verification.
+
 ## Current task — offline resilience: no dead ends, no false claims (2026-10-29)
 
 Uncommitted work on `master`, based on `47b38df`. **The owner stages and

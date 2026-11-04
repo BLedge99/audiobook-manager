@@ -366,6 +366,16 @@ model Profile {
   lockedUntil       DateTime?
   lastLoginAt       DateTime?
 
+  // Spec 32 / ADR 023: external identity for production sign-in.
+  //
+  // Nullable on purpose. Household profiles created by the admin have none;
+  // OAuth sign-ins write the provider + provider user id, and the email/password
+  // path writes the email. A profile is still the account; this is an attribute
+  // of it, not a second identity table.
+  oauthProvider   String?  // "google" | "github" | null
+  oauthProviderId String?
+  email          String?
+
   // Spec 27: does this profile receive newly scanned books automatically?
   //
   // The existing-vs-new distinction from the spec, made explicit. Profiles

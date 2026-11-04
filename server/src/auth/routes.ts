@@ -1,3 +1,4 @@
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Profile } from "@prisma/client";
 import { fail } from "../http-errors";
@@ -8,6 +9,13 @@ import {
   sessionTokenFromRequest,
 } from "./session";
 import { AuthFailure, AuthService, type LoginResult } from "./service";
+import {
+  OAUTH_STATE_COOKIE,
+  buildAuthorizeUrl,
+  createPkcePair,
+  oauthProviderById,
+} from "./oauth";
+import type { OAuthProvider } from "./oauth";
 
 export interface RegisterAuthOptions {
   /** `Secure` cookies are required once the web is served over HTTPS. */
@@ -142,13 +150,14 @@ export async function registerAuthRoutes(
     }
   });
 
-  app.post<{ Body: { password: string; profileId?: number } }>("/api/auth/login", {
+  app.post<{ Body: { password: string; profileId?: number; email?: string } }>("/api/auth/login", {
     schema: {
       body: {
         type: "object",
         properties: {
           password: { type: "string" },
           profileId: { type: "integer", minimum: 1 },
+          email: { type: "string" },
         },
         required: ["password"],
         additionalProperties: false,
@@ -158,14 +167,21 @@ export async function registerAuthRoutes(
     if (!auth.enabled) return { token: "disabled", authDisabled: true };
 
     try {
-      const result = request.body.profileId
-        ? await auth.loginProfile(
-            request.body.profileId,
-            request.body.password,
-            metadata(request),
-            request.ip,
-          )
-        : await auth.loginHousehold(request.body.password, metadata(request), request.ip);
+      const result = request.body.email
+        ? await auth.signInWithEmail({
+            email: request.body.email,
+            password: request.body.password,
+            meta: metadata(request),
+            ip: request.ip,
+          })
+        : request.body.profileId
+          ? await auth.loginProfile(
+              request.body.profileId,
+              request.body.password,
+              metadata(request),
+              request.ip,
+            )
+          : await auth.loginHousehold(request.body.password, metadata(request), request.ip);
       setSessionCookie(reply, result.token, options);
       await cleanupAfterLogin(auth);
       return loginPayload(result);
@@ -343,6 +359,72 @@ export async function registerAuthRoutes(
       return { ok: true, profile: publicProfile(profile) };
     } catch (error) {
       return sendAuthFailure(reply, error);
+    }
+  });
+
+  /**
+   * Spec 32 / ADR 023: start the external (Google/GitHub) OAuth flow. The server
+   * owns the PKCE pair and the state, redirects the browser to the provider, and
+   * keeps both in HttpOnly cookies so the callback can validate without ever
+   * touching browser-accessible storage.
+   */
+  app.get<{ Params: { provider: string } }>("/api/auth/:provider/authorize", async (request, reply) => {
+    const provider = auth.oauth.enabled ? oauthProviderById(auth.oauth, request.params.provider) : null;
+    if (!provider) return fail(reply, 404, "not_found");
+    const { codeVerifier, codeChallenge } = createPkcePair();
+    const state = randomBytes(16).toString("hex");
+    const redirectUri = `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
+    reply
+      .setCookie(OAUTH_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", path: "/" })
+      .setCookie("oauth_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", path: "/" })
+      .redirect(buildAuthorizeUrl(provider, { redirectUri, state, codeChallenge }));
+  });
+
+  /**
+   * Spec 32 / ADR 023: the OAuth provider callback. Validates state, exchanges
+   * the code, resolves the identity to a profile and answers with a session.
+   * Failures clear the cookies and redirect home with an `auth_error` code for
+   * the client to render.
+   */
+  app.get<{ Params: { provider: string }; Querystring: { code?: string; state?: string } }>(
+    "/api/auth/:provider/callback",
+    async (request, reply) => {
+    const provider = auth.oauth.enabled ? oauthProviderById(auth.oauth, request.params.provider) : null;
+    const code = typeof request.query.code === "string" ? request.query.code : null;
+    const state = typeof request.query.state === "string" ? request.query.state : null;
+    const stateCookieValue = request.cookies?.[OAUTH_STATE_COOKIE] ?? null;
+    const codeVerifier = request.cookies?.["oauth_code_verifier"] ?? null;
+
+    if (!provider || !code || !state || !codeVerifier) {
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
+      reply.clearCookie("oauth_code_verifier", { path: "/" });
+      return reply.redirect("/?auth_error=oauth_state_mismatch");
+    }
+
+    const redirectUri = `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
+    try {
+      const result = await auth.signInWithOAuth({
+        provider,
+        code,
+        state,
+        stateCookieValue,
+        codeVerifier,
+        redirectUri,
+        meta: metadata(request),
+        ip: request.ip,
+      });
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
+      reply.clearCookie("oauth_code_verifier", { path: "/" });
+      setSessionCookie(reply, result.token, options);
+      await cleanupAfterLogin(auth);
+      return reply.redirect("/");
+    } catch (error) {
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
+      reply.clearCookie("oauth_code_verifier", { path: "/" });
+      if (error instanceof AuthFailure) {
+        return reply.redirect(`/?auth_error=${error.code}`);
+      }
+      throw error;
     }
   });
 }

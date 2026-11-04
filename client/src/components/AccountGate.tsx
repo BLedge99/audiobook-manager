@@ -6,7 +6,7 @@ import {
   setActiveProfileId,
   setSessionToken,
 } from "../lib/api";
-import { responseErrorText } from "../lib/apiError";
+import { errorSentenceForCode, responseErrorText } from "../lib/apiError";
 import { isNativeShell } from "../lib/platform";
 import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
 import { deleteProfileCache, fromBase64, lockOfflineCache, rememberProfileKey, unlockProfileCacheWithKey } from "../local/privateCache";
@@ -35,7 +35,8 @@ type Mode =
   | { kind: "list" }
   | { kind: "password"; account: Account }
   | { kind: "setup"; account: Account }
-  | { kind: "household" };
+  | { kind: "household" }
+  | { kind: "email" };
 
 const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
 const PENDING_PROFILE_KEY = "pendingProfileId";
@@ -62,6 +63,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
   const [error, setError] = useState<string>();
 
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [householdPassword, setHouseholdPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -69,6 +71,13 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
 
   useEffect(() => { void biometricVault.available().then(setBiometricsAvailable); }, []);
+
+  // Spec 32 / ADR 023: the OAuth callback redirects home with `?auth_error=<code>`
+  // when the flow fails, so the listener sees it without a session.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("auth_error");
+    if (code) setError(errorSentenceForCode(code));
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -333,6 +342,39 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
     }
   };
 
+  const emailSignIn = async (event: FormEvent) => {
+    event.preventDefault();
+    if (mode.kind !== "email") return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const res = await boundedFetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        setError(await responseErrorText(res));
+        return;
+      }
+      const body = (await res.json()) as { token?: string; authDisabled?: boolean; profile?: { id: number } };
+      if (body.authDisabled || body.token === "disabled") {
+        await finish(null, undefined);
+        return;
+      }
+      await finish(body.profile?.id ?? null, body.token);
+    } catch (submitError) {
+      setError(errorSentence(submitError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Spec 32 / ADR 023: hand off to the provider authorize endpoint. */
+  const startOAuth = (provider: "google" | "github") => {
+    window.location.href = `/api/auth/${provider}/authorize`;
+  };
+
   const household = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -360,6 +402,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
     window.localStorage.removeItem(PENDING_PROFILE_KEY);
     setMode({ kind: "list" });
     setPassword("");
+    setEmail("");
     setHouseholdPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -371,7 +414,9 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
       ? copy.account.setupHeading(mode.account.name)
       : mode.kind === "household"
         ? copy.account.householdHeading
-        : copy.profile.heading;
+        : mode.kind === "email"
+          ? copy.login.heading
+          : copy.profile.heading;
 
   return (
     <FullScreen>
@@ -387,7 +432,9 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
                 ? copy.account.householdIntro
                 : mode.kind === "password"
                   ? copy.account.passwordLabel(mode.account.name)
-                  : copy.account.intro}
+                  : mode.kind === "email"
+                    ? copy.login.emailIntro
+                    : copy.account.intro}
           </p>
 
           {loading && (
@@ -444,6 +491,33 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
                     {copy.account.noProfiles}
                   </p>
                 )}
+              </div>
+
+              <div className="mt-5 grid min-w-0 gap-3">
+                <button
+                  type="button"
+                  onClick={() => startOAuth("google")}
+                  className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
+                >
+                  {copy.login.oauthGoogleAction}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => startOAuth("github")}
+                  className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
+                >
+                  {copy.login.oauthGithubAction}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(undefined);
+                    setMode({ kind: "email" });
+                  }}
+                  className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
+                >
+                  {copy.login.emailAction}
+                </button>
               </div>
 
               <button
@@ -595,6 +669,55 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
               />
               <Btn type="submit" variant="primary" disabled={busy} className="w-full">
                 {busy ? copy.login.checking : copy.login.submit}
+              </Btn>
+              <button
+                type="button"
+                onClick={back}
+                className="inline-flex items-center justify-center gap-1.5 text-sm font-bold text-ink3"
+              >
+                <ArrowLeft size={15} aria-hidden="true" />
+                {copy.account.back}
+              </button>
+            </form>
+          )}
+
+          {!loading && mode.kind === "email" && (
+            <form onSubmit={emailSignIn} className="mt-5 grid gap-3">
+              <label htmlFor="email" className="sr-only">
+                {copy.login.emailLabel}
+              </label>
+              <Field
+                id="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder={copy.login.emailPlaceholder}
+                autoComplete="email"
+                autoFocus
+              />
+              <label htmlFor="email-password" className="sr-only">
+                {copy.login.passwordLabel}
+              </label>
+              <Field
+                id="email-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={copy.login.passwordPlaceholder}
+                autoComplete="current-password"
+              />
+              <Btn type="submit" variant="primary" disabled={busy} className="w-full">
+                {busy ? (
+                  <>
+                    <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
+                    {copy.login.checking}
+                  </>
+                ) : (
+                  <>
+                    <KeyRound size={17} aria-hidden="true" />
+                    {copy.login.submit}
+                  </>
+                )}
               </Btn>
               <button
                 type="button"

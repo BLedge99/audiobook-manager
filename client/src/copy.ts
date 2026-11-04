@@ -493,6 +493,21 @@ export const copy = {
       "This phone's device sign-in belongs to a different profile. Sign in with your password.",
     deviceLocked:
       "Too many tries with fingerprint or face. Wait a moment, or sign in with your password.",
+    /**
+     * Spec 32 / ADR 023: the external sign-in surface (Google/GitHub) and the
+     * email sign-in path that wraps it. The provider names themselves are not
+     * copy — the listener only ever sees the outcome.
+     */
+    oauthUnavailable: "Sign-in with this provider isn't set up on the server.",
+    oauthFailed: "Sign-in with the provider didn't complete. Try again.",
+    oauthEmailNotVerified: "That email couldn't be verified. Try again with the provider.",
+    oauthRateLimited: "Too many sign-in attempts. Wait a moment and try again.",
+    oauthGoogleAction: "Sign in with Google",
+    oauthGithubAction: "Sign in with GitHub",
+    emailIntro: "Sign in with your email and password.",
+    emailLabel: "Email",
+    emailPlaceholder: "Email",
+    emailAction: "Sign in with email",
   },
 
   /**

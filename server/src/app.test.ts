@@ -638,3 +638,79 @@ describe("the API error contract", () => {
     expect(res.json()).toEqual({ code: "tag_name_rejected", params: { reason: "reserved" } });
   });
 });
+
+describe("oauth flow routes", () => {
+  let oauthApp: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeAll(async () => {
+    oauthApp = await buildApp({
+      logger: false,
+      appPassword: "household",
+      prisma,
+      oauth: {
+        enabled: true,
+        providers: [
+          {
+            id: "google",
+            clientId: "google-client-id",
+            clientSecret: "google-client-secret",
+            authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+            tokenUrl: "https://oauth2.googleapis.com/token",
+            userInfoUrl: "https://openidconnect.googleapis.com/v1/userinfo",
+            scope: "openid profile email",
+            issuer: "https://accounts.google.com",
+          },
+        ],
+      },
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await oauthApp.close();
+  });
+
+  it("redirects to the provider authorize endpoint with pkce and state", async () => {
+    const res = await oauthApp.inject({ method: "GET", url: "/api/auth/google/authorize" });
+    expect(res.statusCode).toBe(302);
+    const location = res.headers["location"];
+    expect(typeof location).toBe("string");
+    expect(location).toContain("https://accounts.google.com/o/oauth2/v2/auth");
+    expect(location).toContain("response_type=code");
+    expect(location).toContain("client_id=google-client-id");
+    expect(location).toContain("code_challenge=");
+    expect(location).toContain("code_challenge_method=S256");
+    expect(location).toContain("state=");
+  });
+
+  it("answers a callback without a valid state cookie with oauth_state_mismatch", async () => {
+    const res = await oauthApp.inject({
+      method: "GET",
+      url: "/api/auth/google/callback?code=abc&state=xyz",
+      headers: { cookie: "oauth_state=wrong; oauth_code_verifier=verifier" },
+    });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe("/?auth_error=oauth_state_mismatch");
+  });
+
+  it("throttles repeated failed callbacks per IP with oauth_rate_limited", async () => {
+    // OAUTH_MAX_ATTEMPTS failed callbacks each record a failure; the next one is
+    // answered with the rate-limit error instead of touching the provider again.
+    // (One failure was already recorded by the state-mismatch test above.)
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      const res = await oauthApp.inject({
+        method: "GET",
+        url: "/api/auth/google/callback?code=abc&state=xyz",
+        headers: { cookie: "oauth_state=wrong; oauth_code_verifier=verifier" },
+      });
+      expect(res.statusCode).toBe(302);
+      expect(res.headers.location).toBe("/?auth_error=oauth_state_mismatch");
+    }
+    const throttled = await oauthApp.inject({
+      method: "GET",
+      url: "/api/auth/google/callback?code=abc&state=xyz",
+      headers: { cookie: "oauth_state=wrong; oauth_code_verifier=verifier" },
+    });
+    expect(throttled.statusCode).toBe(302);
+    expect(throttled.headers.location).toBe("/?auth_error=oauth_rate_limited");
+  });
+});

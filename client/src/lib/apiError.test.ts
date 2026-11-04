@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { copy } from "../copy";
-import { apiErrorText, responseErrorText } from "./apiError";
+import { apiErrorText, errorSentenceForCode, responseErrorText } from "./apiError";
 
 /**
  * The client half of the API error contract (ADR 015).
@@ -80,6 +80,14 @@ describe("apiErrorText", () => {
     expect(apiErrorText(401, { code: "device_auth_failed" })).toBe(copy.login.deviceFailed);
   });
 
+  it("renders the spec 32 external sign-in sentences", () => {
+    expect(apiErrorText(503, { code: "oauth_not_configured" })).toBe(copy.login.oauthUnavailable);
+    expect(apiErrorText(400, { code: "oauth_state_mismatch" })).toBe(copy.login.oauthFailed);
+    expect(apiErrorText(400, { code: "oauth_code_exchange_failed" })).toBe(copy.login.oauthFailed);
+    expect(apiErrorText(403, { code: "oauth_email_not_verified" })).toBe(copy.login.oauthEmailNotVerified);
+    expect(apiErrorText(429, { code: "oauth_rate_limited" })).toBe(copy.login.oauthRateLimited);
+  });
+
   it("falls back to the generic sentence for an unknown code", () => {
     expect(apiErrorText(418, { code: "not_a_shipped_code" })).toBe(copy.errors.requestFailed(418));
   });
@@ -100,5 +108,18 @@ describe("responseErrorText", () => {
   it("uses the generic sentence when the body is not JSON", async () => {
     const response = new Response("<html>bad gateway</html>", { status: 502 });
     await expect(responseErrorText(response)).resolves.toBe(copy.errors.requestFailed(502));
+  });
+});
+
+describe("errorSentenceForCode", () => {
+  it("renders the sentence for an OAuth callback error code", () => {
+    expect(errorSentenceForCode("oauth_state_mismatch")).toBe(copy.login.oauthFailed);
+    expect(errorSentenceForCode("oauth_code_exchange_failed")).toBe(copy.login.oauthFailed);
+    expect(errorSentenceForCode("oauth_email_not_verified")).toBe(copy.login.oauthEmailNotVerified);
+    expect(errorSentenceForCode("oauth_not_configured")).toBe(copy.login.oauthUnavailable);
+  });
+
+  it("degrades to the generic sentence for an unknown code", () => {
+    expect(errorSentenceForCode("not_a_real_oauth_code")).toBe(copy.errors.requestFailed(400));
   });
 });

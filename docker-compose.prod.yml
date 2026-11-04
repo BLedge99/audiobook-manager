@@ -55,6 +55,13 @@ services:
       WEBAUTHN_RP_NAME: Bookle
       COVER_DIR: /data/covers
       GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
+      # Spec 32 / ADR 023: external sign-in for the production demo audience.
+      # Local dev keeps the admin-managed household model and leaves this off.
+      OAUTH_ENABLED: ${OAUTH_ENABLED:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     volumes:
       - app_data:/data
       - ${MEDIA_PATH:-./test}:/media:ro

@@ -5,6 +5,7 @@ import { buildAdminApp } from "./admin/app";
 import { AdminAuth } from "./admin/auth";
 import { PrismaClient } from "@prisma/client";
 import { createScanManager } from "./scanner";
+import { oauthConfigFromEnv } from "./auth/oauth";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const ADMIN_PORT = parseInt(process.env.ADMIN_PORT || "3100", 10);
@@ -35,7 +36,7 @@ async function main() {
   // failure here must not stop the server from serving.
   try {
     const { AuthService } = await import("./auth/service");
-    await new AuthService({ prisma }).cleanupExpired();
+    await new AuthService({ prisma, oauth: oauthConfigFromEnv() }).cleanupExpired();
     console.log("[server] cleaned up expired auth rows");
   } catch (err) {
     console.error("[server] auth cleanup skipped:", err);

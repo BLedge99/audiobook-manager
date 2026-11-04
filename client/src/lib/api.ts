@@ -67,7 +67,7 @@ export interface SessionInfo {
   authDisabled: boolean;
   profile: SessionProfile | null;
   role: "admin" | "member";
-  via: "profile" | "household" | "device";
+  via: "profile" | "household" | "device" | "oauth";
   expiresAt: string | null;
   capabilities: {
     passkeys: boolean;

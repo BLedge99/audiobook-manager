@@ -60,6 +60,15 @@ export function apiErrorText(status: number, body: unknown): string {
       return copy.login.deviceGone;
     case "device_auth_failed":
       return copy.login.deviceFailed;
+    case "oauth_not_configured":
+      return copy.login.oauthUnavailable;
+    case "oauth_state_mismatch":
+    case "oauth_code_exchange_failed":
+      return copy.login.oauthFailed;
+    case "oauth_email_not_verified":
+      return copy.login.oauthEmailNotVerified;
+    case "oauth_rate_limited":
+      return copy.login.oauthRateLimited;
   }
 
   const key = catalogKey(code);
@@ -134,6 +143,15 @@ export async function responseErrorText(response: Response): Promise<string> {
     return copy.errors.requestFailed(response.status);
   }
   return apiErrorText(response.status, body);
+}
+
+/**
+ * The sentence for an OAuth callback error code, read from the redirect the
+ * callback answers (`/?auth_error=<code>`). The shape is the API's error body,
+ * so one renderer serves both paths.
+ */
+export function errorSentenceForCode(code: string): string {
+  return apiErrorText(400, { code });
 }
 
 /**
