@@ -46,6 +46,7 @@ services:
       # server applies prisma/schema.prisma's migrations on startup.
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the production PostgreSQL connection string}
       APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD before deploying}
+      ACCOUNT_EXPERIENCE: ${ACCOUNT_EXPERIENCE:-household}
       ADMIN_PANEL_PASSWORD: ${ADMIN_PANEL_PASSWORD:-}
       MEDIA_TOKEN_SECRET: ${MEDIA_TOKEN_SECRET:?Set MEDIA_TOKEN_SECRET before deploying}
       COOKIE_SECURE: "true"
@@ -60,8 +61,10 @@ services:
       OAUTH_ENABLED: ${OAUTH_ENABLED:-false}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-}
     volumes:
       - app_data:/data
       - ${MEDIA_PATH:-./test}:/media:ro

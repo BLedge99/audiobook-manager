@@ -58,11 +58,11 @@ export const SESSION_HEADER = "x-house-session";
 let accountExperience: "household" | "demo" = "household";
 
 export interface SessionProfile {
-  id: number;
+  id?: number;
   name?: string;
   email?: string | null;
   color?: string | null;
-  role: "admin" | "member";
+  role?: "admin" | "member";
 }
 
 export interface SessionInfo {

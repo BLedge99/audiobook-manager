@@ -18,17 +18,20 @@ supersedes neither the Profile-is-the-account data model nor the local UI.
 
 ## Status (2026-11-04)
 
-Plan accepted 2026-11-04. Implementation underway; initial account-mode and
-signup paths are present, but the privacy audit and complete regression suite
-are unfinished. This is not release-ready. Phase plan:
+Plan accepted 2026-11-04. Implementation is underway; server/client foundations,
+route privacy protections, and regression checks are being completed. This is
+not release-ready until PostgreSQL migrations, production callback configuration,
+and live OAuth provider flows are verified. Phase plan:
 
 1. Documentation and decisions (this spec, ADR 024, roadmap, LIMITATIONS).
 2. Production identity/privacy audit and auth-foundation corrections required
-   for safe production use. (In progress; not release-ready.)
+   for safe production use. (In progress: account scope and protected surfaces
+   are enforced; focused route tests pass. Full response/API matrix is still open.)
 3. Production-only client mode: account sign-in/sign-up, account header menu,
-   and no profile selection or names.
-4. Server-side production account policy and API privacy enforcement.
-5. Regression, security, E2E and deployment verification.
+   and no profile selection or names. (In progress: account gate/menu behavior
+   exists; route-level integration coverage is still required.)
+4. Server-side production account policy and API privacy enforcement. (In progress.)
+5. Regression, security, E2E and deployment verification. (Not complete.)
 
 ## Decision summary
 
@@ -128,7 +131,7 @@ are unfinished. This is not release-ready. Phase plan:
 
 ## Acceptance criteria
 
-- [ ] Production setting selects demo experience; unset/local setting preserves
+- [x] Production setting selects demo experience; unset/local setting preserves
       household mode.
 - [ ] Demo sign-in offers supported account sign-in and email account creation;
       successful sign-in enters the app without choosing/renaming a profile.

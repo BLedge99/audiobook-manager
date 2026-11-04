@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import type { Audiobook } from "../types";
 import { copy } from "../copy";
 import { responseErrorText } from "../lib/apiError";
+import { profileHeaders } from "../lib/api";
 import { Btn, MachineHead, Swatch, cn } from "../ui/primitives";
 import { CoverImage, urlCoverKey } from "../local/CoverImage";
 
@@ -33,11 +34,9 @@ interface Candidate {
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const profileId = window.localStorage.getItem("profileId");
   const headers: Record<string, string> = {};
   if (options?.body) headers["Content-Type"] = "application/json";
-  if (profileId) headers["x-profile-id"] = profileId;
-  const response = await fetch(url, { ...options, headers: { ...headers, ...(options?.headers as Record<string, string>) } });
+  const response = await fetch(url, { ...options, headers: { ...profileHeaders(), ...headers, ...(options?.headers as Record<string, string>) } });
   if (!response.ok) {
     throw new Error(await responseErrorText(response));
   }

@@ -126,7 +126,7 @@ export function AccountGate({ onSuccess, accountExperience = "household" }: {
   const finish = async (profileId: number | null, token: string | undefined) => {
     setSessionToken(token);
     setActiveProfileId(accountExperience === "demo" ? null : profileId);
-    if (profileId === null) lockOfflineCache();
+    if (profileId === null || accountExperience === "demo") lockOfflineCache();
     window.localStorage.removeItem(PENDING_PROFILE_KEY);
     await onSuccess();
   };
@@ -369,12 +369,12 @@ export function AccountGate({ onSuccess, accountExperience = "household" }: {
         setError(await responseErrorText(res));
         return;
       }
-      const body = (await res.json()) as { token?: string; authDisabled?: boolean; profile?: { id: number } };
+      const body = (await res.json()) as { token?: string; authDisabled?: boolean; profile?: { id?: number } };
       if (body.authDisabled || body.token === "disabled") {
         await finish(null, undefined);
         return;
       }
-      await finish(body.profile?.id ?? null, body.token);
+      await finish(null, body.token);
     } catch (submitError) {
       setError(errorSentence(submitError));
     } finally {

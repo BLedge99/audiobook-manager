@@ -116,6 +116,7 @@ export async function registerAuthRoutes(
   app.post<{ Body: { secret: string } }>("/api/auth/devices/session", {
     schema: { body: { type: "object", properties: { secret: { type: "string", minLength: 20, maxLength: 128 } }, required: ["secret"], additionalProperties: false } },
   }, async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
     try {
       const result = await auth.exchangeDeviceCredential(request.body.secret, metadata(request));
       setSessionCookie(reply, result.token, options);
@@ -129,6 +130,7 @@ export async function registerAuthRoutes(
   app.post<{ Body: { label?: string } }>("/api/auth/devices", {
     schema: { body: { type: "object", properties: { label: { type: "string", maxLength: 80 } }, additionalProperties: false } },
   }, async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
     if (!request.auth?.profile) return fail(reply, 403, "forbidden");
     try {
       return await auth.createDeviceCredential(request.auth.profile.id, request.body.label ?? null);
@@ -138,6 +140,7 @@ export async function registerAuthRoutes(
   });
 
   app.get("/api/auth/devices", async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
     if (!request.auth?.profile) return fail(reply, 403, "forbidden");
     return { devices: await auth.listDeviceCredentials(request.auth.profile.id) };
   });
@@ -145,6 +148,7 @@ export async function registerAuthRoutes(
   app.delete<{ Params: { id: string } }>("/api/auth/devices/:id", {
     schema: { params: { type: "object", properties: { id: { type: "string", minLength: 1, maxLength: 80 } }, required: ["id"] } },
   }, async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
     if (!request.auth?.profile) return fail(reply, 403, "forbidden");
     try {
       await auth.revokeDeviceCredential(request.auth.profile.id, request.params.id);
@@ -168,6 +172,7 @@ export async function registerAuthRoutes(
       },
     },
   }, async (request, reply) => {
+    if (!auth.enabled && demoMode()) return fail(reply, 503, "auth_required");
     if (!auth.enabled) return { token: "disabled", authDisabled: true };
     if (demoMode() && !request.body.email) return fail(reply, 404, "not_found");
 
@@ -417,10 +422,10 @@ export async function registerAuthRoutes(
     if (!provider) return fail(reply, 404, "not_found");
     const { codeVerifier, codeChallenge } = createPkcePair();
     const state = randomBytes(16).toString("hex");
-    const redirectUri = `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
+    const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
     reply
-      .setCookie(OAUTH_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", path: "/" })
-      .setCookie("oauth_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", path: "/" })
+      .setCookie(OAUTH_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/api/auth", maxAge: 600 })
+      .setCookie("oauth_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/api/auth", maxAge: 600 })
       .redirect(buildAuthorizeUrl(provider, { redirectUri, state, codeChallenge }));
   });
 
@@ -440,12 +445,12 @@ export async function registerAuthRoutes(
     const codeVerifier = request.cookies?.["oauth_code_verifier"] ?? null;
 
     if (!provider || !code || !state || !codeVerifier) {
-      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
-      reply.clearCookie("oauth_code_verifier", { path: "/" });
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/api/auth" });
+      reply.clearCookie("oauth_code_verifier", { path: "/api/auth" });
       return reply.redirect("/?auth_error=oauth_state_mismatch");
     }
 
-    const redirectUri = `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
+    const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
     try {
       const result = await auth.signInWithOAuth({
         provider,
@@ -457,14 +462,14 @@ export async function registerAuthRoutes(
         meta: metadata(request),
         ip: request.ip,
       });
-      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
-      reply.clearCookie("oauth_code_verifier", { path: "/" });
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/api/auth" });
+      reply.clearCookie("oauth_code_verifier", { path: "/api/auth" });
       setSessionCookie(reply, result.token, options);
       await cleanupAfterLogin(auth);
       return reply.redirect("/");
     } catch (error) {
-      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
-      reply.clearCookie("oauth_code_verifier", { path: "/" });
+      reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/api/auth" });
+      reply.clearCookie("oauth_code_verifier", { path: "/api/auth" });
       if (error instanceof AuthFailure) {
         return reply.redirect(`/?auth_error=${error.code}`);
       }

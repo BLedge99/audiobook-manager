@@ -743,8 +743,24 @@ describe("production demo account policy", () => {
     expect((await demoApp.inject({ method: "GET", url: "/api/config" })).json()).toEqual({ accountExperience: "demo" });
     expect((await demoApp.inject({ method: "GET", url: "/api/profiles" })).statusCode).toBe(401);
     expect((await demoApp.inject({ method: "GET", url: "/api/auth/accounts" })).statusCode).toBe(404);
-    expect((await demoApp.inject({ method: "POST", url: "/api/profiles", payload: { name: "Not allowed" } })).statusCode).toBe(401);
-    expect((await demoApp.inject({ method: "POST", url: "/api/auth/signup", payload: { email: "demo@example.test", password: "long-enough-demo-pass-9" } })).statusCode).toBe(200);
+    const signup = await demoApp.inject({ method: "POST", url: "/api/auth/signup", payload: { email: `demo-${Date.now()}@example.test`, password: "long-enough-demo-pass-9" } });
+    expect(signup.statusCode).toBe(200);
+    expect(signup.json()).not.toHaveProperty("profile.id");
+    expect(signup.json()).not.toHaveProperty("profile.name");
+    const cookie = signup.cookies.map((entry) => `${entry.name}=${entry.value}`).join("; ");
+    const session = await demoApp.inject({ method: "GET", url: "/api/auth/session", headers: { cookie } });
+    expect(session.statusCode).toBe(200);
+    expect(session.json()).not.toHaveProperty("profile.id");
+    expect(session.json()).not.toHaveProperty("profile.name");
+    const scopes = await Promise.all([
+      demoApp.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "x-profile-id": String(otherProfileId) } }),
+      demoApp.inject({ method: "GET", url: "/api/server-library", headers: { cookie, "x-profile-id": String(otherProfileId) } }),
+      demoApp.inject({ method: "GET", url: "/api/audiobooks/1/progress", headers: { cookie, "x-profile-id": String(otherProfileId) } }),
+    ]);
+    expect(scopes.map((result) => result.statusCode)).toEqual([200, 200, 200]);
+    expect(scopes[2].json()).toEqual({ position: 0, completed: false });
+    const sessionProfileId = session.json<{ profile?: { id?: number } }>().profile?.id;
+    expect(sessionProfileId).toBeUndefined();
   });
 
   it("does not trust a forged x-profile-id for progress and does not serialize names in session info", async () => {

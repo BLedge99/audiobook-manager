@@ -127,7 +127,7 @@ function App() {
   /** The session profile is authoritative; localStorage is the break-glass hint. */
   const activeProfileId = accountExperience === "demo"
     ? (session?.profile?.id ? String(session.profile.id) : null)
-    : session?.profile ? String(session.profile.id) : profileId;
+    : session?.profile?.id ? String(session.profile.id) : profileId;
   /** A probe in flight, so a failing probe cannot trigger another one. */
   const probeInFlight = useRef(false);
   /**
@@ -213,10 +213,13 @@ function App() {
         }
         setSession(info);
         setAuthed(true);
-        if (info.profile) {
+        if (config.accountExperience === "demo") {
+          setProfileId(null);
+          setActiveProfileId(null);
+        } else if (info.profile) {
           const id = String(info.profile.id);
           setProfileId(id);
-          if (config.accountExperience !== "demo") setActiveProfileId(id);
+          setActiveProfileId(id);
         } else if (info.via === "household") {
           setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
         }
@@ -1000,9 +1003,9 @@ function App() {
               </>
             )}
 
-            <div className="mt-10">
+            {accountExperience !== "demo" && <div className="mt-10">
               <TagManager tags={browse.tags} onChanged={() => void browse.refresh()} />
-            </div>
+            </div>}
           </>
         )}
 

@@ -9,7 +9,7 @@ import type {
   TagSummary,
   WishlistItem,
 } from "./types";
-import { boundedFetch } from "./lib/api";
+import { boundedFetch, profileHeaders } from "./lib/api";
 import { responseErrorText } from "./lib/apiError";
 import { copy } from "./copy";
 import {
@@ -27,13 +27,11 @@ import {
  */
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const profileId = typeof window !== "undefined" ? window.localStorage.getItem("profileId") : null;
   const headers: Record<string, string> = {};
   if (options?.body) headers["Content-Type"] = "application/json";
-  if (profileId) headers["x-profile-id"] = profileId;
   const response = await boundedFetch(url, {
     ...options,
-    headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) },
+    headers: { ...profileHeaders(), ...headers, ...(options?.headers as Record<string, string> | undefined) },
   });
   if (!response.ok) {
     throw new Error(await responseErrorText(response));

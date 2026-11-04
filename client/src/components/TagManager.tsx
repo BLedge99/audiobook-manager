@@ -3,6 +3,7 @@ import { GitMerge, Plus, Tag as TagIcon, Trash2 } from "lucide-react";
 import type { TagSummary } from "../types";
 import { copy } from "../copy";
 import { responseErrorText } from "../lib/apiError";
+import { profileHeaders } from "../lib/api";
 import { Btn, Field, MachineHead, Notice } from "../ui/primitives";
 
 /**
@@ -16,10 +17,8 @@ import { Btn, Field, MachineHead, Notice } from "../ui/primitives";
  */
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const profileId = window.localStorage.getItem("profileId");
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...profileHeaders() };
   if (options?.body) headers["Content-Type"] = "application/json";
-  if (profileId) headers["x-profile-id"] = profileId;
   const response = await fetch(url, { ...options, headers: { ...headers, ...(options?.headers as Record<string, string>) } });
   if (!response.ok) {
     throw new Error(await responseErrorText(response));

@@ -21,10 +21,12 @@ export interface OAuthProvider {
   authorizationUrl: string;
   tokenUrl: string;
   userInfoUrl: string;
-  /** OIDC-style scope for Google (`openid profile email`); GitHub uses `read:user`. */
+  /** OIDC-style scope for Google; GitHub requests read:user plus user:email. */
   scope: string;
   /** OIDC issuer for Google; the identity source is the signed userinfo endpoint. */
   issuer?: string;
+  /** Fixed callback registered with the provider; required behind proxies. */
+  redirectUri?: string;
 }
 
 export interface OAuthConfig {
@@ -51,6 +53,7 @@ export function oauthConfigFromEnv(
       userInfoUrl: "https://openidconnect.googleapis.com/v1/userinfo",
       scope: "openid profile email",
       issuer: "https://accounts.google.com",
+      redirectUri: env.GOOGLE_REDIRECT_URI?.trim(),
     });
   }
 
@@ -62,7 +65,8 @@ export function oauthConfigFromEnv(
       authorizationUrl: "https://github.com/login/oauth/authorize",
       tokenUrl: "https://github.com/login/oauth/access_token",
       userInfoUrl: "https://api.github.com/user",
-      scope: "read:user",
+      scope: "read:user user:email",
+      redirectUri: env.GITHUB_REDIRECT_URI?.trim(),
     });
   }
 
@@ -149,7 +153,7 @@ export async function exchangeAuthorizationCode(
 export interface OAuthIdentity {
   sub: string;
   email: string | null;
-  /** Google: the IdP-reported verification flag. GitHub: email presence. */
+  /** Provider-confirmed verification; GitHub primary verified email is fetched separately. */
   emailVerified: boolean;
   name: string | null;
 }
@@ -176,10 +180,21 @@ export async function fetchOAuthIdentity(
     };
   }
 
-  const login = typeof json.login === "string" ? json.login : "";
+  const login = typeof json.id === "number" ? String(json.id) : "";
   const name = typeof json.name === "string" && json.name ? json.name : login;
-  const email = typeof json.email === "string" ? json.email : null;
-  return { sub: login, email, emailVerified: email !== null, name };
+  let email: string | null = null;
+  let emailVerified = false;
+  const emailResponse = await fetch("https://api.github.com/user/emails", {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/vnd.github+json" },
+  });
+  if (!emailResponse.ok) throw new Error("oauth_identity_unavailable");
+  const emails = await emailResponse.json() as Array<{ email?: unknown; primary?: unknown; verified?: unknown }>;
+  const verifiedPrimary = emails.find((entry) => entry.primary === true && entry.verified === true && typeof entry.email === "string");
+  if (verifiedPrimary && typeof verifiedPrimary.email === "string") {
+    email = verifiedPrimary.email;
+    emailVerified = true;
+  }
+  return { sub: login, email, emailVerified, name };
 }
 
 /** Constant-time string comparison, matching the password-verification posture. */

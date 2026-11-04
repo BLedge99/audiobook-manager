@@ -374,7 +374,7 @@ model Profile {
   // of it, not a second identity table.
   oauthProvider   String?  // "google" | "github" | null
   oauthProviderId String?
-  email          String?
+  email          String?   @unique
 
   // Spec 27: does this profile receive newly scanned books automatically?
   //

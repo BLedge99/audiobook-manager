@@ -432,6 +432,7 @@ export async function registerPasskeyRoutes(
   auth: AuthService,
   options: RegisterAuthOptions,
 ): Promise<void> {
+  const demoMode = () => (options.accountExperienceResolver?.() ?? options.accountExperience) === "demo";
   app.post<{ Body: { profileId?: number } }>("/api/auth/passkeys/login/options", {
     schema: {
       body: {
@@ -441,6 +442,7 @@ export async function registerPasskeyRoutes(
       },
     },
   }, async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
     if (!passkeys.enabled) return fail(reply, 503, "passkey_not_configured");
     try {
       return await passkeys.loginOptions(request.body?.profileId ?? null);
@@ -462,6 +464,7 @@ export async function registerPasskeyRoutes(
       },
     },
     async (request, reply) => {
+      if (demoMode()) return fail(reply, 404, "not_found");
       if (!passkeys.enabled) return fail(reply, 503, "passkey_not_configured");
       try {
         const result = await passkeys.verifyLogin(
@@ -476,7 +479,7 @@ export async function registerPasskeyRoutes(
         } catch {
           /* expired rows are never a correctness dependency */
         }
-        return loginPayload(result);
+        return loginPayload(result, demoMode());
       } catch (error) {
         return sendAuthFailure(reply, error);
       }
@@ -484,6 +487,7 @@ export async function registerPasskeyRoutes(
   );
 
   app.post("/api/auth/passkeys/register/options", async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
     if (!passkeys.enabled) return fail(reply, 503, "passkey_not_configured");
     const context = request.auth;
     if (!context?.profile) return fail(reply, 403, "forbidden");
@@ -510,6 +514,7 @@ export async function registerPasskeyRoutes(
       },
     },
     async (request, reply) => {
+      if (demoMode()) return fail(reply, 404, "not_found");
       if (!passkeys.enabled) return fail(reply, 503, "passkey_not_configured");
       const context = request.auth;
       if (!context?.profile) return fail(reply, 403, "forbidden");
@@ -529,6 +534,7 @@ export async function registerPasskeyRoutes(
   );
 
   app.get("/api/auth/passkeys", async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
     if (!request.auth?.profile) return fail(reply, 403, "forbidden");
     if (!passkeys.enabled) return { passkeys: [], configured: false };
     return {
@@ -546,6 +552,7 @@ export async function registerPasskeyRoutes(
       },
     },
   }, async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
     if (!request.auth?.profile) return fail(reply, 403, "forbidden");
     if (!passkeys.enabled) return fail(reply, 503, "passkey_not_configured");
     try {

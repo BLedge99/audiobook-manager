@@ -213,8 +213,20 @@ export class AuthService {
         codeVerifier: input.codeVerifier,
       });
 
-      const identity = await fetchOAuthIdentity(input.provider, token.accessToken);
-      if (input.provider.id === "google" && !identity.emailVerified) {
+      let identity: OAuthIdentity;
+      try {
+        identity = await fetchOAuthIdentity(input.provider, token.accessToken);
+      } catch (error) {
+        if (error instanceof Error && error.message === "oauth_identity_unavailable") {
+          throw new AuthFailure(502, "oauth_identity_unavailable");
+        }
+        throw error;
+      }
+      if (!identity.sub || identity.sub.length > 255) throw new AuthFailure(401, "oauth_identity_invalid");
+      if (input.provider.id === "google" && (!identity.email || !identity.emailVerified)) {
+        throw new AuthFailure(403, "oauth_email_not_verified");
+      }
+      if (input.provider.id === "github" && identity.email && !identity.emailVerified) {
         throw new AuthFailure(403, "oauth_email_not_verified");
       }
 
@@ -285,12 +297,6 @@ export class AuthService {
     if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new AuthFailure(400, "request_invalid");
     }
-    const existing = await this.prisma.profile.findFirst({ where: { email } });
-    if (existing) {
-      await hashPassword(input.password);
-      this.recordSignupFailure(input.ip);
-      throw new AuthFailure(409, "account_creation_unavailable");
-    }
     if (input.password.length < 12 || input.password.length > 128) {
       throw new AuthFailure(400, input.password.length < 12 ? "password_too_short" : "password_too_long", {
         [input.password.length < 12 ? "minLength" : "maxLength"]: input.password.length < 12 ? 12 : 128,
@@ -298,22 +304,18 @@ export class AuthService {
     }
     this.assertPassword(input.password, "");
     const passwordHash = await hashPassword(input.password);
-    const localPart = email.split("@")[0] || "Listener";
-    const baseName = `Listener ${localPart.slice(0, 32)}`;
-    let name = baseName;
-    for (let suffix = 2; await this.prisma.profile.findUnique({ where: { name } }); suffix += 1) {
-      name = `${baseName} ${suffix}`;
+    const name = `account-${randomUUID()}`;
+    let profile: Profile;
+    try {
+      profile = await this.prisma.profile.create({
+        data: { name, email, role: "member", passwordHash, passwordUpdatedAt: this.now(), followsServerLibrary: true },
+      });
+    } catch {
+      // The unique email constraint is the concurrency-safe duplicate check.
+      // Same generic response for duplicate registration; do not reveal which.
+      this.recordSignupFailure(input.ip);
+      throw new AuthFailure(409, "account_creation_unavailable");
     }
-    const profile = await this.prisma.profile.create({
-      data: {
-        name,
-        email,
-        role: "member",
-        passwordHash,
-        passwordUpdatedAt: this.now(),
-        followsServerLibrary: true,
-      },
-    });
     this.accountSignups.delete(input.ip);
     return this.createSession(profile.id, "profile", input.meta);
   }
@@ -327,12 +329,20 @@ export class AuthService {
     const byProvider = await this.prisma.profile.findFirst({
       where: { oauthProvider: provider.id, oauthProviderId: identity.sub },
     });
-    if (byProvider) return byProvider;
+    if (byProvider) {
+      if (byProvider.disabled) throw new AuthFailure(403, "account_disabled");
+      return byProvider;
+    }
 
-    const byEmail = identity.email
+    const byEmail = identity.email && identity.emailVerified
       ? await this.prisma.profile.findFirst({ where: { email: identity.email.toLowerCase() } })
       : null;
-    if (byEmail) return byEmail;
+    if (byEmail) {
+      if (byEmail.disabled) throw new AuthFailure(403, "account_disabled");
+      // Do not silently attach a provider identity to an existing account.
+      // Account-linking UX and proof of control for a second credential are deferred.
+      throw new AuthFailure(409, "account_linking_required");
+    }
 
     const baseName = (identity.name ?? "").trim() || identity.email?.split("@")[0] || `Listener ${provider.id}`;
     let name = baseName;
