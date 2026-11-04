@@ -437,7 +437,6 @@ export async function registerAuthRoutes(
    * touching browser-accessible storage.
    */
   app.get<{ Params: { provider: string } }>("/api/auth/:provider/authorize", async (request, reply) => {
-    console.error("OAUTH AUTHORIZE CALLED", { enabled: auth.oauth.enabled, provider: request.params.provider });
     const provider = auth.oauth.enabled ? oauthProviderById(auth.oauth, request.params.provider) : null;
     if (!provider) return fail(reply, 404, "not_found");
     const { codeVerifier, codeChallenge } = createPkcePair();
