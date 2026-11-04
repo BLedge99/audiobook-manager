@@ -740,7 +740,9 @@ describe("production demo account policy", () => {
   });
 
   it("advertises demo mode and hides profile lists and management endpoints", async () => {
-    expect((await demoApp.inject({ method: "GET", url: "/api/config" })).json()).toEqual({ accountExperience: "demo" });
+    const config = (await demoApp.inject({ method: "GET", url: "/api/config" })).json();
+    expect(config.accountExperience).toBe("demo");
+    expect(Array.isArray(config.oauthProviders)).toBe(true);
     expect((await demoApp.inject({ method: "GET", url: "/api/profiles" })).statusCode).toBe(401);
     expect((await demoApp.inject({ method: "GET", url: "/api/auth/accounts" })).statusCode).toBe(404);
     const signup = await demoApp.inject({ method: "POST", url: "/api/auth/signup", payload: { email: `demo-${Date.now()}@example.test`, password: "long-enough-demo-pass-9" } });
@@ -752,6 +754,10 @@ describe("production demo account policy", () => {
     expect(session.statusCode).toBe(200);
     expect(session.json()).not.toHaveProperty("profile.id");
     expect(session.json()).not.toHaveProperty("profile.name");
+    expect((await demoApp.inject({ method: "POST", url: "/api/auth/passkeys/login/options", payload: {} })).statusCode).toBe(404);
+    expect((await demoApp.inject({ method: "POST", url: "/api/auth/devices/session", payload: { secret: "some-long-device-secret-value" } })).statusCode).toBe(404);
+    expect((await demoApp.inject({ method: "GET", url: "/api/enrichment/status", headers: { cookie } })).statusCode).toBe(404);
+    expect((await demoApp.inject({ method: "GET", url: "/api/library-roots", headers: { cookie } })).statusCode).toBe(404);
     const scopes = await Promise.all([
       demoApp.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie, "x-profile-id": String(otherProfileId) } }),
       demoApp.inject({ method: "GET", url: "/api/server-library", headers: { cookie, "x-profile-id": String(otherProfileId) } }),

@@ -199,7 +199,7 @@ function App() {
           setAuthed(false);
           setSession(null);
           setSessionToken(null);
-          if (config.accountExperience !== "demo") setActiveProfileId(null);
+          setActiveProfileId(null);
           setProfileId(null);
           return;
         }
@@ -216,6 +216,9 @@ function App() {
         if (config.accountExperience === "demo") {
           setProfileId(null);
           setActiveProfileId(null);
+          if (info.profile) {
+            setSession({ ...info, profile: { email: info.profile.email }, role: "member" });
+          }
         } else if (info.profile) {
           const id = String(info.profile.id);
           setProfileId(id);

@@ -3,6 +3,7 @@ import { ArrowLeft, Fingerprint, KeyRound, LoaderCircle, UserRound } from "lucid
 import { copy } from "../copy";
 import {
   boundedFetch,
+  fetchAppConfig,
   setActiveProfileId,
   setSessionToken,
 } from "../lib/api";
@@ -73,6 +74,7 @@ export function AccountGate({ onSuccess, accountExperience = "household" }: {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passkeysAvailable, setPasskeysAvailable] = useState(() => passkeysSupported());
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const [oauthProviders, setOAuthProviders] = useState<string[]>([]);
 
   useEffect(() => { void biometricVault.available().then(setBiometricsAvailable); }, []);
 
@@ -90,8 +92,12 @@ export function AccountGate({ onSuccess, accountExperience = "household" }: {
         if (accountExperience === "demo") {
           if (alive) {
             setAccounts([]);
+            const config = await fetchAppConfig();
+            setOAuthProviders(config.oauthProviders ?? []);
             const authError = new URLSearchParams(window.location.search).get("auth_error");
-            setMode(authError ? { kind: "email" } : { kind: "list" });
+            const signup = new URLSearchParams(window.location.search).get("account_action") === "signup";
+            if (signup) setEmailSignup(true);
+            setMode(authError || signup ? { kind: "email" } : { kind: "list" });
           }
           return;
         }
@@ -459,12 +465,12 @@ export function AccountGate({ onSuccess, accountExperience = "household" }: {
           {!loading && mode.kind === "list" && accountExperience === "demo" && (
             <>
               <div className="mt-5 grid min-w-0 gap-3">
-                <button type="button" onClick={() => startOAuth("google")} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                <a href="/api/auth/google/authorize" className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
                   {copy.login.oauthGoogleAction}
-                </button>
-                <button type="button" onClick={() => startOAuth("github")} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                </a>
+                <a href="/api/auth/github/authorize" className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
                   {copy.login.oauthGithubAction}
-                </button>
+                </a>
                 <button type="button" onClick={() => { setError(undefined); setMode({ kind: "email" }); }} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
                   {copy.login.emailAction}
                 </button>
@@ -525,20 +531,24 @@ export function AccountGate({ onSuccess, accountExperience = "household" }: {
               </div>
 
               <div className="mt-5 grid min-w-0 gap-3">
-                <button
-                  type="button"
-                  onClick={() => startOAuth("google")}
-                  className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
-                >
-                  {copy.login.oauthGoogleAction}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => startOAuth("github")}
-                  className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
-                >
-                  {copy.login.oauthGithubAction}
-                </button>
+                {oauthProviders.includes("google") && (
+                  <button
+                    type="button"
+                    onClick={() => startOAuth("google")}
+                    className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
+                  >
+                    {copy.login.oauthGoogleAction}
+                  </button>
+                )}
+                {oauthProviders.includes("github") && (
+                  <button
+                    type="button"
+                    onClick={() => startOAuth("github")}
+                    className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
+                  >
+                    {copy.login.oauthGithubAction}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -753,6 +763,11 @@ export function AccountGate({ onSuccess, accountExperience = "household" }: {
               {!emailSignup && accountExperience === "demo" && (
                 <button type="button" onClick={() => setEmailSignup(true)} className="text-sm font-bold text-cobalt-ink underline">
                   {copy.login.emailCreateAction}
+                </button>
+              )}
+              {emailSignup && accountExperience === "demo" && (
+                <button type="button" onClick={() => setEmailSignup(false)} className="text-sm font-bold text-cobalt-ink underline">
+                  {copy.login.emailAction}
                 </button>
               )}
               <button

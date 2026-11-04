@@ -269,6 +269,25 @@ export async function registerAuthRoutes(
     };
   });
 
+  /**
+   * The public capability list the sign-in surface needs.
+   *
+   * The client must not offer a provider that the server cannot complete: an
+   * "Sign in with Google" button that answers 404 is a dead end, and the
+   * person cannot tell that from a misconfigured app. The provider list is
+   * therefore part of the public config, and it is derived from the same
+   * `OAuthConfig` the callback uses -- so it can never disagree with it.
+   */
+  app.get("/api/auth/providers", async (_request, reply) => {
+    return {
+      providers: auth.oauth.enabled
+        ? auth.oauth.providers.map((provider) => ({ id: provider.id }))
+        : [],
+      emailSignUpAllowed: options.emailSignUpAllowed === true,
+      emailSignInAllowed: true,
+    };
+  });
+
   // Public on purpose: a client must be able to clear a stale cookie/token even
   // when the session has already expired.
   app.post("/api/auth/logout", async (request, reply) => {

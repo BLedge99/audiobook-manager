@@ -69,6 +69,7 @@ function isPublicApiPath(path: string): boolean {
     path === "/api/config" ||
     path === "/api/auth/login" ||
     path === "/api/auth/signup" ||
+    path === "/api/auth/providers" ||
     path === "/api/auth/accounts" ||
     path === "/api/auth/claim" ||
     path === "/api/auth/logout" ||
@@ -252,6 +253,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const token = sessionTokenFromRequest(request);
     if (token) request.auth = await auth.validate(token);
 
+    // A pre-demo household/break-glass session has no account scope. Never let
+    // it pass as an authenticated demo listener (for example in a browser that
+    // retained the old household cookie during deployment).
+    if (accountExperience === "demo" && request.auth?.via === "household") {
+      request.auth = null;
+    }
+
+    if (accountExperience === "demo" && isAdminRoute(request.method, path) && isPublicApiPath(path)) {
+      return fail(reply, 404, "not_found");
+    }
     if (isPublicApiPath(path)) return;
     if (!request.auth) return fail(reply, 401, "auth_required");
     if (accountExperience === "demo" && isAdminRoute(request.method, path)) {
@@ -268,7 +279,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     accountExperienceResolver: () => accountExperience,
     emailSignUpAllowed: accountExperience === "demo",
   });
-  await registerPasskeyRoutes(app, passkeys, auth, { secureCookie });
+  await registerPasskeyRoutes(app, passkeys, auth, {
+    secureCookie,
+    accountExperience,
+    accountExperienceResolver: () => accountExperience,
+  });
 
   function parseIdParam(raw: string | undefined): number | null {
     const id = Number(raw);
@@ -334,7 +349,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }
 
   app.get("/api/health", async () => ({ status: "ok" }));
-  app.get("/api/config", async () => ({ accountExperience }));
+  app.get("/api/config", async () => ({
+    accountExperience,
+    oauthProviders: auth.oauth.enabled
+      ? auth.oauth.providers.map((provider) => provider.id)
+      : [],
+  }));
 
   // Serve the built client (production single-origin). In dev the Vite dev
   // server runs separately on :5173, so this only kicks in when client/dist exists.
@@ -419,7 +439,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const profileId = accountExperience === "demo"
       ? requireAccountProfileId(request, reply)
       : optionalProfileId(request);
-    if (profileId === null) return fail(reply, 400, "profile_required");
+    if (profileId === null) {
+      return accountExperience === "demo" && reply.sent ? undefined : fail(reply, accountExperience === "demo" ? 401 : 400, accountExperience === "demo" ? "auth_required" : "profile_required");
+    }
     if (!mediaTokenSecret || Buffer.byteLength(mediaTokenSecret, "utf8") < 32) {
       return fail(reply, 503, "media_token_not_configured");
     }
@@ -1317,6 +1339,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.post<{ Params: { id: string } }>("/api/audiobooks/:id/metadata/reset", {
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
+    if (accountExperience === "demo") return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });

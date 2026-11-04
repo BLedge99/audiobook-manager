@@ -79,6 +79,7 @@ export interface SessionInfo {
 
 export interface AppConfig {
   accountExperience: "household" | "demo";
+  oauthProviders?: string[];
 }
 
 export function setAccountExperience(experience: "household" | "demo"): void {
@@ -88,11 +89,14 @@ export function setAccountExperience(experience: "household" | "demo"): void {
 export async function fetchAppConfig(): Promise<AppConfig> {
   try {
     const response = await boundedFetch("/api/config");
-    if (!response.ok) return { accountExperience: "household" };
+    if (!response.ok) return { accountExperience: "household", oauthProviders: [] };
     const config = (await response.json()) as Partial<AppConfig>;
-    return { accountExperience: config.accountExperience === "demo" ? "demo" : "household" };
+    return {
+      accountExperience: config.accountExperience === "demo" ? "demo" : "household",
+      oauthProviders: Array.isArray(config.oauthProviders) ? config.oauthProviders : [],
+    };
   } catch {
-    return { accountExperience: "household" };
+    return { accountExperience: "household", oauthProviders: [] };
   }
 }
 

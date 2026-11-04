@@ -131,6 +131,30 @@ describe("AccountGate", () => {
     expect(getActiveProfileId()).toBe("7");
   });
 
+  it("offers a direct email sign-up route in demo mode without fetching household profiles", async () => {
+    const fetchMock = mockFetch({
+      "/api/auth/signup": () => json({ ok: true, token: "demo-token" }),
+    });
+    const onSuccess = vi.fn();
+    render(<AccountGate accountExperience="demo" onSuccess={onSuccess} />);
+
+    expect(await screen.findByRole("link", { name: copy.login.oauthGoogleAction })).toHaveAttribute("href", "/api/auth/google/authorize");
+    expect(screen.getByRole("link", { name: copy.login.oauthGithubAction })).toHaveAttribute("href", "/api/auth/github/authorize");
+    fireEvent.click(screen.getByRole("button", { name: copy.login.emailCreateAction }));
+    fireEvent.change(screen.getByLabelText(copy.login.emailLabel), { target: { value: "new@example.test" } });
+    fireEvent.change(screen.getByLabelText(copy.login.passwordLabel), { target: { value: "long-enough-demo-pass-9" } });
+    fireEvent.click(screen.getByRole("button", { name: copy.login.emailCreateSubmit }));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/auth/accounts"))).toBe(false);
+  });
+
+  it("opens email account creation directly from the demo sign-in URL", async () => {
+    window.history.replaceState({}, "", "/?account_action=signup");
+    render(<AccountGate accountExperience="demo" onSuccess={() => undefined} />);
+    expect(await screen.findByRole("heading", { name: copy.login.emailCreateHeading })).toBeInTheDocument();
+    window.history.replaceState({}, "", "/");
+  });
+
   it("opens the claim form for a profile with no password", async () => {
     mockFetch({
       "/api/auth/claim": () =>
