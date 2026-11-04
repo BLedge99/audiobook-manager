@@ -442,7 +442,7 @@ export async function registerAuthRoutes(
     const { codeVerifier, codeChallenge } = createPkcePair();
     const state = randomBytes(16).toString("hex");
     const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
-    reply
+    return reply
       .setCookie(OAUTH_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/api/auth", maxAge: 600 })
       .setCookie("oauth_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/api/auth", maxAge: 600 })
       .redirect(buildAuthorizeUrl(provider, { redirectUri, state, codeChallenge }));
