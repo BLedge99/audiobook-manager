@@ -83,6 +83,7 @@ export class AuthService {
   private readonly now: () => Date;
   private readonly ipFailures = new Map<string, { count: number; resetAt: number }>();
   private readonly oauthFailures = new Map<string, { count: number; resetAt: number }>();
+  private readonly accountSignups = new Map<string, { count: number; resetAt: number }>();
 
   constructor(options: AuthServiceOptions) {
     this.prisma = options.prisma;
@@ -270,6 +271,50 @@ export class AuthService {
       where: { id: profile.id },
       data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now() },
     });
+    return this.createSession(profile.id, "profile", input.meta);
+  }
+
+  async signUpWithEmail(input: {
+    email: string;
+    password: string;
+    meta: SessionMetadata;
+    ip: string;
+  }): Promise<LoginResult> {
+    this.checkSignupRate(input.ip);
+    const email = input.email.trim().toLowerCase();
+    if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new AuthFailure(400, "request_invalid");
+    }
+    const existing = await this.prisma.profile.findFirst({ where: { email } });
+    if (existing) {
+      await hashPassword(input.password);
+      this.recordSignupFailure(input.ip);
+      throw new AuthFailure(409, "account_creation_unavailable");
+    }
+    if (input.password.length < 12 || input.password.length > 128) {
+      throw new AuthFailure(400, input.password.length < 12 ? "password_too_short" : "password_too_long", {
+        [input.password.length < 12 ? "minLength" : "maxLength"]: input.password.length < 12 ? 12 : 128,
+      });
+    }
+    this.assertPassword(input.password, "");
+    const passwordHash = await hashPassword(input.password);
+    const localPart = email.split("@")[0] || "Listener";
+    const baseName = `Listener ${localPart.slice(0, 32)}`;
+    let name = baseName;
+    for (let suffix = 2; await this.prisma.profile.findUnique({ where: { name } }); suffix += 1) {
+      name = `${baseName} ${suffix}`;
+    }
+    const profile = await this.prisma.profile.create({
+      data: {
+        name,
+        email,
+        role: "member",
+        passwordHash,
+        passwordUpdatedAt: this.now(),
+        followsServerLibrary: true,
+      },
+    });
+    this.accountSignups.delete(input.ip);
     return this.createSession(profile.id, "profile", input.meta);
   }
 
@@ -707,5 +752,27 @@ export class AuthService {
 
   private clearOAuthRate(ip: string): void {
     this.oauthFailures.delete(ip);
+  }
+
+  private checkSignupRate(ip: string): void {
+    const entry = this.accountSignups.get(ip);
+    if (!entry) return;
+    const now = this.now().getTime();
+    if (now >= entry.resetAt) {
+      this.accountSignups.delete(ip);
+      return;
+    }
+    if (entry.count >= 5) {
+      throw new AuthFailure(429, "oauth_rate_limited", {
+        retryAfterSeconds: Math.ceil((entry.resetAt - now) / 1000),
+      });
+    }
+  }
+
+  private recordSignupFailure(ip: string): void {
+    const now = this.now().getTime();
+    const entry = this.accountSignups.get(ip);
+    if (!entry || now >= entry.resetAt) this.accountSignups.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
+    else entry.count += 1;
   }
 }

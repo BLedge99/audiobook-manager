@@ -8,6 +8,8 @@ import {
   needsServerUrl,
   onServerUnreachable,
   fetchSession,
+  fetchAppConfig,
+  setAccountExperience as setApiAccountExperience,
   getActiveProfileId,
   setActiveProfileId,
   setSessionToken,
@@ -28,6 +30,7 @@ import { biometricVault } from "./lib/biometricVault";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
+import { AccountMenu } from "./components/AccountMenu";
 import { ReviewQueue } from "./components/ReviewQueue";
 import { SearchBar } from "./components/SearchBar";
 import { ServerLibrary } from "./components/ServerLibrary";
@@ -84,6 +87,7 @@ function Mark() {
 function App() {
   /** The server-derived identity (spec 28); null until the probe resolves. */
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [accountExperience, setAccountExperience] = useState<"household" | "demo">("household");
   const canManageLibrary = session?.role === "admin";
   const library = useLibrary();
   const {
@@ -121,7 +125,9 @@ function App() {
   const [serverReachable, setServerReachable] = useState<boolean>();
   const [profileId, setProfileId] = useState<string | null>(() => getActiveProfileId());
   /** The session profile is authoritative; localStorage is the break-glass hint. */
-  const activeProfileId = session?.profile ? String(session.profile.id) : profileId;
+  const activeProfileId = accountExperience === "demo"
+    ? (session?.profile?.id ? String(session.profile.id) : null)
+    : session?.profile ? String(session.profile.id) : profileId;
   /** A probe in flight, so a failing probe cannot trigger another one. */
   const probeInFlight = useRef(false);
   /**
@@ -174,7 +180,10 @@ function App() {
     if (probeInFlight.current) return;
     probeInFlight.current = true;
     try {
-      const probe = await probeServerRequest();
+        const config = await fetchAppConfig();
+        setAccountExperience(config.accountExperience);
+        setApiAccountExperience(config.accountExperience);
+        const probe = await probeServerRequest();
         setServerReachable(probe.reachable);
         if (probe.reachable) {
           setBypassServerSetup(false);
@@ -183,14 +192,14 @@ function App() {
           setAuthed(false);
           // AccountGate can persist a profile immediately before this probe
           // fails. Refresh the in-memory hint so offline sign-in can continue.
-          setProfileId(getActiveProfileId());
+          setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
           return;
         }
         if (!probe.authed) {
           setAuthed(false);
           setSession(null);
           setSessionToken(null);
-          setActiveProfileId(null);
+          if (config.accountExperience !== "demo") setActiveProfileId(null);
           setProfileId(null);
           return;
         }
@@ -207,15 +216,15 @@ function App() {
         if (info.profile) {
           const id = String(info.profile.id);
           setProfileId(id);
-          setActiveProfileId(id);
+          if (config.accountExperience !== "demo") setActiveProfileId(id);
         } else if (info.via === "household") {
-          setProfileId(getActiveProfileId());
+          setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
         }
     } catch (error) {
       console.error("Could not complete server probe.", error);
       setServerReachable(false);
       setAuthed(false);
-      setProfileId(getActiveProfileId());
+      setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
     } finally {
       probeInFlight.current = false;
     }
@@ -699,8 +708,9 @@ function App() {
   if (serverReachable && authed === false) {
     return (
       <AccountGate
+        accountExperience={accountExperience}
         onSuccess={() => {
-          setProfileId(getActiveProfileId());
+          setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
           void (async () => {
             await refresh();
             await probeServer();
@@ -716,7 +726,7 @@ function App() {
   // saved or restored, so pick (or create) one before browsing. A normal
   // profile session always has one; this is the break-glass household path
   // during the migration.
-  if (serverReachable && authed && !activeProfileId) {
+  if (serverReachable && authed && !activeProfileId && accountExperience !== "demo") {
     return <ProfileGate onSuccess={() => setProfileId(getActiveProfileId())} />;
   }
 
@@ -764,7 +774,7 @@ function App() {
             </IconBtn>
             {/* The profile list lives on the server, so offline the switcher has
                 nothing to offer and would open a panel that cannot fill. */}
-            {!offline && <ProfileSwitcher />}
+            {!offline && (accountExperience === "demo" ? <AccountMenu session={session} /> : <ProfileSwitcher />)}
           </div>
         </div>
 

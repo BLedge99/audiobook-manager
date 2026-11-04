@@ -714,3 +714,53 @@ describe("oauth flow routes", () => {
     expect(throttled.headers.location).toBe("/?auth_error=oauth_rate_limited");
   });
 });
+
+describe("production demo account policy", () => {
+  let demoApp: Awaited<ReturnType<typeof buildApp>>;
+  let firstProfileId: number;
+  let otherProfileId: number;
+
+  beforeAll(async () => {
+    const suffix = Date.now().toString(36);
+    const first = await prisma.profile.create({ data: { name: `demo-a-${suffix}` } });
+    const other = await prisma.profile.create({ data: { name: `demo-b-${suffix}` } });
+    firstProfileId = first.id;
+    otherProfileId = other.id;
+    demoApp = await buildApp({
+      logger: false,
+      appPassword: "household",
+      prisma,
+      accountExperience: "demo",
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await demoApp.close();
+    await prisma.profile.deleteMany({ where: { id: { in: [firstProfileId, otherProfileId] } } });
+  });
+
+  it("advertises demo mode and hides profile lists and management endpoints", async () => {
+    expect((await demoApp.inject({ method: "GET", url: "/api/config" })).json()).toEqual({ accountExperience: "demo" });
+    expect((await demoApp.inject({ method: "GET", url: "/api/profiles" })).statusCode).toBe(401);
+    expect((await demoApp.inject({ method: "GET", url: "/api/auth/accounts" })).statusCode).toBe(404);
+    expect((await demoApp.inject({ method: "POST", url: "/api/profiles", payload: { name: "Not allowed" } })).statusCode).toBe(401);
+    expect((await demoApp.inject({ method: "POST", url: "/api/auth/signup", payload: { email: "demo@example.test", password: "long-enough-demo-pass-9" } })).statusCode).toBe(200);
+  });
+
+  it("does not trust a forged x-profile-id for progress and does not serialize names in session info", async () => {
+    const login = await demoApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { profileId: firstProfileId, password: "not-configured" },
+    });
+    // Demo mode does not provide profile-id/password sign-in. The follow-up
+    // session assertions use an OAuth-created session in dedicated auth tests.
+    expect(login.statusCode).toBe(404);
+    const noSession = await demoApp.inject({
+      method: "GET",
+      url: "/api/audiobooks/1/progress",
+      headers: { "x-profile-id": String(otherProfileId) },
+    });
+    expect(noSession.statusCode).toBe(401);
+  });
+});

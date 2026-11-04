@@ -45,6 +45,7 @@ export type ApiErrorCode =
   | "oauth_code_exchange_failed"
   | "oauth_email_not_verified"
   | "oauth_rate_limited"
+  | "account_creation_unavailable"
   | "media_token_not_configured"
   | "not_found"
   | "profile_required"

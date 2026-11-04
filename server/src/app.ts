@@ -49,6 +49,8 @@ export interface BuildAppOptions {
   mediaTokenSecret?: string;
   /** External OAuth providers for production sign-in (spec 32 / ADR 023). */
   oauth?: OAuthConfig;
+  /** Production demo account surface; defaults to household for safety. */
+  accountExperience?: "household" | "demo";
 }
 
 /** Test seam for proving that the family listener has no admin surface. */
@@ -64,7 +66,9 @@ function isPublicApiPath(path: string): boolean {
   const isOAuthFlowPath = segments.length === 2 && (segments[1] === "authorize" || segments[1] === "callback");
   return (
     path === "/api/health" ||
+    path === "/api/config" ||
     path === "/api/auth/login" ||
+    path === "/api/auth/signup" ||
     path === "/api/auth/accounts" ||
     path === "/api/auth/claim" ||
     path === "/api/auth/logout" ||
@@ -77,6 +81,10 @@ function isPublicApiPath(path: string): boolean {
 function headerProfileId(request: FastifyRequest): number | null {
   const profileId = Number(request.headers["x-profile-id"]);
   return Number.isInteger(profileId) && profileId >= 1 ? profileId : null;
+}
+
+function accountExperienceFromEnv(value = process.env.ACCOUNT_EXPERIENCE): "household" | "demo" {
+  return value?.trim().toLowerCase() === "demo" ? "demo" : "household";
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -108,6 +116,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const recommendations = new RecommendationService(prisma);
   const appPassword = options.appPassword ?? process.env.APP_PASSWORD;
   const auth = new AuthService({ prisma, appPassword, oauth: options.oauth ?? oauthConfigFromEnv(), now: options.now });
+  const accountExperience = options.accountExperience ?? accountExperienceFromEnv();
   const passkeys = new PasskeyService({
     prisma,
     config: options.passkeyConfig ?? passkeyConfigFromEnv(),
@@ -247,7 +256,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   });
 
-  await registerAuthRoutes(app, auth, { secureCookie });
+  await registerAuthRoutes(app, auth, {
+    secureCookie,
+    accountExperience,
+    accountExperienceResolver: () => accountExperience,
+    emailSignUpAllowed: accountExperience === "demo",
+  });
   await registerPasskeyRoutes(app, passkeys, auth, { secureCookie });
 
   function parseIdParam(raw: string | undefined): number | null {
@@ -314,6 +328,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }
 
   app.get("/api/health", async () => ({ status: "ok" }));
+  app.get("/api/config", async () => ({ accountExperience }));
 
   // Serve the built client (production single-origin). In dev the Vite dev
   // server runs separately on :5173, so this only kicks in when client/dist exists.
@@ -341,6 +356,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   function optionalProfileId(request: FastifyRequest): number | null {
     const sessionProfileId = request.auth?.session.profileId ?? null;
     if (sessionProfileId !== null) return sessionProfileId;
+    if (accountExperience === "demo") return null;
     if (request.auth && request.auth.via !== "household") return null;
     const profileId = headerProfileId(request);
     return profileId;
@@ -1669,8 +1685,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // Progress (profile-scoped)
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/progress", async (request, reply) => {
-    const profileId = Number(request.headers["x-profile-id"]);
-    if (!Number.isInteger(profileId) || profileId < 1) return fail(reply, 400, "profile_required");
+    const profileId = requireProfileId(request);
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
     const row = await prisma.listeningHistory.findFirst({
@@ -1681,8 +1697,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.put<{ Params: { id: string }; Body: { position?: number; completed?: boolean } }>("/api/audiobooks/:id/progress", async (request, reply) => {
-    const profileId = Number(request.headers["x-profile-id"]);
-    if (!Number.isInteger(profileId) || profileId < 1) return fail(reply, 400, "profile_required");
+    const profileId = requireProfileId(request);
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
 
@@ -1708,8 +1724,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.post<{ Params: { id: string }; Body: { fromPosition?: number; toPosition?: number; speed?: number; startedAt?: string; endedAt?: string } }>("/api/audiobooks/:id/sessions", async (request, reply) => {
-    const profileId = Number(request.headers["x-profile-id"]);
-    if (!Number.isInteger(profileId) || profileId < 1) return fail(reply, 400, "profile_required");
+    const profileId = requireProfileId(request);
+    if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
     const toPosition = Number(request.body?.toPosition);
@@ -1738,8 +1754,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.get("/api/history", async (request, reply) => {
-    const profileId = Number(request.headers["x-profile-id"]);
-    if (!Number.isInteger(profileId) || profileId < 1) return fail(reply, 400, "profile_required");
+    const profileId = requireProfileId(request);
+    if (profileId === null) return fail(reply, 400, "profile_required");
     return prisma.playSession.findMany({ where: { profileId }, orderBy: { startedAt: "desc" }, take: 100 });
   });
 
@@ -1757,12 +1773,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     createdAt: true,
     followsServerLibrary: true,
   } as const;
-  app.get("/api/profiles", async () => prisma.profile.findMany({
-    orderBy: { createdAt: "asc" },
-    select: profileSummary,
-  }));
+  app.get("/api/profiles", async (request, reply) => {
+    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
+    return prisma.profile.findMany({ orderBy: { createdAt: "asc" }, select: profileSummary });
+  });
 
   app.post<{ Body: { name?: string; color?: string } }>("/api/profiles", async (request, reply) => {
+    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
     const name = request.body?.name?.trim();
     if (!name) return fail(reply, 400, "profile_name_required");
     const existing = await prisma.profile.findUnique({ where: { name } });
@@ -1779,6 +1798,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.delete<{ Params: { id: string } }>("/api/profiles/:id", async (request, reply) => {
+    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
     await prisma.profile.delete({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     return reply.code(204).send();
   });

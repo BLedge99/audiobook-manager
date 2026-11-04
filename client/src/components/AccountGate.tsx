@@ -55,7 +55,10 @@ function errorSentence(error: unknown): string {
  * The household password is still reachable, but it is a separate mode with its
  * own explanation: it is for setup and recovery, not the daily sign-in.
  */
-export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<void> }) {
+export function AccountGate({ onSuccess, accountExperience = "household" }: {
+  onSuccess: () => void | Promise<void>;
+  accountExperience?: "household" | "demo";
+}) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [loading, setLoading] = useState(true);
@@ -64,6 +67,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
 
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
+  const [emailSignup, setEmailSignup] = useState(false);
   const [householdPassword, setHouseholdPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -83,6 +87,14 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
     let alive = true;
     void (async () => {
       try {
+        if (accountExperience === "demo") {
+          if (alive) {
+            setAccounts([]);
+            const authError = new URLSearchParams(window.location.search).get("auth_error");
+            setMode(authError ? { kind: "email" } : { kind: "list" });
+          }
+          return;
+        }
         const res = await boundedFetch("/api/auth/accounts");
         if (!res.ok) {
           if (alive) setError(copy.account.loadFailed(res.status));
@@ -109,11 +121,11 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
     return () => {
       alive = false;
     };
-  }, []);
+  }, [accountExperience]);
 
   const finish = async (profileId: number | null, token: string | undefined) => {
     setSessionToken(token);
-    setActiveProfileId(profileId);
+    setActiveProfileId(accountExperience === "demo" ? null : profileId);
     if (profileId === null) lockOfflineCache();
     window.localStorage.removeItem(PENDING_PROFILE_KEY);
     await onSuccess();
@@ -348,7 +360,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
     setBusy(true);
     setError(undefined);
     try {
-      const res = await boundedFetch("/api/auth/login", {
+      const res = await boundedFetch(emailSignup ? "/api/auth/signup" : "/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -415,7 +427,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
       : mode.kind === "household"
         ? copy.account.householdHeading
         : mode.kind === "email"
-          ? copy.login.heading
+          ? emailSignup ? copy.login.emailCreateHeading : copy.login.heading
           : copy.profile.heading;
 
   return (
@@ -433,7 +445,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
                 : mode.kind === "password"
                   ? copy.account.passwordLabel(mode.account.name)
                   : mode.kind === "email"
-                    ? copy.login.emailIntro
+                    ? emailSignup ? copy.login.emailCreateHeading : copy.login.emailIntro
                     : copy.account.intro}
           </p>
 
@@ -444,7 +456,26 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
             </p>
           )}
 
-          {!loading && mode.kind === "list" && (
+          {!loading && mode.kind === "list" && accountExperience === "demo" && (
+            <>
+              <div className="mt-5 grid min-w-0 gap-3">
+                <button type="button" onClick={() => startOAuth("google")} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                  {copy.login.oauthGoogleAction}
+                </button>
+                <button type="button" onClick={() => startOAuth("github")} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                  {copy.login.oauthGithubAction}
+                </button>
+                <button type="button" onClick={() => { setError(undefined); setMode({ kind: "email" }); }} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                  {copy.login.emailAction}
+                </button>
+                <button type="button" onClick={() => { setEmailSignup(true); setError(undefined); setMode({ kind: "email" }); }} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                  {copy.login.emailCreateAction}
+                </button>
+              </div>
+            </>
+          )}
+
+          {!loading && mode.kind === "list" && accountExperience === "household" && (
             <>
               <div className="mt-5 grid min-w-0 gap-3">
                 {accounts.map((account, index) => (
@@ -615,7 +646,7 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
                 value={householdPassword}
                 onChange={(event) => setHouseholdPassword(event.target.value)}
                 placeholder={copy.login.passwordPlaceholder}
-                autoComplete="current-password"
+                autoComplete={emailSignup ? "new-password" : "current-password"}
               />
               <label htmlFor="claim-new" className="sr-only">
                 {copy.account.newPasswordLabel}
@@ -715,10 +746,15 @@ export function AccountGate({ onSuccess }: { onSuccess: () => void | Promise<voi
                 ) : (
                   <>
                     <KeyRound size={17} aria-hidden="true" />
-                    {copy.login.submit}
+                    {emailSignup ? copy.login.emailCreateSubmit : copy.login.submit}
                   </>
                 )}
               </Btn>
+              {!emailSignup && accountExperience === "demo" && (
+                <button type="button" onClick={() => setEmailSignup(true)} className="text-sm font-bold text-cobalt-ink underline">
+                  {copy.login.emailCreateAction}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={back}

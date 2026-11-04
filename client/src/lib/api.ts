@@ -55,10 +55,12 @@ let nativeSessionToken = "";
 
 /** The header the server accepts the session token in (see server `app.ts`). */
 export const SESSION_HEADER = "x-house-session";
+let accountExperience: "household" | "demo" = "household";
 
 export interface SessionProfile {
   id: number;
-  name: string;
+  name?: string;
+  email?: string | null;
   color?: string | null;
   role: "admin" | "member";
 }
@@ -73,6 +75,25 @@ export interface SessionInfo {
     passkeys: boolean;
     devices: boolean;
   };
+}
+
+export interface AppConfig {
+  accountExperience: "household" | "demo";
+}
+
+export function setAccountExperience(experience: "household" | "demo"): void {
+  accountExperience = experience;
+}
+
+export async function fetchAppConfig(): Promise<AppConfig> {
+  try {
+    const response = await boundedFetch("/api/config");
+    if (!response.ok) return { accountExperience: "household" };
+    const config = (await response.json()) as Partial<AppConfig>;
+    return { accountExperience: config.accountExperience === "demo" ? "demo" : "household" };
+  } catch {
+    return { accountExperience: "household" };
+  }
 }
 
 /**
@@ -471,7 +492,7 @@ export function installApiBaseUrl(): void {
 /** The profile header the server scopes progress and favourites by. */
 export function profileHeaders(): Record<string, string> {
   const profileId = getActiveProfileId();
-  return profileId ? { "x-profile-id": profileId } : {};
+  return profileId && accountExperience !== "demo" ? { "x-profile-id": profileId } : {};
 }
 
 /**
@@ -567,7 +588,7 @@ export function sessionHeaders(): Record<string, string> {
   const profileId = getActiveProfileId();
   return {
     ...(token ? { [SESSION_HEADER]: token } : {}),
-    ...(profileId ? { "x-profile-id": profileId } : {}),
+    ...(profileId && accountExperience !== "demo" ? { "x-profile-id": profileId } : {}),
   };
 }
 

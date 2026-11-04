@@ -20,6 +20,9 @@ import type { OAuthProvider } from "./oauth";
 export interface RegisterAuthOptions {
   /** `Secure` cookies are required once the web is served over HTTPS. */
   secureCookie: boolean;
+  accountExperience?: "household" | "demo";
+  accountExperienceResolver?: () => "household" | "demo";
+  emailSignUpAllowed?: boolean;
 }
 
 function publicProfile(profile: Profile) {
@@ -31,12 +34,12 @@ function publicProfile(profile: Profile) {
   };
 }
 
-export function loginPayload(result: LoginResult) {
+export function loginPayload(result: LoginResult, demoMode = false) {
   return {
     ok: true,
     token: result.token,
-    role: result.role,
-    profile: result.profile ? publicProfile(result.profile) : null,
+    role: demoMode ? "member" : result.role,
+    profile: result.profile ? (demoMode ? { email: result.profile.email } : publicProfile(result.profile)) : null,
     expiresAt: result.session.expiresAt,
   };
 }
@@ -106,6 +109,7 @@ export async function registerAuthRoutes(
   auth: AuthService,
   options: RegisterAuthOptions,
 ): Promise<void> {
+  const demoMode = () => (options.accountExperienceResolver?.() ?? options.accountExperience) === "demo";
   // The device secret is presented only after the OS biometric prompt has
   // released it from the native Vault. It is exchanged for an ordinary,
   // revocable profile session and is never returned again.
@@ -116,7 +120,7 @@ export async function registerAuthRoutes(
       const result = await auth.exchangeDeviceCredential(request.body.secret, metadata(request));
       setSessionCookie(reply, result.token, options);
       await cleanupAfterLogin(auth);
-      return loginPayload(result);
+      return loginPayload(result, demoMode());
     } catch (error) {
       return sendAuthFailure(reply, error);
     }
@@ -165,6 +169,7 @@ export async function registerAuthRoutes(
     },
   }, async (request, reply) => {
     if (!auth.enabled) return { token: "disabled", authDisabled: true };
+    if (demoMode() && !request.body.email) return fail(reply, 404, "not_found");
 
     try {
       const result = request.body.email
@@ -184,13 +189,46 @@ export async function registerAuthRoutes(
           : await auth.loginHousehold(request.body.password, metadata(request), request.ip);
       setSessionCookie(reply, result.token, options);
       await cleanupAfterLogin(auth);
-      return loginPayload(result);
+      return loginPayload(result, demoMode());
     } catch (error) {
       return sendAuthFailure(reply, error);
     }
   });
 
-  app.get("/api/auth/accounts", async () => auth.listAccounts());
+  app.get("/api/auth/accounts", async (_request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
+    return auth.listAccounts();
+  });
+
+  app.post<{ Body: { email: string; password: string } }>("/api/auth/signup", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          email: { type: "string", minLength: 3, maxLength: 254 },
+          password: { type: "string", minLength: 1, maxLength: 256 },
+        },
+        required: ["email", "password"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!options.emailSignUpAllowed) return fail(reply, 404, "not_found");
+    if (!auth.enabled) return fail(reply, 503, "auth_required");
+    try {
+      const result = await auth.signUpWithEmail({
+        email: request.body.email,
+        password: request.body.password,
+        meta: metadata(request),
+        ip: request.ip,
+      });
+      setSessionCookie(reply, result.token, options);
+      await cleanupAfterLogin(auth);
+      return loginPayload(result, demoMode());
+    } catch (error) {
+      return sendAuthFailure(reply, error);
+    }
+  });
 
   app.get("/api/auth/session", async (request, reply) => {
     if (!auth.enabled) {
@@ -211,8 +249,12 @@ export async function registerAuthRoutes(
     if (!context) return fail(reply, 401, "auth_required");
     return {
       authDisabled: false,
-      profile: context.profile ? publicProfile(context.profile) : null,
-      role: context.role,
+      profile: context.profile
+        ? demoMode()
+          ? { email: context.profile.email }
+          : publicProfile(context.profile)
+        : null,
+      role: demoMode() ? "member" : context.role,
       via: context.via,
       expiresAt: context.session.expiresAt,
       capabilities: {
@@ -248,6 +290,7 @@ export async function registerAuthRoutes(
       },
     },
     async (request, reply) => {
+      if (demoMode()) return fail(reply, 404, "not_found");
       try {
         const result = await auth.claim(
           request.body.profileId,
@@ -258,7 +301,7 @@ export async function registerAuthRoutes(
         );
         setSessionCookie(reply, result.token, options);
         await cleanupAfterLogin(auth);
-        return loginPayload(result);
+        return loginPayload(result, demoMode());
       } catch (error) {
         return sendAuthFailure(reply, error);
       }
@@ -332,6 +375,7 @@ export async function registerAuthRoutes(
       },
     },
     async (request, reply) => {
+      if (demoMode()) return fail(reply, 404, "not_found");
       const id = parseId(request.params.id);
       if (id === null) return fail(reply, 400, "invalid_id");
       try {

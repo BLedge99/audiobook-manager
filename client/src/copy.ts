@@ -508,6 +508,9 @@ export const copy = {
     emailLabel: "Email",
     emailPlaceholder: "Email",
     emailAction: "Sign in with email",
+    emailCreateAction: "Create an account with email",
+    emailCreateHeading: "Create your account",
+    emailCreateSubmit: "Create account",
   },
 
   /**
@@ -516,6 +519,9 @@ export const copy = {
    * the same thing.
    */
   account: {
+    demoAccount: "Demo account",
+    accountMenu: "Account menu",
+    signOut: "Sign out",
     intro: "Choose your profile, then enter its password.",
     passwordLabel: (name: string) => `${name}'s password`,
     passwordPlaceholder: "Profile password",
