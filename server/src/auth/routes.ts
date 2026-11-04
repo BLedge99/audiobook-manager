@@ -58,13 +58,8 @@ export function setSessionCookie(
   });
 }
 
-function clearSessionCookie(reply: FastifyReply, options?: RegisterAuthOptions): void {
-  reply.clearCookie(SESSION_COOKIE, {
-    path: "/",
-    httpOnly: true,
-    sameSite: options?.secureCookie ? "none" : "lax",
-    secure: options?.secureCookie,
-  });
+function clearSessionCookie(reply: FastifyReply): void {
+  reply.clearCookie(SESSION_COOKIE, { path: "/" });
 }
 
 function metadata(request: FastifyRequest) {
@@ -298,7 +293,7 @@ export async function registerAuthRoutes(
   app.post("/api/auth/logout", async (request, reply) => {
     const token = sessionTokenFromRequest(request);
     if (token) await auth.revokeToken(token);
-    clearSessionCookie(reply, options);
+    clearSessionCookie(reply);
     return { ok: true };
   });
 
@@ -468,16 +463,7 @@ export async function registerAuthRoutes(
     const stateCookieValue = request.cookies?.[OAUTH_STATE_COOKIE] ?? null;
     const codeVerifier = request.cookies?.["oauth_code_verifier"] ?? null;
 
-    console.log("[OAuth Callback] Start", {
-      provider: provider?.id,
-      hasCode: !!code,
-      hasState: !!state,
-      hasStateCookie: !!stateCookieValue,
-      hasCodeVerifier: !!codeVerifier,
-    });
-
     if (!provider || !code || !state || !codeVerifier) {
-      console.log("[OAuth Callback] Missing required params, redirecting with error");
       reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
       reply.clearCookie("oauth_code_verifier", { path: "/" });
       return reply.redirect("/?auth_error=oauth_state_mismatch");
@@ -485,7 +471,6 @@ export async function registerAuthRoutes(
 
     const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
     try {
-      console.log("[OAuth Callback] Calling signInWithOAuth");
       const result = await auth.signInWithOAuth({
         provider,
         code,
@@ -496,19 +481,15 @@ export async function registerAuthRoutes(
         meta: metadata(request),
         ip: request.ip,
       });
-      console.log("[OAuth Callback] signInWithOAuth succeeded, setting cookie and redirecting");
       reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
       reply.clearCookie("oauth_code_verifier", { path: "/" });
       setSessionCookie(reply, result.token, options);
       await cleanupAfterLogin(auth);
-      console.log("[OAuth Callback] Redirecting to /");
       return reply.redirect("/");
     } catch (error) {
-      console.log("[OAuth Callback] Error:", error instanceof Error ? error.message : error);
       reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
       reply.clearCookie("oauth_code_verifier", { path: "/" });
       if (error instanceof AuthFailure) {
-        console.log("[OAuth Callback] AuthFailure, redirecting with code:", error.code);
         return reply.redirect(`/?auth_error=${error.code}`);
       }
       throw error;
