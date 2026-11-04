@@ -75,11 +75,13 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [adding, setAdding] = React.useState(false);
   const [working, setWorking] = React.useState(false);
   const [uploadFiles, setUploadFiles] = React.useState<File[]>([]);
+  const [bookName, setBookName] = React.useState("");
   const [uploadNotice, setUploadNotice] = React.useState("");
-  const uploadInput = React.useRef<HTMLInputElement>(null);
+  const folderInput = React.useRef<HTMLInputElement>(null);
+  const filesInput = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => {
-    uploadInput.current?.setAttribute("webkitdirectory", "");
-    uploadInput.current?.setAttribute("directory", "");
+    folderInput.current?.setAttribute("webkitdirectory", "");
+    folderInput.current?.setAttribute("directory", "");
   }, []);
   const load = React.useCallback(async () => {
     try {
@@ -118,10 +120,10 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     setPath(""); setLabel(""); setAdding(false);
   }
   async function uploadSelectedFiles() {
-    if (!status?.storage.configured || !uploadFiles.length) return;
-    const rootNames = new Set(uploadFiles.map((file) => file.webkitRelativePath.split("/")[0]).filter(Boolean));
-    if (rootNames.size !== 1) { setError(copyAdmin.storage.folderRequired); return; }
-    const bookName = [...rootNames][0];
+    if (!status?.storage.configured || !uploadFiles.length || !bookName.trim()) {
+      setError(copyAdmin.storage.bookNameRequired);
+      return;
+    }
     setWorking(true);
     setError("");
     setUploadNotice("");
@@ -129,13 +131,14 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       for (const [index, file] of uploadFiles.entries()) {
         setUploadNotice(copyAdmin.storage.uploading(file.name, index + 1, uploadFiles.length));
         if (file.size > 50 * 1024 * 1024) throw new Error(copyAdmin.storage.fileTooLarge(file.name));
-        const parts = file.webkitRelativePath.split("/");
-        const relativePath = parts.slice(1).join("/") || file.name;
+        const relativePath = file.webkitRelativePath
+          ? file.webkitRelativePath.split("/").slice(1).join("/") || file.name
+          : file.name;
         const signedResponse = await fetch("/api/admin/storage/upload-url", {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ bookName, relativePath }),
+          body: JSON.stringify({ bookName: bookName.trim(), relativePath }),
         });
         if (!signedResponse.ok) throw new Error(copyAdmin.storage.uploadFailed(file.name));
         const signed = await signedResponse.json() as { url: string };
@@ -151,7 +154,9 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       if (!syncResponse.ok) throw new Error(copyAdmin.storage.syncFailed);
       setUploadNotice(copyAdmin.storage.syncStarted);
       setUploadFiles([]);
-      if (uploadInput.current) uploadInput.current.value = "";
+      setBookName("");
+      if (folderInput.current) folderInput.current.value = "";
+      if (filesInput.current) filesInput.current.value = "";
       await load();
     } catch (cause) {
       setUploadNotice("");
@@ -191,14 +196,26 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
         <p>{copyAdmin.storage.explainer}</p>
         {!status.storage.configured ? <p>{copyAdmin.storage.notConfigured}</p> : <>
           <p>{copyAdmin.storage.fileLimit}</p>
-          <label>{copyAdmin.storage.chooseFolder}<input ref={uploadInput} type="file" multiple accept=".mp3,.m4a,.m4b,.flac,.ogg,.wav,.aac" onChange={(event) => {
+          <label>{copyAdmin.storage.bookNameLabel}<input value={bookName} onChange={(event) => setBookName(event.target.value)} required maxLength={120} /></label>
+          <label>{copyAdmin.storage.chooseFolder}<input ref={folderInput} type="file" multiple accept=".mp3,.m4a,.m4b,.flac,.ogg,.wav,.aac" onChange={(event) => {
             const selected = Array.from(event.currentTarget.files ?? []);
             const files = selected.filter((file) => uploadAudioExtensions.has(file.name.split(".").pop()?.toLowerCase() ?? ""));
             setUploadFiles(files);
+            const names = new Set(files.map((file) => file.webkitRelativePath.split("/")[0]).filter(Boolean));
+            if (names.size === 1) setBookName([...names][0]);
+            if (filesInput.current) filesInput.current.value = "";
             setUploadNotice("");
             setError(files.length ? "" : copyAdmin.storage.noAudioFiles);
           }} /></label>
-          <p>{copyAdmin.storage.selectedFiles(uploadFiles.length, Math.max(0, (uploadInput.current?.files?.length ?? 0) - uploadFiles.length))}</p>
+          <label>{copyAdmin.storage.chooseFiles}<input ref={filesInput} type="file" multiple accept=".mp3,.m4a,.m4b,.flac,.ogg,.wav,.aac" onChange={(event) => {
+            const selected = Array.from(event.currentTarget.files ?? []);
+            const files = selected.filter((file) => uploadAudioExtensions.has(file.name.split(".").pop()?.toLowerCase() ?? ""));
+            setUploadFiles(files);
+            if (folderInput.current) folderInput.current.value = "";
+            setUploadNotice("");
+            setError(files.length ? "" : copyAdmin.storage.noAudioFiles);
+          }} /></label>
+          <p>{copyAdmin.storage.selectedFiles(uploadFiles.length)}</p>
           <div className="library-actions">
             <button disabled={working || uploadFiles.length === 0} onClick={() => void uploadSelectedFiles()}>{copyAdmin.storage.upload}</button>
             <button className="secondary" disabled={working || status.storage.sync.status === "syncing"} onClick={() => void mutate("/api/admin/storage/sync", "POST")}>{copyAdmin.storage.sync}</button>

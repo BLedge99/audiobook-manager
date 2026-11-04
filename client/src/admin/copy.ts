@@ -135,13 +135,16 @@ export const copyAdmin = {
 
   storage: {
     heading: "Upload audiobook folders",
-    explainer: "Choose an already-extracted book folder. Audio files are stored privately and scanned into the library.",
+    explainer: "Choose an extracted book folder, or select its audio files and enter the book name. Files are stored together and scanned into the library.",
     notConfigured: "Supabase Storage is not configured on this server.",
     chooseFolder: "Choose extracted folder",
+    chooseFiles: "Or choose audio files",
+    bookNameLabel: "Book name",
+    bookNameRequired: "Enter the book name before uploading.",
     upload: "Upload selected files",
     sync: "Sync stored books now",
     uploading: (name: string, index: number, total: number) => `Uploading ${name} (${index} of ${total})…`,
-    selectedFiles: (count: number, ignored: number) => `${count} audio files selected; ${ignored} other files ignored.`,
+    selectedFiles: (count: number) => `${count} audio files selected. Other file types are ignored.`,
     fileLimit: "Each audio file must be 50 MB or smaller. Larger files cannot be uploaded to this bucket.",
     folderRequired: "Choose one book folder before uploading.",
     noAudioFiles: "The selected folder contains no supported audio files.",

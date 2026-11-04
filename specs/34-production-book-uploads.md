@@ -16,9 +16,10 @@ available to the existing scanner, library, and playback routes.
 - Audio is stored in a **private Supabase Storage bucket**. The server uses a
   service-role key and issues short-lived signed upload URLs only after an
   admin session is validated. The service-role key never reaches the browser.
-- The browser uploads an extracted folder, preserving relative paths under
-  `books/<folder>/`. Only supported audio extensions are accepted, each file
-  must be at most 50 MB, and paths cannot escape that prefix.
+- The browser can upload an extracted folder, preserving relative paths under
+  `books/<folder>/`, or multiple selected audio files grouped under an
+  operator-entered book name. Only supported audio extensions are accepted,
+  each file must be at most 50 MB, and paths cannot escape that prefix.
 - The server synchronizes bucket audio into `SUPABASE_CACHE_DIR`, registers
   that directory as a library root, then runs the existing scanner and
   enrichment pipeline. A startup synchronization rebuilds the disposable
@@ -41,8 +42,9 @@ available to the existing scanner, library, and playback routes.
 5. Sync lists and downloads only supported audio files under `books/`, writes
    them atomically inside the configured cache, registers the cache root, and
    scans/enqueues enrichment. Restart sync is safe to repeat.
-6. The panel clearly explains the per-file 50 MB limit and that the selected
-   folder must already be extracted.
+6. The panel clearly explains the per-file 50 MB limit and that uploads must
+   be extracted audio files; file selection provides a book-name fallback for
+   browsers where folder selection is unavailable.
 7. Tests cover proxy routing, upload validation, storage API failures, sync
    path confinement, and existing scan integration. Setup documentation
    explains required Render variables, private bucket creation, and Supabase's
