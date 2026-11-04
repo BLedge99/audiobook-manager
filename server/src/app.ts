@@ -237,6 +237,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.decorateRequest("auth", null);
   app.addHook("onRequest", async (request, reply) => {
     const path = request.url.split("?")[0];
+    if (path.includes("authorize")) {
+      console.error("OAUTH AUTHORIZE REQUEST", { path, method: request.method });
+    }
     if (!path.startsWith("/api/")) return;
     if (request.method === "OPTIONS") return;
     // The admin panel has a separate listener and route table. Do not let the
