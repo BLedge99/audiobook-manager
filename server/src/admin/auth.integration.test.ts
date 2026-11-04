@@ -79,6 +79,8 @@ describe("admin panel authentication", () => {
     const lockedApp = await buildAdminApp({ prisma, auth: unconfiguredAuth, scanner: createScanManager(prisma) });
     const health = await lockedApp.inject({ url: "/api/health" });
     expect(health.json().adminConfigured).toBe(false);
+    const config = await lockedApp.inject({ url: "/api/admin/config" });
+    expect(config.json().adminConfigured).toBe(false);
     const login = await lockedApp.inject({ method: "POST", url: "/api/admin/login", payload: { password: "anything" } });
     expect(login.statusCode).toBe(503);
     expect(login.json().code).toBe("admin_not_configured");
@@ -107,12 +109,23 @@ describe("admin panel authentication", () => {
       method: "POST", url: "/api/admin/library-roots", cookies: { admin_panel_session: token! },
       payload: { path: process.cwd(), label: "Test root" },
     });
+
     expect(added.statusCode).toBe(201);
     const rootId = added.json().id as number;
     const roots = await adminApp.inject({ url: "/api/admin/library-roots", cookies: { admin_panel_session: token! } });
     expect(roots.json().some((root: { id: number }) => root.id === rootId)).toBe(true);
     const removed = await adminApp.inject({ method: "DELETE", url: `/api/admin/library-roots/${rootId}`, cookies: { admin_panel_session: token! } });
     expect(removed.statusCode).toBe(204);
+  });
+
+  it("requires the separate admin session before storage upload actions", async () => {
+    const upload = await adminApp.inject({
+      method: "POST",
+      url: "/api/admin/storage/upload-url",
+      payload: { bookName: "Book", relativePath: "track.mp3" },
+    });
+    expect(upload.statusCode).toBe(401);
+    expect(upload.json().code).toBe("admin_auth_required");
   });
 
   it("starts scans through the shared scanner and reports their state", async () => {

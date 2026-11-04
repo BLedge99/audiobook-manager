@@ -10,6 +10,12 @@ import { EnrichmentManager } from "../metadata/run";
 import type { ScanManager } from "../scanner";
 import { ADMIN_DB_TABLES, executeReadOnlyQuery, validateReadOnlySql, type AdminDbTable } from "./read-only-sql";
 import { fileURLToPath } from "node:url";
+import {
+  createSignedStorageUploadUrl,
+  storageObjectKey,
+  type StorageSync,
+  type SupabaseStorageConfig,
+} from "./supabase-storage";
 
 function routeDocs(app: FastifyInstance): { method: string | string[]; url: string; schema: unknown }[] {
   return ((app as FastifyInstance & { apiDocs?: { method: string | string[]; url: string; schema: unknown }[] }).apiDocs ?? []).map((route) => ({
@@ -27,8 +33,10 @@ export async function buildAdminApp(options: {
   networkMode?: string;
   scanner: ScanManager;
   familyApp?: FastifyInstance;
+  storage?: SupabaseStorageConfig | null;
+  storageSync?: StorageSync;
 }): Promise<FastifyInstance> {
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({ logger: options.logger ?? false, trustProxy: ["127.0.0.1", "::1"] });
   const apiDocs: { method: string | string[]; url: string; schema: unknown }[] = [];
   app.decorate("apiDocs", apiDocs);
   app.addHook("onRoute", (route) => {
@@ -37,6 +45,7 @@ export async function buildAdminApp(options: {
   await app.register(cookie);
   await registerAdminAuth(app, options.auth, options.secureCookie ?? false);
   app.get("/api/health", async () => ({ ok: true, adminConfigured: await options.auth.isConfigured() }));
+  app.get("/api/admin/config", async () => ({ adminConfigured: await options.auth.isConfigured() }));
   app.get("/api/admin/status", { preHandler: requireAdminSession(options.auth) }, async () => {
     const [roots, bookCount, profileCount, newestEntry, newestScan, enrichment] = await Promise.all([
       options.prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { id: "asc" } }),
@@ -82,8 +91,51 @@ export async function buildAdminApp(options: {
       library: { rootCount: roots.length, bookCount, profileCount, roots: rootStatus },
       scans: { newestScanAt: newestScan?.lastScanAt ?? null },
       enrichment,
+      storage: {
+        configured: Boolean(options.storage && options.storageSync),
+        sync: options.storageSync?.state() ?? {
+          status: "idle", filesDownloaded: 0, lastSyncAt: null, message: null,
+        },
+      },
       freshness: { newestProfileLibraryEntryAt: newestEntry?.createdAt ?? null },
     };
+  });
+  app.post<{ Body: { bookName: string; relativePath: string } }>("/api/admin/storage/upload-url", {
+    preHandler: requireAdminSession(options.auth),
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          bookName: { type: "string", minLength: 1, maxLength: 120 },
+          relativePath: { type: "string", minLength: 1, maxLength: 900 },
+        },
+        required: ["bookName", "relativePath"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!options.storage) return fail(reply, 503, "storage_not_configured");
+    if (!storageObjectKey(request.body.bookName, request.body.relativePath)) {
+      return fail(reply, 400, "storage_object_path_invalid");
+    }
+    try {
+      const url = await createSignedStorageUploadUrl(options.storage, request.body.bookName, request.body.relativePath);
+      return reply.send({ url });
+    } catch (error) {
+      request.log.warn({ error }, "admin storage upload URL creation failed");
+      return fail(reply, 502, "storage_upload_unavailable");
+    }
+  });
+  app.get("/api/admin/storage/status", { preHandler: requireAdminSession(options.auth) }, async () => ({
+    configured: Boolean(options.storage && options.storageSync),
+    sync: options.storageSync?.state() ?? {
+      status: "idle", filesDownloaded: 0, lastSyncAt: null, message: null,
+    },
+  }));
+  app.post("/api/admin/storage/sync", { preHandler: requireAdminSession(options.auth) }, async (_request, reply) => {
+    if (!options.storageSync) return fail(reply, 503, "storage_not_configured");
+    if (!options.storageSync.start()) return fail(reply, 409, "storage_sync_in_progress");
+    return reply.code(202).send({ status: "started" });
   });
   app.get("/api/admin/library-roots", { preHandler: requireAdminSession(options.auth) }, async () => {
     return options.prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { createdAt: "asc" } });

@@ -64,7 +64,7 @@ export default defineConfig(({ mode }) => ({
             workbox: {
               navigateFallback: '/index.html',
               // OAuth authorize/callback are top-level navigations, not SPA routes.
-              navigateFallbackDenylist: [/^\/api(?:\/|$)/],
+              navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/admin(?:\/|$)/],
               runtimeCaching: [
                 { urlPattern: /^\/api\//, handler: 'NetworkOnly' },
               ],

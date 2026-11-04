@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { copyAdmin } from "./copy";
 import "./style.css";
 
+const uploadAudioExtensions = new Set(["mp3", "m4a", "m4b", "flac", "ogg", "wav", "aac"]);
+
 function AdminLogin() {
   const [authenticated, setAuthenticated] = React.useState<boolean | null>(null);
   const [password, setPassword] = React.useState("");
@@ -13,7 +15,7 @@ function AdminLogin() {
     void fetch("/api/admin/session", { credentials: "include" }).then((response) => {
       setAuthenticated(response.ok);
     }).catch(() => setAuthenticated(false));
-    void fetch("/api/health").then((response) => response.json()).then((result) => {
+    void fetch("/api/admin/config").then((response) => response.json()).then((result) => {
       if (result.adminConfigured === false) setConfigured(false);
     }).catch(() => undefined);
   }, []);
@@ -51,6 +53,7 @@ type Status = {
   library: { rootCount: number; bookCount: number; profileCount: number; roots: { id: number; label: string | null; path: string; accessible: boolean; itemCount: number; scan: { status: string; filesFound: number; lastScanAt: string | null; message: string | null } | null }[] };
   scans: { newestScanAt: string | null };
   enrichment: { status: string; queued: number; processed: number; applied: number; review: number; failed: number; skipped: number; startedAt: string | null; finishedAt: string | null; message: string | null };
+  storage: { configured: boolean; sync: { status: string; filesDownloaded: number; lastSyncAt: string | null; message: string | null } };
   freshness: { newestProfileLibraryEntryAt: string | null };
 };
 
@@ -71,6 +74,13 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [label, setLabel] = React.useState("");
   const [adding, setAdding] = React.useState(false);
   const [working, setWorking] = React.useState(false);
+  const [uploadFiles, setUploadFiles] = React.useState<File[]>([]);
+  const [uploadNotice, setUploadNotice] = React.useState("");
+  const uploadInput = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    uploadInput.current?.setAttribute("webkitdirectory", "");
+    uploadInput.current?.setAttribute("directory", "");
+  }, []);
   const load = React.useCallback(async () => {
     try {
       const response = await fetch("/api/admin/status", { credentials: "include" });
@@ -107,6 +117,49 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     await mutate("/api/admin/library-roots", "POST", { path: path.trim(), label: label.trim() || undefined });
     setPath(""); setLabel(""); setAdding(false);
   }
+  async function uploadSelectedFiles() {
+    if (!status?.storage.configured || !uploadFiles.length) return;
+    const rootNames = new Set(uploadFiles.map((file) => file.webkitRelativePath.split("/")[0]).filter(Boolean));
+    if (rootNames.size !== 1) { setError(copyAdmin.storage.folderRequired); return; }
+    const bookName = [...rootNames][0];
+    setWorking(true);
+    setError("");
+    setUploadNotice("");
+    try {
+      for (const [index, file] of uploadFiles.entries()) {
+        setUploadNotice(copyAdmin.storage.uploading(file.name, index + 1, uploadFiles.length));
+        if (file.size > 50 * 1024 * 1024) throw new Error(copyAdmin.storage.fileTooLarge(file.name));
+        const parts = file.webkitRelativePath.split("/");
+        const relativePath = parts.slice(1).join("/") || file.name;
+        const signedResponse = await fetch("/api/admin/storage/upload-url", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ bookName, relativePath }),
+        });
+        if (!signedResponse.ok) throw new Error(copyAdmin.storage.uploadFailed(file.name));
+        const signed = await signedResponse.json() as { url: string };
+        const uploaded = await fetch(signed.url, {
+          method: "PUT",
+          headers: { "content-type": "application/octet-stream", "x-upsert": "true" },
+          body: file,
+        });
+        if (!uploaded.ok) throw new Error(copyAdmin.storage.uploadFailed(file.name));
+      }
+      const syncResponse = await fetch("/api/admin/storage/sync", { method: "POST", credentials: "include" });
+      if (syncResponse.status === 409) throw new Error(copyAdmin.storage.syncBusy);
+      if (!syncResponse.ok) throw new Error(copyAdmin.storage.syncFailed);
+      setUploadNotice(copyAdmin.storage.syncStarted);
+      setUploadFiles([]);
+      if (uploadInput.current) uploadInput.current.value = "";
+      await load();
+    } catch (cause) {
+      setUploadNotice("");
+      setError(cause instanceof Error ? cause.message : copyAdmin.storage.syncFailed);
+    } finally {
+      setWorking(false);
+    }
+  }
   const rootsRef = React.useRef(roots);
   React.useEffect(() => { rootsRef.current = roots; }, [roots]);
   React.useEffect(() => {
@@ -134,6 +187,27 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
         <StatusCard title={copyAdmin.cards.enrichment}><dl><dt>{copyAdmin.fields.status}</dt><dd>{status.enrichment.status}</dd><dt>{copyAdmin.fields.queued}</dt><dd>{status.enrichment.queued}</dd><dt>{copyAdmin.fields.processed}</dt><dd>{status.enrichment.processed}</dd><dt>{copyAdmin.fields.appliedReview}</dt><dd>{status.enrichment.applied} / {status.enrichment.review}</dd><dt>{copyAdmin.fields.failedSkipped}</dt><dd>{status.enrichment.failed} / {status.enrichment.skipped}</dd><dt>{copyAdmin.fields.lastFinished}</dt><dd>{formatDate(status.enrichment.finishedAt)}</dd></dl>{status.enrichment.message && <p>{status.enrichment.message}</p>}</StatusCard>
       </div>
       <StatusCard title={copyAdmin.folders.heading}><div className="library-actions"><button disabled={working || roots.length === 0} onClick={() => void mutate("/api/admin/scan", "POST", {})}>{copyAdmin.folders.scanAll}</button><button className="secondary" disabled={working} onClick={() => setAdding((value) => !value)}>{copyAdmin.folders.addFolder}</button></div>{adding && <form className="root-form" onSubmit={(event) => void addRoot(event)}><label>{copyAdmin.folders.pathLabel}<input value={path} onChange={(event) => setPath(event.target.value)} required maxLength={4096} placeholder={copyAdmin.folders.pathPlaceholder} /></label><label>{copyAdmin.folders.labelOptional}<input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={200} placeholder={copyAdmin.folders.labelPlaceholder} /></label><button type="submit" disabled={working}>{copyAdmin.folders.addFolder}</button></form>}<div className="root-list">{roots.length ? roots.map((root) => <article key={root.id} className="root"><div><strong>{root.label || root.path}</strong><p><code>{root.path}</code></p></div><span className={root.accessible ? "good" : "bad"}>{root.accessible ? copyAdmin.folders.accessible : copyAdmin.folders.unavailable}</span><span>{copyAdmin.folders.bookCount(root.itemCount)}</span><span>{copyAdmin.folders.scanState(root.scan?.status ?? copyAdmin.folders.neverScanned)}</span><span>{copyAdmin.folders.scanSummary(root.scan?.filesFound ?? 0, formatDate(root.scan?.lastScanAt ?? null))}</span><div className="root-buttons"><button className="secondary" disabled={working} onClick={() => void mutate("/api/admin/scan", "POST", { rootId: root.id })}>{copyAdmin.folders.scanOne}</button><button className="danger" disabled={working} onClick={() => { if (window.confirm(copyAdmin.folders.removeConfirm(root.label || root.path))) void mutate(`/api/admin/library-roots/${root.id}`, "DELETE"); }}>{copyAdmin.folders.remove}</button></div>{root.scan?.message && <p className="error">{root.scan.message}</p>}</article>) : <p>{copyAdmin.folders.empty}</p>}</div></StatusCard>
+      <StatusCard title={copyAdmin.storage.heading}>
+        <p>{copyAdmin.storage.explainer}</p>
+        {!status.storage.configured ? <p>{copyAdmin.storage.notConfigured}</p> : <>
+          <p>{copyAdmin.storage.fileLimit}</p>
+          <label>{copyAdmin.storage.chooseFolder}<input ref={uploadInput} type="file" multiple accept=".mp3,.m4a,.m4b,.flac,.ogg,.wav,.aac" onChange={(event) => {
+            const selected = Array.from(event.currentTarget.files ?? []);
+            const files = selected.filter((file) => uploadAudioExtensions.has(file.name.split(".").pop()?.toLowerCase() ?? ""));
+            setUploadFiles(files);
+            setUploadNotice("");
+            setError(files.length ? "" : copyAdmin.storage.noAudioFiles);
+          }} /></label>
+          <p>{copyAdmin.storage.selectedFiles(uploadFiles.length, Math.max(0, (uploadInput.current?.files?.length ?? 0) - uploadFiles.length))}</p>
+          <div className="library-actions">
+            <button disabled={working || uploadFiles.length === 0} onClick={() => void uploadSelectedFiles()}>{copyAdmin.storage.upload}</button>
+            <button className="secondary" disabled={working || status.storage.sync.status === "syncing"} onClick={() => void mutate("/api/admin/storage/sync", "POST")}>{copyAdmin.storage.sync}</button>
+          </div>
+          {uploadNotice && <p role="status" className="good">{uploadNotice}</p>}
+          <p>{copyAdmin.storage.state(status.storage.sync.status, status.storage.sync.filesDownloaded)}</p>
+          {status.storage.sync.message === "storage_sync_failed" && <p role="alert" className="error">{copyAdmin.storage.syncFailed}</p>}
+        </>}
+      </StatusCard>
     </>}
   </main>;
 }

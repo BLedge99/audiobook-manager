@@ -133,6 +133,26 @@ export const copyAdmin = {
       `Remove folder configuration for “${folder}”? The audio files will not be deleted.`,
   },
 
+  storage: {
+    heading: "Upload audiobook folders",
+    explainer: "Choose an already-extracted book folder. Audio files are stored privately and scanned into the library.",
+    notConfigured: "Supabase Storage is not configured on this server.",
+    chooseFolder: "Choose extracted folder",
+    upload: "Upload selected files",
+    sync: "Sync stored books now",
+    uploading: (name: string, index: number, total: number) => `Uploading ${name} (${index} of ${total})…`,
+    selectedFiles: (count: number, ignored: number) => `${count} audio files selected; ${ignored} other files ignored.`,
+    fileLimit: "Each audio file must be 50 MB or smaller. Larger files cannot be uploaded to this bucket.",
+    folderRequired: "Choose one book folder before uploading.",
+    noAudioFiles: "The selected folder contains no supported audio files.",
+    fileTooLarge: (name: string) => `${name} is larger than 50 MB.`,
+    uploadFailed: (name: string) => `Unable to upload ${name}.`,
+    syncStarted: "Upload finished. Library sync has started.",
+    syncBusy: "A library sync is already running. Wait for it to finish, then try again.",
+    syncFailed: "The library sync failed. Check the server logs and try again.",
+    state: (status: string, count: number) => `Storage sync: ${status} · ${count} files downloaded`,
+  },
+
   /** Read-only database explorer. Writes are out of scope (spec 31). */
   db: {
     heading: "Read-only database explorer",

@@ -49,6 +49,8 @@ export interface BuildAppOptions {
   mediaTokenSecret?: string;
   /** External OAuth providers for production sign-in (spec 32 / ADR 023). */
   oauth?: OAuthConfig;
+  /** Loopback target for the isolated admin listener; absent in unit tests. */
+  adminProxyTarget?: string;
   /** Production demo account surface; defaults to household for safety. */
   accountExperience?: "household" | "demo";
 }
@@ -241,7 +243,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (request.method === "OPTIONS") return;
     // The admin panel has a separate listener and route table. Do not let the
     // household auth gate turn its absent routes into a misleading 401.
-    if (path === "/api/admin" || path.startsWith("/api/admin/")) return fail(reply, 404, "not_found");
+    if (path === "/api/admin" || path.startsWith("/api/admin/")) {
+      if (options.adminProxyTarget) return;
+      return fail(reply, 404, "not_found");
+    }
     if (!authEnabled) return;
 
     const mediaResource = mediaResourceFromPath(path);
@@ -272,6 +277,54 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       return fail(reply, 403, "forbidden");
     }
   });
+
+  const adminProxyTarget = options.adminProxyTarget ? new URL(options.adminProxyTarget) : null;
+  if (adminProxyTarget && !["127.0.0.1", "[::1]", "localhost"].includes(adminProxyTarget.hostname)) {
+    throw new Error("adminProxyTarget must point to a loopback address");
+  }
+  const proxyAdminRequest = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!adminProxyTarget) return fail(reply, 404, "not_found");
+    const requestPath = request.url.split("?")[0];
+    if (requestPath === "/admin") return reply.redirect("/admin/", 302);
+    const upstreamPath = requestPath.startsWith("/admin/")
+      ? request.url.slice("/admin".length)
+      : request.url;
+    const headers: Record<string, string> = {
+      "x-forwarded-for": request.ip,
+      "x-forwarded-proto": request.protocol,
+      "x-forwarded-host": String(request.headers.host ?? ""),
+    };
+    if (request.headers.cookie) headers.cookie = request.headers.cookie;
+    if (request.headers["content-type"]) headers["content-type"] = request.headers["content-type"];
+    if (request.headers.accept) headers.accept = request.headers.accept;
+    const body = request.body === undefined
+      ? undefined
+      : typeof request.body === "string" ? request.body : JSON.stringify(request.body);
+    try {
+      const upstream = await fetch(new URL(upstreamPath, adminProxyTarget), {
+        method: request.method,
+        headers,
+        ...(body === undefined ? {} : { body }),
+        redirect: "manual",
+      });
+      reply.code(upstream.status);
+      for (const header of ["content-type", "cache-control", "etag", "last-modified", "location", "vary"]) {
+        const value = upstream.headers.get(header);
+        if (value) reply.header(header, value);
+      }
+      const setCookies = upstream.headers.getSetCookie();
+      if (setCookies.length) reply.header("set-cookie", setCookies);
+      return reply.send(Buffer.from(await upstream.arrayBuffer()));
+    } catch (error) {
+      request.log.error({ error }, "admin listener proxy failed");
+      return fail(reply, 503, "admin_unavailable");
+    }
+  };
+  const adminProxyMethods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
+  app.route({ method: [...adminProxyMethods], url: "/admin", handler: proxyAdminRequest });
+  app.route({ method: [...adminProxyMethods], url: "/admin/*", handler: proxyAdminRequest });
+  app.route({ method: [...adminProxyMethods], url: "/api/admin", handler: proxyAdminRequest });
+  app.route({ method: [...adminProxyMethods], url: "/api/admin/*", handler: proxyAdminRequest });
 
   await registerAuthRoutes(app, auth, {
     secureCookie,

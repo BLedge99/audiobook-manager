@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
+import Fastify from "fastify";
 import { buildApp, SESSION_HEADER } from "./app";
 import { createTestDatabase } from "./test-support/database";
 
@@ -22,6 +23,44 @@ afterAll(async () => {
   await app.close();
   await prisma.$disconnect();
   db.cleanup();
+});
+
+describe("same-origin admin proxy", () => {
+  it("forwards the panel and admin API without using family authentication", async () => {
+    const adminStub = Fastify();
+    adminStub.get("/", async () => ({ panel: "admin" }));
+    adminStub.post<{ Body: { password: string } }>("/api/admin/login", async (request, reply) => {
+      expect(request.body).toEqual({ password: "admin-secret" });
+      return reply.header("set-cookie", "admin_panel_session=token; Path=/; HttpOnly").send({ ok: true });
+    });
+    const address = await adminStub.listen({ port: 0, host: "127.0.0.1" });
+    const proxyApp = await buildApp({
+      logger: false,
+      prisma,
+      appPassword: "household",
+      adminProxyTarget: address,
+    });
+    try {
+      const redirect = await proxyApp.inject({ method: "GET", url: "/admin" });
+      expect(redirect.statusCode).toBe(302);
+      expect(redirect.headers.location).toBe("/admin/");
+      const panel = await proxyApp.inject({ method: "GET", url: "/admin/" });
+      expect(panel.statusCode).toBe(200);
+      expect(panel.json()).toEqual({ panel: "admin" });
+
+      const login = await proxyApp.inject({
+        method: "POST",
+        url: "/api/admin/login",
+        payload: { password: "admin-secret" },
+      });
+      expect(login.statusCode).toBe(200);
+      expect(login.json()).toEqual({ ok: true });
+      expect(login.headers["set-cookie"]?.toString()).toContain("admin_panel_session=token");
+    } finally {
+      await proxyApp.close();
+      await adminStub.close();
+    }
+  });
 });
 
 describe("auth gate", () => {

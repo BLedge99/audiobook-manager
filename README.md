@@ -65,6 +65,11 @@ The production Compose deployment puts the browser app behind Caddy at
 trust and the Android HTTP address that remains available on the household
 LAN.
 
+The hosted Render deployment's operator upload setup is documented in
+[`docs/production-book-storage.md`](docs/production-book-storage.md). It uses
+private Supabase Storage for durable audio and the separate-password admin
+panel at `/admin`.
+
 ## Acknowledgements
 
 This project was partially vibe coded using [Bionic](https://lmstudio.ai/bionic) and Qwen 3.8 27B.

@@ -6,6 +6,7 @@ import { AdminAuth } from "./admin/auth";
 import { PrismaClient } from "@prisma/client";
 import { createScanManager } from "./scanner";
 import { oauthConfigFromEnv } from "./auth/oauth";
+import { createSupabaseLibrarySync, supabaseStorageConfigFromEnv } from "./admin/supabase-storage";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const ADMIN_PORT = parseInt(process.env.ADMIN_PORT || "3100", 10);
@@ -13,13 +14,26 @@ const ADMIN_PORT = parseInt(process.env.ADMIN_PORT || "3100", 10);
 async function main() {
   const prisma = new PrismaClient();
   const scanner = createScanManager(prisma);
-  const app = await buildApp({ logger: true, prisma, scanner });
+  const storage = supabaseStorageConfigFromEnv();
+  const storageSync = storage ? createSupabaseLibrarySync({
+    config: storage,
+    prisma,
+    scanner,
+    onError: (error) => console.error("[storage] library sync failed", error),
+  }) : undefined;
+  const app = await buildApp({
+    logger: true, prisma, scanner,
+    adminProxyTarget: `http://127.0.0.1:${ADMIN_PORT}`,
+  });
   const adminAuth = new AdminAuth(prisma);
   if (process.env.ADMIN_PANEL_PASSWORD) {
     await adminAuth.seed(process.env.ADMIN_PANEL_PASSWORD);
     console.log("[server] admin-panel credential seeded");
   }
-  const adminApp = await buildAdminApp({ prisma, auth: adminAuth, scanner, familyApp: app, logger: true, startedAt: Date.now() });
+  const adminApp = await buildAdminApp({
+    prisma, auth: adminAuth, scanner, familyApp: app, logger: true, startedAt: Date.now(),
+    storage, storageSync,
+  });
   // First launch: create the default household profiles so progress
   // is profile-scoped from the very first play. No-op once seeded.
   try {
@@ -46,6 +60,7 @@ async function main() {
   console.log(`[server] listening on 0.0.0.0:${PORT}`);
   await adminApp.listen({ port: ADMIN_PORT, host: "0.0.0.0" });
   console.log(`[admin] listening on 0.0.0.0:${ADMIN_PORT}`);
+  if (storageSync?.start()) console.log("[storage] startup library sync started");
 
   // Spec 17: seed the genre taxonomy and provider mappings. Idempotent, and
   // must run before any enrichment pass so provider genres have somewhere to

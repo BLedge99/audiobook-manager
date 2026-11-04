@@ -21,8 +21,10 @@ home for three reasons:
 
 This spec was written before implementation, per `AGENTS.md`. Phase 1 (admin
 listener, credential, separate session and lock screen) is implemented. Phase 2
-(read-only status dashboard) is now implemented; phases 3–4 remain planned. ADR
-022 records the architecture decision this spec follows.
+(read-only status dashboard), phases 3–4 (library controls, DB explorer and API
+docs), and the later changes documented in spec 34 are implemented. ADR 022
+records the architecture decision this spec follows; ADR 025 adds the narrow
+same-origin proxy used by the hosted Render deployment.
 
 ## The decision
 
@@ -32,9 +34,11 @@ its own session and its own client build:
 
 - **Same process, second port** — a second Fastify instance in the server
   container listening on `ADMIN_PORT` (default `3100`). The main port (`:3000`,
-  what every phone points at) serves **no admin route at all** — not a
-  `/admin/*` path that merely requires a stronger session; the route table of
-  the main server simply does not contain admin surface.
+  what every phone points at) has no admin handlers or session validation.
+  Local builds with no `adminProxyTarget` return 404 for admin paths. The
+  hosted Render build configures a loopback-only proxy for `/admin` and
+  `/api/admin/*`; all panel pages and API requests still reach the separate
+  admin listener, which enforces its own session.
 - **Same Prisma, same DB** — the panel runs in the same Node process, sharing
   the main server's Prisma client. This is deliberate (ADR 022): local
   development is SQLite, and a second *connection* (let alone a second
@@ -44,10 +48,11 @@ its own session and its own client build:
   call the same modules the main server calls, so the panel can never drift
   from what a *scan from the phone's tab* would have done.
 
-**Isolation model.** The isolation is at the network door and the session, not
-the file system: Docker compose exposes `ADMIN_PORT` only on demand (see
-Compose/config section); nothing changes about where the data lives, so there
-is no second thing to keep in sync.
+**Isolation model.** The admin app retains its separate route table and
+session. Locally, Docker compose exposes `ADMIN_PORT` only on demand (see
+Compose/config section). The hosted deployment exposes a narrow same-origin
+proxy because Render provides one public web port; the proxy forwards only to
+the loopback admin listener and does not authorize requests itself.
 
 ## The credential
 
@@ -178,10 +183,12 @@ A **dedicated admin password**, independent of every profile password:
 
 ## Acceptance criteria
 
-- [x] The main port returns 404 for every panel route and serves no admin
-      session cookie.
+- [x] Without an explicit loopback proxy target, the main port returns 404 for
+      admin API paths and serves no admin session cookie. Hosted Render exposes
+      only `/admin` and `/api/admin/*` through the proxy in ADR 025.
 - [x] With `ADMIN_PANEL_PASSWORD` unset, the panel boots into a locked state
-      saying exactly that, and nothing but `GET /api/health` answers.
+      saying exactly that; only health/config status reads answer without
+      authentication, and all admin actions remain locked.
 - [x] Login accepts the seeded password, is rate-limited, and every panel page
       redirects to it when the session is absent or expired.
 - [ ] Changing the password from the panel invalidates every admin session,
@@ -235,8 +242,7 @@ Each phase lands with its tests against the criteria above.
   tool; revisit only if the panel is ever exposed beyond the LAN (ADR 006's
   own revisit condition).
 - **Remote access of any kind.** Unchanged by this feature; ADR 006 stands.
-- **Serving the panel from the production Render instance.** It is built to
-  run where the operator runs it, at the door they configure. Prod deploy of
-  the *panel* is not part of this feature.
+- **Media upload and durable storage.** Spec 34 covers private Supabase Storage,
+  the disposable server cache and operator folder uploads.
 - **Metadata writing into media files.** Forbidden house rule (spec 13), and
   the panel's API docs for enrichment will not smuggle it in either.
