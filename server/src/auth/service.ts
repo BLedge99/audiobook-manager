@@ -176,7 +176,7 @@ export class AuthService {
     this.clearIp(ip);
     await this.prisma.profile.update({
       where: { id: profile.id },
-      data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now() },
+      data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now(), lastActiveAt: this.now() },
     });
     return this.createSession(profile.id, "profile", meta);
   }
@@ -281,7 +281,7 @@ export class AuthService {
     this.clearIp(input.ip);
     await this.prisma.profile.update({
       where: { id: profile.id },
-      data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now() },
+      data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now(), lastActiveAt: this.now() },
     });
     return this.createSession(profile.id, "profile", input.meta);
   }
@@ -308,7 +308,7 @@ export class AuthService {
     let profile: Profile;
     try {
       profile = await this.prisma.profile.create({
-        data: { name, email, role: "member", passwordHash, passwordUpdatedAt: this.now(), followsServerLibrary: true },
+        data: { name, email, role: "member", passwordHash, passwordUpdatedAt: this.now(), followsServerLibrary: true, lastActiveAt: this.now() },
       });
     } catch {
       // The unique email constraint is the concurrency-safe duplicate check.
@@ -360,6 +360,7 @@ export class AuthService {
         email: identity.email,
         oauthProvider: provider.id,
         oauthProviderId: identity.sub,
+        lastActiveAt: this.now(),
       },
     });
     return profile;
@@ -399,6 +400,7 @@ export class AuthService {
         passwordUpdatedAt: this.now(),
         failedLoginCount: 0,
         lockedUntil: null,
+        lastActiveAt: this.now(),
       },
     });
     if (updated.count === 0) throw new AuthFailure(409, "claim_unavailable");
@@ -493,6 +495,10 @@ export class AuthService {
     const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
     if (!profile) throw new AuthFailure(404, "not_found");
     if (profile.disabled) throw new AuthFailure(403, "account_disabled");
+    await this.prisma.profile.update({
+      where: { id: profileId },
+      data: { lastActiveAt: this.now() },
+    });
     return this.createSession(profileId, via, meta);
   }
 
@@ -634,6 +640,45 @@ export class AuthService {
     await this.prisma.webAuthnChallenge.deleteMany({
       where: { expiresAt: { lt: this.now() } },
     });
+    // Device credentials carry a 90-day expiry; clean up expired or revoked ones.
+    await this.prisma.deviceCredential.deleteMany({
+      where: {
+        OR: [{ expiresAt: { lt: this.now() } }, { revokedAt: { not: null } }],
+      },
+    });
+    // Admin sessions follow the same TTL rules as profile sessions.
+    await this.prisma.adminSession.deleteMany({
+      where: {
+        OR: [{ expiresAt: { lt: this.now() } }, { revokedAt: { not: null } }],
+      },
+    });
+    // Inactive profiles: no successful authentication for 24 months.
+    // Profiles never used fall back to createdAt. Cascade deletes every
+    // related personal-data row via the onDelete: Cascade relations.
+    const inactiveBefore = new Date(this.now().getTime() - 24 * 30 * 24 * 60 * 60 * 1000);
+    const inactiveProfiles = await this.prisma.profile.findMany({
+      where: {
+        OR: [
+          { lastActiveAt: { lt: inactiveBefore } },
+          { lastActiveAt: null, createdAt: { lt: inactiveBefore } },
+        ],
+      },
+      select: { id: true },
+    });
+    for (const profile of inactiveProfiles) {
+      await this.prisma.$transaction([
+        this.prisma.webAuthnChallenge.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.webAuthnCredential.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.deviceCredential.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.session.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.listeningHistory.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.playSession.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.favourite.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.wishlistItem.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.profileLibraryEntry.deleteMany({ where: { profileId: profile.id } }),
+        this.prisma.profile.delete({ where: { id: profile.id } }),
+      ]);
+    }
   }
 
   private async createSession(

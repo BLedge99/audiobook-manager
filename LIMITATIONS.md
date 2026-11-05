@@ -492,14 +492,23 @@ validation-only required secrets. The earlier security run reported all 10
 Playwright security tests passing. A zero audit result only describes
 known advisories at audit time, so keep the automated updates and audits active.
 
-**Transport remains a material security gap for Android.** Production web now
+**Transport remains a material security gap for Android (accepted risk with mitigations).** Production web now
 has a Caddy `tls internal` endpoint at `books.home.arpa`, with setup steps in
 [`docs/production-https.md`](docs/production-https.md). It has not yet been
 deployed or tested with Windows CA trust/Hello. Android still communicates over
 HTTP on the household LAN because its configurable local server path does not
 yet provision a trusted TLS CA. Credentials and sessions on that path therefore
-lack transport encryption; do not use it on untrusted networks or expose it to
-the Internet.
+lack transport encryption; **do not use it on untrusted networks or expose it to
+the Internet**.
+
+Mitigations in place ([`decisions/014-webview-http-scheme.md`](decisions/014-webview-http-scheme.md)):
+
+- The WebView keeps its `https://localhost` origin; `android.allowMixedContent = true` permits plain-HTTP requests only to the user-configured home server on a trusted LAN.
+- `network_security_config.xml` allows cleartext at the Android network stack (LAN only).
+- Both `https://localhost` and `http://localhost` are on the server's CORS allow-list.
+- Session cookies are HttpOnly/Secure/SameSite; tokens are hashed at rest; `cleanupExpired()` removes expired sessions.
+
+The genuinely correct fix — terminate TLS on the server and trust the CA on each phone — is recorded in ADR 014 as the destination if the app ever leaves a trusted LAN. This risk is assessed in the production-demo DPIA ([`docs/dpia.md`](docs/dpia.md)) and is covered by the breach procedure ([`docs/breach-procedure.md`](docs/breach-procedure.md)) should a session be intercepted.
 ## 5. Developer-experience friction
 
 - **E2E requires WSL + Docker.** `scripts/e2e-wsl.sh` provisions a Linux Node

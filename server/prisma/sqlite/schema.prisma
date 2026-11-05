@@ -365,6 +365,7 @@ model Profile {
   failedLoginCount  Int       @default(0)
   lockedUntil       DateTime?
   lastLoginAt       DateTime?
+  lastActiveAt      DateTime? // last successful authentication (any method); used for 24-month inactivity retention
 
   // Spec 32 / ADR 023: external identity for production sign-in.
   //

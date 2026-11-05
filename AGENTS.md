@@ -53,6 +53,11 @@ same change. Never silently diverge.
   and tests are SQLite. Both histories are Prisma-managed, so a model change
   needs a migration in each. Keep SQL portable: no SQLite- or PostgreSQL-only
   SQL in application queries. See `server/prisma/README.md` and ADR 019.
+- **GDPR obligations for new features.** Every new feature that processes
+  personal data must document (a) its lawful basis under Art. 6, (b) its
+  retention period under Art. 5(1)(e), and (c) its data-subject-rights impact
+  (access, erasure, rectification). Update `docs/roa.md`,
+  `docs/retention.md`, and the GDPR remediation plan in the same change.
 
 ## How to run things
 

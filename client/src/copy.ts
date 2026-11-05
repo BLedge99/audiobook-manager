@@ -724,6 +724,37 @@ export const copy = {
    * that is only ever logged can stay in the operator tier; one a person reads
    * cannot.
    */
+  privacy: {
+    /**
+     * The privacy notice is served by the server at /privacy and linked from
+     * sign-in and account screens. These strings are the client-side labels
+     * that point to it.
+     */
+    link: "Privacy notice",
+    linkHint: "How we handle your personal data.",
+    /**
+     * Short line shown near sign-up / account creation in production demo mode.
+     */
+    demoIntro: "Creating an account means you agree to the privacy notice.",
+    /** Section headings inside the notice (also echoed in the server template). */
+    heading: "Privacy notice",
+    controller: "Who we are",
+    purposes: "Why we collect your data",
+    lawfulBasis: "Our legal basis for using it",
+    dataCategories: "What data we collect",
+    recipients: "Who receives your data",
+    retention: "How long we keep it",
+    yourRights: "Your rights",
+    cookies: "Cookies",
+    complaints: "Complaints",
+    noProfiling: "We do not make automated decisions about you.",
+    noAnalytics: "We do not use analytics or tracking.",
+    thirdPartyNone: "We do not share your personal data with any third party.",
+    contact: "Contact us",
+    export: "Export my data",
+    erase: "Delete my account",
+  },
+
   errors: {
     loadLibrary: "Could not load the library. Try again.",
     loadAllBooks: "Could not read all the books from the server. Try again.",

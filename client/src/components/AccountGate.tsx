@@ -806,6 +806,12 @@ export function AccountGate({
               {copy.operator.serverSetup.continueOffline}
             </Btn>
           )}
+          <a
+            href="/privacy"
+            className="mt-4 block text-center text-xs font-medium text-ink3 underline decoration-1 underline-offset-2 hover:text-ink"
+          >
+            {copy.privacy.link} &nbsp;·&nbsp; {copy.privacy.linkHint}
+          </a>
         </div>
       </div>
     </FullScreen>

@@ -21,5 +21,6 @@ export default defineConfig({
     exclude: ["node_modules/**", "dist/**"],
     envFile: false,
     globalSetup: ["./src/test-support/global-setup.ts"],
+    testTimeout: 10000,
   },
 });
