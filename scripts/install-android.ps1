@@ -71,6 +71,7 @@ if ($devices.Count -eq 0) {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $clientRoot = Join-Path $repoRoot 'client'
 $androidRoot = Join-Path $clientRoot 'android'
+$applicationId = 'com.technative.audiobookmanager'
 
 Push-Location $clientRoot
 try {
@@ -99,8 +100,42 @@ if (-not (Test-Path $apkPath)) {
   throw "Android build completed but the APK was not found at $apkPath."
 }
 
+# Android must never package the browser PWA's service worker. It can control
+# the bundled Capacitor origin and keep an old app shell alive across updates.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$apk = [System.IO.Compression.ZipFile]::OpenRead($apkPath)
+try {
+  $workerAssets = @(
+    $apk.Entries |
+      Where-Object {
+        $_.FullName -match '^assets/public/(?:sw\.js|registerSW\.js|workbox-[^/]+\.js)$'
+      } |
+      ForEach-Object { $_.FullName }
+  )
+} finally {
+  $apk.Dispose()
+}
+if ($workerAssets.Count -gt 0) {
+  throw "The Android APK unexpectedly contains PWA service-worker assets: $($workerAssets -join ', '). Rebuild with npm run build:android."
+}
+
 $failedDevices = [System.Collections.Generic.List[string]]::new()
 foreach ($serial in $devices) {
+  $installedPath = (& $adb -s $serial shell pm path $applicationId 2>$null | Out-String).Trim()
+  if ($installedPath -match '^package:') {
+    Write-Host "Removing stale WebView service-worker data on $serial..."
+    & $adb -s $serial shell am force-stop $applicationId
+    if ($LASTEXITCODE -ne 0) {
+      throw "Could not stop the installed app on $serial before clearing its WebView service-worker data."
+    }
+
+    $cleanupCommand = "run-as $applicationId sh -c 'if [ -d app_webview/Default/Service\ Worker ]; then rm -r app_webview/Default/Service\ Worker; fi'"
+    & $adb -s $serial shell $cleanupCommand
+    if ($LASTEXITCODE -ne 0) {
+      throw "Could not clear stale WebView service-worker data on $serial; refusing to install over it."
+    }
+  }
+
   Write-Host "Installing APK on $serial..."
   $previousErrorActionPreference = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'

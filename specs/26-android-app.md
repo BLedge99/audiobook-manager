@@ -111,13 +111,18 @@ The build runs on Windows natively, not in WSL. WSL is only used for Docker
 
 ```bash
 cd client
-npm run build          # tsc -b && vite build -> client/dist
+npm run build:android  # tsc -b && vite build --mode android -> client/dist (no PWA service worker)
 npx cap sync android   # copies dist/ into android/app/src/main/assets/public/
 cd android
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+- Prefer `scripts/install-android.ps1`: it verifies the APK contains no PWA
+  service-worker assets and removes an old WebView service-worker cache before
+  updating an installed app. `MainActivity` repeats that cleanup before creating
+  the WebView, covering app installs and restored device state that bypass the
+  script. Android backup is disabled so stale WebView state is not restored.
 - **Debug APKs are auto-signed** with the debug keystore, so sideloading needs no
   signing setup. A real keystore is only needed for a release build.
 - The first Gradle run downloads Gradle and the AGP (~0.5–1 GB) and is slow.
@@ -273,6 +278,8 @@ library as an empty one.
 - [ ] A book not downloaded still streams while online.
 - [ ] "Remove from device" frees space and leaves the server copy untouched.
 - [ ] Server URL is configurable in-app without rebuilding the web bundle.
+- [ ] Android APK excludes the browser PWA service worker, and an update cannot
+      launch a stale WebView app shell.
 - [ ] Forward progress sync applies silently.
 - [ ] Backward progress beyond 5 minutes prompts with both positions named, and
       neither button silently overwrites.
