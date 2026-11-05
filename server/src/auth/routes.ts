@@ -174,7 +174,17 @@ export async function registerAuthRoutes(
   }, async (request, reply) => {
     if (!auth.enabled && demoMode()) return fail(reply, 503, "auth_required");
     if (!auth.enabled) return { token: "disabled", authDisabled: true };
-    if (demoMode() && !request.body.email) return fail(reply, 404, "not_found");
+    if (demoMode() && request.body.profileId) {
+      // Demo mode is the account surface (spec 33): a profile-scoped password
+      // sign-in is not offered there. The *household* password is deployment
+      // configuration rather than an account surface, so it stays available on
+      // any server that has `APP_PASSWORD` set - including the production demo,
+      // which configures one. Without this the household break-glass key the
+      // operator installed on the demo host answered 404, and the listener who
+      // reached for it got a generic "the server did not answer as expected" for
+      // what was really a deliberate refusal.
+      return fail(reply, 404, "not_found");
+    }
 
     try {
       const result = request.body.email

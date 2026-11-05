@@ -76,7 +76,19 @@ and live OAuth provider flows are verified. Phase plan:
 ### Signed-in demo experience
 
 - No profile picker, profile switcher, add/delete-profile affordance, or
-  household break-glass action appears in the demo client.
+  household break-glass action appears in the demo client UI. The demo surface
+  offers account sign-in (OAuth and email/password) only.
+- Server-side, the household break-glass password (`APP_PASSWORD`) remains
+  accepted on demo deployments that configure one: `POST /api/auth/login` with
+  `{ password }` returns 200 with `profile: null` and `via: "household"`. This
+  is operator break-glass / direct API only — it is not exposed as a client UI
+  affordance in the demo.
+- A demo household session carries **no account scope**: no `profileId` is
+  bound, so account-scoped routes (library, progress, media-token) return 401
+  for household sessions. Account-scoped routes require a profile-bound session.
+- Profile-scoped password sign-in (`{ profileId, password }`) is refused with
+  404 in demo mode; demo sign-in resolves exactly one account/profile from an
+  OAuth or email/password session.
 - The top-right account menu identifies the signed-in account using email when
   available; otherwise it uses a generic provider identity. It offers sign out.
 - Every account-scoped action uses the profile/account bound to the server
@@ -142,6 +154,10 @@ and live OAuth provider flows are verified. Phase plan:
 - [ ] Demo requests cannot read/write another account's progress or other
       profile-scoped data by forging IDs/headers/payloads.
 - [ ] Server binds each demo session to exactly one account/profile.
+- [ ] Household password login (`POST /api/auth/login { password }`) returns 200
+      on demo deployments with `APP_PASSWORD`, with `profile: null` and
+      `via: "household"`; profile-scoped password sign-in returns 404. A demo
+      household session carries no account scope.
 - [ ] OAuth state/PKCE/callback and verified-email linking are tested; an
       unverified email cannot link an existing account.
 - [ ] Email sign-up validates inputs, stores a hash only, handles duplicate

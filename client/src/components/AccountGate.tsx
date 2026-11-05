@@ -56,9 +56,15 @@ function errorSentence(error: unknown): string {
  * The household password is still reachable, but it is a separate mode with its
  * own explanation: it is for setup and recovery, not the daily sign-in.
  */
-export function AccountGate({ onSuccess, accountExperience = "household" }: {
+export function AccountGate({
+  onSuccess,
+  accountExperience = "household",
+  onContinueOffline,
+}: {
   onSuccess: () => void | Promise<void>;
   accountExperience?: "household" | "demo";
+  /** Offered in the native shell so the listener is never soft-locked offline. */
+  onContinueOffline?: () => void;
 }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
@@ -788,6 +794,17 @@ export function AccountGate({ onSuccess, accountExperience = "household" }: {
             >
               {error}
             </p>
+          )}
+
+          {onContinueOffline && (
+            <Btn
+              type="button"
+              variant="quiet"
+              onClick={onContinueOffline}
+              className="mt-4 w-full"
+            >
+              {copy.operator.serverSetup.continueOffline}
+            </Btn>
           )}
         </div>
       </div>

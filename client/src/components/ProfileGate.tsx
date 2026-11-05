@@ -18,7 +18,14 @@ const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint
  * selected (first launch, or localStorage was cleared). Progress is
  * profile-scoped, so listening must not start without one.
  */
-export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
+export function ProfileGate({
+  onSuccess,
+  onContinueOffline,
+}: {
+  onSuccess: () => void;
+  /** Offered in the native shell so the listener is never soft-locked offline. */
+  onContinueOffline?: () => void;
+}) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [newName, setNewName] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -148,6 +155,17 @@ export function ProfileGate({ onSuccess }: { onSuccess: () => void }) {
           ) : (
             <Btn variant="quiet" size="sm" onClick={() => setShowAdd(true)} className="mt-4">
               <Plus size={16} aria-hidden="true" /> {copy.profile.addProfile}
+            </Btn>
+          )}
+
+          {onContinueOffline && (
+            <Btn
+              type="button"
+              variant="quiet"
+              onClick={onContinueOffline}
+              className="mt-4 w-full"
+            >
+              {copy.operator.serverSetup.continueOffline}
             </Btn>
           )}
 

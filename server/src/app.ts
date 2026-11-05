@@ -258,17 +258,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const token = sessionTokenFromRequest(request);
     if (token) request.auth = await auth.validate(token);
 
-    // A pre-demo household/break-glass session has no account scope. Never let
-    // it pass as an authenticated demo listener (for example in a browser that
-    // retained the old household cookie during deployment).
-    if (accountExperience === "demo" && request.auth?.via === "household") {
-      request.auth = null;
-    }
-
-    if (accountExperience === "demo" && isAdminRoute(request.method, path) && isPublicApiPath(path)) {
-      return fail(reply, 404, "not_found");
-    }
+    // Public API paths (login, signup, providers, health, OAuth flows) need no
+    // session. This short-circuit must come before the auth check below so that
+    // a login request is not rejected for lacking one.
     if (isPublicApiPath(path)) return;
+
+    // A pre-demo household/break-glass session has no account scope. It used to
+    // be thrown away outright in demo mode, which severed the household break-
+    // glass key the operator configures on the production demo host: a listener
+    // who reached for that key was refused at login (404) or, with a session
+    // already in flight, discarded here, and the app could not tell the difference
+    // between "the password is wrong" and "this server does not take one".
+    // Household sessions simply carry no account scope, so the demo account
+    // routes (which require a session-bound profile) stay unreachable for them.
+    // The decision is recorded in spec 33; local behaviour is unchanged.
     if (!request.auth) return fail(reply, 401, "auth_required");
     if (accountExperience === "demo" && isAdminRoute(request.method, path)) {
       return fail(reply, 404, "not_found");

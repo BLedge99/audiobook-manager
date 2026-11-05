@@ -57,3 +57,13 @@ with individual credentials yet).
 ## Not in this spec
 
 - Individual per-user credentials, roles, remote internet exposure.
+
+## Demo deployments
+
+- The household password (`APP_PASSWORD`) remains accepted on demo deployments
+  that configure one (`ACCOUNT_EXPERIENCE=demo`): `POST /api/auth/login` with
+  `{ password }` returns 200 with `profile: null` and `via: "household"`.
+- A demo household session carries no account scope: no profile is bound, so
+  account-scoped routes require a profile-bound session (401 otherwise).
+  Demo behavior is governed by Spec 33; local household behavior in this spec
+  is unchanged.

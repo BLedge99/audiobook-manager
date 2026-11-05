@@ -725,6 +725,7 @@ function App() {
             await probeServer();
           })();
         }}
+        onContinueOffline={isNativeShell() ? handleContinueOffline : undefined}
       />
     );
   }
@@ -736,7 +737,12 @@ function App() {
   // profile session always has one; this is the break-glass household path
   // during the migration.
   if (serverReachable && authed && !activeProfileId && accountExperience !== "demo") {
-    return <ProfileGate onSuccess={() => setProfileId(getActiveProfileId())} />;
+    return (
+      <ProfileGate
+        onSuccess={() => setProfileId(getActiveProfileId())}
+        onContinueOffline={isNativeShell() ? handleContinueOffline : undefined}
+      />
+    );
   }
 
   return (

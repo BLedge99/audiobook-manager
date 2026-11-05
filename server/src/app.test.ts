@@ -808,6 +808,19 @@ describe("production demo account policy", () => {
     expect(sessionProfileId).toBeUndefined();
   });
 
+  it("accepts the household password in demo mode without an account scope", async () => {
+    const login = await demoApp.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { password: "household" },
+    });
+    expect(login.statusCode).toBe(200);
+    const body = login.json();
+    expect(body.ok).toBe(true);
+    expect(body.token).toBeDefined();
+    expect(body.profile).toBeNull();
+  });
+
   it("does not trust a forged x-profile-id for progress and does not serialize names in session info", async () => {
     const login = await demoApp.inject({
       method: "POST",
