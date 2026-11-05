@@ -22,6 +22,10 @@ export interface SettingsProps {
   onClose: () => void;
   /** Re-run the library load after a URL change. */
   onSaved: () => void;
+  /** True when user has explicitly chosen offline mode. */
+  offlineMode?: boolean;
+  /** Callback to exit offline mode and attempt reconnection. */
+  onReconnect?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -45,8 +49,10 @@ export function Settings({
   offline,
   coverBytes,
   onClearCovers,
-  onClose,
   onSaved,
+  offlineMode,
+  onReconnect,
+  onClose,
 }: SettingsProps) {
   const [value, setValue] = useState(getServerUrl());
   const [status, setStatus] = useState<"idle" | "checking" | "ok" | "failed">("idle");
@@ -161,6 +167,27 @@ export function Settings({
             <Notice tone="warn" role="status" icon={<WifiOff size={15} aria-hidden="true" />} className="mt-4">
               {copy.operator.settings.serverUnreachable}
             </Notice>
+          )}
+
+          {/* Reconnect to server section - shown when user has explicitly chosen offline mode */}
+          {offlineMode && onReconnect && (
+            <section className="panel mt-4 p-5 border-2 border-tan bg-tan/5">
+              <h3 className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
+                <WifiOff size={17} className="text-tan-ink" aria-hidden="true" />
+                {copy.operator.settings.offlineModeHeading}
+              </h3>
+              <p className="mt-2 text-sm text-ink2">
+                {copy.operator.settings.offlineModeHint}
+              </p>
+              <Btn
+                type="button"
+                variant="primary"
+                onClick={onReconnect}
+                className="mt-4 w-full"
+              >
+                {copy.operator.settings.reconnectButton}
+              </Btn>
+            </section>
           )}
 
           {/*

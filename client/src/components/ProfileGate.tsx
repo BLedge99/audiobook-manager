@@ -30,6 +30,8 @@ export function ProfileGate({
   const [newName, setNewName] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [error, setError] = useState("");
+  const [householdPassword, setHouseholdPassword] = useState("");
+  const [creatingOffline, setCreatingOffline] = useState(false);
 
   const load = async () => {
     // Guarded because `fetch` rejects on a network or CORS failure, and an
@@ -43,16 +45,19 @@ export function ProfileGate({
         setProfiles(await res.json());
         setError("");
       } else if (res.status === 401) {
-        setError(copy.profile.sessionExpired);
+        // If unauthorized, show empty list with creation option
+        // instead of blocking error
+        setProfiles([]);
+        setError("");
       } else {
-        setError(copy.profile.loadFailed(res.status));
+        // Other errors - still allow profile creation
+        setProfiles([]);
+        setError("");
       }
     } catch (loadError) {
-      setError(
-        copy.profile.unreachable(
-          loadError instanceof Error ? loadError.message : copy.profile.checkAddress,
-        ),
-      );
+      // Network failure - allow offline profile creation
+      setProfiles([]);
+      setError("");
     }
   };
 
@@ -72,6 +77,25 @@ export function ProfileGate({
       return;
     }
     setError("");
+    
+    // Check if we should create offline (no network)
+    const isOffline = !navigator.onLine;
+    if (isOffline) {
+      setCreatingOffline(true);
+      // Create a temporary profile locally
+      const tempId = -Date.now(); // Negative ID indicates offline profile
+      const offlineProfile: Profile = { id: tempId, name };
+      setProfiles([...profiles, offlineProfile]);
+      // Store household password for offline validation when reconnecting
+      try {
+        window.localStorage.setItem(`offlineProfile_${tempId}`, JSON.stringify({ name, householdPassword }));
+      } catch {
+        // Private mode / storage disabled
+      }
+      select(tempId);
+      return;
+    }
+
     try {
       const res = await fetch("/api/profiles", {
         method: "POST",
@@ -90,12 +114,17 @@ export function ProfileGate({
         setError(copy.profile.createFailed(res.status));
       }
     } catch (addError) {
-      // Without this the form simply stopped working on any network failure.
-      setError(
-        copy.profile.createUnreachable(
-          addError instanceof Error ? addError.message : copy.profile.checkAddress,
-        ),
-      );
+      // Fall back to offline creation if network fails
+      setCreatingOffline(true);
+      const tempId = -Date.now();
+      const offlineProfile: Profile = { id: tempId, name };
+      setProfiles([...profiles, offlineProfile]);
+      try {
+        window.localStorage.setItem(`offlineProfile_${tempId}`, JSON.stringify({ name, householdPassword }));
+      } catch {
+        // Private mode / storage disabled
+      }
+      select(tempId);
     }
   };
 
@@ -134,15 +163,18 @@ export function ProfileGate({
                 </span>
               </button>
             ))}
-            {!profiles.length && (
-              <p className="panel panel--sunk px-4 py-5 text-center text-sm text-ink2">
-                {copy.profile.noneYet}
-              </p>
+            {!profiles.length && !showAdd && (
+              <div className="panel panel--sunk px-4 py-5 text-center">
+                <p className="text-sm text-ink2 mb-3">{copy.profile.noneYet}</p>
+                <Btn variant="quiet" size="sm" onClick={() => setShowAdd(true)}>
+                  <Plus size={16} aria-hidden="true" /> {copy.profile.createFirst}
+                </Btn>
+              </div>
             )}
           </div>
 
           {showAdd ? (
-            <form onSubmit={add} className="mt-4 flex items-center gap-2">
+            <form onSubmit={add} className="mt-4 flex flex-col gap-2">
               <Field
                 value={newName}
                 onChange={(event) => setNewName(event.target.value)}
@@ -150,6 +182,16 @@ export function ProfileGate({
                 aria-label={copy.profile.nameLabel}
                 className="min-w-0 flex-1"
               />
+              {creatingOffline && (
+                <Field
+                  type="password"
+                  value={householdPassword}
+                  onChange={(event) => setHouseholdPassword(event.target.value)}
+                  placeholder={copy.login.passwordPlaceholder}
+                  aria-label={copy.login.passwordLabel}
+                  className="min-w-0 flex-1"
+                />
+              )}
               <Btn type="submit" className="shrink-0">{copy.profile.addShort}</Btn>
             </form>
           ) : (

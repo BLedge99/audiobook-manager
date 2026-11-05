@@ -604,6 +604,7 @@ export const copy = {
     heading: "Who's listening?",
     intro: "Pick your profile so your progress is saved separately from the rest of the household.",
     noneYet: "No profiles yet — create one below.",
+    createFirst: "Create your first profile",
     namePlaceholder: "Name",
     nameLabel: "New profile name",
     /**
@@ -978,6 +979,11 @@ export const copy = {
       coversCached: (bytes: string) => `${bytes} of cover art cached, so covers still show with no connection.`,
       clearCovers: "Clear cached covers",
       coversCleared: "Cached covers cleared. They will come back as you browse.",
+      /** Offline mode section */
+      offlineModeHeading: "Offline mode",
+      offlineModeHint:
+        "The app is running offline. Downloaded books still play, but new books need the home server.",
+      reconnectButton: "Reconnect to server",
     },
 
     serverSetup: {

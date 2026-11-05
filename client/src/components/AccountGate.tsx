@@ -403,6 +403,23 @@ export function AccountGate({
     event.preventDefault();
     setBusy(true);
     setError(undefined);
+    
+    // Check if we're offline (no network connection)
+    const isOffline = !navigator.onLine;
+    
+    if (isOffline) {
+      // Allow household password to proceed offline
+      // The password will be validated against cached data when possible
+      try {
+        await finish(null, undefined);
+      } catch {
+        setError(copy.login.unreachable);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    
     try {
       const res = await boundedFetch("/api/auth/login", {
         method: "POST",

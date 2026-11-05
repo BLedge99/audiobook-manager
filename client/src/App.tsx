@@ -27,6 +27,7 @@ import {
 } from "./local/privateCache";
 import { offlineScreen, type CacheState } from "./lib/offlineGate";
 import { biometricVault } from "./lib/biometricVault";
+import { ConnectionStatus } from "./components/ConnectionStatus";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
 import { ProfileSwitcher } from "./components/ProfileSwitcher";
@@ -123,6 +124,14 @@ function App() {
    * was locked out of it by the very feature that let them download it.
    */
   const [serverReachable, setServerReachable] = useState<boolean>();
+  const [offlineMode, setOfflineMode] = useState<boolean>(() => {
+    // Check if user explicitly chose offline mode
+    try {
+      return window.localStorage.getItem("offlineMode") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [profileId, setProfileId] = useState<string | null>(() => getActiveProfileId());
   /** The session profile is authoritative; localStorage is the break-glass hint. */
   const activeProfileId = accountExperience === "demo"
@@ -177,6 +186,8 @@ function App() {
    * app on the splash for good.
    */
   const probeServer = useCallback(async (): Promise<void> => {
+    // Don't probe when user has explicitly chosen offline mode
+    if (offlineMode) return;
     // One probe at a time. The probe is itself a request, and a request that
     // fails reports the server as unreachable -- so without this guard a
     // failing probe would trigger another probe, for ever.
@@ -202,8 +213,19 @@ function App() {
           setAuthed(false);
           setSession(null);
           setSessionToken(null);
-          setActiveProfileId(null);
-          setProfileId(null);
+          
+          // Check if user has offline data before clearing profile
+          const hasOfflineData = activeCacheProfileId() !== null;
+          const hasStoredProfile = getActiveProfileId() !== null;
+          
+          if (hasOfflineData && hasStoredProfile) {
+            // Keep profile for offline use, don't clear it
+            console.log("Auth failed but offline data available - preserving profile");
+          } else {
+            // No offline data, clear everything
+            setActiveProfileId(null);
+            setProfileId(null);
+          }
           return;
         }
 
@@ -503,6 +525,8 @@ function App() {
   // offline branch until they force-quit and restart it.
   useEffect(() => {
     const recheck = () => {
+      // Don't probe when user has explicitly chosen offline mode
+      if (offlineMode) return;
       if (serverReachable === false) probeServer();
     };
     window.addEventListener("focus", recheck);
@@ -512,7 +536,7 @@ function App() {
       window.removeEventListener("focus", recheck);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [serverReachable, probeServer]);
+  }, [offlineMode, serverReachable, probeServer]);
 
   /**
    * Decide whether offline can be opened at all.
@@ -596,6 +620,12 @@ function App() {
     setShowServerSetup(false);
     setBypassServerSetup(true);
     setServerReachable(false);
+    setOfflineMode(true);
+    try {
+      window.localStorage.setItem("offlineMode", "true");
+    } catch {
+      // Private mode / storage disabled
+    }
   }, []);
 
   /** Leave for the server-address screen; shared by every offline exit. */
@@ -770,6 +800,7 @@ function App() {
               one line. `IconBtn` rather than `Btn`+`iconbtn`, which fought
               over border-radius and rendered a mismatched shape. */}
           <div className="flex items-center gap-2 sm:ml-auto">
+            <ConnectionStatus offlineMode={offlineMode} serverReachable={serverReachable} />
             <ThemeToggle />
             <IconBtn label={copy.shell.settings} onClick={() => setShowSettings(true)}>
               <GearIcon size={19} aria-hidden="true" />
@@ -1102,6 +1133,16 @@ function App() {
           downloadedCount={device.books.length}
           offline={offline}
           coverBytes={coverCacheBytes()}
+          offlineMode={offlineMode}
+          onReconnect={() => {
+            setOfflineMode(false);
+            try {
+              window.localStorage.removeItem("offlineMode");
+            } catch {
+              // Private mode / storage disabled
+            }
+            probeServer();
+          }}
           onClearCovers={async () => { await clearCoverCache(); }}
           onClose={() => setShowSettings(false)}
           onSaved={() => { void refresh(); void device.refresh(); }}
