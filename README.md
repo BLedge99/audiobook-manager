@@ -49,12 +49,13 @@ The app works in a web browser on desktop, and as an installable app on Android 
 **Listen on your phone**
 - Install the app on an Android phone so it feels like a native app
 - Download books to the phone so you can listen without a network connection
-- Progress syncs back to the server when you are back on your home network
+- Choose **Continue offline** to keep the app disconnected until you explicitly reconnect in Settings
+- Offline listening uses downloads on the phone; progress syncs after you reconnect
 
 ## Things worth knowing
 
 - **It works on your home network only.** The app is designed to be used by devices connected to your home Wi-Fi. It is not intended to be accessed from outside your home, and there is no remote-access feature built in.
-- **One shared password gets everyone in.** A single household password protects the app. Each person picks their own profile after signing in.
+- **Profiles have their own sign-in.** The household password is used to create or recover a profile; each person signs in with their own profile password or device biometric.
 - **Your files are safe.** The app only reads your audiobooks. It never writes metadata into your files, moves them, or deletes them.
 - **Online lookups are optional.** The app can look up covers and descriptions online, but it works perfectly well without them. Any AI-assisted features are optional and never required to browse or play.
 - **It keeps running in the background.** Once started, the server stays running so your household can listen at any time. It survives restarts and picks up where it left off.

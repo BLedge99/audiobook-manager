@@ -4,6 +4,7 @@ import {
   apiAssetUrl,
   apiFetch,
   apiUrl,
+  boundedFetch,
   clearServerUrl,
   describeFailure,
   getServerUrl,
@@ -13,6 +14,7 @@ import {
   normaliseServerUrl,
   SERVER_URL_KEY,
   setServerUrl,
+  setExplicitOfflineMode,
 } from "./api";
 import { lockOfflineCache } from "../local/privateCache";
 import { TEST_SERVER_URL, TEST_SERVER_HOST } from "../test/constants";
@@ -261,6 +263,25 @@ describe("apiFetch", () => {
 describe("lockLocal", () => {
   beforeEach(() => {
     vi.mocked(lockOfflineCache).mockClear();
+  });
+
+  describe("explicit offline mode", () => {
+    it("blocks API requests until reconnection is explicitly requested", async () => {
+      const fetchMock = vi.fn(() => Promise.resolve(new Response("{}", { status: 200 })));
+      const original = globalThis.fetch;
+      globalThis.fetch = fetchMock as typeof fetch;
+      setExplicitOfflineMode(true);
+      try {
+        await expect(boundedFetch("/api/auth/accounts")).rejects.toThrow("The app is in offline mode.");
+        expect(fetchMock).not.toHaveBeenCalled();
+        setExplicitOfflineMode(false);
+        await expect(boundedFetch("/api/auth/accounts")).resolves.toBeInstanceOf(Response);
+        expect(fetchMock).toHaveBeenCalledOnce();
+      } finally {
+        setExplicitOfflineMode(false);
+        globalThis.fetch = original;
+      }
+    });
   });
 
   it("clears the local token and offline cache without calling the server", async () => {

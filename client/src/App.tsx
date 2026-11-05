@@ -13,6 +13,7 @@ import {
   getActiveProfileId,
   setActiveProfileId,
   setSessionToken,
+  setExplicitOfflineMode,
   lockLocal,
   type SessionInfo,
 } from "./lib/api";
@@ -115,6 +116,14 @@ function App() {
   const [authed, setAuthed] = useState<boolean>();
   const [showServerSetup, setShowServerSetup] = useState(false);
   const [bypassServerSetup, setBypassServerSetup] = useState(false);
+  const [offlineMode, setOfflineMode] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("offlineMode") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const offlineModeRef = useRef(offlineMode);
   /**
    * Whether the server answered at all, as distinct from whether it said 401.
    *
@@ -123,15 +132,7 @@ function App() {
    * could never complete. Someone who had downloaded a book to listen on a plane
    * was locked out of it by the very feature that let them download it.
    */
-  const [serverReachable, setServerReachable] = useState<boolean>();
-  const [offlineMode, setOfflineMode] = useState<boolean>(() => {
-    // Check if user explicitly chose offline mode
-    try {
-      return window.localStorage.getItem("offlineMode") === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [serverReachable, setServerReachable] = useState<boolean | undefined>(() => offlineMode ? false : undefined);
   const [profileId, setProfileId] = useState<string | null>(() => getActiveProfileId());
   /** The session profile is authoritative; localStorage is the break-glass hint. */
   const activeProfileId = accountExperience === "demo"
@@ -179,15 +180,15 @@ function App() {
    * Ask the server who we are.
    *
    * Records two separate facts: did it answer at all, and did it accept us.
-   * Re-run on focus so returning home recovers without a manual restart.
+   * Re-run after a known outage so returning home recovers without a manual
+   * restart. Explicit offline mode is a separate choice and suppresses probes.
    *
    * The probe is **bounded** (see `lib/reachability.ts`): a host that is
    * unreachable but silent never answers, and an unbounded request left the
    * app on the splash for good.
    */
-  const probeServer = useCallback(async (): Promise<void> => {
-    // Don't probe when user has explicitly chosen offline mode
-    if (offlineMode) return;
+  const probeServer = useCallback(async (force = false): Promise<void> => {
+    if (offlineModeRef.current && !force) return;
     // One probe at a time. The probe is itself a request, and a request that
     // fails reports the server as unreachable -- so without this guard a
     // failing probe would trigger another probe, for ever.
@@ -195,9 +196,11 @@ function App() {
     probeInFlight.current = true;
     try {
         const config = await fetchAppConfig();
+        if (offlineModeRef.current && !force) return;
         setAccountExperience(config.accountExperience);
         setApiAccountExperience(config.accountExperience);
         const probe = await probeServerRequest();
+        if (offlineModeRef.current && !force) return;
         setServerReachable(probe.reachable);
         if (probe.reachable) {
           setBypassServerSetup(false);
@@ -213,23 +216,15 @@ function App() {
           setAuthed(false);
           setSession(null);
           setSessionToken(null);
-          
-          // Check if user has offline data before clearing profile
-          const hasOfflineData = activeCacheProfileId() !== null;
-          const hasStoredProfile = getActiveProfileId() !== null;
-          
-          if (hasOfflineData && hasStoredProfile) {
-            // Keep profile for offline use, don't clear it
-            console.log("Auth failed but offline data available - preserving profile");
-          } else {
-            // No offline data, clear everything
-            setActiveProfileId(null);
-            setProfileId(null);
-          }
+
+          // Keep the remembered identity as a hint for password/biometric
+          // recovery. A failed session must not erase the only local link to
+          // the offline cache.
           return;
         }
 
         const info = await fetchSession();
+        if (offlineModeRef.current && !force) return;
         if (!info) {
           setAuthed(false);
           setSession(null);
@@ -274,9 +269,17 @@ function App() {
    * button is the one place that settles it.
    */
   const refreshEverything = useCallback(() => {
-    if (serverReachable === false) probeServer();
+    if (offlineMode) {
+      void device.refresh();
+      return;
+    }
+    if (serverReachable === false) {
+      probeServer();
+      void device.refresh();
+      return;
+    }
     void refresh();
-  }, [serverReachable, probeServer, refresh]);
+  }, [offlineMode, serverReachable, probeServer, refresh, device.refresh]);
 
   /**
    * A request failed because the server could not be reached.
@@ -368,7 +371,7 @@ function App() {
    * not look like a failure. Offline with nothing downloaded is still the app:
    * the library tab shows an honest empty state (spec 29).
    */
-  const offline = serverReachable === false;
+  const offline = offlineMode || serverReachable === false;
   const libraryBooks = useMemo(() => {
     const books = new Map<string, Audiobook>();
     if (!offline) {
@@ -616,11 +619,17 @@ function App() {
     setSkippedUnlock(false);
   }, [activeProfileId]);
 
-  const handleContinueOffline = useCallback(() => {
+  const handleContinueOffline = useCallback((preserveUnlockedCache = false) => {
+    offlineModeRef.current = true;
+    setExplicitOfflineMode(true);
     setShowServerSetup(false);
     setBypassServerSetup(true);
     setServerReachable(false);
     setOfflineMode(true);
+    setAuthed(false);
+    setSession(null);
+    setOfflineUnlocked(preserveUnlockedCache);
+    if (!preserveUnlockedCache) void lockLocal();
     try {
       window.localStorage.setItem("offlineMode", "true");
     } catch {
@@ -681,7 +690,7 @@ function App() {
 
   // Still deciding whether the server is there. Rendering the login form now
   // would flash a password box at someone who is simply on a slow connection.
-  if (serverReachable === undefined) return <Splash />;
+  if (!offlineMode && serverReachable === undefined) return <Splash />;
 
   /**
    * Offline: one tested decision, not a ladder of `if`s (spec 29).
@@ -748,7 +757,11 @@ function App() {
     return (
       <AccountGate
         accountExperience={accountExperience}
-        onSuccess={() => {
+        onSuccess={(result) => {
+          if (result?.offline) {
+            handleContinueOffline(true);
+            return;
+          }
           setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
           void (async () => {
             await refresh();
@@ -769,7 +782,10 @@ function App() {
   if (serverReachable && authed && !activeProfileId && accountExperience !== "demo") {
     return (
       <ProfileGate
-        onSuccess={() => setProfileId(getActiveProfileId())}
+        onSuccess={() => {
+          setProfileId(getActiveProfileId());
+          void probeServer();
+        }}
         onContinueOffline={isNativeShell() ? handleContinueOffline : undefined}
       />
     );
@@ -1135,13 +1151,16 @@ function App() {
           coverBytes={coverCacheBytes()}
           offlineMode={offlineMode}
           onReconnect={() => {
+            offlineModeRef.current = false;
+            setExplicitOfflineMode(false);
             setOfflineMode(false);
+            setServerReachable(undefined);
             try {
               window.localStorage.removeItem("offlineMode");
             } catch {
               // Private mode / storage disabled
             }
-            probeServer();
+            void probeServer(true);
           }}
           onClearCovers={async () => { await clearCoverCache(); }}
           onClose={() => setShowSettings(false)}

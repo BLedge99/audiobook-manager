@@ -72,6 +72,23 @@ describe("AccountGate biometric sign-in", () => {
     expect(onSuccess).toHaveBeenCalledOnce();
   });
 
+  it("reports local biometric unlock as offline when the server session cannot be exchanged", async () => {
+    mocks.fetch.mockImplementation(async (path: string) => {
+      if (path === "/api/auth/accounts") return response(200, [{
+        id: 7, name: "Ben", role: "member", disabled: false,
+        hasPassword: true, hasPasskey: false, hasDeviceUnlock: true,
+      }]);
+      throw new Error("server unreachable");
+    });
+    const onSuccess = vi.fn();
+    render(<AccountGate onSuccess={onSuccess} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+    fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith({ offline: true }));
+    expect(mocks.unlockKey).toHaveBeenCalledWith(7, expect.any(Uint8Array));
+  });
+
   it("falls back to the password form when the prompt is cancelled", async () => {
     mocks.unlock.mockRejectedValue(new Error("cancelled"));
     const onSuccess = vi.fn();

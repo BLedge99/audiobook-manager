@@ -215,6 +215,41 @@ export async function registerAuthRoutes(
     return auth.listAccounts();
   });
 
+  app.post<{ Body: { name: string; householdPassword: string; password: string } }>(
+    "/api/auth/register-profile",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 80 },
+            householdPassword: { type: "string", minLength: 1, maxLength: 256 },
+            password: { type: "string", minLength: 1, maxLength: 256 },
+          },
+          required: ["name", "householdPassword", "password"],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (demoMode()) return fail(reply, 404, "not_found");
+      try {
+        const result = await auth.registerProfile(
+          request.body.name,
+          request.body.householdPassword,
+          request.body.password,
+          metadata(request),
+          request.ip,
+        );
+        setSessionCookie(reply, result.token, options);
+        await cleanupAfterLogin(auth);
+        return loginPayload(result);
+      } catch (error) {
+        return sendAuthFailure(reply, error);
+      }
+    },
+  );
+
   app.post<{ Body: { email: string; password: string } }>("/api/auth/signup", {
     schema: {
       body: {

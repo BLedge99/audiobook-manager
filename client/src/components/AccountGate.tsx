@@ -13,6 +13,7 @@ import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passk
 import { deleteProfileCache, fromBase64, lockOfflineCache, rememberProfileKey, unlockProfileCacheWithKey } from "../local/privateCache";
 import { biometricVault } from "../lib/biometricVault";
 import { toBase64, exportActiveProfileKey } from "../local/privateCache";
+import { ProfileRegistration } from "./ProfileRegistration";
 import {
   biometricFailureMessage,
   classifyBiometricFailure,
@@ -37,6 +38,7 @@ type Mode =
   | { kind: "password"; account: Account }
   | { kind: "setup"; account: Account }
   | { kind: "household" }
+  | { kind: "register" }
   | { kind: "email" };
 
 const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
@@ -61,7 +63,7 @@ export function AccountGate({
   accountExperience = "household",
   onContinueOffline,
 }: {
-  onSuccess: () => void | Promise<void>;
+  onSuccess: (result?: { offline: boolean }) => void | Promise<void>;
   accountExperience?: "household" | "demo";
   /** Offered in the native shell so the listener is never soft-locked offline. */
   onContinueOffline?: () => void;
@@ -69,6 +71,7 @@ export function AccountGate({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [loading, setLoading] = useState(true);
+  const [accountsLoadFailed, setAccountsLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -109,12 +112,16 @@ export function AccountGate({
         }
         const res = await boundedFetch("/api/auth/accounts");
         if (!res.ok) {
-          if (alive) setError(copy.account.loadFailed(res.status));
+          if (alive) {
+            setAccountsLoadFailed(true);
+            setError(copy.account.loadFailed(res.status));
+          }
           return;
         }
         const list = (await res.json()) as Account[];
         if (!alive) return;
         setAccounts(list);
+        setAccountsLoadFailed(false);
         const pending = window.localStorage.getItem(PENDING_PROFILE_KEY);
         if (pending) {
           const match = list.find((account) => String(account.id) === pending);
@@ -125,7 +132,10 @@ export function AccountGate({
           }
         }
       } catch (loadError) {
-        if (alive) setError(errorSentence(loadError));
+        if (alive) {
+          setAccountsLoadFailed(true);
+          setError(errorSentence(loadError));
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -135,12 +145,12 @@ export function AccountGate({
     };
   }, [accountExperience]);
 
-  const finish = async (profileId: number | null, token: string | undefined) => {
+  const finish = async (profileId: number | null, token: string | undefined, offline = false) => {
     setSessionToken(token);
     setActiveProfileId(accountExperience === "demo" ? null : profileId);
     if (profileId === null || accountExperience === "demo") lockOfflineCache();
     window.localStorage.removeItem(PENDING_PROFILE_KEY);
-    await onSuccess();
+    await onSuccess({ offline });
   };
 
   /**
@@ -302,6 +312,7 @@ export function AccountGate({
       }
       let token: string | undefined;
       let response: Response | undefined;
+      let offlineSignIn = !saved.secret;
       
       // Only try server authentication if we have a secret (online-registered mode)
       if (saved.secret) {
@@ -312,6 +323,7 @@ export function AccountGate({
           });
         } catch {
           // The DEK can open this profile offline; no server session is invented.
+          offlineSignIn = true;
         }
         if (response && !response.ok) {
           if (response.status === 401 || response.status === 404) {
@@ -327,7 +339,7 @@ export function AccountGate({
       }
       // Unlock with the saved key (works for both offline-only and online-registered modes)
       await unlockProfileCacheWithKey(saved.profileId, fromBase64(saved.key));
-      await finish(saved.profileId, token);
+      await finish(saved.profileId, token, offlineSignIn);
     } catch {
       setError(copy.login.deviceFailed);
     } finally { setBusy(false); }
@@ -403,23 +415,6 @@ export function AccountGate({
     event.preventDefault();
     setBusy(true);
     setError(undefined);
-    
-    // Check if we're offline (no network connection)
-    const isOffline = !navigator.onLine;
-    
-    if (isOffline) {
-      // Allow household password to proceed offline
-      // The password will be validated against cached data when possible
-      try {
-        await finish(null, undefined);
-      } catch {
-        setError(copy.login.unreachable);
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    
     try {
       const res = await boundedFetch("/api/auth/login", {
         method: "POST",
@@ -455,7 +450,9 @@ export function AccountGate({
       ? copy.account.setupHeading(mode.account.name)
       : mode.kind === "household"
         ? copy.account.householdHeading
-        : mode.kind === "email"
+      : mode.kind === "register"
+        ? copy.account.createProfile
+      : mode.kind === "email"
           ? emailSignup ? copy.login.emailCreateHeading : copy.login.heading
           : copy.profile.heading;
 
@@ -471,6 +468,8 @@ export function AccountGate({
               ? copy.account.setupIntro
               : mode.kind === "household"
                 ? copy.account.householdIntro
+                : mode.kind === "register"
+                  ? copy.account.registerIntro
                 : mode.kind === "password"
                   ? copy.account.passwordLabel(mode.account.name)
                   : mode.kind === "email"
@@ -546,12 +545,29 @@ export function AccountGate({
                     ) : null}
                   </button>
                 ))}
-                {!accounts.length && (
+                {!accounts.length && !accountsLoadFailed && (
                   <p className="panel panel--sunk px-4 py-5 text-center text-sm text-ink2">
                     {copy.account.noProfiles}
                   </p>
                 )}
               </div>
+
+              {!accountsLoadFailed && (
+                <Btn
+                  type="button"
+                  variant="quiet"
+                  onClick={() => {
+                    setError(undefined);
+                    setMode({ kind: "register" });
+                  }}
+                  className="mt-4 w-full"
+                >
+                  {copy.account.createProfile}
+                </Btn>
+              )}
+              {accountsLoadFailed && error && (
+                <p role="alert" className="text-sm font-bold text-rasp-ink">{error}</p>
+              )}
 
               <div className="mt-5 grid min-w-0 gap-3">
                 {oauthProviders.includes("google") && (
@@ -745,6 +761,13 @@ export function AccountGate({
             </form>
           )}
 
+          {!loading && mode.kind === "register" && (
+            <ProfileRegistration
+              onRegistered={(profileId, token) => finish(profileId, token)}
+              onCancel={back}
+            />
+          )}
+
           {!loading && mode.kind === "email" && (
             <form onSubmit={emailSignIn} className="mt-5 grid gap-3">
               <label htmlFor="email" className="sr-only">
@@ -804,7 +827,7 @@ export function AccountGate({
             </form>
           )}
 
-          {error && (
+          {error && !(mode.kind === "list" && accountsLoadFailed && accountExperience === "household") && (
             <p
               role="alert"
               className="mt-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-rasp/12 px-3 py-2 text-sm font-bold text-rasp-ink"

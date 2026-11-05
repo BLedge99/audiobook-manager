@@ -1,15 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installApiBaseUrl, onServerUnreachable, resolveApiRequest, setServerUrl, setSessionToken } from "./api";
+import {
+  installApiBaseUrl,
+  onServerUnreachable,
+  resolveApiRequest,
+  setExplicitOfflineMode,
+  setServerUrl,
+  setSessionToken,
+} from "./api";
 import { TEST_SERVER_URL } from "../test/constants";
 
 beforeEach(() => {
   window.localStorage.clear();
+  setExplicitOfflineMode(false);
 });
 
 afterEach(() => {
   // The installer replaces window.fetch for the whole jsdom instance, so it has
   // to be undone or it leaks into every later test file.
   (window as unknown as Record<string, unknown>).__audiobookApiBaseInstalled = false;
+  setExplicitOfflineMode(false);
   vi.restoreAllMocks();
 });
 
@@ -99,6 +108,41 @@ describe("installApiBaseUrl", () => {
     }
 
     expect(inits[0]?.credentials).toBe("include");
+  });
+
+  it("blocks raw API fetches while explicit offline mode is active", async () => {
+    const original = window.fetch;
+    const fetchServer = vi.fn(async () => new Response("[]", { status: 200 }));
+    window.fetch = fetchServer as typeof fetch;
+
+    try {
+      setServerUrl(TEST_SERVER_URL);
+      setExplicitOfflineMode(true);
+      installApiBaseUrl();
+
+      await expect(fetch("/api/profiles")).rejects.toThrow("The app is in offline mode.");
+      await expect(fetch(`${TEST_SERVER_URL}/api/health`)).rejects.toThrow("The app is in offline mode.");
+      expect(fetchServer).not.toHaveBeenCalled();
+    } finally {
+      window.fetch = original;
+      setExplicitOfflineMode(false);
+    }
+  });
+
+  it("continues to allow local media fetches while offline", async () => {
+    const original = window.fetch;
+    const fetchMedia = vi.fn(async () => new Response("audio", { status: 200 }));
+    window.fetch = fetchMedia as typeof fetch;
+
+    try {
+      setExplicitOfflineMode(true);
+      installApiBaseUrl();
+      await expect(fetch("capacitor-file://_capacitor_file_/books/7/70.mp3")).resolves.toBeInstanceOf(Response);
+      expect(fetchMedia).toHaveBeenCalledOnce();
+    } finally {
+      window.fetch = original;
+      setExplicitOfflineMode(false);
+    }
   });
 
   it("sends the in-memory native session as a header on every fetch", async () => {

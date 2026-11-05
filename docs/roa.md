@@ -13,15 +13,15 @@ This RoPA maps every processing activity that involves personal data, its purpos
 
 | Field | Value |
 |-------|-------|
-| **Activity** | Creation, update, and deletion of profiles (accounts) |
+| **Activity** | Household-password-authorized profile registration, update, sign-in identity, and deletion |
 | **Purpose** | Identity for household members / production-demo users; isolates progress, history, favourites, wishlist, library per person |
-| **Personal data** | `Profile.id`, `Profile.name` (display name), `Profile.color`, `Profile.avatar`, `Profile.createdAt`, `Profile.role` (admin/member), optional hashed password (spec 28), OAuth provider ID + email (spec 32, production demo only) |
+| **Personal data** | `Profile.id`, `Profile.name` (display name), `Profile.color`, `Profile.avatar`, `Profile.createdAt`, `Profile.role` (admin/member), hashed profile password (spec 28), OAuth provider ID + email (spec 32, production demo only). The household password is checked transiently and is not retained by this registration flow. |
 | **Lawful basis** | Art. 6(1)(b) contract — necessary to provide the service; Art. 6(1)(a) consent for OAuth/email sign-up in production demo |
 | **Retention** | Indefinite while account active; deleted on self-service erasure (Phase 4) or admin deletion; inactive-profile purge per retention schedule (Phase 6) |
 | **Recipients** | Server only; client receives profile id/name/color for the authenticated profile |
 | **Cross-border transfer** | None |
 | **Automated decision-making** | None |
-| **System** | `server/prisma/schema.prisma` model `Profile`; `server/src/app.ts` routes `/api/profiles` |
+| **System** | `server/prisma/schema.prisma` model `Profile`; `server/src/auth/routes.ts` route `/api/auth/register-profile`; `server/src/app.ts` routes `/api/profiles` |
 
 ---
 
@@ -182,7 +182,9 @@ This RoPA maps every processing activity that involves personal data, its purpos
 | Key envelopes | IndexedDB `keyEnvelopes` | Wrapped DEKs at rest only | `client/src/local/privateCache.ts` |
 | Book replica + covers | IndexedDB `books`, `covers` | None (household content) | `client/src/local/db.ts` |
 | Active profile + server URL | `localStorage` | Plaintext identifiers only | `client/src/lib/api.ts` |
+| Explicit offline preference | `localStorage` | Boolean preference; contains no credential | `client/src/App.tsx` |
 | Session token | Memory (Android) / HttpOnly cookie (browser) | — | `client/src/lib/api.ts` |
+| Registration credentials | Form/request memory only | Household password is not saved; profile password is used to wrap the local cache key and is not persisted | `client/src/components/ProfileRegistration.tsx` |
 
 ---
 

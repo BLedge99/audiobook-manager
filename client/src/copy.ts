@@ -530,10 +530,14 @@ export const copy = {
     newPasswordLabel: "New password",
     confirmPasswordLabel: "Confirm new password",
     setupSubmit: "Set up profile",
+    createProfile: "Create a profile",
+    createProfileSubmit: "Create profile and sign in",
+    registerIntro: "Create a profile for this household. The household password confirms permission to join; your profile password protects your sign-in.",
+    householdPasswordLabel: "Household password",
     mismatch: "The two passwords don't match.",
     needsSetup: "Needs setup",
     disabled: "Switched off",
-    noProfiles: "No profiles yet. Use the household password to set one up.",
+    noProfiles: "No profiles have been set up on this server yet.",
     loadFailed: (status: number) => `Could not load the profiles (HTTP ${status}).`,
     unclaimedHint: "This profile doesn't have a password yet.",
     useHousehold: "Use the household password",
@@ -617,6 +621,7 @@ export const copy = {
     addProfileCompact: "+ Profile",
     addShort: "Add",
     duplicate: "A profile with that name already exists.",
+    nameRequired: "Enter a name for your profile.",
     /**
      * The status code is in parentheses, not in front: the listener needs to
      * know what to do next, and an operator can read the code in the logs.

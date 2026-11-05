@@ -52,10 +52,19 @@ if (typeof window !== "undefined") {
 /** Storage key for the profile chosen in the break-glass flow. */
 export const PROFILE_ID_KEY = "profileId";
 let nativeSessionToken = "";
+let explicitOfflineMode = (() => {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem("offlineMode") === "true";
+  } catch {
+    return false;
+  }
+})();
 
 /** The header the server accepts the session token in (see server `app.ts`). */
 export const SESSION_HEADER = "x-house-session";
 let accountExperience: "household" | "demo" = "household";
+const OFFLINE_MODE_ERROR = "The app is in offline mode.";
 
 export interface SessionProfile {
   id?: number;
@@ -84,6 +93,10 @@ export interface AppConfig {
 
 export function setAccountExperience(experience: "household" | "demo"): void {
   accountExperience = experience;
+}
+
+export function setExplicitOfflineMode(enabled: boolean): void {
+  explicitOfflineMode = enabled;
 }
 
 export async function fetchAppConfig(): Promise<AppConfig> {
@@ -337,6 +350,21 @@ export function resolveApiRequest(input: RequestInfo | URL): RequestInfo | URL {
   return input;
 }
 
+function isApiRequest(input: RequestInfo | URL): boolean {
+  const rawUrl =
+    typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url;
+  try {
+    const url = new URL(rawUrl, window.location.href);
+    return url.pathname === "/api" || url.pathname.startsWith("/api/");
+  } catch {
+    return false;
+  }
+}
+
 const INSTALL_FLAG = "__audiobookApiBaseInstalled";
 
 /**
@@ -468,6 +496,10 @@ export function installApiBaseUrl(): void {
 
   const original = window.fetch.bind(window);
   window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    if (explicitOfflineMode && isApiRequest(input)) {
+      return Promise.reject(new Error(OFFLINE_MODE_ERROR));
+    }
+
     // Attach the session token here rather than at each call site. The app has
     // ~8 duplicated private `request` helpers plus raw `fetch` calls, so any
     // per-call-site approach silently misses most of them -- that is exactly how
@@ -538,6 +570,9 @@ export async function boundedFetch(
   init: RequestInit = {},
   timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
+  if (explicitOfflineMode) {
+    throw new Error(OFFLINE_MODE_ERROR);
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const outer = init.signal;

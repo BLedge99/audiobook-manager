@@ -47,8 +47,9 @@ Profiles with no `lastActiveAt` at all (created but never used) are evaluated ag
 |-------|------|-----------|-------------|
 | IndexedDB `privateRows` | Encrypted per-profile progress/favourites/wishlist | Until profile deletion or explicit clear | `DELETE /api/me` response triggers client to wipe `privateRows`/`keyEnvelopes` and `localStorage.profileId` |
 | IndexedDB `books` / `covers` | Book replica + cover images | Until source removed or cache expiry | Scanner/cache eviction, not personal data |
-| `localStorage` | Active profile id, server URL | Until sign-out or profile deletion | `lockSession()` clears token; `DELETE /api/me` clears profile id |
+| `localStorage` | Active profile id, server URL, explicit offline-mode boolean | Profile id until sign-out/profile deletion; server URL and mode preference until changed | `lockSession()` clears token; `DELETE /api/me` clears profile id; reconnect clears offline preference |
 | Session token | Browser memory / HttpOnly cookie (web) | Session TTL | Cookie expires with session; Android holds in memory |
+| Registration form values | Name and household/profile passwords | Request lifetime only | Component state is discarded after submission; household password is never persisted; only the server-side profile password hash is retained |
 
 ---
 

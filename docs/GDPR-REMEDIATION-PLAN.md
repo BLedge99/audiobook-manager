@@ -226,4 +226,21 @@ Work one phase at a time. Each phase that changes code must include:
 - Tests (integration via Fastify `inject` + temp SQLite; unit for pure logic).
 - Additive migrations only (Prisma-managed; portable SQL).
 
+### Profile registration and offline-mode update (2026-11-05)
+
+The new household-password-backed `/api/auth/register-profile` flow creates
+the existing `Profile` account record; it introduces no new personal-data
+category or table. The RoPA entry for profile management applies:
+
+- **Lawful basis:** Art. 6(1)(b), providing and securing the household profile
+  service.
+- **Retention:** profile and password hash follow the existing active-profile
+  and 24-month inactivity schedule in `docs/retention.md`.
+- **Rights impact:** registration adds a profile to the same access, rectification,
+  and erasure paths as other profiles; account deletion cascades to associated
+  profile data. The household password is request-only and is not retained.
+- **Offline mode:** the persisted preference is a boolean, not personal data or
+  an authentication credential. No household password, temporary profile, or
+  pending registration is stored on the device.
+
 Start: Phase 1.

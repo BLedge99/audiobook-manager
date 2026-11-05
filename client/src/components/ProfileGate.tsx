@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Plus, UserRound } from "lucide-react";
 import { copy } from "../copy";
+import { boundedFetch } from "../lib/api";
+import { ProfileRegistration } from "./ProfileRegistration";
 import { Btn, Field, FullScreen, Wordmark, cn } from "../ui/primitives";
 
 interface Profile {
@@ -30,34 +32,24 @@ export function ProfileGate({
   const [newName, setNewName] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [error, setError] = useState("");
-  const [householdPassword, setHouseholdPassword] = useState("");
-  const [creatingOffline, setCreatingOffline] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = async () => {
-    // Guarded because `fetch` rejects on a network or CORS failure, and an
-    // unhandled rejection here left the screen looking like it had done nothing
-    // at all: the Add button appeared dead, with no message anywhere. On the
-    // Android app that is the *first* thing a new user sees, and the most likely
-    // failure is "cannot reach the server", which they cannot diagnose unaided.
+    setLoading(true);
+    setError("");
     try {
-      const res = await fetch("/api/profiles");
-      if (res.ok) {
-        setProfiles(await res.json());
-        setError("");
-      } else if (res.status === 401) {
-        // If unauthorized, show empty list with creation option
-        // instead of blocking error
-        setProfiles([]);
-        setError("");
-      } else {
-        // Other errors - still allow profile creation
-        setProfiles([]);
-        setError("");
+      const res = await boundedFetch("/api/profiles");
+      if (!res.ok) {
+        setError(res.status === 401
+          ? copy.profile.sessionExpired
+          : copy.profile.loadFailed(res.status));
+        return;
       }
-    } catch (loadError) {
-      // Network failure - allow offline profile creation
-      setProfiles([]);
-      setError("");
+      setProfiles(await res.json() as Profile[]);
+    } catch {
+      setError(copy.profile.unreachable(copy.profile.checkAddress));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -78,26 +70,8 @@ export function ProfileGate({
     }
     setError("");
     
-    // Check if we should create offline (no network)
-    const isOffline = !navigator.onLine;
-    if (isOffline) {
-      setCreatingOffline(true);
-      // Create a temporary profile locally
-      const tempId = -Date.now(); // Negative ID indicates offline profile
-      const offlineProfile: Profile = { id: tempId, name };
-      setProfiles([...profiles, offlineProfile]);
-      // Store household password for offline validation when reconnecting
-      try {
-        window.localStorage.setItem(`offlineProfile_${tempId}`, JSON.stringify({ name, householdPassword }));
-      } catch {
-        // Private mode / storage disabled
-      }
-      select(tempId);
-      return;
-    }
-
     try {
-      const res = await fetch("/api/profiles", {
+      const res = await boundedFetch("/api/profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -114,17 +88,7 @@ export function ProfileGate({
         setError(copy.profile.createFailed(res.status));
       }
     } catch (addError) {
-      // Fall back to offline creation if network fails
-      setCreatingOffline(true);
-      const tempId = -Date.now();
-      const offlineProfile: Profile = { id: tempId, name };
-      setProfiles([...profiles, offlineProfile]);
-      try {
-        window.localStorage.setItem(`offlineProfile_${tempId}`, JSON.stringify({ name, householdPassword }));
-      } catch {
-        // Private mode / storage disabled
-      }
-      select(tempId);
+      setError(addError instanceof Error ? addError.message : copy.profile.createFailed(0));
     }
   };
 
@@ -140,7 +104,9 @@ export function ProfileGate({
           <h1 className="font-display text-2xl font-semibold text-ink">{copy.profile.heading}</h1>
           <p className="mt-1.5 text-sm text-ink2">{copy.profile.intro}</p>
 
-          <div className="mt-5 grid min-w-0 gap-3">
+          {loading && <p className="mt-5 text-sm text-ink2" role="status">{copy.login.checking}</p>}
+
+          {!loading && profiles.length > 0 && <div className="mt-5 grid min-w-0 gap-3">
             {profiles.map((profile, index) => (
               <button
                 key={profile.id}
@@ -163,17 +129,19 @@ export function ProfileGate({
                 </span>
               </button>
             ))}
-            {!profiles.length && !showAdd && (
-              <div className="panel panel--sunk px-4 py-5 text-center">
-                <p className="text-sm text-ink2 mb-3">{copy.profile.noneYet}</p>
-                <Btn variant="quiet" size="sm" onClick={() => setShowAdd(true)}>
-                  <Plus size={16} aria-hidden="true" /> {copy.profile.createFirst}
-                </Btn>
-              </div>
-            )}
-          </div>
+          </div>}
 
-          {showAdd ? (
+          {!loading && profiles.length === 0 && !error && (
+            <>
+              <p className="panel panel--sunk mt-5 px-4 py-5 text-center text-sm text-ink2">
+                {copy.account.noProfiles}
+              </p>
+              <p className="mt-3 text-sm text-ink2">{copy.account.registerIntro}</p>
+              <ProfileRegistration onRegistered={() => onSuccess()} />
+            </>
+          )}
+
+          {!loading && profiles.length > 0 && showAdd ? (
             <form onSubmit={add} className="mt-4 flex flex-col gap-2">
               <Field
                 value={newName}
@@ -182,21 +150,17 @@ export function ProfileGate({
                 aria-label={copy.profile.nameLabel}
                 className="min-w-0 flex-1"
               />
-              {creatingOffline && (
-                <Field
-                  type="password"
-                  value={householdPassword}
-                  onChange={(event) => setHouseholdPassword(event.target.value)}
-                  placeholder={copy.login.passwordPlaceholder}
-                  aria-label={copy.login.passwordLabel}
-                  className="min-w-0 flex-1"
-                />
-              )}
               <Btn type="submit" className="shrink-0">{copy.profile.addShort}</Btn>
             </form>
-          ) : (
+          ) : !loading && profiles.length > 0 ? (
             <Btn variant="quiet" size="sm" onClick={() => setShowAdd(true)} className="mt-4">
               <Plus size={16} aria-hidden="true" /> {copy.profile.addProfile}
+            </Btn>
+          ) : null}
+
+          {!loading && error && (
+            <Btn type="button" variant="quiet" onClick={() => void load()} className="mt-4 w-full">
+              {copy.shell.refresh}
             </Btn>
           )}
 

@@ -136,6 +136,76 @@ export class AuthService {
     return this.createSession(null, "household", meta);
   }
 
+  async registerProfile(
+    name: string,
+    householdPassword: string,
+    password: string,
+    meta: SessionMetadata,
+    ip: string,
+  ): Promise<LoginResult> {
+    if (!this.enabled) throw new AuthFailure(400, "request_invalid");
+    this.checkIp(ip);
+
+    const expected = createHash("sha256").update(this.appPassword as string).digest();
+    const provided = createHash("sha256").update(householdPassword).digest();
+    if (!timingSafeEqual(expected, provided)) {
+      this.recordIpFailure(ip);
+      throw new AuthFailure(401, "incorrect_password");
+    }
+
+    const profileName = name.trim();
+    if (!profileName) throw new AuthFailure(400, "profile_name_required");
+    if (await this.prisma.profile.findUnique({ where: { name: profileName } })) {
+      throw new AuthFailure(409, "profile_name_taken");
+    }
+    this.assertPassword(password, profileName);
+    const passwordHash = await hashPassword(password);
+
+    const token = newSessionToken();
+    const now = this.now();
+    let result: LoginResult;
+    try {
+      result = await this.prisma.$transaction(async (transaction) => {
+        const profile = await transaction.profile.create({
+          data: {
+            name: profileName,
+            passwordHash,
+            passwordUpdatedAt: now,
+            lastLoginAt: now,
+            lastActiveAt: now,
+          },
+        });
+        const session = await transaction.session.create({
+          data: {
+            id: newSessionId(),
+            tokenHash: hashSessionToken(token),
+            profileId: profile.id,
+            via: "profile",
+            userAgent: meta.userAgent?.slice(0, 500) ?? null,
+            deviceLabel: meta.deviceLabel?.slice(0, 100) ?? null,
+            createdAt: now,
+            lastUsedAt: now,
+            expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+          },
+        });
+        return { token, session, profile, role: "member" };
+      });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        throw new AuthFailure(409, "profile_name_taken");
+      }
+      throw error;
+    }
+
+    this.clearIp(ip);
+    return result;
+  }
+
   async loginProfile(
     profileId: number,
     password: string,

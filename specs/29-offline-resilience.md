@@ -41,6 +41,9 @@ Written before the code, per `AGENTS.md`. Implementation: `client/src/lib/offlin
 | 8 | Biometrics unavailable | Explain in both Settings and the sign-in screen |
 | 9 | Listen without progress | Allowed, with a persistent "progress is not being saved" line, no repeat prompting |
 | 10 | Reconnect | A skip lasts for the offline session; reconnecting re-offers the key by resetting the skip |
+| 11 | Explicit offline mode | Persist the choice, clear the in-memory server credential, and block API calls until manual reconnect |
+| 12 | Offline biometric sign-in | If local Vault unlock succeeds but server credential exchange cannot complete, enter the local offline shell without another probe |
+| 13 | Remembered identity | Preserve the local profile id after auth failure; never invent temporary profile ids |
 
 Related: [`decisions/018-offline-cache-is-provable-two-ways.md`](../decisions/018-offline-cache-is-provable-two-ways.md),
 [`specs/26-android-app.md`](26-android-app.md) (offline section),
@@ -48,8 +51,16 @@ Related: [`decisions/018-offline-cache-is-provable-two-ways.md`](../decisions/01
 
 ## Behaviour
 
-Offline means `serverReachable === false`. The app asks the server once; a failed
-request re-probes, and the probe alone decides.
+Offline means the server is unreachable or the listener explicitly chose offline
+mode. An explicit choice is persisted for cold starts, clears the in-memory
+server credential, and blocks API calls until **Reconnect to server** is chosen
+in Settings. It is not inferred from `navigator.onLine`.
+
+When offline mode was not explicitly selected, the app probes on launch and
+rechecks on foreground after a known outage. A probe decides reachability; a
+failed API request alone does not force the app offline. Once explicitly
+offline, focus changes, refreshes, and request failures must not trigger server
+probes or other server requests.
 
 ### The offline screen table
 
@@ -105,6 +116,12 @@ disabled **Continue offline** button, in a different component.
 The skip resets when the server becomes reachable or the profile changes — a
 fresh session is a fresh chance to save progress, and a skip must never nag
 mid-session.
+
+Offline mode does not delete the configured server URL, downloaded shelves, or
+remembered profile id. Reconnection is explicit and then runs the ordinary
+server probe/auth flow. A household password cannot be checked offline;
+continuation is a separate action and does not create an account or persist the
+password.
 
 ### Progress that is not being saved
 

@@ -110,6 +110,7 @@ export function apiErrorText(status: number, body: unknown): string {
 const ALIASES: Record<string, () => string> = {
   incorrect_password: () => copy.login.wrongPassword,
   profile_name_taken: () => copy.profile.duplicate,
+  profile_name_required: () => copy.profile.nameRequired,
   auth_required: () => copy.profile.sessionExpired,
 };
 

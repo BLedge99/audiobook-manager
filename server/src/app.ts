@@ -70,6 +70,7 @@ function isPublicApiPath(path: string): boolean {
     path === "/api/health" ||
     path === "/api/config" ||
     path === "/api/auth/login" ||
+    path === "/api/auth/register-profile" ||
     path === "/api/auth/signup" ||
     path === "/api/auth/providers" ||
     path === "/api/auth/accounts" ||

@@ -49,8 +49,10 @@ Confirmed with the household:
 4. **Passkeys are for the Windows web front end**, through Windows Hello. The
    Android app does not use passkeys.
 5. **Android uses native fingerprint/face unlock**, not WebAuthn.
-6. **Offline mode requires the profile password**, and the private cache is
-   encrypted. A hash alone is not enough.
+6. **Offline mode requires a locally unlocked profile key**, and the private
+   cache is encrypted. The profile password or a previously enrolled device
+   biometric may unlock it; an offline device cannot validate the household
+   password or create a server account.
 7. **HTTPS is part of this work.** The production web address is
    `books.home.arpa`, served by Caddy with `tls internal`; its local CA is
    installed on the Windows machines. `http://localhost` remains a valid secure
@@ -112,6 +114,11 @@ password.
 - The old household form remains available only when `APP_PASSWORD` is set. It
   creates a break-glass admin session with no profile, and is used for claiming
   and recovery. It is not shown as the normal way in.
+- If the account list is confirmed empty, **Create a profile** asks for a name,
+  the household password, and a new profile password. `POST
+  /api/auth/register-profile` validates the household key, creates the profile,
+  and returns a profile-bound session. A failed account-list request is an
+  error state, not an empty-list/signup state.
 - On a fresh install with no passwords set, the first-run screen explains that
   an admin must claim `admin` with the household key, or that the household key
   can be used to set each profile's first password.
@@ -415,6 +422,8 @@ Public (no session):
 - `GET /api/health`
 - `POST /api/auth/login` — `{ password }` is break-glass; `{ profileId,
   password }` is a profile sign-in.
+- `POST /api/auth/register-profile` — `{ name, householdPassword, password }`
+  validates the household key, creates a profile, and issues a profile session.
 - `POST /api/auth/claim`
 - `GET /api/auth/accounts` — id, name, colour, role, `hasPassword`, `hasPasskey`
 - `POST /api/auth/passkeys/login/options`
@@ -538,6 +547,9 @@ checked against a copy of the live database before it is applied.
       documented codes.
 - [x] `POST /api/auth/login` with a profile id and password creates a profile
       session; the profile is derived from the session, not the header.
+- [x] First profile registration validates the household password and profile
+      password, creates a real profile/session, and does not store the household
+      password on the client.
 - [x] A member session that sends another profile's `x-profile-id` still reads
       and writes only its own progress, favourites, wishlist and library.
 - [x] A member gets 403 on scan, enrichment, taxonomy, library-root and
@@ -575,6 +587,8 @@ checked against a copy of the live database before it is applied.
 - [x] Shared metadata, covers and audio stay readable offline; private rows do
       not.
 - [x] Locking clears the in-memory key and requires a fresh sign-in.
+- [x] Choosing offline mode clears the in-memory server credential, blocks API
+      requests, survives app restart, and exits only through explicit reconnect.
 - [ ] Caddy serves `https://books.home.arpa` with its local CA trusted on
       Windows; Windows Hello works there.
 - [x] Android media requests use five-minute, profile- and resource-scoped

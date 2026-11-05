@@ -71,6 +71,67 @@ describe("account list", () => {
   });
 });
 
+describe("household profile registration", () => {
+  it("creates a named profile with its own password and signs it in", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-profile",
+      payload: {
+        name: `registered-${Date.now().toString(36)}`,
+        householdPassword: "household",
+        password: "own-password-82",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ token: string; profile: { id: number; name: string } }>();
+    expect(body.token.length).toBeGreaterThan(20);
+    expect(body.profile.name).toMatch(/^registered-/);
+    const profile = await prisma.profile.findUnique({ where: { id: body.profile.id } });
+    expect(profile?.passwordHash).toBeTruthy();
+
+    const session = await app.inject({
+      method: "GET",
+      url: "/api/auth/session",
+      headers: { [SESSION_HEADER]: body.token },
+    });
+    expect(session.statusCode).toBe(200);
+    expect(session.json<{ profile: { id: number } }>().profile.id).toBe(body.profile.id);
+  });
+
+  it("rejects an incorrect household password without creating a profile", async () => {
+    const name = `rejected-${Date.now().toString(36)}`;
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-profile",
+      payload: { name, householdPassword: "wrong", password: "own-password-82" },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ code: "incorrect_password" });
+    expect(await prisma.profile.findUnique({ where: { name } })).toBeNull();
+  });
+
+  it("rejects duplicate names and weak profile passwords", async () => {
+    const profile = await createProfile();
+    const duplicate = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-profile",
+      payload: { name: profile.name, householdPassword: "household", password: "own-password-82" },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json()).toEqual({ code: "profile_name_taken" });
+
+    const weak = await app.inject({
+      method: "POST",
+      url: "/api/auth/register-profile",
+      payload: { name: "New Listener", householdPassword: "household", password: "short" },
+    });
+    expect(weak.statusCode).toBe(400);
+    expect(weak.json<{ code: string }>().code).toBe("password_too_short");
+  });
+});
+
 describe("profile login", () => {
   it("creates a session and returns the profile", async () => {
     const profile = await createProfile();

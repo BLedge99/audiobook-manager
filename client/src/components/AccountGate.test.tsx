@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { copy } from "../copy";
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   fetchAppConfig: vi.fn(),
   setToken: vi.fn(),
   setProfile: vi.fn(),
   available: vi.fn(),
+  rememberProfileKey: vi.fn(),
 }));
 
 vi.mock("../lib/api", () => ({
@@ -26,7 +28,7 @@ vi.mock("../lib/biometricVault", () => ({
 }));
 vi.mock("../local/privateCache", () => ({
   lockOfflineCache: vi.fn(),
-  rememberProfileKey: vi.fn(),
+  rememberProfileKey: mocks.rememberProfileKey,
   unlockProfileCacheWithKey: vi.fn(),
   deleteProfileCache: vi.fn(),
   toBase64: () => "",
@@ -69,6 +71,22 @@ describe("AccountGate continue offline", () => {
 
     fireEvent.click(continueBtn);
     expect(onContinueOffline).toHaveBeenCalledOnce();
+  });
+
+  it("offers registration instead of treating an empty account list as a dead end", async () => {
+    render(<AccountGate onSuccess={vi.fn()} />);
+    expect(await screen.findByText("No profiles have been set up on this server yet.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: copy.account.createProfile }));
+    expect(screen.getByLabelText(copy.profile.nameLabel)).toBeInTheDocument();
+    expect(screen.getByLabelText(copy.account.householdPasswordLabel)).toBeInTheDocument();
+  });
+
+  it("does not describe an account-list failure as an empty server", async () => {
+    mocks.fetch.mockRejectedValueOnce(new Error("network unavailable"));
+    render(<AccountGate onSuccess={vi.fn()} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("network unavailable");
+    expect(screen.queryByText("No profiles have been set up on this server yet.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: copy.account.createProfile })).not.toBeInTheDocument();
   });
 
   it("also offers continue offline in demo mode", () => {
