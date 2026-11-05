@@ -1,75 +1,69 @@
 # Audiobook Manager
 
-A local-first web application that scans your storage for audiobook files, enriches them with online metadata, and presents them in a Netflix-style browsing interface. Integrates with LM Studio for AI-powered features.
+A simple, private way to enjoy your household's audiobook collection on any phone, tablet, or computer in your home.
 
-## Features
+## What this is
 
-- Scan local directories for audiobook files (MP3, M4B, FLAC, OGG, WAV)
-- Parse embedded metadata, chapters, and cover art using FFmpeg and music-metadata
-- Enrich library data via online APIs (Audnexus, LibriVox, Google Books, Open Library)
-- Netflix-style browse UI with genre shelves, search, filtering, and playback controls
-- Per-profile favourites, curated tags, and a Discover feed of books you don't own
-- AI integration through LM Studio's OpenAI-compatible API for metadata assistance
+Audiobook Manager turns a folder of audiobook files into a ready-to-listen library, much like a streaming service you would subscribe to — except it lives entirely in your home, on your own hardware, and only the people in your household can use it.
 
-## Tech Stack
+You point it at the folders where your audiobooks live, and it does the rest: it reads the files, pulls in covers and descriptions, organises everything into a browsable library, and lets anyone in the household play books, pause, speed them up, set a sleep timer, and pick up exactly where they left off — even switching from one device to another.
 
-- **Frontend:** React + Vite + TypeScript + Tailwind CSS + shadcn/ui
-- **Backend:** Node.js + Fastify + Prisma ORM
-- **Database:** SQLite (with PostgreSQL support via Prisma)
-- **Media Processing:** FFmpeg / ffprobe, fluent-ffmpeg, music-metadata
-- **AI Integration:** LM Studio local models
+It is built for families and households, not for public sharing. There are no accounts to create, no subscriptions, and no data sent to social networks. Everything stays on your own device.
 
-## Getting Started
+## Who it is for
 
-This project uses Docker Compose with a Makefile for easy management.
+- **Household members:** anyone at home who wants to browse and listen without worrying about files, folders, or how the technology works.
+- **The person who sets it up:** one person adds the library folders, starts the scan, and keeps the server running. No programming skills are needed for day-to-day use.
+- **The host:** a computer that stays on at home — anything from an everyday PC to a small, low-power device like a Raspberry Pi.
 
-```bash
-# Start all services
-make start
+## Quick start
 
-# Stop all services
-make stop
+1. **Start the server.** Run the startup command for your setup (usually one command that brings everything up).
+2. **Add your audiobooks.** Point the server at the folders on your computer or network where your audiobook files are stored.
+3. **Run a scan.** The server reads your files, figures out which belong to the same book, and pulls in cover art and details where it can find them.
+4. **Open the app.** On any phone, tablet, or computer connected to your home Wi-Fi, open the app address shown when the server starts.
+5. **Pick a profile and listen.** Each household member can have their own profile so their place in a book, favourites, and history are kept separate.
 
-# View logs
-make logs
+The app works in a web browser on desktop, and as an installable app on Android phones. No special software is needed on the devices you listen with.
 
-# Trigger a library scan
-make scan
+## What it does
 
-# Tear down and rebuild from scratch
-make reset
-```
+**Browse your library**
+- A Netflix-style grid of your books with cover art, authors, and narrators
+- Search across titles, authors, narrators, series, and genres
+- Shelves organised by genre, series, and other categories
+- A "Continue listening" shelf so you can pick up where you left off
 
-The client will be available at `http://localhost:5173` and the API server at `http://localhost:3000`.
+**Play books**
+- Play with chapters, adjustable playback speed, and a sleep timer
+- Resume exactly where you stopped, even on a different device
+- Per-user progress and listening history
+- Lock-screen and background playback on supported phones
 
-## Android app
+**Keep things organised**
+- Each household member has their own profile with separate progress and favourites
+- Books can be matched to online records to fill in missing covers and descriptions
+- You can confirm or correct matches yourself — your corrections always win
+- Your audio files are never changed or tagged by the app
 
-The phone app is a Capacitor shell around the same client. Build and install a
-debug APK on every ADB-ready device with:
+**Listen on your phone**
+- Install the app on an Android phone so it feels like a native app
+- Download books to the phone so you can listen without a network connection
+- Progress syncs back to the server when you are back on your home network
 
-```powershell
-.\scripts\install-android.ps1
-```
+## Things worth knowing
 
-Keep the USB tunnel up (`adb reverse tcp:3000 tcp:3000`) if the phone is using
-`http://localhost:3000`, or point it at the home server's LAN address in
-Settings. The app works offline for downloaded books; the offline behaviour,
-the fingerprint lifecycle and recovery of audio left behind by an origin change
-are documented in [`specs/29-offline-resilience.md`](specs/29-offline-resilience.md).
+- **It works on your home network only.** The app is designed to be used by devices connected to your home Wi-Fi. It is not intended to be accessed from outside your home, and there is no remote-access feature built in.
+- **One shared password gets everyone in.** A single household password protects the app. Each person picks their own profile after signing in.
+- **Your files are safe.** The app only reads your audiobooks. It never writes metadata into your files, moves them, or deletes them.
+- **Online lookups are optional.** The app can look up covers and descriptions online, but it works perfectly well without them. Any AI-assisted features are optional and never required to browse or play.
+- **It keeps running in the background.** Once started, the server stays running so your household can listen at any time. It survives restarts and picks up where it left off.
+- **Android first for mobile.** The phone experience is built for Android. iPhones and iPads can use the website in a browser, but there is no dedicated Apple app.
 
-## Production web access
+## Getting help
 
-The production Compose deployment puts the browser app behind Caddy at
-`https://books.home.arpa` so web passkeys have a trusted HTTPS origin. See
-[`docs/production-https.md`](docs/production-https.md) for local DNS, Caddy CA
-trust and the Android HTTP address that remains available on the household
-LAN.
+If something is not working, the best place to start is checking that the server is running and that your phone or computer is on the same home network. For setup details specific to your environment, look in the project documentation folder.
 
-The hosted Render deployment's operator upload setup is documented in
-[`docs/production-book-storage.md`](docs/production-book-storage.md). It uses
-private Supabase Storage for durable audio and the separate-password admin
-panel at `/admin`.
+---
 
-## Acknowledgements
-
-This project was partially vibe coded using [Bionic](https://lmstudio.ai/bionic) and Qwen 3.8 27B.
+*Audiobook Manager — your household's audiobooks, on every device at home.*

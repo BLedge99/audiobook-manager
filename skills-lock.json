@@ -6,6 +6,25 @@
       "sourceType": "github",
       "skillPath": "skills/design-mobile-apps/SKILL.md",
       "computedHash": "30bfa26c39e384af50d5ca2a9da7c39e239ce822f5e3fd2a31e8e6b55d3679ac"
+    },
+    "security-review": {
+      "source": "registry:github/security-review",
+      "commit_sha": "e986f49695491311df2774030ebe11efabd0fb77",
+      "digest": "sha256:f20284d7695f2e070998bbc9d8ae79e6949163b4de6f45e693ed3d8b4a0d9e82",
+      "agents": [
+        "claude-code",
+        "codex",
+        "opencode",
+        "github-copilot",
+        "antigravity-cli"
+      ],
+      "mode": {
+        "claude-code": "junction",
+        "codex": "canonical",
+        "opencode": "junction",
+        "github-copilot": "junction",
+        "antigravity-cli": "canonical"
+      }
     }
   }
 }
