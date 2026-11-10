@@ -49,6 +49,21 @@ Top recommendation from the architecture review: **split the server app module**
 2. B1 → B2 → B3 (client)
 3. C1 → C2 (later)
 
+## Status & Progress
+
+- **Phase 1 (Server):**
+  - [x] A1 — Extract progress mathematics (`server/src/progress-math.ts`)
+  - [x] A2 — Split server app module (`server/src/api/*`, `server/src/app.ts`)
+- **Phase 2 (Client):**
+  - [x] B1 — Consolidate fetch layer (`client/src/lib/api.ts`)
+  - [x] B2 — Extract player controller (`client/src/lib/playerController.ts`, `client/src/components/ChapterPlayer.tsx`)
+  - [x] B3 — Split App module into composition root, `useAppState.ts`, and `screens/*`
+- **Phase 3 (Worth exploring):**
+  - [x] C1 — Split auth module behind facade (`server/src/auth/service.ts`, `session-manager.ts`, `lockout.ts`, `oauth-flow.ts`)
+  - [x] C2 — Scanner consumes metadata precedence module (`server/src/metadata/precedence.ts`, `server/src/scanner.ts`)
+- **Process Items:**
+  - [x] Create repo-root `GLOSSARY.md`
+
 ## Per-action verification (repo rules)
 
 - `npx tsc --noEmit` (server) / `npx tsc -b` (client); vitest suites; `make check-copy`; e2e via `scripts/e2e-wsl.sh` when UI is touched.
