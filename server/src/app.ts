@@ -31,6 +31,7 @@ import { oauthConfigFromEnv, type OAuthConfig, buildAuthorizeUrl, createPkcePair
 import { registerProgressRoutes } from "./api/progress";
 import { registerScanRoutes } from "./api/scan";
 import { registerLibraryRoutes } from "./api/library";
+import { errorHandler } from "./api/error-handler";
 
 export { SESSION_HEADER };
 
@@ -148,21 +149,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.addHook("preSerialization", async (_request, _reply, payload) => serializeBigInts(payload));
 
-  app.setErrorHandler((error, request, reply) => {
-    // The detail is for the server log only. This handler used to echo
-    // `error.message` on any 4xx, and that included filesystem paths and
-    // Prisma wording (spec 11); the client renders the code instead.
-    request.log.error(error);
-    const candidateStatusCode =
-      typeof error === "object" && error !== null && "statusCode" in error
-        ? error.statusCode
-        : undefined;
-    const statusCode =
-      typeof candidateStatusCode === "number" && candidateStatusCode >= 400
-        ? candidateStatusCode
-        : 500;
-    return fail(reply, statusCode, statusCode >= 500 ? "internal_error" : "request_invalid");
-  });
+  app.setErrorHandler(errorHandler);
 
   // CORS allow-list.
   //
