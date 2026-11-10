@@ -503,6 +503,9 @@ button:focus {
   .spark {
     display: none;
   }
+  .dome {
+    animation: none !important;
+  }
 }
 
 /* The dispense: the one authored moment. The dock capsule settles in and its

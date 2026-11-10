@@ -144,12 +144,14 @@ export function Dome({
   label,
   onClick,
   className,
+  spin = false,
   disabled = false,
   children,
 }: {
   label: string;
   onClick?: () => void;
   className?: string;
+  spin?: boolean;
   disabled?: boolean;
   children?: ReactNode;
 }) {
@@ -172,7 +174,7 @@ export function Dome({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className={cn("dome", disabled && "cursor-not-allowed opacity-40", className)}
+      className={cn("dome", spin && "animate-[spin_1.1s_linear_infinite]", disabled && "cursor-not-allowed opacity-40", className)}
     >
       <span className="dome__play" aria-hidden="true" style={children ? { display: "none" } : undefined} />
       {children}

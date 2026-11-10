@@ -791,6 +791,7 @@ export function ChapterPlayer({
         <Dome
           label={showsPause ? copy.player.pause : copy.player.play}
           onClick={() => togglePlayback()}
+          spin={playing}
           disabled={!activeProfileId}
         >
           {showsPause ? (
