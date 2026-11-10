@@ -511,12 +511,74 @@ Mitigations in place ([`decisions/014-webview-http-scheme.md`](decisions/014-web
 The genuinely correct fix — terminate TLS on the server and trust the CA on each phone — is recorded in ADR 014 as the destination if the app ever leaves a trusted LAN. This risk is assessed in the production-demo DPIA ([`docs/dpia.md`](docs/dpia.md)) and is covered by the breach procedure ([`docs/breach-procedure.md`](docs/breach-procedure.md)) should a session be intercepted.
 ## 5. Developer-experience friction
 
+- **`make local` did not crash the server. It powered off the virtual
+  machine.** Found and fixed 2026-11-10. This one cost the most time to
+  diagnose because every symptom points at the server, and the server was
+  innocent.
+
+  **The symptom.** `make local` brought the stack up, the server served
+  requests for about a minute, and then everything exited 143. It read as a
+  server that starts and then dies.
+
+  **What the evidence actually said.** The server logs were clean: Prisma
+  generated, migrations applied, `listening on 0.0.0.0:3001`, then a
+  run of 200s on `/api/health`, and then nothing. No exception, no stack
+  trace, no error. `docker ps` showed `Exited (143)` -- SIGTERM, not a
+  crash. The `expose-lan.log` transcript showed the whole recipe
+  *succeeding*: the elevated run exited 0 and the LAN probe returned
+  `HTTP 200 - reachable`. So the recipe finished its work and the server
+  was killed afterwards.
+
+  **The cause.** WSL powers a distribution off 15 seconds after its last
+  client session ends (`instanceIdleTimeout`, default 15000, in
+  `%UserProfile%\.wslconfig`). Docker runs *inside* this distribution as a
+  systemd service, so the distribution powering off stops `docker.service`,
+  which SIGTERMs every container. The systemd journal is unambiguous:
+
+      Stopping docker.service - Docker Application Container Engine...
+      dockerd: Processing signal 'terminated'
+      Stopped docker.service - Docker Application Container Engine.
+      ...
+      Reached target poweroff.target - System Power Off.
+      Shutting down.
+
+  That is the whole distro being powered off -- not a container failing.
+  The 15-second gap between the recipe succeeding and the distro dying
+  matched `instanceIdleTimeout` exactly.
+
+  **The fix** (`scripts/wsl-lifecycle.ps1`, wired into `make start`,
+  `make restart` and `make reset`), in two layers because neither alone is
+  enough:
+
+  1. `[general] instanceIdleTimeout=-1` in `%UserProfile%\.wslconfig` -- the
+     official switch, and permanent. WSL reads it when the distribution
+     starts, so it takes effect at the next WSL restart.
+  2. A detached `wsl.exe` client session holds the distribution open right
+     now (`scripts/wsl-keepalive.sh`). A distribution with a live client
+     session is never idle, so it never powers off. This is what makes the
+     fix work on the first run and before layer 1 is picked up.
+
+  `make keepalive-stop` releases the session again. `make stop` deliberately
+  does not: stopping the app and tearing down the machine are different
+  intentions, and a stop/start in quick succession would race the shutdown.
+
+  **The lesson worth keeping: a `SIGTERM` is not a crash.** Exit 143 means
+  something asked the process to stop, and the question to ask next is
+  *who* -- the container's own supervisor, Docker, systemd, or the
+  hypervisor. The journal answers that in one line, and the answer here was
+  "the entire machine". Read the exit code before reading the logs: 143 and
+  137 mean something killed it, and only an exception in the server's own
+  output means the server did it to itself.
+
 - **E2E requires WSL + Docker.** `scripts/e2e-wsl.sh` provisions a Linux Node
   because WSL ships none and the Windows interop `npm` installs `.cmd` wrappers
   bash cannot execute. Docker is unavailable from the Windows shell.
 - **WSL idles out and reaps the containers.** Any sequence of
   "start stack → query → inspect" must run in a **single** WSL session or it
-  fails with connection errors that look like code bugs.
+  fails with connection errors that look like code bugs. `make start` now
+  holds a keepalive session open for exactly this reason -- see the entry
+  above -- but a *script* that queries the stack still has to stay in one
+  session.
 - **The Vite dev server in Docker misses edits made over the `/mnt/c` bind
   mount.** `docker compose restart client` before concluding a client change
   "does nothing".

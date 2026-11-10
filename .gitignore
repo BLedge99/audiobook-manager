@@ -42,6 +42,10 @@ yarn-error.log*
 pnpm-debug.log*
 *.log
 
+# Local runtime state for the WSL keepalive session (scripts/wsl-lifecycle.ps1).
+# A pid on this machine; never part of the project.
+logs/*.pid
+
 # Docker volume data (if mounted locally during dev)
 data/
 

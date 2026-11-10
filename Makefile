@@ -1,4 +1,4 @@
-.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client check-copy test-e2e capture device-tunnel verify lan local
+.PHONY: start stop restart logs scan enrich migrate reset install install-server install-client client server test test-server test-client check-copy test-e2e capture device-tunnel verify lan local keepalive keepalive-stop
 
 ## Expose the server on the LAN so a phone can reach it.
 # The whole stack runs inside WSL, and WSL's NAT mode only relays the server to
@@ -19,6 +19,44 @@ lan:
 	fi; \
 	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$$script"
 
+## Hold the WSL distro open so the stack survives between terminal sessions.
+# This is not a nicety. WSL powers a distribution off 15 seconds after its
+# last client session ends (`instanceIdleTimeout`, default 15000, in
+# %USERPROFILE%\.wslconfig). Docker runs *inside* this distribution as a
+# systemd service, so the distribution powering off stops docker.service,
+# which SIGTERMs every container: the stack exits 143 and it reads as "the
+# server started and then crashed". The server never crashed -- it was shut
+# down with the virtual machine.
+#
+# Two layers, because neither alone is enough:
+#  - `[general] instanceIdleTimeout=-1` in %USERPROFILE%\.wslconfig is the
+#    official switch and it is permanent. WSL reads it when the distribution
+#    starts, so it takes effect at the next WSL restart.
+#  - a detached `wsl.exe` client session holds the distribution open right
+#    now, so the fix works on the first run and before the config is picked
+#    up. A distribution with a live client session is never idle.
+#
+# Nothing about the product changes: no container, image, volume or port.
+# `make keepalive-stop` releases the session again.
+keepalive:
+	@script="./scripts/wsl-lifecycle.ps1"; \
+	if command -v wslpath >/dev/null 2>&1 && grep -qi microsoft /proc/version 2>/dev/null; then \
+		script=$$(wslpath -w "$$script"); \
+	fi; \
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$$script" -Distro "$$WSL_DISTRO_NAME"
+
+## Release the keepalive session.
+# The stack keeps running; only the WSL session goes, so the distro can idle
+# out and power off on its own. `make stop` deliberately does NOT do this:
+# stopping the app and tearing down the machine are different intentions, and
+# a stop/start in quick succession would otherwise race the shutdown.
+keepalive-stop:
+	@script="./scripts/wsl-lifecycle.ps1"; \
+	if command -v wslpath >/dev/null 2>&1 && grep -qi microsoft /proc/version 2>/dev/null; then \
+		script=$$(wslpath -w "$$script"); \
+	fi; \
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$$script" -Distro "$$WSL_DISTRO_NAME" -Stop
+
 ## Bring the stack up AND expose it to the LAN, in one command.
 # The way phones reach the server is `http://<lan-ip>:3000`, and the server is
 # only published on the LAN by the scripts/expose-lan.ps1 portproxy+firewall
@@ -32,6 +70,10 @@ lan:
 #
 # Expect one UAC prompt (the script re-launches itself elevated). Safe to
 # re-run at any time; re-run it after restarting WSL or Docker.
+#
+# `make start` holds the WSL distro open on the way through, so the stack
+# survives this recipe returning. See `make keepalive` for why that is not
+# optional.
 local:
 	@$(MAKE) start
 	@healthy=""; \
@@ -47,6 +89,7 @@ local:
 
 start:
 	docker compose up -d
+	@if command -v powershell.exe >/dev/null 2>&1; then $(MAKE) keepalive; fi
 
 stop:
 	docker compose down
@@ -62,6 +105,7 @@ stop:
 # Run `make reset-server-modules` first in that case.
 restart:
 	docker compose up -d --force-recreate
+	@if command -v powershell.exe >/dev/null 2>&1; then $(MAKE) keepalive; fi
 
 ## Remove and recreate the server node_modules volume.
 # Use this after adding or removing dependencies in server/package.json, since
@@ -164,6 +208,7 @@ migrate:
 reset:
 	docker compose down -v --remove-orphans
 	docker compose up -d --build
+	@if command -v powershell.exe >/dev/null 2>&1; then $(MAKE) keepalive; fi
 
 install-server:
 	cd server && npm ci
