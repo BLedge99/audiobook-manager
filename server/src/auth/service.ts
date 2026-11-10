@@ -18,53 +18,35 @@ import {
 import type { OAuthConfig, OAuthIdentity, OAuthProvider } from "./oauth";
 import { exchangeAuthorizationCode, fetchOAuthIdentity, safeEqualStrings } from "./oauth";
 
-export type AuthRole = "admin" | "member";
-export type AuthVia = "profile" | "household" | "device" | "oauth";
+// Import types from service-types first
+import {
+  AuthRole,
+  AuthVia,
+  AuthContext,
+  SessionMetadata,
+  LoginResult,
+  AuthFailure,
+  AuthServiceOptions,
+} from "./service-types";
+import { SlidingRateLimiter } from "./lockout";
+import { AccountLockout } from "./lockout";
+import { OAuthFlow } from "./oauth-flow";
+import { SessionManager } from "./session-manager";
 
-export interface AuthContext {
-  token: string;
-  session: Session;
-  profile: Profile | null;
-  role: AuthRole;
-  via: AuthVia;
-}
-
-export interface SessionMetadata {
-  userAgent?: string | null;
-  deviceLabel?: string | null;
-}
-
-export interface LoginResult {
-  token: string;
-  session: Session;
-  profile: Profile | null;
-  role: AuthRole;
-}
-
-export class AuthFailure extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: ApiErrorCode,
-    readonly params?: ApiErrorParams,
-  ) {
-    super(code);
-    this.name = "AuthFailure";
-  }
-}
-
-export interface AuthServiceOptions {
-  prisma: PrismaClient;
-  appPassword?: string;
-  /** External OAuth providers for the production demo (spec 32 / ADR 023). */
-  oauth?: OAuthConfig;
-  /** Test seam for expiry and lockout. */
-  now?: () => Date;
-}
+// Re-export from service-types for backward compatibility
+export {
+  AuthRole,
+  AuthVia,
+  AuthContext,
+  SessionMetadata,
+  LoginResult,
+  AuthFailure,
+  AuthServiceOptions,
+} from "./service-types";
 
 const IP_WINDOW_MS = 10 * 60 * 1000;
 const IP_MAX_FAILURES = 20;
 const LOCK_AFTER = 5;
-/** Per-IP ceiling on failed OAuth callback attempts before the flow is throttled (spec 32). */
 const OAUTH_MAX_ATTEMPTS = 10;
 
 /**
@@ -74,6 +56,12 @@ const OAUTH_MAX_ATTEMPTS = 10;
  * translate `AuthFailure` into the API error contract. That keeps the rules
  * testable without Fastify and stops a route from quietly inventing a weaker
  * check.
+ *
+ * This class now delegates to split modules:
+ * - SlidingRateLimiter for IP-based rate limiting
+ * - AccountLockout for per-profile lockout logic
+ * - OAuthFlow for OAuth authorization code flow
+ * - SessionManager for session CRUD and validation
  */
 export class AuthService {
   readonly enabled: boolean;
@@ -81,9 +69,12 @@ export class AuthService {
   private readonly prisma: PrismaClient;
   private readonly appPassword: string | undefined;
   private readonly now: () => Date;
-  private readonly ipFailures = new Map<string, { count: number; resetAt: number }>();
-  private readonly oauthFailures = new Map<string, { count: number; resetAt: number }>();
-  private readonly accountSignups = new Map<string, { count: number; resetAt: number }>();
+  private readonly ipLimiter: SlidingRateLimiter;
+  private readonly oauthLimiter: SlidingRateLimiter;
+  private readonly signupLimiter: SlidingRateLimiter;
+  private readonly accountLockout: AccountLockout;
+  private readonly oauthFlow: OAuthFlow;
+  private readonly sessionManager: SessionManager;
 
   constructor(options: AuthServiceOptions) {
     this.prisma = options.prisma;
@@ -91,6 +82,44 @@ export class AuthService {
     this.oauth = options.oauth ?? { enabled: false, providers: [] };
     this.enabled = Boolean(options.appPassword);
     this.now = options.now ?? (() => new Date());
+
+    // IP-based rate limiters (delegated to SlidingRateLimiter)
+    this.ipLimiter = new SlidingRateLimiter({
+      windowMs: IP_WINDOW_MS,
+      maxFailures: IP_MAX_FAILURES,
+      now: this.now,
+      failureErrorCode: "account_locked",
+    });
+    this.oauthLimiter = new SlidingRateLimiter({
+      windowMs: IP_WINDOW_MS,
+      maxFailures: OAUTH_MAX_ATTEMPTS,
+      now: this.now,
+      failureErrorCode: "oauth_rate_limited",
+    });
+    this.signupLimiter = new SlidingRateLimiter({
+      windowMs: IP_WINDOW_MS,
+      maxFailures: 5,
+      now: this.now,
+      failureErrorCode: "oauth_rate_limited",
+    });
+
+    // Account lockout logic
+    this.accountLockout = new AccountLockout(this.now);
+
+    // Session manager
+    this.sessionManager = new SessionManager({
+      prisma: this.prisma,
+      now: this.now,
+    });
+
+    // OAuth flow (needs createSession callback)
+    this.oauthFlow = new OAuthFlow({
+      prisma: this.prisma,
+      oauth: this.oauth,
+      rateLimiter: this.oauthLimiter,
+      now: this.now,
+      createSession: (profileId, via, meta) => this.sessionManager.createSession(profileId, via, meta),
+    });
   }
 
   /**
@@ -123,17 +152,17 @@ export class AuthService {
     ip: string,
   ): Promise<LoginResult> {
     if (!this.enabled) throw new AuthFailure(400, "request_invalid");
-    this.checkIp(ip);
+    this.ipLimiter.check(ip);
 
     const expected = createHash("sha256").update(this.appPassword as string).digest();
     const provided = createHash("sha256").update(password).digest();
     if (!timingSafeEqual(expected, provided)) {
-      this.recordIpFailure(ip);
+      this.ipLimiter.record(ip);
       throw new AuthFailure(401, "incorrect_password");
     }
 
-    this.clearIp(ip);
-    return this.createSession(null, "household", meta);
+    this.ipLimiter.clear(ip);
+    return this.sessionManager.createSession(null, "household", meta);
   }
 
   async registerProfile(
@@ -144,12 +173,12 @@ export class AuthService {
     ip: string,
   ): Promise<LoginResult> {
     if (!this.enabled) throw new AuthFailure(400, "request_invalid");
-    this.checkIp(ip);
+    this.ipLimiter.check(ip);
 
     const expected = createHash("sha256").update(this.appPassword as string).digest();
     const provided = createHash("sha256").update(householdPassword).digest();
     if (!timingSafeEqual(expected, provided)) {
-      this.recordIpFailure(ip);
+      this.ipLimiter.record(ip);
       throw new AuthFailure(401, "incorrect_password");
     }
 
@@ -202,7 +231,7 @@ export class AuthService {
       throw error;
     }
 
-    this.clearIp(ip);
+    this.ipLimiter.clear(ip);
     return result;
   }
 
@@ -212,43 +241,47 @@ export class AuthService {
     meta: SessionMetadata,
     ip: string,
   ): Promise<LoginResult> {
-    this.checkIp(ip);
+    this.ipLimiter.check(ip);
 
     const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
     if (!profile) {
       // Same work as a real profile, so a missing profile is not a cheap
       // oracle. The answer is identical to a wrong password.
       await hashPassword(password);
-      this.recordIpFailure(ip);
+      this.ipLimiter.record(ip);
       throw new AuthFailure(401, "incorrect_password");
     }
 
     if (profile.disabled) throw new AuthFailure(403, "account_disabled");
     if (!profile.passwordHash) throw new AuthFailure(409, "profile_unclaimed");
 
-    const lockedFor = this.lockedSeconds(profile);
+    const lockedFor = this.accountLockout.lockedSeconds(profile);
     if (lockedFor > 0) {
       throw new AuthFailure(429, "account_locked", { retryAfterSeconds: lockedFor });
     }
 
     const ok = await verifyPassword(password, profile.passwordHash);
     if (!ok) {
-      const lockedUntil = await this.recordProfileFailure(profile);
-      this.recordIpFailure(ip);
+      const { nextFailures, lockedUntil } = this.accountLockout.computeLockout(profile.failedLoginCount);
+      await this.prisma.profile.update({
+        where: { id: profile.id },
+        data: { failedLoginCount: nextFailures, lockedUntil },
+      });
+      this.ipLimiter.record(ip);
       if (lockedUntil) {
         throw new AuthFailure(429, "account_locked", {
-          retryAfterSeconds: this.secondsUntil(lockedUntil),
+          retryAfterSeconds: this.accountLockout.secondsUntil(lockedUntil),
         });
       }
       throw new AuthFailure(401, "incorrect_password");
     }
 
-    this.clearIp(ip);
+    this.ipLimiter.clear(ip);
     await this.prisma.profile.update({
       where: { id: profile.id },
       data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now(), lastActiveAt: this.now() },
     });
-    return this.createSession(profile.id, "profile", meta);
+    return this.sessionManager.createSession(profile.id, "profile", meta);
   }
 
   /**
@@ -270,44 +303,7 @@ export class AuthService {
     meta: SessionMetadata;
     ip: string;
   }): Promise<LoginResult> {
-    if (!this.oauth.enabled || !input.provider) throw new AuthFailure(503, "oauth_not_configured");
-    this.checkOAuthRate(input.ip);
-    try {
-      if (!input.stateCookieValue || !safeEqualStrings(input.state, input.stateCookieValue)) {
-        throw new AuthFailure(400, "oauth_state_mismatch");
-      }
-
-      const token = await exchangeAuthorizationCode(input.provider, {
-        code: input.code,
-        redirectUri: input.redirectUri,
-        codeVerifier: input.codeVerifier,
-      });
-
-      let identity: OAuthIdentity;
-      try {
-        identity = await fetchOAuthIdentity(input.provider, token.accessToken);
-      } catch (error) {
-        if (error instanceof Error && error.message === "oauth_identity_unavailable") {
-          throw new AuthFailure(502, "oauth_identity_unavailable");
-        }
-        throw error;
-      }
-      if (!identity.sub || identity.sub.length > 255) throw new AuthFailure(401, "oauth_identity_invalid");
-      if (input.provider.id === "google" && (!identity.email || !identity.emailVerified)) {
-        throw new AuthFailure(403, "oauth_email_not_verified");
-      }
-      if (input.provider.id === "github" && identity.email && !identity.emailVerified) {
-        throw new AuthFailure(403, "oauth_email_not_verified");
-      }
-
-      const profile = await this.resolveOAuthProfile(input.provider, identity);
-      if (profile.disabled) throw new AuthFailure(403, "account_disabled");
-      this.clearOAuthRate(input.ip);
-      return this.createSession(profile.id, "oauth", input.meta);
-    } catch (error) {
-      this.recordOAuthFailure(input.ip);
-      throw error;
-    }
+    return this.oauthFlow.signInWithOAuth(input);
   }
 
   /**
@@ -322,38 +318,42 @@ export class AuthService {
     meta: SessionMetadata;
     ip: string;
   }): Promise<LoginResult> {
-    this.checkIp(input.ip);
+    this.ipLimiter.check(input.ip);
     const email = input.email.trim().toLowerCase();
     const profile = email ? await this.prisma.profile.findFirst({ where: { email } }) : null;
     if (!profile) {
-      this.recordIpFailure(input.ip);
+      this.ipLimiter.record(input.ip);
       throw new AuthFailure(401, "incorrect_password");
     }
     if (profile.disabled) throw new AuthFailure(403, "account_disabled");
     if (!profile.passwordHash) throw new AuthFailure(409, "profile_unclaimed");
 
-    const lockedFor = this.lockedSeconds(profile);
+    const lockedFor = this.accountLockout.lockedSeconds(profile);
     if (lockedFor > 0) {
       throw new AuthFailure(429, "account_locked", { retryAfterSeconds: lockedFor });
     }
     const ok = await verifyPassword(input.password, profile.passwordHash);
     if (!ok) {
-      const lockedUntil = await this.recordProfileFailure(profile);
-      this.recordIpFailure(input.ip);
+      const { nextFailures, lockedUntil } = this.accountLockout.computeLockout(profile.failedLoginCount);
+      await this.prisma.profile.update({
+        where: { id: profile.id },
+        data: { failedLoginCount: nextFailures, lockedUntil },
+      });
+      this.ipLimiter.record(input.ip);
       if (lockedUntil) {
         throw new AuthFailure(429, "account_locked", {
-          retryAfterSeconds: this.secondsUntil(lockedUntil),
+          retryAfterSeconds: this.accountLockout.secondsUntil(lockedUntil),
         });
       }
       throw new AuthFailure(401, "incorrect_password");
     }
 
-    this.clearIp(input.ip);
+    this.ipLimiter.clear(input.ip);
     await this.prisma.profile.update({
       where: { id: profile.id },
       data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: this.now(), lastActiveAt: this.now() },
     });
-    return this.createSession(profile.id, "profile", input.meta);
+    return this.sessionManager.createSession(profile.id, "profile", input.meta);
   }
 
   async signUpWithEmail(input: {
@@ -362,7 +362,7 @@ export class AuthService {
     meta: SessionMetadata;
     ip: string;
   }): Promise<LoginResult> {
-    this.checkSignupRate(input.ip);
+    this.signupLimiter.check(input.ip);
     const email = input.email.trim().toLowerCase();
     if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new AuthFailure(400, "request_invalid");
@@ -383,63 +383,13 @@ export class AuthService {
     } catch {
       // The unique email constraint is the concurrency-safe duplicate check.
       // Same generic response for duplicate registration; do not reveal which.
-      this.recordSignupFailure(input.ip);
+      this.signupLimiter.record(input.ip);
       throw new AuthFailure(409, "account_creation_unavailable");
     }
-    this.accountSignups.delete(input.ip);
-    return this.createSession(profile.id, "profile", input.meta);
+    this.signupLimiter.clear(input.ip);
+    return this.sessionManager.createSession(profile.id, "profile", input.meta);
   }
 
-  /**
-   * Resolve an OAuth identity to a profile (spec 32): by provider + provider
-   * user id first, then by verified email, else create a new member profile
-   * against the hosted library (the production demo audience).
-   */
-  private async resolveOAuthProfile(provider: OAuthProvider, identity: OAuthIdentity): Promise<Profile> {
-    const byProvider = await this.prisma.profile.findFirst({
-      where: { oauthProvider: provider.id, oauthProviderId: identity.sub },
-    });
-    if (byProvider) {
-      if (byProvider.disabled) throw new AuthFailure(403, "account_disabled");
-      return byProvider;
-    }
-
-    const byEmail = identity.email && identity.emailVerified
-      ? await this.prisma.profile.findFirst({ where: { email: identity.email.toLowerCase() } })
-      : null;
-    if (byEmail) {
-      if (byEmail.disabled) throw new AuthFailure(403, "account_disabled");
-      // Do not silently attach a provider identity to an existing account.
-      // Account-linking UX and proof of control for a second credential are deferred.
-      throw new AuthFailure(409, "account_linking_required");
-    }
-
-    const baseName = (identity.name ?? "").trim() || identity.email?.split("@")[0] || `Listener ${provider.id}`;
-    let name = baseName;
-    for (let attempt = 2; ; attempt += 1) {
-      const clash = await this.prisma.profile.findUnique({ where: { name } });
-      if (!clash) break;
-      name = `${baseName} ${attempt}`;
-    }
-
-    const profile = await this.prisma.profile.create({
-      data: {
-        name,
-        role: "member",
-        followsServerLibrary: true,
-        email: identity.email,
-        oauthProvider: provider.id,
-        oauthProviderId: identity.sub,
-        lastActiveAt: this.now(),
-      },
-    });
-    return profile;
-  }
-
-  /**
-   * Claim an unclaimed profile with the break-glass key. This is the only place
-   * a normal person ever types the household key besides recovery.
-   */
   async claim(
     profileId: number,
     householdPassword: string,
@@ -448,12 +398,12 @@ export class AuthService {
     ip: string,
   ): Promise<LoginResult> {
     if (!this.enabled) throw new AuthFailure(400, "request_invalid");
-    this.checkIp(ip);
+    this.ipLimiter.check(ip);
 
     const expected = createHash("sha256").update(this.appPassword as string).digest();
     const provided = createHash("sha256").update(householdPassword).digest();
     if (!timingSafeEqual(expected, provided)) {
-      this.recordIpFailure(ip);
+      this.ipLimiter.record(ip);
       throw new AuthFailure(401, "incorrect_password");
     }
 
@@ -475,8 +425,8 @@ export class AuthService {
     });
     if (updated.count === 0) throw new AuthFailure(409, "claim_unavailable");
 
-    this.clearIp(ip);
-    return this.createSession(profileId, "profile", meta);
+    this.ipLimiter.clear(ip);
+    return this.sessionManager.createSession(profileId, "profile", meta);
   }
 
   async changePassword(
@@ -569,7 +519,7 @@ export class AuthService {
       where: { id: profileId },
       data: { lastActiveAt: this.now() },
     });
-    return this.createSession(profileId, via, meta);
+    return this.sessionManager.createSession(profileId, via, meta);
   }
 
   /** Create a device-bound secret. Only its hash is stored by the server. */
@@ -599,7 +549,7 @@ export class AuthService {
     await this.prisma.deviceCredential.update({
       where: { id: credential.id }, data: { lastUsedAt: now },
     });
-    return this.createProfileSession(credential.profileId, "device", meta);
+    return this.sessionManager.createProfileSession(credential.profileId, "device", meta);
   }
 
   async listDeviceCredentials(profileId: number) {
@@ -617,87 +567,20 @@ export class AuthService {
   }
 
   async validate(token: string): Promise<AuthContext | null> {
-    const tokenHash = hashSessionToken(token);
-    const session = await this.prisma.session.findUnique({
-      where: { tokenHash },
-      include: { profile: true },
-    });
-    if (!session) return null;
-    if (session.revokedAt) return null;
-
-    const now = this.now();
-    if (session.expiresAt.getTime() <= now.getTime()) return null;
-    if (session.profile?.disabled) return null;
-
-    const cap = new Date(session.createdAt.getTime() + SESSION_MAX_AGE_MS);
-    let expiresAt = session.expiresAt;
-    if (
-      now.getTime() > session.expiresAt.getTime() - SESSION_RENEW_WINDOW_MS &&
-      now.getTime() < cap.getTime()
-    ) {
-      const proposed = new Date(now.getTime() + SESSION_TTL_MS);
-      expiresAt = proposed.getTime() < cap.getTime() ? proposed : cap;
-    }
-
-    const shouldTouch = now.getTime() - session.lastUsedAt.getTime() > SESSION_TOUCH_MS;
-    if (shouldTouch || expiresAt.getTime() !== session.expiresAt.getTime()) {
-      await this.prisma.session.update({
-        where: { id: session.id },
-        data: {
-          lastUsedAt: shouldTouch ? now : session.lastUsedAt,
-          expiresAt,
-        },
-      });
-      session.lastUsedAt = shouldTouch ? now : session.lastUsedAt;
-      session.expiresAt = expiresAt;
-    }
-
-    const role: AuthRole = session.profile?.role === "admin" ? "admin" : session.profile ? "member" : "admin";
-    return {
-      token,
-      session,
-      profile: session.profile,
-      role,
-      via: session.via as AuthVia,
-    };
+    return this.sessionManager.validate(token);
   }
 
   async revokeToken(token: string): Promise<void> {
-    await this.prisma.session.updateMany({
-      where: { tokenHash: hashSessionToken(token), revokedAt: null },
-      data: { revokedAt: this.now() },
-    });
+    return this.sessionManager.revokeToken(token);
   }
 
   async listSessions(context: AuthContext) {
-    if (!context.profile) return [];
-    const rows = await this.prisma.session.findMany({
-      where: { profileId: context.profile.id, revokedAt: null, expiresAt: { gt: this.now() } },
-      orderBy: { lastUsedAt: "desc" },
-    });
-    return rows.map((row) => ({
-      id: row.id,
-      deviceLabel: row.deviceLabel,
-      userAgent: row.userAgent,
-      via: row.via,
-      createdAt: row.createdAt,
-      lastUsedAt: row.lastUsedAt,
-      expiresAt: row.expiresAt,
-      current: row.id === context.session.id,
-    }));
+    return this.sessionManager.listSessions(context);
   }
 
   async revokeSession(context: AuthContext, sessionId: string): Promise<void> {
-    if (!context.profile) throw new AuthFailure(404, "session_not_found");
-    const session = await this.prisma.session.findFirst({
-      where: { id: sessionId, profileId: context.profile.id },
-      select: { id: true },
-    });
-    if (!session) throw new AuthFailure(404, "session_not_found");
-    await this.prisma.session.update({
-      where: { id: session.id },
-      data: { revokedAt: this.now() },
-    });
+    const ok = await this.sessionManager.revokeSession(context.profile!.id, sessionId);
+    if (!ok) throw new AuthFailure(404, "session_not_found");
   }
 
   /** Best effort; correctness never depends on this having run. */
@@ -751,37 +634,6 @@ export class AuthService {
     }
   }
 
-  private async createSession(
-    profileId: number | null,
-    via: AuthVia,
-    meta: SessionMetadata,
-  ): Promise<LoginResult> {
-    const token = newSessionToken();
-    const now = this.now();
-    const session = await this.prisma.session.create({
-      data: {
-        id: newSessionId(),
-        tokenHash: hashSessionToken(token),
-        profileId,
-        via,
-        userAgent: meta.userAgent?.slice(0, 500) ?? null,
-        deviceLabel: meta.deviceLabel?.slice(0, 100) ?? null,
-        createdAt: now,
-        lastUsedAt: now,
-        expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
-      },
-    });
-    const profile = profileId
-      ? await this.prisma.profile.findUnique({ where: { id: profileId } })
-      : null;
-    return {
-      token,
-      session,
-      profile,
-      role: profile?.role === "admin" ? "admin" : profile ? "member" : "admin",
-    };
-  }
-
   private assertPassword(password: string, profileName: string): void {
     const failure = validatePassword(password, profileName);
     if (failure) throw new AuthFailure(400, failure.code, failure.params);
@@ -791,113 +643,5 @@ export class AuthService {
     if (!context || context.role !== "admin") {
       throw new AuthFailure(403, "forbidden");
     }
-  }
-
-  private lockedSeconds(profile: Profile): number {
-    if (!profile.lockedUntil) return 0;
-    // Deliberately not `secondsUntil`: that clamps to at least 1 for the
-    // retry-after header, which would make an expired lock look permanent.
-    const remaining = profile.lockedUntil.getTime() - this.now().getTime();
-    return Math.max(0, Math.ceil(remaining / 1000));
-  }
-
-  private secondsUntil(date: Date): number {
-    return Math.max(1, Math.ceil((date.getTime() - this.now().getTime()) / 1000));
-  }
-
-  private async recordProfileFailure(profile: Profile): Promise<Date | null> {
-    const count = profile.failedLoginCount + 1;
-    let lockedUntil: Date | null = null;
-    if (count >= LOCK_AFTER) {
-      const exponent = Math.min(count - LOCK_AFTER, 5);
-      const seconds = Math.min(30 * 2 ** exponent, 900);
-      lockedUntil = new Date(this.now().getTime() + seconds * 1000);
-    }
-    await this.prisma.profile.update({
-      where: { id: profile.id },
-      data: { failedLoginCount: count, lockedUntil },
-    });
-    return lockedUntil;
-  }
-
-  /** Per-IP limiter covers unknown profiles and the household key too. */
-  private checkIp(ip: string): void {
-    const entry = this.ipFailures.get(ip);
-    if (!entry) return;
-    if (this.now().getTime() >= entry.resetAt) {
-      this.ipFailures.delete(ip);
-      return;
-    }
-    if (entry.count >= IP_MAX_FAILURES) {
-      throw new AuthFailure(429, "account_locked", {
-        retryAfterSeconds: Math.ceil((entry.resetAt - this.now().getTime()) / 1000),
-      });
-    }
-  }
-
-  private recordIpFailure(ip: string): void {
-    const now = this.now().getTime();
-    const entry = this.ipFailures.get(ip);
-    if (!entry || now >= entry.resetAt) {
-      this.ipFailures.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
-      return;
-    }
-    entry.count += 1;
-  }
-
-  private clearIp(ip: string): void {
-    this.ipFailures.delete(ip);
-  }
-
-  /** Per-IP ceiling on failed external sign-in attempts before throttling (spec 32). */
-  private checkOAuthRate(ip: string): void {
-    const entry = this.oauthFailures.get(ip);
-    if (!entry) return;
-    const now = this.now().getTime();
-    if (now >= entry.resetAt) {
-      this.oauthFailures.delete(ip);
-      return;
-    }
-    if (entry.count >= OAUTH_MAX_ATTEMPTS) {
-      throw new AuthFailure(429, "oauth_rate_limited", {
-        retryAfterSeconds: Math.ceil((entry.resetAt - now) / 1000),
-      });
-    }
-  }
-
-  private recordOAuthFailure(ip: string): void {
-    const now = this.now().getTime();
-    const entry = this.oauthFailures.get(ip);
-    if (!entry || now >= entry.resetAt) {
-      this.oauthFailures.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
-      return;
-    }
-    entry.count += 1;
-  }
-
-  private clearOAuthRate(ip: string): void {
-    this.oauthFailures.delete(ip);
-  }
-
-  private checkSignupRate(ip: string): void {
-    const entry = this.accountSignups.get(ip);
-    if (!entry) return;
-    const now = this.now().getTime();
-    if (now >= entry.resetAt) {
-      this.accountSignups.delete(ip);
-      return;
-    }
-    if (entry.count >= 5) {
-      throw new AuthFailure(429, "oauth_rate_limited", {
-        retryAfterSeconds: Math.ceil((entry.resetAt - now) / 1000),
-      });
-    }
-  }
-
-  private recordSignupFailure(ip: string): void {
-    const now = this.now().getTime();
-    const entry = this.accountSignups.get(ip);
-    if (!entry || now >= entry.resetAt) this.accountSignups.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
-    else entry.count += 1;
   }
 }

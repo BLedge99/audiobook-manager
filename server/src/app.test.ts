@@ -693,6 +693,80 @@ describe("the API error contract", () => {
   });
 });
 
+describe("restored feature routes", () => {
+  it("keeps metadata, taxonomy, favourites, wishlist, and privacy routes available", async () => {
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { password: "household" },
+    });
+    const cookie = login.cookies.map((entry) => `${entry.name}=${entry.value}`).join("; ");
+    const suffix = Date.now().toString(36);
+    const profile = await prisma.profile.create({ data: { name: `Restored routes ${suffix}` } });
+    const root = await prisma.libraryRoot.create({
+      data: { path: path.join(tmpdir(), `restored-routes-${suffix}`), label: "Restored routes" },
+    });
+    const item = await prisma.mediaItem.create({
+      data: {
+        libraryRootId: root.id,
+        filePath: path.join(root.path, "book.mp3"),
+        title: "Original title",
+        author: "Unknown",
+        fileFormat: "mp3",
+        duration: 10,
+      },
+    });
+    const headers = { cookie, "x-profile-id": String(profile.id) };
+
+    expect((await app.inject({ method: "GET", url: "/privacy" })).headers["content-type"]).toContain("text/html");
+    expect((await app.inject({ method: "GET", url: "/api/genres", headers: { cookie } })).statusCode).toBe(200);
+    const genre = await app.inject({
+      method: "POST",
+      url: "/api/genres",
+      headers,
+      payload: { slug: `restored-${suffix}`, name: "Restored genre" },
+    });
+    expect(genre.statusCode).toBe(200);
+    expect((await app.inject({ method: "PATCH", url: `/api/genres/${genre.json().id}`, headers, payload: { name: "Updated genre" } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "DELETE", url: `/api/genres/${genre.json().id}`, headers })).statusCode).toBe(200);
+
+    const tag = await app.inject({ method: "POST", url: "/api/tags", headers, payload: { name: `Restored ${suffix}` } });
+    expect(tag.statusCode).toBe(201);
+    const tags = await app.inject({
+      method: "PUT",
+      url: `/api/audiobooks/${item.id}/tags`,
+      headers,
+      payload: { title: "Edited title", tagIds: [tag.json().id] },
+    });
+    expect(tags.statusCode).toBe(200);
+    expect((await prisma.mediaItem.findUnique({ where: { id: item.id } }))?.title).toBe("Edited title");
+    expect((await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/tags`, headers })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/candidates`, headers })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: `/api/audiobooks/${item.id}/metadata/reset`, headers })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/enrichment/status", headers: { cookie } })).statusCode).toBe(200);
+
+    expect((await app.inject({ method: "PUT", url: `/api/audiobooks/${item.id}/favourite`, headers })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/api/favourites/ids", headers })).json()).toContain(item.id);
+    expect((await app.inject({ method: "DELETE", url: `/api/audiobooks/${item.id}/favourite`, headers })).statusCode).toBe(200);
+
+    const wishlist = await app.inject({
+      method: "POST",
+      url: "/api/wishlist",
+      headers,
+      payload: { title: "Wishlist title", provider: "test", providerKey: `wishlist-${suffix}` },
+    });
+    expect(wishlist.statusCode).toBe(201);
+    expect((await app.inject({ method: "GET", url: "/api/wishlist", headers })).json()).toEqual([
+      expect.objectContaining({ title: "Wishlist title", playable: false }),
+    ]);
+    await app.inject({ method: "DELETE", url: `/api/wishlist/${wishlist.json().id}`, headers });
+    await app.inject({ method: "DELETE", url: `/api/tags/${tag.json().id}`, headers });
+    await prisma.mediaItem.delete({ where: { id: item.id } });
+    await prisma.libraryRoot.delete({ where: { id: root.id } });
+    await prisma.profile.delete({ where: { id: profile.id } });
+  });
+});
+
 describe("oauth flow routes", () => {
   let oauthApp: Awaited<ReturnType<typeof buildApp>>;
 
