@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { LockKeyhole, Trash2 } from "lucide-react";
 import { copy } from "../copy";
-import { boundedFetch, getActiveProfileId, lockSession, setActiveProfileId } from "../lib/api";
+import { getActiveProfileId, lockSession, setActiveProfileId } from "../lib/api";
 import { responseErrorText } from "../lib/apiError";
 import { Btn, Field, cn } from "../ui/primitives";
 
@@ -24,7 +24,7 @@ export function ProfileSwitcher() {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await boundedFetch("/api/auth/session");
+        const res = await fetch("/api/auth/session");
         if (res.ok) {
           const body = (await res.json()) as { via?: "profile" | "household" | "device" };
           setVia(body.via ?? null);
@@ -36,7 +36,7 @@ export function ProfileSwitcher() {
   }, []);
 
   const load = async () => {
-    const res = await boundedFetch("/api/profiles");
+    const res = await fetch("/api/profiles");
     if (res.ok) setProfiles(await res.json());
   };
 
@@ -80,7 +80,7 @@ export function ProfileSwitcher() {
       return;
     }
     setError("");
-    const res = await boundedFetch("/api/profiles", {
+    const res = await fetch("/api/profiles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -99,7 +99,7 @@ export function ProfileSwitcher() {
   };
 
   const remove = async (id: number) => {
-    const res = await boundedFetch(`/api/profiles/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
     if (!res.ok) {
       setError(await responseErrorText(res));
       return;

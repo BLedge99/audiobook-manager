@@ -46,7 +46,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { localDb, type CoverRecord } from "./db";
-import { boundedFetch, coverUrl } from "../lib/api";
+import { coverUrl } from "../lib/api";
 
 /**
  * How many covers may be held on the device.
@@ -303,7 +303,7 @@ async function enqueueRevalidate(key: string, stored: CoverRecord): Promise<void
 async function fetchCover(url: string, etag: string | null): Promise<{ blob: Blob; etag: string | null } | undefined> {
   const headers: Record<string, string> = {};
   if (etag) headers["If-None-Match"] = etag;
-  const response = await boundedFetch(url, { headers });
+  const response = await fetch(url, { headers });
   if (response.status === 304) return undefined;
   if (!response.ok) throw new Error(`Cover request failed (${response.status})`);
   const blob = await response.blob();

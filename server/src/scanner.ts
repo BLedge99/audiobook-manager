@@ -10,7 +10,6 @@ import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./sc
 import { addBookToFollowingProfiles } from "./library-membership";
 import { stripTrackNumberPrefix, parseTrackTitleOverrides, resolveTrackTitle } from "./metadata/chapters";
 import { resolveLocalNarrator } from "./narrator";
-import { scannerLockedFields } from "./metadata/precedence";
 
 export const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".wav", ".aac"]);
 
@@ -297,14 +296,23 @@ export function createScanManager(prisma: PrismaClient) {
           ? !(await coverFileExists(existingRow.coverImagePath))
           : false;
         // Spec 17 / ADR 009: per-field overrides replace the spec 07 all-or-nothing
-        // `metadataSource === "user"` sentinel via scannerLockedFields.
+        // `metadataSource === "user"` sentinel. Fixing only a narrator must no
+        // longer freeze the title against rescans.
+        //
+        // Only the spec 07 `user` sentinel gets the blanket legacy lock, and
+        // only when no per-field overrides exist (those rows predate spec 17).
+        // `manual` is deliberately NOT locked wholesale: it is written by the
+        // spec 16/17 routes, which record real per-field overrides for what
+        // the user actually set. Blanket-freezing on `manual` silently and
+        // permanently blocked the scanner from ever correcting a title.
         const overrideRows = existingRow
           ? await prisma.fieldOverride.findMany({ where: { mediaItemId: existingRow.id }, select: { field: true } })
           : [];
-        const locked = scannerLockedFields(
-          overrideRows.map((row) => row.field),
-          existingRow?.metadataSource,
-        );
+        const legacyLock = existingRow?.metadataSource === "user" && overrideRows.length === 0;
+        const locked = new Set<string>(overrideRows.map((row) => row.field));
+        if (legacyLock) {
+          locked.add("title").add("author").add("narrator").add("releaseDate").add("genre").add("coverImagePath");
+        }
         const writable = (field: string) => !locked.has(field);
 
         // Provenance is bookkeeping, not content, so it is always refreshed.

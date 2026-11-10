@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Plug } from "lucide-react";
-import { apiUrl, boundedFetch, getServerUrl, setServerUrl } from "../lib/api";
+import { getServerUrl, setServerUrl } from "../lib/api";
 import { copy } from "../copy";
 import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
 
@@ -58,7 +58,7 @@ export function ServerSetup({
     setStatus("checking");
     setMessage("");
     try {
-      const response = await boundedFetch(apiUrl("/api/health"));
+      const response = await fetch(`${saved}/api/health`);
       if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
       onDone();
     } catch (error) {

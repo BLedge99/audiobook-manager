@@ -560,10 +560,10 @@ export const REQUEST_TIMEOUT_MS = 30_000;
  * The signal is composed rather than replaced, so a caller that already set
  * one keeps it.
  *
- * Every request in the app goes through here (directly or via `apiFetch`), so
- * a deadline is applied no matter which layer a caller lands in. The per-
- * component `request` helpers that used to carry their own copies are gone;
- * `LIMITATIONS.md` §5 records that gap, and it is now closed.
+ * **Not every call site uses this yet.** The per-component `request` helpers
+ * in `ReviewQueue`, `TagManager`, `AudiobookDetail` and the gates still use a
+ * raw `fetch`, and each of them can still spin forever when the server is
+ * unreachable. `LIMITATIONS.md` §5 records that as the remaining work.
  */
 export async function boundedFetch(
   input: RequestInfo | URL,

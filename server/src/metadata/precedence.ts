@@ -77,55 +77,14 @@ export function resolveFields(layers: Record<string, FieldLayer>): Partial<Recor
   return out;
 }
 
-export const SCANNER_LEGACY_FIELDS = [
-  "title",
-  "author",
-  "narrator",
-  "releaseDate",
-  "genre",
-  "coverImagePath",
-] as const;
-
-/**
- * Derives whether a field is writable during a rescan, adhering to ADR 009.
- *
- * Spec 17 / ADR 009: per-field overrides replace the spec 07 all-or-nothing
- * `metadataSource === "user"` sentinel. Fixing only a narrator must no
- * longer freeze the title against rescans.
- *
- * Only the spec 07 `user` sentinel gets the blanket legacy lock, and
- * only when no per-field overrides exist (those rows predate spec 17).
- * `manual` is deliberately NOT locked wholesale: it is written by the
- * spec 16/17 routes, which record real per-field overrides for what
- * the user actually set. Blanket-freezing on `manual` silently and
- * permanently blocked the scanner from ever correcting a title.
- */
-export function scannerLockedFields(
-  overriddenFields: Iterable<string>,
-  metadataSource?: string | null,
-): Set<string> {
-  const overrides = Array.from(overriddenFields);
-  const legacyLock = metadataSource === "user" && overrides.length === 0;
-  const locked = new Set<string>(overrides);
-  if (legacyLock) {
-    for (const field of SCANNER_LEGACY_FIELDS) {
-      locked.add(field);
-    }
-  }
-  return locked;
-}
-
 /**
  * Which fields may the scanner write on rescan?
  *
  * Only the ones a human has NOT overridden. This is the fix for the spec 07
  * behaviour where correcting a narrator also froze the title forever.
  */
-export function scannableFields(
-  overriddenFields: Iterable<string>,
-  metadataSource?: string | null,
-): Set<MetadataField> {
-  const locked = scannerLockedFields(overriddenFields, metadataSource);
+export function scannableFields(overriddenFields: Iterable<string>): Set<MetadataField> {
+  const locked = new Set<string>(overriddenFields);
   return new Set(METADATA_FIELDS.filter((field) => !locked.has(field)));
 }
 

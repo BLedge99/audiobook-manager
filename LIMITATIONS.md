@@ -538,12 +538,12 @@ The genuinely correct fix — terminate TLS on the server and trust the CA on ea
   cannot be reached must never be a screen the listener cannot leave.
 
   Fixed with `client/src/lib/reachability.ts` (a bounded probe, 10s) and
-  `client/src/lib/api.ts` (`boundedFetch`, 30s by default). As of the fetch-
-  layer consolidation, **every request in the app goes through the module**:
-  the hooks and components that used to carry private `request` helpers
-  (`ReviewQueue`, `TagManager`, `AudiobookDetail`) and the gates now call
-  `apiFetch` / `boundedFetch` directly, so no caller can spin forever when the
-  server is unreachable.
+  `client/src/lib/api.ts` (`boundedFetch`, 30s by default, now used by the
+  library and browse hooks). **Every request in the app should eventually go
+  through `boundedFetch`** — the per-component `request` helpers in
+  `ReviewQueue`, `TagManager`, `AudiobookDetail` and the gates still use a raw
+  `fetch`, and each of them can still spin forever when the server is
+  unreachable.
 
   A second, smaller race came with it: the app decided "offline" before the
   **device library** had finished loading from IndexedDB, so a phone with
