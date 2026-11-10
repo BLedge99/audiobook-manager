@@ -4,6 +4,8 @@ import {
   resolveField,
   resolveFields,
   scannableFields,
+  scannerLockedFields,
+  SCANNER_LEGACY_FIELDS,
   toPrismaData,
 } from "./precedence";
 import { GENRE_TAXONOMY, PROVIDER_GENRE_MAPPING } from "./taxonomy";
@@ -73,6 +75,23 @@ describe("resolveField precedence", () => {
 describe("scannableFields", () => {
   it("allows every field when nothing is overridden", () => {
     expect(scannableFields([])).toEqual(new Set(METADATA_FIELDS));
+  });
+
+  it("applies legacy blanket lock when metadataSource is user and no overrides exist", () => {
+    const locked = scannerLockedFields([], "user");
+    expect(locked).toEqual(new Set(SCANNER_LEGACY_FIELDS));
+    const scannable = scannableFields([], "user");
+    for (const field of SCANNER_LEGACY_FIELDS) {
+      expect(scannable.has(field as any)).toBe(false);
+    }
+  });
+
+  it("does not apply legacy lock if overrides exist or metadataSource is not user", () => {
+    const lockedWithOverride = scannerLockedFields(["narrator"], "user");
+    expect(lockedWithOverride).toEqual(new Set(["narrator"]));
+
+    const lockedManual = scannerLockedFields([], "manual");
+    expect(lockedManual.size).toBe(0);
   });
 
   it("locks only the overridden field", () => {
