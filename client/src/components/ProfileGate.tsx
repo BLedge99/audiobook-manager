@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Plus, UserRound } from "lucide-react";
 import { copy } from "../copy";
+import { boundedFetch } from "../lib/api";
 import { Btn, Field, FullScreen, Wordmark, cn } from "../ui/primitives";
 
 interface Profile {
@@ -38,7 +39,7 @@ export function ProfileGate({
     // Android app that is the *first* thing a new user sees, and the most likely
     // failure is "cannot reach the server", which they cannot diagnose unaided.
     try {
-      const res = await fetch("/api/profiles");
+      const res = await boundedFetch("/api/profiles");
       if (res.ok) {
         setProfiles(await res.json());
         setError("");
@@ -73,7 +74,7 @@ export function ProfileGate({
     }
     setError("");
     try {
-      const res = await fetch("/api/profiles", {
+      const res = await boundedFetch("/api/profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),

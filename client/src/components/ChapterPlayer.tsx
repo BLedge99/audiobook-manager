@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook } from "../types";
-import { getActiveProfileId, profileHeaders } from "../lib/api";
+import { apiFetch, getActiveProfileId } from "../lib/api";
 import { cacheProgress, readProgress } from "../local/privateCache";
 import { copy } from "../copy";
 import { ProgressTimeline } from "./ProgressTimeline";
@@ -216,10 +216,9 @@ export function ChapterPlayer({
     // The encrypted copy is written whether or not the request lands: offline
     // listening is the point, and a failed write must not lose the position.
     const progress = { position: at, completed, lastPlayed: new Date().toISOString() };
-    void fetch(`/api/audiobooks/${book.id}/progress`, {
+    void apiFetch(`/api/audiobooks/${book.id}/progress`, {
       method: "PUT",
       keepalive: true,
-      headers: { "Content-Type": "application/json", ...profileHeaders() },
       body: JSON.stringify({ position: at, ...(completed ? { completed: true } : {}) }),
     })
       .catch(() => undefined)
@@ -242,10 +241,9 @@ export function ChapterPlayer({
     // keepalive: the browser cancels in-flight requests on navigation, and this
     // flush is exactly the case where the user closes the tab or the app is
     // backgrounded.
-    void fetch(`/api/audiobooks/${book.id}/sessions`, {
+    void apiFetch(`/api/audiobooks/${book.id}/sessions`, {
       method: "POST",
       keepalive: true,
-      headers: { "Content-Type": "application/json", ...profileHeaders() },
       body: JSON.stringify({
         fromPosition: session.fromPosition,
         toPosition,
@@ -419,16 +417,11 @@ export function ChapterPlayer({
     void (async () => {
       let saved = 0;
       try {
-        const res = await fetch(`/api/audiobooks/${book.id}/progress`, { headers: profileHeaders() });
-        if (res.ok) {
-          const body = (await res.json()) as { position?: number };
-          saved = body.position ?? 0;
-        } else {
-          // Offline or unauthorised: the encrypted row is the last position this
-          // profile saw. It only exists while the profile key is unlocked.
-          saved = (await readProgress(book.id))?.position ?? 0;
-        }
+        const progress = await apiFetch<{ position?: number }>(`/api/audiobooks/${book.id}/progress`);
+        saved = progress.position ?? 0;
       } catch {
+        // Offline or unauthorised: the encrypted row is the last position this
+        // profile saw. It only exists while the profile key is unlocked.
         saved = (await readProgress(book.id))?.position ?? 0;
       }
       applyResume(saved);
