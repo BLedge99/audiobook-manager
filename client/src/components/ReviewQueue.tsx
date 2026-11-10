@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import type { Audiobook } from "../types";
 import { copy } from "../copy";
-import { responseErrorText } from "../lib/apiError";
-import { profileHeaders } from "../lib/api";
+import { apiFetch } from "../lib/api";
 import { Btn, MachineHead, Swatch, cn } from "../ui/primitives";
 import { CoverImage, urlCoverKey } from "../local/CoverImage";
 
@@ -31,16 +30,6 @@ interface Candidate {
   seriesName?: string | null;
   publisher?: string | null;
   publishedYear?: number | null;
-}
-
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (options?.body) headers["Content-Type"] = "application/json";
-  const response = await fetch(url, { ...options, headers: { ...profileHeaders(), ...headers, ...(options?.headers as Record<string, string>) } });
-  if (!response.ok) {
-    throw new Error(await responseErrorText(response));
-  }
-  return response.status === 204 ? (undefined as T) : response.json();
 }
 
 function decodeList(value: string | null | undefined): string[] {
@@ -134,7 +123,7 @@ function CandidateRow({
             disabled={busy}
             onClick={() =>
               void act(
-                () => request(`/api/audiobooks/${candidate.id}/metadata`, { method: "POST", body: JSON.stringify({ candidateId: candidate.id }) }),
+                () => apiFetch(`/api/audiobooks/${candidate.id}/metadata`, { method: "POST", body: JSON.stringify({ candidateId: candidate.id }) }),
                 onApply,
               )
             }
@@ -147,7 +136,7 @@ function CandidateRow({
             disabled={busy}
             onClick={() =>
               void act(
-                () => request(`/api/audiobooks/${candidate.id}/metadata/reset`, { method: "POST" }),
+                () => apiFetch(`/api/audiobooks/${candidate.id}/metadata/reset`, { method: "POST" }),
                 onSkip,
               )
             }
@@ -188,7 +177,7 @@ function ReviewRow({ book, onResolved }: { book: Audiobook; onResolved: () => vo
 
   const load = () => {
     setLoading(true);
-    void request<Candidate[]>(`/api/audiobooks/${book.id}/candidates`)
+    void apiFetch<Candidate[]>(`/api/audiobooks/${book.id}/candidates`)
       .then(setCandidates)
       .catch((requestError) => setError(requestError instanceof Error ? requestError.message : copy.operator.review.loadFailed))
       .finally(() => setLoading(false));

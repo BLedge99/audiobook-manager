@@ -8,7 +8,6 @@ import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
 import type { ScanManager } from "./scanner";
-import { addBookToProfile, libraryEntriesFor, removeBookFromProfile } from "./library-membership";
 import { LMStudioAdapter } from "./ai/llm";
 import { COVER_DIR } from "./enrichment";
 import { resolveInsideRoot } from "./safePath";
@@ -22,12 +21,17 @@ import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
 import { RecommendationService, DEFAULT_PAGE_SIZE } from "./metadata/recommend-service";
 import { fail } from "./http-errors";
 import { AuthService } from "./auth/service";
-import { isAdminRoute } from "./auth/policy";
 import { PasskeyService, passkeyConfigFromEnv, registerPasskeyRoutes, type PasskeyConfig } from "./auth/passkeys";
 import { registerAuthRoutes } from "./auth/routes";
-import { SESSION_HEADER, sessionTokenFromRequest } from "./auth/session";
-import { issueMediaToken, mediaResourceFromPath, verifyMediaToken } from "./auth/media-token";
+import { SESSION_HEADER } from "./auth/session";
+import { mediaResourceFromPath, verifyMediaToken } from "./auth/media-token";
 import { oauthConfigFromEnv, type OAuthConfig, buildAuthorizeUrl, createPkcePair, oauthProviderById } from "./auth/oauth";
+import { registerProgressRoutes } from "./api/progress";
+import { registerScanRoutes } from "./api/scan";
+import { registerAuthGate } from "./api/auth-gate";
+import { registerLibraryRoutes } from "./api/library";
+import { errorHandler } from "./api/error-handler";
+import { registerMediaRoutes } from "./api/media";
 
 export { SESSION_HEADER };
 
@@ -77,31 +81,6 @@ export interface BuildAppOptions {
 }
 
 /** Test seam for proving that the family listener has no admin surface. */
-
-/** Public API paths; everything else under `/api/` needs a session. */
-function isPublicApiPath(path: string): boolean {
-  // `/api/auth/:provider/authorize` and `/api/auth/:provider/callback` are the
-  // two legs of an OAuth flow that must complete before a session exists
-  // (spec 32 / ADR 023). They carry no credentials; the authorize leg redirects
-  // away to the provider and the callback leg answers the provider.
-  const rest = path.slice("/api/auth".length);
-  const segments = rest.split("/").filter(Boolean);
-  const isOAuthFlowPath = segments.length === 2 && (segments[1] === "authorize" || segments[1] === "callback");
-  return (
-    path === "/api/health" ||
-    path === "/api/config" ||
-    path === "/api/auth/login" ||
-    path === "/api/auth/register-profile" ||
-    path === "/api/auth/signup" ||
-    path === "/api/auth/providers" ||
-    path === "/api/auth/accounts" ||
-    path === "/api/auth/claim" ||
-    path === "/api/auth/logout" ||
-    path === "/api/auth/devices/session" ||
-    path.startsWith("/api/auth/passkeys/login/") ||
-    isOAuthFlowPath
-  );
-}
 
 function headerProfileId(request: FastifyRequest): number | null {
   const profileId = Number(request.headers["x-profile-id"]);
@@ -167,21 +146,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.addHook("preSerialization", async (_request, _reply, payload) => serializeBigInts(payload));
 
-  app.setErrorHandler((error, request, reply) => {
-    // The detail is for the server log only. This handler used to echo
-    // `error.message` on any 4xx, and that included filesystem paths and
-    // Prisma wording (spec 11); the client renders the code instead.
-    request.log.error(error);
-    const candidateStatusCode =
-      typeof error === "object" && error !== null && "statusCode" in error
-        ? error.statusCode
-        : undefined;
-    const statusCode =
-      typeof candidateStatusCode === "number" && candidateStatusCode >= 400
-        ? candidateStatusCode
-        : 500;
-    return fail(reply, statusCode, statusCode >= 500 ? "internal_error" : "request_invalid");
-  });
+  app.setErrorHandler(errorHandler);
 
   // CORS allow-list.
   //
@@ -258,55 +223,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Browser media uses its HttpOnly cookie. The Android shell uses a
   // five-minute, profile- and resource-scoped media token in the URL because
   // native media requests cannot consistently carry the session header.
-  app.decorateRequest("auth", null);
-  app.addHook("onRequest", async (request, reply) => {
-    const path = request.url.split("?")[0];
-    if (!path.startsWith("/api/")) return;
-    if (request.method === "OPTIONS") return;
-    // The admin panel has a separate listener and route table. Do not let the
-    // household auth gate turn its absent routes into a misleading 401.
-    if (path === "/api/admin" || path.startsWith("/api/admin/")) {
-      if (options.adminProxyTarget) return;
-      return fail(reply, 404, "not_found");
-    }
-    if (!authEnabled) return;
-
-    const mediaResource = mediaResourceFromPath(path);
-    if (mediaResource) {
-      const query = request.query as Record<string, unknown> | undefined;
-      if (verifyMediaToken(mediaTokenSecret, query?.media, mediaResource)) return;
-    }
-
-    const token = sessionTokenFromRequest(request);
-    if (token) request.auth = await auth.validate(token);
-
-    // Public API paths (login, signup, providers, health, OAuth flows) need no
-    // session. This short-circuit must come before the auth check below so that
-    // a login request is not rejected for lacking one.
-    if (isPublicApiPath(path)) return;
-
-    // A pre-demo household/break-glass session has no account scope. It used to
-    // be thrown away outright in demo mode, which severed the household break-
-    // glass key the operator configures on the production demo host: a listener
-    // who reached for that key was refused at login (404) or, with a session
-    // already in flight, discarded here, and the app could not tell the difference
-    // between "the password is wrong" and "this server does not take one".
-    // Household sessions simply carry no account scope, so the demo account
-    // routes (which require a session-bound profile) stay unreachable for them.
-    // The decision is recorded in spec 33; local behaviour is unchanged.
-    if (!request.auth) return fail(reply, 401, "auth_required");
-    if (accountExperience === "demo" && isAdminRoute(request.method, path)) {
-      return fail(reply, 404, "not_found");
-    }
-    if (isAdminRoute(request.method, path) && request.auth.role !== "admin") {
-      return fail(reply, 403, "forbidden");
-    }
-  });
-
   const adminProxyTarget = options.adminProxyTarget ? new URL(options.adminProxyTarget) : null;
   if (adminProxyTarget && !["127.0.0.1", "[::1]", "localhost"].includes(adminProxyTarget.hostname)) {
     throw new Error("adminProxyTarget must point to a loopback address");
   }
+
+  registerAuthGate(app, {
+    auth,
+    authEnabled,
+    mediaTokenSecret,
+    accountExperience,
+    adminProxyTarget,
+  });
+
   const proxyAdminRequest = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!adminProxyTarget) return fail(reply, 404, "not_found");
     const requestPath = request.url.split("?")[0];
@@ -606,309 +535,35 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }));
   }
 
-  app.post<{ Body: { kind: "cover" | "book-stream" | "track-stream"; id: number } }>("/api/auth/media-token", {
-    schema: {
-      body: {
-        type: "object",
-        properties: {
-          kind: { type: "string", enum: ["cover", "book-stream", "track-stream"] },
-          id: { type: "integer", minimum: 1 },
-        },
-        required: ["kind", "id"],
-        additionalProperties: false,
-      },
-    },
-  }, async (request, reply) => {
-    // Development without APP_PASSWORD intentionally has no auth boundary and
-    // therefore needs no bearer token on media URLs.
-    if (!authEnabled) return { token: null, expiresAt: null };
-    const profileId = accountExperience === "demo"
-      ? requireAccountProfileId(request, reply)
-      : optionalProfileId(request);
-    if (profileId === null) {
-      return accountExperience === "demo" && reply.sent ? undefined : fail(reply, accountExperience === "demo" ? 401 : 400, accountExperience === "demo" ? "auth_required" : "profile_required");
-    }
-    if (!mediaTokenSecret || Buffer.byteLength(mediaTokenSecret, "utf8") < 32) {
-      return fail(reply, 503, "media_token_not_configured");
-    }
-
-    const { kind, id } = request.body;
-    const allowed = kind === "track-stream"
-      ? await prisma.track.findFirst({
-        where: { id, mediaItem: libraryEntriesFor(profileId) },
-        select: { id: true },
-      })
-      : await prisma.mediaItem.findFirst({
-        where: { id, ...libraryEntriesFor(profileId) },
-        select: { id: true },
-      });
-    if (!allowed) return fail(reply, 404, kind === "track-stream" ? "track_not_found" : "audiobook_not_found");
-
-    const token = issueMediaToken(mediaTokenSecret, { profileId, kind, resourceId: id });
-    reply.header("cache-control", "no-store");
-    return { token, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
+  registerMediaRoutes(app, {
+    prisma,
+    authEnabled,
+    mediaTokenSecret,
+    accountExperience,
+    optionalProfileId,
+    requireAccountProfileId,
+    parseIdParam,
+    canReadMediaItem,
   });
 
-  app.get("/api/audiobooks", async (request, reply) => {
-    // Spec 20: the browse UI needs genres, series and custom tags on the list
-    // payload -- fetching them per-book would be an N+1 request per shelf.
-    const profileId = accountExperience === "demo"
-      ? requireAccountProfileId(request, reply)
-      : optionalProfileId(request);
-    if (accountExperience === "demo" && profileId === null) return;
-    // Spec 27: a profile sees its own library, not the whole server's.
-    //
-    // With no profile there is no caller to scope to, so the whole server
-    // library is returned -- the same answer the endpoint gave before spec 27,
-    // which keeps tooling and the unscoped API working. The client always
-    // sends the header once a profile is chosen.
-    const items = await prisma.mediaItem.findMany({
-      where: profileId === null ? undefined : libraryEntriesFor(profileId),
-      include: {
-        tracks: true,
-        series: true,
-        genres: { include: { genre: true } },
-        customTags: { include: { tag: true } },
-        contributors: { include: { contributor: true } },
-      },
-    });
-    // One query for the whole library's progress rather than one per book.
-    const history = profileId === null
-      ? []
-      : await prisma.listeningHistory.findMany({
-        where: { profileId },
-        select: { mediaItemId: true, position: true, completed: true, lastPlayed: true },
-      });
-    const byItem = new Map(history.map((row) => [row.mediaItemId, row]));
-    // Spec 14: the grid needs each book's saved position to render
-    // "continue listening" without N+1 requests. Scoped to the caller's profile,
-    // so one household member never sees another's position.
-    const payload = items.map((item) => {
-      const row = byItem.get(item.id);
-      return {
-        // Spec 11: never expose server filesystem paths to a client.
-        ...publicMediaItem({
-          ...item,
-          tracks: item.tracks.map(({ filePath: _trackPath, ...track }) => track),
-        }),
-        // Flatten the join rows so the client can filter without walking them.
-        genres: item.genres.map((link) => ({
-          id: link.genre.id,
-          slug: link.genre.slug,
-          name: link.genre.name,
-          parentId: link.genre.parentId,
-          source: link.source,
-        })),
-        customTags: item.customTags.map((link) => ({
-          id: link.tag.id,
-          name: link.tag.name,
-        })),
-        contributors: item.contributors.map((link) => ({
-          id: link.contributor.id,
-          name: link.contributor.name,
-          role: link.contributor.role,
-        })),
-        progress: row
-          ? { position: row.position, completed: row.completed, lastPlayed: row.lastPlayed }
-          : null,
-      };
-    });
 
-    // Spec 15b: a refresh that changed nothing must not resend the library.
-    // The tag covers the progress rows too, so it can never be correct for the
-    // wrong profile -- and `vary` says so for anything between us and the
-    // client that might cache this.
-    return sendConditional(request, reply, payload, {
-      vary: ["x-profile-id", "x-house-session"],
-    });
+  registerLibraryRoutes(app, {
+    prisma,
+    accountExperience,
+    optionalProfileId,
+    requireAccountProfileId,
+    requireProfileId,
+    parseIdParam,
+    canReadMediaItem,
+    sendConditional,
   });
 
-  /**
-   * Spec 27: the whole server library, with each book marked for the caller.
-   *
-   * This is the other side of `/api/audiobooks`, which returns only the
-   * caller's membership. The "Server library" tab reads this: it needs to see
-   * every book on the server, including the ones the profile already has, so
-   * the household can add what is missing.
-   *
-   * The `inLibrary` flag is computed from the caller's membership rows, so
-   * the tab never has to join two lists itself.
-   */
-  app.get("/api/server-library", async (request, reply) => {
-    const profileId = accountExperience === "demo"
-      ? requireAccountProfileId(request, reply)
-      : optionalProfileId(request);
-    if (accountExperience === "demo" && profileId === null) return;
-    const items = await prisma.mediaItem.findMany({
-      orderBy: { title: "asc" },
-      include: {
-        tracks: true,
-        series: true,
-        genres: { include: { genre: true } },
-        customTags: { include: { tag: true } },
-        contributors: { include: { contributor: true } },
-      },
-    });
-    const held = profileId === null
-      ? new Set<number>()
-      : new Set(
-          (await prisma.profileLibraryEntry.findMany({
-            where: { profileId },
-            select: { mediaItemId: true },
-          })).map((row) => row.mediaItemId),
-        );
 
-    const payload = items.map((item) => ({
-      ...publicMediaItem({
-        ...item,
-        tracks: item.tracks.map(({ filePath: _trackPath, ...track }) => track),
-      }),
-      genres: item.genres.map((link) => ({
-        id: link.genre.id,
-        slug: link.genre.slug,
-        name: link.genre.name,
-        parentId: link.genre.parentId,
-        source: link.source,
-      })),
-      customTags: item.customTags.map((link) => ({
-        id: link.tag.id,
-        name: link.tag.name,
-      })),
-      contributors: item.contributors.map((link) => ({
-        id: link.contributor.id,
-        name: link.contributor.name,
-        role: link.contributor.role,
-      })),
-      /** Is this book in the calling profile's library? */
-      inLibrary: held.has(item.id),
-    }));
-
-    return sendConditional(request, reply, payload, {
-      vary: ["x-profile-id", "x-house-session"],
-    });
-  });
-
-  /**
-   * Spec 27: add a book to the calling profile's library.
-   *
-   * Idempotent: adding a book the profile already has is a 200 with
-   * `added: false`, not an error. The client sends an id, never a path.
-   */
-  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/library", {
-    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
-  }, async (request, reply) => {
-    const profileId = requireProfileId(request);
-    if (profileId === null) return fail(reply, 400, "profile_required");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
-    if (!item) return fail(reply, 404, "audiobook_not_found");
-    const added = await addBookToProfile(prisma, profileId, id);
-    return { added, inLibrary: true };
-  });
-
-  /**
-   * Spec 27: remove a book from the calling profile's library.
-   *
-   * The book stays on the server. The server library is a property of the
-   * filesystem, so a book removed from every profile simply appears in nobody's
-   * shelf -- it is not deleted from disk.
-   */
-  app.delete<{ Params: { id: string } }>("/api/audiobooks/:id/library", {
-    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
-  }, async (request, reply) => {
-    const profileId = requireProfileId(request);
-    if (profileId === null) return fail(reply, 400, "profile_required");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const removed = await removeBookFromProfile(prisma, profileId, id);
-    return { removed, inLibrary: false };
-  });
-
-  app.get<{ Params: { id: string } }>("/api/audiobooks/:id", async (request, reply) => {
-    // Number("abc") is NaN, which Prisma turns into a 500. Validate like the
-    // other id routes so a bad id is a 400/404, not a server error.
-    const id = parseIdParam((request.params as { id: string }).id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const item = await prisma.mediaItem.findUnique({
-      where: { id },
-      include: { tracks: true, contributors: { include: { contributor: true } } },
-    });
-    if (!item) return fail(reply, 404, "audiobook_not_found");
-    if (accountExperience === "demo" && !(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
-    // Spec 11: strip filePath / coverImagePath (and track paths) from the payload.
-    return publicMediaItem({
-      ...item,
-      tracks: item.tracks.map(({ filePath: _trackPath, ...track }) => track),
-    });
-  });
-
-  app.get("/api/library-roots", async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    // Conditional for the same reason as the library, and separately: scan
-    // state changes during a scan even when no book does, so sharing one tag
-    // with `/api/audiobooks` would hide a running scan.
-    const roots = await prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { createdAt: "asc" } });
-    return sendConditional(request, reply, roots);
-  });
-
-  app.post<{ Body: { path?: string; label?: string } }>("/api/library-roots", async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const rootPath = request.body.path?.trim();
-    if (!rootPath) return fail(reply, 400, "library_path_required");
-    try {
-      await access(rootPath);
-    } catch {
-      return fail(reply, 400, "library_path_inaccessible");
-    }
-    const root = await prisma.libraryRoot.upsert({
-      where: { path: path.resolve(rootPath) },
-      create: { path: path.resolve(rootPath), label: request.body.label?.trim() || path.basename(rootPath) },
-      update: { label: request.body.label?.trim() || path.basename(rootPath) },
-    });
-    return reply.code(201).send(root);
-  });
-
-  app.delete<{ Params: { id: string } }>("/api/library-roots/:id", async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    await prisma.libraryRoot.delete({ where: { id } });
-    return reply.code(204).send();
-  });
-
-  app.post<{ Body: { rootId?: number } }>("/api/scan", async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const roots = request.body?.rootId
-      ? await prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
-      : await prisma.libraryRoot.findMany();
-    if (roots.length === 0) return fail(reply, 400, "library_root_required");
-    for (const root of roots) {
-      void scanner
-        .scanRoot(root.id)
-        .then(async () => {
-          // Spec 16: completing a scan automatically kicks off a background
-          // enrichment pass. Failures here must never affect the scan result.
-          try {
-            const status = await enrichment.enqueue();
-            app.log.info({ enrichment: status }, "scan finished, enrichment enqueued");
-          } catch (error) {
-            app.log.error({ error }, "failed to enqueue enrichment after scan");
-          }
-        })
-        .catch((error) => app.log.error(error));
-    }
-    return reply.code(202).send({ status: "started", rootIds: roots.map((root) => root.id) });
-  });
-
-  app.get("/api/scan/status", async (_request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const roots = await prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { id: "asc" } });
-    return roots.map((root) => ({
-      rootId: root.id,
-      path: root.path,
-      status: scanner.getProgress(root.id) || root.scanState || { status: "idle", filesFound: 0 },
-    }));
+  registerScanRoutes(app, {
+    prisma,
+    scanner,
+    enrichment,
+    accountExperience,
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/cover", async (request, reply) => {
@@ -950,43 +605,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       return fail(reply, 404, "cover_not_found");
     }
     return sendConditional(request, reply, createReadStream(item.coverImagePath), { match });
-  });
-
-  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/stream", async (request, reply) => {
-    const item = await prisma.mediaItem.findUnique({
-      where: { id: parseIdParam(request.params.id) ?? -1 },
-      include: { libraryRoot: true },
-    });
-    if (!item) return fail(reply, 404, "audiobook_not_found");
-    if (!(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
-    if (resolveInsideRoot(item.filePath, item.libraryRoot.path) === null) {
-      return fail(reply, 403, "forbidden");
-    }
-    try {
-      return await streamAudioFile(item.filePath, request.headers.range, reply);
-    } catch {
-      return fail(reply, 404, "audio_file_not_found");
-    }
-  });
-
-  app.get<{ Params: { id: string } }>("/api/tracks/:id/stream", async (request, reply) => {
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    if (!Number.isInteger(id) || id < 1) return fail(reply, 400, "invalid_track_id");
-    const track = await prisma.track.findUnique({
-      where: { id },
-      include: { mediaItem: { include: { libraryRoot: true } } },
-    });
-    if (!track) return fail(reply, 404, "track_not_found");
-    if (!(await canReadMediaItem(request, track.mediaItem.id))) return fail(reply, 404, "track_not_found");
-    if (resolveInsideRoot(track.filePath, track.mediaItem.libraryRoot.path) === null) {
-      return fail(reply, 403, "forbidden");
-    }
-    try {
-      return await streamAudioFile(track.filePath, request.headers.range, reply);
-    } catch {
-      return fail(reply, 404, "audio_file_not_found");
-    }
   });
 
   // ---------------------------------------------------------------------
@@ -1943,81 +1561,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // Progress (profile-scoped)
-  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/progress", async (request, reply) => {
-    const profileId = requireProfileId(request);
-    if (profileId === null) return fail(reply, 400, "profile_required");
-    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
-    if (!item) return fail(reply, 404, "audiobook_not_found");
-    const row = await prisma.listeningHistory.findFirst({
-      where: { mediaItemId: item.id, profileId },
-      orderBy: { lastPlayed: "desc" },
-    });
-    return { position: row?.position ?? 0, completed: row?.completed ?? false };
-  });
-
-  app.put<{ Params: { id: string }; Body: { position?: number; completed?: boolean } }>("/api/audiobooks/:id/progress", async (request, reply) => {
-    const profileId = requireProfileId(request);
-    if (profileId === null) return fail(reply, 400, "profile_required");
-    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
-    if (!item) return fail(reply, 404, "audiobook_not_found");
-
-    const rawPosition = typeof request.body?.position === "number" && Number.isFinite(request.body.position) ? request.body.position : 0;
-    // Clamp into the book's real bounds when the duration is known. A
-    // non-finite or negative value resets to the start rather than persisting
-    // garbage that would resume a book at an impossible offset.
-    const duration = item.duration > 0 ? item.duration : 0;
-    const position = duration > 0
-      ? Math.min(Math.max(rawPosition, 0), duration)
-      : Math.max(0, Number.isFinite(rawPosition) ? rawPosition : 0);
-    const completed = request.body?.completed ?? (duration > 0 && position >= 0.95 * duration);
-
-    // Upsert on the (mediaItem, profile) unique key: concurrent saves from the
-    // periodic saver, the pause saver and an unmount can no longer both
-    // decide "no row yet" and each create one.
-    const saved = await prisma.listeningHistory.upsert({
-      where: { mediaItemId_profileId: { mediaItemId: item.id, profileId } },
-      create: { mediaItemId: item.id, profileId, position, completed },
-      update: { position, completed },
-    });
-    return { position: saved.position, completed: saved.completed };
-  });
-
-  app.post<{ Params: { id: string }; Body: { fromPosition?: number; toPosition?: number; speed?: number; startedAt?: string; endedAt?: string } }>("/api/audiobooks/:id/sessions", async (request, reply) => {
-    const profileId = requireProfileId(request);
-    if (profileId === null) return fail(reply, 400, "profile_required");
-    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
-    if (!item) return fail(reply, 404, "audiobook_not_found");
-    const toPosition = Number(request.body?.toPosition);
-    const fromPosition = Number(request.body?.fromPosition);
-    if (!Number.isFinite(toPosition) || !Number.isFinite(fromPosition)) {
-      return fail(reply, 400, "positions_required");
-    }
-    // Keep history rows physically meaningful: no negative offsets, and no
-    // position past the end of the book.
-    const safeTo = Math.min(Math.max(toPosition, 0), item.duration || toPosition);
-    const safeFrom = Math.min(Math.max(fromPosition, 0), safeTo);
-    const speed = Number(request.body?.speed);
-    const safeSpeed = Number.isFinite(speed) && speed > 0 ? Math.min(speed, 10) : 1;
-    const session = await prisma.playSession.create({
-      data: {
-        profileId,
-        mediaItemId: item.id,
-        fromPosition: safeFrom,
-        toPosition: safeTo,
-        speed: safeSpeed,
-        startedAt: request.body?.startedAt ? new Date(request.body.startedAt) : new Date(),
-        endedAt: request.body?.endedAt ? new Date(request.body.endedAt) : new Date(),
-      },
-    });
-    const { profileId: _profileId, ...publicSession } = session;
-    return reply.code(201).send(publicSession);
-  });
-
-  app.get("/api/history", async (request, reply) => {
-    const profileId = requireProfileId(request);
-    if (profileId === null) return fail(reply, 400, "profile_required");
-    const sessions = await prisma.playSession.findMany({ where: { profileId }, orderBy: { startedAt: "desc" }, take: 100 });
-    return sessions.map(({ profileId: _profileId, ...session }) => session);
+  registerProgressRoutes(app, {
+    prisma,
+    requireProfileId,
+    parseIdParam,
   });
 
   // Profiles
@@ -2202,22 +1749,3 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   return app;
 }
 
-async function streamAudioFile(filePath: string, range: string | undefined, reply: import("fastify").FastifyReply) {
-  const details = await stat(filePath);
-  reply.header("Accept-Ranges", "bytes").type(audioContentType(filePath));
-  if (!range) {
-    reply.header("Content-Length", details.size);
-    return reply.send(createReadStream(filePath));
-  }
-
-  const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-  if (!match || (!match[1] && !match[2])) return reply.code(416).header("Content-Range", `bytes */${details.size}`).send();
-  const start = match[1] ? Number(match[1]) : Math.max(0, details.size - Number(match[2]));
-  const end = match[1] && match[2] ? Number(match[2]) : match[1] ? details.size - 1 : details.size - 1;
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start >= details.size || start > end) {
-    return reply.code(416).header("Content-Range", `bytes */${details.size}`).send();
-  }
-  const boundedEnd = Math.min(end, details.size - 1);
-  reply.code(206).headers({ "Content-Range": `bytes ${start}-${boundedEnd}/${details.size}`, "Content-Length": boundedEnd - start + 1 });
-  return reply.send(createReadStream(filePath, { start, end: boundedEnd }));
-}

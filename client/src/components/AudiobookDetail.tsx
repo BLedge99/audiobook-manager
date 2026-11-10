@@ -8,6 +8,7 @@ import { TagSuiteEditor } from "./TagSuiteEditor";
 import { copy } from "../copy";
 import { Btn, cn, durationLabel } from "../ui/primitives";
 import { RemoveFromLibraryQuestion, useRemoveFromLibrary } from "./removeFromLibrary";
+import { apiFetch } from "../lib/api";
 
 interface Candidate {
   id: number;
@@ -26,13 +27,11 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   const enrich = async () => {
     setState("loading");
     try {
-      const res = await fetch(`/api/audiobooks/${book.id}/enrich`, { method: "POST" });
-      if (!res.ok) throw new Error();
-      const list = await res.json();
-      const rows: Candidate[] = list.map((candidate: { source: string; title: string; author?: string; coverUrl?: string; description?: string; confidence?: number }, index: number) => ({ id: index, ...candidate }));
+      const list = await apiFetch<{ source: string; title: string; author?: string; coverUrl?: string; description?: string; confidence?: number }[]>(`/api/audiobooks/${book.id}/enrich`, { method: "POST" });
+      const rows: Candidate[] = list.map((candidate, index) => ({ id: index, ...candidate }));
       // Re-fetch stored candidates so we have real ids
-      const stored = await fetch(`/api/audiobooks/${book.id}/candidates`);
-      setCandidates(stored.ok ? await stored.json() : rows);
+      const stored = await apiFetch<Candidate[]>(`/api/audiobooks/${book.id}/candidates`).catch(() => null);
+      setCandidates(stored ?? rows);
       setState("ready");
     } catch {
       setState("error");
@@ -40,12 +39,11 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   };
 
   const apply = async (candidateId: number) => {
-    const res = await fetch(`/api/audiobooks/${book.id}/metadata`, {
+    await apiFetch(`/api/audiobooks/${book.id}/metadata`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ candidateId }),
     });
-    if (res.ok) onUpdated();
+    onUpdated();
   };
 
   return (
