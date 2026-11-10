@@ -65,14 +65,45 @@ Settings → Advisors → the `rls_disabled_in_public` finding is gone.
 **In the SQL editor:**
 
 ```sql
-select c.relname, c.relrowsecurity
+select
+  count(*) filter (where c.relkind in ('r','p'))                           as tables,
+  count(*) filter (where c.relkind in ('r','p') and c.relrowsecurity)     as protected,
+  count(*) filter (where c.relkind in ('r','p') and not c.relrowsecurity) as unprotected
 from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
-where n.nspname = 'public' and c.relkind in ('r', 'p')
-order by c.relname;
+where n.nspname = 'public';
 ```
 
-Every row must show `relrowsecurity = true`.
+Expected: `unprotected` is 0.
+
+**Read the `relkind` filter.** Row-Level Security is a property of *tables*.
+`pg_class` also holds indexes, sequences, views, TOAST tables and composite
+types, and those rows report `relrowsecurity = false` no matter what — there is
+no RLS to enable on a sequence. Counting over the whole of `pg_class` will
+show a large `false` number that means nothing. To list the tables that are
+genuinely unprotected:
+
+```sql
+select c.relname
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relkind in ('r', 'p')
+  and not c.relrowsecurity;
+```
+
+That must return no rows. (`_prisma_migrations` is a table and is covered by
+the sweep, so it counts toward the total.)
+
+**And the grants**, which are the other half of the fix:
+
+```sql
+select grantee, table_name, privilege_type
+from information_schema.table_privileges
+where table_schema = 'public' and grantee in ('anon', 'authenticated');
+```
+
+That must return no rows either.
 
 **End to end**, with the project's public `anon` key (Settings → API):
 
@@ -83,6 +114,15 @@ curl -s "https://<project-ref>.supabase.co/rest/v1/MediaItem?select=id&limit=1" 
 
 The answer must be `[]` (or a permission error), not a row. The same request
 against `/rest/v1/Profile` must not return e-mail addresses or password hashes.
+
+The same check from inside the database, which needs no key:
+
+```sql
+set role anon;
+select count(*) from "Profile";
+```
+
+That must fail with `permission denied for table Profile`.
 
 ## A table added later
 
