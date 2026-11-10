@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl, mediaAssetUrl, type MediaResourceKind } from "./api";
+import { nativeMediaProxyUrl } from "./nativeMediaProxy";
 import type { PlaybackSource } from "./playback";
 
 /**
@@ -118,17 +119,18 @@ async function within<T>(promise: Promise<T>, ms: number): Promise<T> {
 async function resolveRemote(source: PlaybackSource): Promise<string> {
   const plain = apiUrl(source.path);
   if (!plain) return source.path;
+  let streamUrl = plain;
   try {
     const tokenUrl = await within(
       mediaAssetUrl(source.path, remoteKind(source.kind), source.id),
       TOKEN_TIMEOUT_MS,
     );
-    return tokenUrl || plain;
+    streamUrl = tokenUrl || plain;
   } catch {
     // The token is an optimisation for the shell, not a requirement of the
     // player. Fall back rather than refusing to play.
-    return plain;
   }
+  return nativeMediaProxyUrl(streamUrl);
 }
 
 export function usePlayerSource({
@@ -188,7 +190,16 @@ export function usePlayerSource({
         if (previous && previous.key === nextKey && previous.url === url) return previous;
         return { key: nextKey, sourceKey: key, url, local: false };
       });
-    })();
+    })().catch((error: unknown) => {
+      console.error("[Playback] Could not configure the native media proxy.", error);
+      if (cancelled) return;
+      setResolved({
+        key: `${key}|stream`,
+        sourceKey: key,
+        url: apiUrl(source.path),
+        local: false,
+      });
+    });
 
     return () => { cancelled = true; };
     // The `source` object is rebuilt on every position tick by `planPosition`,

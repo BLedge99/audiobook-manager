@@ -14,7 +14,13 @@ public class MainActivity extends BridgeActivity {
     // cannot intercept the bundled app's first navigation.
     removeStaleServiceWorkerData();
     registerPlugin(BiometricVaultPlugin.class);
+    registerPlugin(NativeMediaProxyPlugin.class);
     super.onCreate(savedInstanceState);
+    if (getBridge() == null) {
+      Log.e(TAG, "Capacitor bridge is unavailable; cannot install the media proxy.");
+      return;
+    }
+    getBridge().setWebViewClient(new NativeMediaProxyWebViewClient(getBridge(), this));
   }
 
   private void removeStaleServiceWorkerData() {

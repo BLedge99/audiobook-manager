@@ -89,6 +89,21 @@ describe("AccountGate biometric sign-in", () => {
     expect(mocks.unlockKey).toHaveBeenCalledWith(7, expect.any(Uint8Array));
   });
 
+  it("does not force offline mode when an older biometric record has no server secret", async () => {
+    mocks.unlock.mockResolvedValue({ profileId: 7, key: "wrapped-dek" });
+    const onSuccess = vi.fn();
+    render(<AccountGate onSuccess={onSuccess} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+    fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith({ offline: false }));
+    expect(mocks.fetch).not.toHaveBeenCalledWith(
+      "/api/auth/devices/session",
+      expect.anything(),
+    );
+    expect(mocks.setToken).toHaveBeenCalledWith(undefined);
+  });
+
   it("falls back to the password form when the prompt is cancelled", async () => {
     mocks.unlock.mockRejectedValue(new Error("cancelled"));
     const onSuccess = vi.fn();

@@ -312,7 +312,7 @@ export function AccountGate({
       }
       let token: string | undefined;
       let response: Response | undefined;
-      let offlineSignIn = !saved.secret;
+      let offlineSignIn = false;
       
       // Only try server authentication if we have a secret (online-registered mode)
       if (saved.secret) {

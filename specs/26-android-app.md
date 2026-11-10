@@ -24,6 +24,14 @@ server URL.
   enrichment remain server-only, so a metadata conflict cannot arise.
 - **One book at a time.** No download queue, no resumable background
   transfers — serve the files over the LAN.
+- **Android server streaming preserves the app origin.** Capacitor serves the
+  app from `https://localhost`; remote audio is fetched by a native proxy under
+  that same origin, so Chromium does not block HTTP server audio as mixed
+  content. The proxy only forwards audiobook/track stream endpoints to the
+  configured server and preserves the media type plus byte-range headers and
+  responses for seeking. The server reports the source container's audio MIME
+  type (including `audio/mp4` for chaptered M4B/M4A files). Android's cleartext
+  network policy is still needed for HTTP API and download requests.
 - **Users cannot manage device storage.** A clear "remove book from device"
   action is required.
 - **Listening is one device, one book, one profile** for most sessions.
@@ -276,6 +284,8 @@ library as an empty one.
 - [ ] A downloaded book plays with the network off.
 - [ ] Its genres, tags, series and chapters are visible offline.
 - [ ] A book not downloaded still streams while online.
+- [ ] An Android book not downloaded plays from the configured HTTP home server.
+- [ ] Seeking in streamed M4B/M4A chapter books keeps playback working.
 - [ ] "Remove from device" frees space and leaves the server copy untouched.
 - [ ] Server URL is configurable in-app without rebuilding the web bundle.
 - [ ] Android APK excludes the browser PWA service worker, and an update cannot

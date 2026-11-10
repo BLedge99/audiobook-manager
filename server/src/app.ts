@@ -31,6 +31,27 @@ import { oauthConfigFromEnv, type OAuthConfig, buildAuthorizeUrl, createPkcePair
 
 export { SESSION_HEADER };
 
+export function audioContentType(filePath: string): string {
+  switch (path.extname(filePath).toLowerCase()) {
+    case ".mp3":
+      return "audio/mpeg";
+    case ".m4a":
+    case ".m4b":
+    case ".mp4":
+      return "audio/mp4";
+    case ".flac":
+      return "audio/flac";
+    case ".ogg":
+      return "audio/ogg";
+    case ".wav":
+      return "audio/wav";
+    case ".aac":
+      return "audio/aac";
+    default:
+      return "application/octet-stream";
+  }
+}
+
 /** The largest page a client may ask for, matching the route schemas. */
 const MAX_PAGE_SIZE = 20;
 
@@ -2183,7 +2204,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
 async function streamAudioFile(filePath: string, range: string | undefined, reply: import("fastify").FastifyReply) {
   const details = await stat(filePath);
-  reply.header("Accept-Ranges", "bytes").type("audio/mpeg");
+  reply.header("Accept-Ranges", "bytes").type(audioContentType(filePath));
   if (!range) {
     reply.header("Content-Length", details.size);
     return reply.send(createReadStream(filePath));

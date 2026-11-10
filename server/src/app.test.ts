@@ -4,10 +4,25 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import Fastify from "fastify";
-import { buildApp, SESSION_HEADER } from "./app";
+import { audioContentType, buildApp, SESSION_HEADER } from "./app";
 import { createTestDatabase } from "./test-support/database";
 
 const db = createTestDatabase("audiobook-test-");
+
+describe("audio content type", () => {
+  it.each([
+    ["book.mp3", "audio/mpeg"],
+    ["book.m4a", "audio/mp4"],
+    ["book.m4b", "audio/mp4"],
+    ["book.flac", "audio/flac"],
+    ["book.ogg", "audio/ogg"],
+    ["book.wav", "audio/wav"],
+    ["book.aac", "audio/aac"],
+    ["book.unknown", "application/octet-stream"],
+  ])("returns %s media type for the matching file format", (filePath, expected) => {
+    expect(audioContentType(filePath)).toBe(expected);
+  });
+});
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 // Only for arranging rows the API cannot create itself -- books arrive via a
