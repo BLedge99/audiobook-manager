@@ -22,14 +22,14 @@ import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
 import { RecommendationService, DEFAULT_PAGE_SIZE } from "./metadata/recommend-service";
 import { fail } from "./http-errors";
 import { AuthService } from "./auth/service";
-import { isAdminRoute } from "./auth/policy";
 import { PasskeyService, passkeyConfigFromEnv, registerPasskeyRoutes, type PasskeyConfig } from "./auth/passkeys";
 import { registerAuthRoutes } from "./auth/routes";
-import { SESSION_HEADER, sessionTokenFromRequest } from "./auth/session";
+import { SESSION_HEADER } from "./auth/session";
 import { issueMediaToken, mediaResourceFromPath, verifyMediaToken } from "./auth/media-token";
 import { oauthConfigFromEnv, type OAuthConfig, buildAuthorizeUrl, createPkcePair, oauthProviderById } from "./auth/oauth";
 import { registerProgressRoutes } from "./api/progress";
 import { registerScanRoutes } from "./api/scan";
+import { registerAuthGate } from "./api/auth-gate";
 import { registerLibraryRoutes } from "./api/library";
 import { errorHandler } from "./api/error-handler";
 
@@ -60,30 +60,6 @@ export interface BuildAppOptions {
 }
 
 /** Test seam for proving that the family listener has no admin surface. */
-
-/** Public API paths; everything else under `/api/` needs a session. */
-function isPublicApiPath(path: string): boolean {
-  // `/api/auth/:provider/authorize` and `/api/auth/:provider/callback` are the
-  // two legs of an OAuth flow that must complete before a session exists
-  // (spec 32 / ADR 023). They carry no credentials; the authorize leg redirects
-  // away to the provider and the callback leg answers the provider.
-  const rest = path.slice("/api/auth".length);
-  const segments = rest.split("/").filter(Boolean);
-  const isOAuthFlowPath = segments.length === 2 && (segments[1] === "authorize" || segments[1] === "callback");
-  return (
-    path === "/api/health" ||
-    path === "/api/config" ||
-    path === "/api/auth/login" ||
-    path === "/api/auth/signup" ||
-    path === "/api/auth/providers" ||
-    path === "/api/auth/accounts" ||
-    path === "/api/auth/claim" ||
-    path === "/api/auth/logout" ||
-    path === "/api/auth/devices/session" ||
-    path.startsWith("/api/auth/passkeys/login/") ||
-    isOAuthFlowPath
-  );
-}
 
 function headerProfileId(request: FastifyRequest): number | null {
   const profileId = Number(request.headers["x-profile-id"]);
@@ -226,55 +202,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Browser media uses its HttpOnly cookie. The Android shell uses a
   // five-minute, profile- and resource-scoped media token in the URL because
   // native media requests cannot consistently carry the session header.
-  app.decorateRequest("auth", null);
-  app.addHook("onRequest", async (request, reply) => {
-    const path = request.url.split("?")[0];
-    if (!path.startsWith("/api/")) return;
-    if (request.method === "OPTIONS") return;
-    // The admin panel has a separate listener and route table. Do not let the
-    // household auth gate turn its absent routes into a misleading 401.
-    if (path === "/api/admin" || path.startsWith("/api/admin/")) {
-      if (options.adminProxyTarget) return;
-      return fail(reply, 404, "not_found");
-    }
-    if (!authEnabled) return;
-
-    const mediaResource = mediaResourceFromPath(path);
-    if (mediaResource) {
-      const query = request.query as Record<string, unknown> | undefined;
-      if (verifyMediaToken(mediaTokenSecret, query?.media, mediaResource)) return;
-    }
-
-    const token = sessionTokenFromRequest(request);
-    if (token) request.auth = await auth.validate(token);
-
-    // Public API paths (login, signup, providers, health, OAuth flows) need no
-    // session. This short-circuit must come before the auth check below so that
-    // a login request is not rejected for lacking one.
-    if (isPublicApiPath(path)) return;
-
-    // A pre-demo household/break-glass session has no account scope. It used to
-    // be thrown away outright in demo mode, which severed the household break-
-    // glass key the operator configures on the production demo host: a listener
-    // who reached for that key was refused at login (404) or, with a session
-    // already in flight, discarded here, and the app could not tell the difference
-    // between "the password is wrong" and "this server does not take one".
-    // Household sessions simply carry no account scope, so the demo account
-    // routes (which require a session-bound profile) stay unreachable for them.
-    // The decision is recorded in spec 33; local behaviour is unchanged.
-    if (!request.auth) return fail(reply, 401, "auth_required");
-    if (accountExperience === "demo" && isAdminRoute(request.method, path)) {
-      return fail(reply, 404, "not_found");
-    }
-    if (isAdminRoute(request.method, path) && request.auth.role !== "admin") {
-      return fail(reply, 403, "forbidden");
-    }
-  });
-
   const adminProxyTarget = options.adminProxyTarget ? new URL(options.adminProxyTarget) : null;
   if (adminProxyTarget && !["127.0.0.1", "[::1]", "localhost"].includes(adminProxyTarget.hostname)) {
     throw new Error("adminProxyTarget must point to a loopback address");
   }
+
+  registerAuthGate(app, {
+    auth,
+    authEnabled,
+    mediaTokenSecret,
+    accountExperience,
+    adminProxyTarget,
+  });
+
   const proxyAdminRequest = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!adminProxyTarget) return fail(reply, 404, "not_found");
     const requestPath = request.url.split("?")[0];
