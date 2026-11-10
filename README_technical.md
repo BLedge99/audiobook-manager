@@ -60,7 +60,7 @@ test/              Real LibriVox MP3 sample libraries for scanner tests/fixtures
 e2e/               Playwright E2E + security suite
 decisions/         ADRs (architectural decision records)
 specs/             One spec per roadmap feature: behaviour + acceptance criteria + checks
-docs/              Operational guides (production HTTPS, book storage)
+docs/              Operational guides (production HTTPS, book storage, database access control)
 scripts/           Copy check, LAN exposure, device tunnel, E2E WSL provisioning
 ```
 

@@ -19,6 +19,9 @@ the first feature of the 15b pass. Everything else is unchanged.
 **Updated 2026-10-27** to preserve the Android WebView origin while enabling
 LAN HTTP requests; see §1.6.
 
+**Updated 2026-11-10** with the Row-Level Security work that closed the
+Supabase "table publicly accessible" finding; see §4.
+
 Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
 than intended · **DEFERRED** = deliberately not built.
 
@@ -475,6 +478,38 @@ Audnexus reachable permanently rather than incidentally.
 ---
 
 ## 4. Security debt
+
+**The production database was publicly reachable through the Supabase API
+until 2026-11-10.** Supabase flagged it as critical: every table in the
+`public` schema had Row-Level Security disabled, and Supabase grants those
+tables to the `anon` and `authenticated` roles by default. Anyone holding the
+project's public anon key could therefore read and write profiles, e-mail
+addresses, password hashes, session hashes and the whole catalogue through
+`/rest/v1`. Writing was the worse half: a `Profile` row could be rewritten
+with a password hash the attacker controlled, and an `AdminCredential` row
+could be replaced outright.
+
+Fixed by spec 35 / ADR 026: a PostgreSQL migration enables RLS on every table
+and revokes the `anon`/`authenticated` grants on tables, sequences and
+functions, for the objects that exist and for the ones created later. No
+policies are added — deny-by-default is right, because the application has no
+PostgREST access path. The server is unaffected: it connects as the role that
+owns the tables. Rehearsed against a real PostgreSQL with the full migration
+history and Supabase's role setup: 28 unprotected tables before, 0 after, the
+anonymous roles denied, the owner and the service role unaffected, and a
+second run clean.
+
+Two residual gaps, both small:
+
+- A table created *outside* Prisma after that migration (for example in the
+  Supabase dashboard) has no RLS flag, so the platform's own advisor still
+  reports it. It is not reachable through the API — the revoked default
+  privileges mean `anon` and `authenticated` hold no grants on it — and the
+  sweep in `docs/production-database-access-control.md` gives it RLS too.
+- The server connects as the table owner, which is exempt from RLS. A
+  narrower application role with `BYPASSRLS` or a policy set would be more
+  precise, and is deferred: the app's own session layer already provides
+  access control, and the change is larger than the exposure requires.
 
 The security dependency refresh completed on 2026-10-24. Clean installs and
 `npm audit` report zero known vulnerabilities in the root Playwright, server,

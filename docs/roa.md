@@ -2,10 +2,20 @@
 
 **Controller:** audiobook-manager (household / production demo)  
 **Contact:** See `docs/gdpr-governance.md`  
-**Last updated:** 2026-11-05  
+**Last updated:** 2026-11-10  
 **Status:** Draft — aligns with `server/prisma/schema.prisma` and `server/prisma/sqlite/schema.prisma`
 
 This RoPA maps every processing activity that involves personal data, its purpose, the personal-data categories, the lawful basis, retention, and recipients. It is the authoritative record referenced by `docs/gdpr-governance.md` and the GDPR audit (`GDPR-AUDIT.md`).
+
+**Where the data is held.** In production the database is a managed Supabase
+PostgreSQL instance. Row-Level Security is enabled on every table in the
+`public` schema and the platform's `anon`/`authenticated` roles hold no grants
+on it, so the public Supabase API cannot read or write any of the personal
+data listed below. The server is the only reader, and it connects as the role
+that owns the tables. This is a technical measure under Art. 32; it changes no
+lawful basis, no retention period and no data-subject right. See
+[`docs/production-database-access-control.md`](production-database-access-control.md),
+spec 35 and ADR 026.
 
 ---
 
