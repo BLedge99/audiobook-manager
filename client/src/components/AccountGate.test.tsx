@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { copy } from "../copy";
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -81,6 +81,38 @@ describe("AccountGate continue offline", () => {
     expect(screen.getByLabelText(copy.account.householdPasswordLabel)).toBeInTheDocument();
   });
 
+  it("signs into a selected local household profile with its password", async () => {
+    const account = {
+      id: 41,
+      name: "Test Listener",
+      color: null,
+      role: "member" as const,
+      disabled: false,
+      hasPassword: true,
+      hasPasskey: false,
+      hasDeviceUnlock: false,
+    };
+    const onSuccess = vi.fn();
+    mocks.fetch
+      .mockResolvedValueOnce(response(200, [account]))
+      .mockResolvedValueOnce(response(200, { token: "profile-session", profile: { id: account.id } }));
+    render(<AccountGate onSuccess={onSuccess} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: account.name }));
+    fireEvent.change(screen.getByLabelText(copy.account.passwordLabel(account.name)), {
+      target: { value: "listener-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: copy.login.submit }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith({ offline: false }));
+    expect(mocks.fetch).toHaveBeenNthCalledWith(2, "/api/auth/login", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ profileId: account.id, password: "listener-password" }),
+    }));
+    expect(mocks.setToken).toHaveBeenCalledWith("profile-session");
+    expect(mocks.setProfile).toHaveBeenCalledWith(account.id);
+  });
+
   it("does not describe an account-list failure as an empty server", async () => {
     mocks.fetch.mockRejectedValueOnce(new Error("network unavailable"));
     render(<AccountGate onSuccess={vi.fn()} />);
@@ -96,9 +128,24 @@ describe("AccountGate continue offline", () => {
     });
     const onContinueOffline = vi.fn();
     render(<AccountGate accountExperience="demo" onSuccess={vi.fn()} onContinueOffline={onContinueOffline} />);
+    expect(screen.queryByRole("link", { name: copy.login.oauthGoogleAction })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: copy.login.oauthGithubAction })).not.toBeInTheDocument();
     const continueBtn = screen.getByRole("button", { name: /continue offline/i });
     expect(continueBtn).toBeInTheDocument();
     fireEvent.click(continueBtn);
     expect(onContinueOffline).toHaveBeenCalledOnce();
+  });
+
+  it("shows only the OAuth providers enabled by the server in demo mode", async () => {
+    mocks.fetchAppConfig.mockResolvedValue({
+      accountExperience: "demo",
+      oauthProviders: ["google"],
+    });
+    render(<AccountGate accountExperience="demo" onSuccess={vi.fn()} />);
+
+    expect(await screen.findByRole("link", { name: copy.login.oauthGoogleAction }))
+      .toHaveAttribute("href", "/api/auth/google/authorize");
+    expect(screen.queryByRole("link", { name: copy.login.oauthGithubAction })).not.toBeInTheDocument();
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

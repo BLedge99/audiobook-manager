@@ -31,7 +31,7 @@ let prisma: PrismaClient;
 
 beforeAll(async () => {
   prisma = new PrismaClient();
-  app = await buildApp({ logger: false, appPassword: "household", prisma });
+  app = await buildApp({ logger: false, appPassword: "household", prisma, accountExperience: "household" });
 }, 120_000);
 
 afterAll(async () => {
@@ -925,5 +925,28 @@ describe("production demo account policy", () => {
       headers: { "x-profile-id": String(otherProfileId) },
     });
     expect(noSession.statusCode).toBe(401);
+  });
+});
+
+describe("account experience deployment config", () => {
+  it("uses ACCOUNT_EXPERIENCE when buildApp has no explicit mode", async () => {
+    const previous = process.env.ACCOUNT_EXPERIENCE;
+    process.env.ACCOUNT_EXPERIENCE = "demo";
+    let envApp: Awaited<ReturnType<typeof buildApp>> | undefined;
+    try {
+      envApp = await buildApp({
+        logger: false,
+        appPassword: "household",
+        prisma,
+        oauth: { enabled: false, providers: [] },
+      });
+      const config = await envApp.inject({ method: "GET", url: "/api/config" });
+      expect(config.json().accountExperience).toBe("demo");
+      expect((await envApp.inject({ method: "GET", url: "/api/auth/accounts" })).statusCode).toBe(404);
+    } finally {
+      await envApp?.close();
+      if (previous === undefined) delete process.env.ACCOUNT_EXPERIENCE;
+      else process.env.ACCOUNT_EXPERIENCE = previous;
+    }
   });
 });

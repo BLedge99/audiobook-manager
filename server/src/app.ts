@@ -96,6 +96,10 @@ export interface BuildAppOptions {
   accountExperience?: "household" | "demo";
 }
 
+function accountExperienceFromEnv(value = process.env.ACCOUNT_EXPERIENCE): "household" | "demo" {
+  return value?.trim().toLowerCase() === "demo" ? "demo" : "household";
+}
+
 /** Test seam for proving that the family listener has no admin surface. */
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const {
@@ -110,7 +114,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     mediaTokenSecret,
     oauth = oauthConfigFromEnv(),
     adminProxyTarget,
-    accountExperience = "household",
+    accountExperience = accountExperienceFromEnv(),
   } = options;
 
   const prisma = injectedPrisma ?? new PrismaClient();

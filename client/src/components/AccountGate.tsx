@@ -487,12 +487,16 @@ export function AccountGate({
           {!loading && mode.kind === "list" && accountExperience === "demo" && (
             <>
               <div className="mt-5 grid min-w-0 gap-3">
-                <a href="/api/auth/google/authorize" className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
-                  {copy.login.oauthGoogleAction}
-                </a>
-                <a href="/api/auth/github/authorize" className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
-                  {copy.login.oauthGithubAction}
-                </a>
+                {oauthProviders.includes("google") && (
+                  <a href="/api/auth/google/authorize" className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                    {copy.login.oauthGoogleAction}
+                  </a>
+                )}
+                {oauthProviders.includes("github") && (
+                  <a href="/api/auth/github/authorize" className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                    {copy.login.oauthGithubAction}
+                  </a>
+                )}
                 <button type="button" onClick={() => { setError(undefined); setMode({ kind: "email" }); }} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
                   {copy.login.emailAction}
                 </button>
