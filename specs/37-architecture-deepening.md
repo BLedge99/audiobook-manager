@@ -159,7 +159,7 @@ stuck; say so rather than leaving it ambiguous.
 | 7.6 the demo-mode policy | done | opencode | 6bdc76f |
 | 7.7 the remaining routes | done | opencode | e6857eb |
 | 7.8 share the listener logic | done | opencode | ebe23c4 |
-| 7.9 the admin proxy's scope | not started | | |
+| 7.9 the admin proxy's scope | done | opencode | d2ed1d6 |
 | 8.1 copy out of `position.ts` | not started | | |
 | 8.2 copy out of `browse.ts` | not started | | |
 | 8.3 copy out of the local modules | not started | | |

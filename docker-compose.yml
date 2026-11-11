@@ -49,6 +49,8 @@ services:
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
       - "${ADMIN_PORT:-3100}:${ADMIN_PORT:-3100}"
+    # Spec 37 / ADR 029: the household family port carries no /admin surface;
+    # ADMIN_PROXY is deliberately NOT set here. Reach the panel on ADMIN_PORT.
     environment:
       - PORT=${PORT:-3000}
       - DATABASE_URL=file:/app/data/library.db

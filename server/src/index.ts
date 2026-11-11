@@ -23,7 +23,10 @@ async function main() {
   }) : undefined;
   const app = await buildApp({
     logger: true, prisma, scanner,
-    adminProxyTarget: `http://127.0.0.1:${ADMIN_PORT}`,
+    // Spec 37 / ADR 029: the admin proxy belongs to the hosted single-port
+    // deployment only. The household compose leaves ADMIN_PROXY unset and
+    // reaches the panel on ADMIN_PORT instead.
+    ...(process.env.ADMIN_PROXY === "true" ? { adminProxyTarget: `http://127.0.0.1:${ADMIN_PORT}` } : {}),
   });
   const adminAuth = new AdminAuth(prisma);
   if (process.env.ADMIN_PANEL_PASSWORD) {

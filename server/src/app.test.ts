@@ -26,6 +26,16 @@ afterAll(async () => {
 });
 
 describe("same-origin admin proxy", () => {
+  it("registers no admin route when the proxy is not configured (ADR 029)", async () => {
+    // The household/default wiring: index.ts only passes adminProxyTarget
+    // when ADMIN_PROXY=true (the hosted single-port deployment). Without it
+    // the family listener has no admin surface at all.
+    expect((await app.inject({ method: "GET", url: "/admin" })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: "/admin/" })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: "/api/admin/login" })).statusCode).toBe(404);
+    expect((await app.inject({ method: "POST", url: "/api/admin/login", payload: { password: "x" } })).statusCode).toBe(404);
+  });
+
   it("forwards the panel and admin API without using family authentication", async () => {
     const adminStub = Fastify();
     adminStub.get("/", async () => ({ panel: "admin" }));

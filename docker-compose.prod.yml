@@ -42,6 +42,10 @@ services:
     environment:
       PORT: 3000
       ADMIN_PORT: 3100
+      # Spec 37 / ADR 029: one public web port is the only route to the
+      # operator here, so the app proxies `/admin` to the loopback admin
+      # listener. Household deployments leave this unset.
+      ADMIN_PROXY: "true"
       # Production is PostgreSQL (e.g. a managed Supabase database). The
       # server applies prisma/schema.prisma's migrations on startup.
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the production PostgreSQL connection string}
