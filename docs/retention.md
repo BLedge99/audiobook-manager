@@ -24,6 +24,7 @@ This schedule maps each personal-data table in `server/prisma/schema.prisma` to 
 | 10 | `WebAuthnChallenge` | challenge, type, expires at (profile-scoped, nullable) | 5 minutes; single-use, deleted after consumption | `cleanupExpired()` deletes rows where `expiresAt < now` |
 | 11 | `AdminSession` | token hash, expires at, revoked at | TTL-based (same as `Session`); revoked sessions deleted on cleanup | `cleanupExpired()` deletes expired admin sessions |
 | 12 | `AdminCredential` | password hash | Until rotated; no automatic expiry | Admin rotation only |
+| 13 | `OAuthHandoff` | sha256 code + state, pseudonymous profile id, expiry (native OAuth handoff, ADR 030) | Single-use + 60 s TTL; consumed at exchange, otherwise swept | Exchange consumes atomically; expired rows deleted at startup sweep |
 
 ---
 
