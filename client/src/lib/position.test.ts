@@ -6,7 +6,7 @@ import {
   locateSegment,
   parseSegments,
   percentComplete,
-  remainingLabel,
+  remainingTime,
   sessionMarkerFraction,
   timeLabel,
   totalDuration,
@@ -199,7 +199,7 @@ describe("describePosition", () => {
       ]),
     }));
     const described = describePosition(long.segments, 7000 + 45 * 60 + 34, long.kind, 12000);
-    expect(described.heading).toBe("Chapter 4");
+    expect(described.heading).toEqual({ kind: "chapters", number: 4 });
     expect(described.title).toBe("Four");
     expect(described.segmentElapsed).toBe(45 * 60 + 34);
     expect(described.bookPercent).toBeCloseTo(((7000 + 2734) / 12000) * 100, 5);
@@ -208,13 +208,13 @@ describe("describePosition", () => {
 
   it("does not claim a chapter number for a single-segment book", () => {
     const single = parseSegments(book({ duration: 600 }));
-    expect(describePosition(single.segments, 100, single.kind, 600).heading).toBe("Chapter");
+    expect(describePosition(single.segments, 100, single.kind, 600).heading).toEqual({ kind: "single", number: null });
     expect(describePosition(single.segments, 100, single.kind, 600).bookRemaining).toBe(500);
   });
 
   it("uses Track as the noun for a multi-file book", () => {
     const tracks = parseSegments(multiTrack);
-    expect(describePosition(tracks.segments, 700, tracks.kind, 1800).heading).toBe("Track 2");
+    expect(describePosition(tracks.segments, 700, tracks.kind, 1800).heading).toEqual({ kind: "tracks", number: 2 });
   });
 
   it("clamps an overshooting position to the book's real length", () => {
@@ -241,7 +241,7 @@ describe("chapterTicks", () => {
     const ticks = chapterTicks(segments, kind, 1800);
     expect(ticks).toHaveLength(3);
     expect(ticks.map((tick) => tick.fraction)).toEqual([0, 700 / 1800, 1400 / 1800]);
-    expect(ticks[1].heading).toBe("Chapter 2");
+    expect(ticks[1].heading).toEqual({ kind: "chapters", number: 2 });
     expect(ticks[1].title).toBe("The Overthrow");
   });
 
@@ -312,11 +312,11 @@ describe("labels", () => {
   });
 
   it("summarises remaining time coarsely", () => {
-    expect(remainingLabel(30)).toBe("under a minute left");
-    expect(remainingLabel(45 * 60)).toBe("45m left");
-    expect(remainingLabel(60 * 60)).toBe("1h left");
-    expect(remainingLabel(60 * 60 + 25 * 60)).toBe("1h 25m left");
-    expect(remainingLabel(0)).toBe("under a minute left");
+    expect(remainingTime(30)).toEqual({ hours: 0, minutes: 0, subMinute: true });
+    expect(remainingTime(45 * 60)).toEqual({ hours: 0, minutes: 45, subMinute: false });
+    expect(remainingTime(60 * 60)).toEqual({ hours: 1, minutes: 0, subMinute: false });
+    expect(remainingTime(60 * 60 + 25 * 60)).toEqual({ hours: 1, minutes: 25, subMinute: false });
+    expect(remainingTime(0)).toEqual({ hours: 0, minutes: 0, subMinute: true });
   });
 
   it("clamps percentages to 0..100 and survives a zero total", () => {

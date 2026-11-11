@@ -214,7 +214,7 @@ const ICU_PENDING = [
   "copy.profile.createFailed",
   "copy.profile.createUnreachable",
   "copy.profile.unreachable",
-  "copy.position.chapterTitle",
+
   "copy.position.heading",
   "copy.position.minutesLeft",
   "copy.position.hoursMinutesLeft",

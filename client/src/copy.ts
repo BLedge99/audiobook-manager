@@ -711,15 +711,13 @@ export const copy = {
   },
 
   /**
-   * The strings `lib/position.ts` produces.
+   * The strings `lib/position.ts` produces via its renderer, `lib/segmentCopy.ts`.
    *
    * They live here because they are user-facing -- a listener reads "2h 14m
    * left" -- and because a wording change should be a one-line edit even when
-   * the string is built deep inside a pure module. The module stays pure:
-   * `copy.ts` has no dependencies of its own.
+   * the components consume position data.
    */
   position: {
-    chapterTitle: (index: number) => `Chapter ${index + 1}`,
     chapterNoun: "Chapter",
     trackNoun: "Track",
     /** The display number is passed in, already one-based. */

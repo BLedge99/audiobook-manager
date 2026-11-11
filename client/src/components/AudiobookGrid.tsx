@@ -6,10 +6,10 @@ import {
   describePosition,
   hasProgress,
   parseSegments,
-  remainingLabel,
   timeLabel,
   totalDuration,
 } from "../lib/position";
+import { headingText, remainingLabel } from "../lib/segmentCopy";
 import { copy } from "../copy";
 import {
   CapsuleMarks,
@@ -33,7 +33,8 @@ export function describeBookProgress(book: Audiobook): { line: string; percent: 
   const described = describePosition(segments, position, kind, total);
   const parts: string[] = [];
   if (segments.length > 1) {
-    parts.push(`${described.heading}${described.title ? ` · ${described.title}` : ""}`);
+    const heading = headingText(described.heading);
+    parts.push(`${heading}${described.title ? ` · ${described.title}` : ""}`);
     parts.push(`${timeLabel(described.segmentElapsed)} in`);
   }
   parts.push(remainingLabel(described.bookRemaining));

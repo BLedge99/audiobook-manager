@@ -13,10 +13,10 @@ import {
   describePosition,
   locateSegment,
   parseSegments,
-  remainingLabel,
   timeLabel,
   totalDuration as computeTotalDuration,
 } from "../lib/position";
+import { headingText, remainingLabel } from "../lib/segmentCopy";
 import {
   bookPositionFromSource,
   nextSegmentIndex,
@@ -183,6 +183,7 @@ export function ChapterPlayer({
     () => describePosition(segments, displayPosition, kind, total),
     [segments, displayPosition, kind, total],
   );
+  const heading = headingText(described.heading);
 
   /**
    * Where the listener is, including a seek that has not landed yet.
@@ -866,10 +867,10 @@ export function ChapterPlayer({
 
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-[15px] font-semibold text-ink">
-            {described.title || copy.player.trackFallback(currentIndex + 1)}
+            {described.title || heading}
           </p>
           <p className="text-[12px] text-ink3 tnum">
-            {segments.length > 1 ? `${described.heading} of ${segments.length}` : described.heading}
+            {segments.length > 1 ? `${heading} of ${segments.length}` : heading}
           </p>
         </div>
       </div>
@@ -885,7 +886,7 @@ export function ChapterPlayer({
           unusable with a screen reader (decisions/007). */}
       <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1" data-testid="position-readout">
         <p className="min-w-0 font-display text-[16px] font-semibold text-ink">
-          {described.heading}
+          {heading}
           {described.title && <span className="font-normal text-ink2"> — {described.title}</span>}
         </p>
         <p className="text-[12.5px] text-ink3 tnum" data-testid="chapter-readout">
@@ -905,7 +906,7 @@ export function ChapterPlayer({
           sessionStart={sessionStart}
           segmentElapsed={described.segmentElapsed}
           segmentDuration={described.segmentDuration}
-          segmentHeading={described.heading}
+          segmentHeading={heading}
           onSeek={(target) => {
             userInteractedRef.current = true;
             // Keep whatever the listener was doing: dragging the scrubber while

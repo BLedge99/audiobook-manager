@@ -1,13 +1,12 @@
 import type { Audiobook, Track } from "../types";
-import { copy } from "../copy";
 
 /**
  * All listening-position maths, kept out of the components so the GUI redesign
  * (spec 15) restyles the player without reimplementing any of this.
  *
- * Nothing in here touches the DOM, React or the network — every function is a
- * pure transform of (segments, position). The one thing it does read is
- * `copy.ts`, which is itself dependency-free, so the module stays pure.
+ * Nothing in here touches the DOM, React, the network or `copy.ts` — every
+ * function is a pure transform of (segments, position) and returns data, never
+ * user-facing sentences. The components render the words.
  */
 
 export type Segment = {
@@ -80,7 +79,7 @@ export function parseSegments(book: Audiobook): { segments: Segment[]; kind: Seg
             : 0;
         return {
           key: String(index),
-          title: chapter.title || copy.position.chapterTitle(index + 1),
+          title: chapter.title || "",
           duration: Math.max(0, duration),
           offset: start,
         };
@@ -177,31 +176,44 @@ export function timeLabel(seconds: number): string {
     : `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
-/** Coarse "1h 23m left" / "23m left" — for grids and cards, not the player clock. */
-export function remainingLabel(seconds: number): string {
+/**
+ * Coarse remaining time as data — for grids and cards, not the player clock.
+ * Under a minute is reported as `subMinute` so the renderer can choose the
+ * wording; anything larger as whole minutes (and whole hours).
+ */
+export type RemainingTime = {
+  hours: number;
+  minutes: number;
+  /** True when the remainder is under a minute. */
+  subMinute: boolean;
+};
+
+export function remainingTime(seconds: number): RemainingTime {
   const total = Math.max(0, Math.ceil(safeSeconds(seconds)));
-  if (total < 60) return copy.position.underAMinuteLeft;
+  if (total < 60) return { hours: 0, minutes: 0, subMinute: true };
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
-  if (!hours) return copy.position.minutesLeft(minutes);
-  return minutes
-    ? copy.position.hoursMinutesLeft(hours, minutes)
-    : copy.position.hoursLeft(hours);
+  return { hours, minutes, subMinute: false };
 }
 
-export function chapterHeading(index: number, kind: SegmentKind, total: number): string {
-  const noun =
-    kind === "chapters" ? copy.position.chapterNoun : kind === "tracks" ? copy.position.trackNoun : copy.position.chapterNoun;
+/** How the heading should read: which segment type, and which one-based number (if any). */
+export type SegmentHeading = {
+  kind: SegmentKind;
+  /** 1-based number, or null when a number would be meaningless (single-segment books). */
+  number: number | null;
+};
+
+export function segmentHeading(index: number, kind: SegmentKind, total: number): SegmentHeading {
   // A single-segment book has no meaningful chapter number, so don't fake one.
-  if (kind === "single" || total <= 1) return noun;
-  return copy.position.heading(noun, index + 1);
+  if (kind === "single" || total <= 1) return { kind, number: null };
+  return { kind, number: index + 1 };
 }
 
 export type PositionDescription = {
   segmentIndex: number;
   segment: Segment | null;
-  /** e.g. "Chapter 4" — never a fake number for single-segment books. */
-  heading: string;
+  /** Data, never rendered copy — components turn this into words. */
+  heading: SegmentHeading;
   title: string;
   offsetIntoSegment: number;
   segmentElapsed: number;
@@ -236,7 +248,7 @@ export function describePosition(
   return {
     segmentIndex: index,
     segment,
-    heading: chapterHeading(index, kind, segments.length),
+    heading: segmentHeading(index, kind, segments.length),
     title: segment?.title || "",
     offsetIntoSegment,
     segmentElapsed: clamp(offsetIntoSegment, 0, segmentDuration || Number.MAX_SAFE_INTEGER),
@@ -253,7 +265,7 @@ export type ChapterTick = {
   index: number;
   key: string;
   title: string;
-  heading: string;
+  heading: SegmentHeading;
   /** Fraction of the book, 0..1 — used for CSS positioning. */
   fraction: number;
   offset: number;
@@ -270,7 +282,7 @@ export function chapterTicks(segments: Segment[], kind: SegmentKind, bookTotal: 
     index,
     key: segment.key,
     title: segment.title || "",
-    heading: chapterHeading(index, kind, segments.length),
+    heading: segmentHeading(index, kind, segments.length),
     fraction: clamp(segment.offset / total, 0, 1),
     offset: segment.offset,
   }));
