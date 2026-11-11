@@ -129,7 +129,7 @@ stuck; say so rather than leaving it ambiguous.
 | Step | Status | Claimed by | Commit |
 |---|---|---|---|
 | 0.1 typecheck into `make test` | done | opencode | (this commit) |
-| 0.2 client request test helper | not started | | |
+| 0.2 client request test helper | done | opencode | (next commit) |
 | 1.1 name the request guarantees | not started | | |
 | 1.2 `useLibrary` + `useBrowse` | not started | | |
 | 1.3 the components | not started | | |
@@ -314,8 +314,10 @@ the faster inner loop while working on a step.
 **State on entry:** Step 0.1 is merged.
 
 **Why:** Steps 1.x, 2.x, 3.x and 4.x all need to stub `fetch` and assert on
-the request. Today every test file writes its own `fakeResponse` — four
-copies exist already. A shared helper makes those steps short.
+the request. Today every test file writes its own `fakeResponse` — three
+copies exist, and they disagree: one knows about ETags, two do not. None of
+them records what was actually requested, so a test can answer a request but
+never assert on it. A shared helper makes those steps short.
 
 **Files:**
 - `client/src/test/requests.ts` — **new**
@@ -330,13 +332,42 @@ describe("fakeResponse", () => {
   it("exposes an etag only when one was given", () => { /* ... */ });
   it("returns the body from json() and text()", () => { /* ... */ });
 });
+
+describe("stubFetch", () => {
+  it("records every request it saw, in order", () => { /* ... */ });
+  it("records the headers and the body the caller sent", () => { /* ... */ });
+  it("finds the requests that mention a fragment of the URL", () => { /* ... */ });
+  it("puts the real fetch back when restored", () => { /* ... */ });
+});
 ```
 
-Then implement `client/src/test/requests.ts`:
+**Then:** implement `client/src/test/requests.ts`:
 
 ```ts
 export function fakeResponse(body: unknown, init?: { status?: number; etag?: string | null }): Response
-export function stubFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>): () => void
+export function stubFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>): FetchStub
+
+export interface FetchStub {
+  calls: RecordedRequest[];
+  last(): RecordedRequest | undefined;
+  to(fragment: string): RecordedRequest[];
+  restore(): void;
+}
+```
+
+`stubFetch` returns a **stub**, not a bare teardown function: the recorded
+calls are the assertion surface, and a bare function would hide them. It
+records the URL, the method, the lower-cased headers and the body, so a test
+can assert that a request carried the profile header or the session token.
+
+`restore()` is idempotent, and `vi.unstubAllGlobals()` is the backstop for a
+test that forgets to call it — the helper must not fight Vitest's own
+teardown.
+
+**Note (implemented):** the helper's own test file is the first thing under
+`client/src/test/` that is not the Vitest setup file, so it also proves that
+directory is not swallowed by `.gitignore` (the bare `test/` pattern used to
+match it at any depth).
 ```
 
 **Then:** implement `client/src/test/requests.ts` with the two helpers.
@@ -348,9 +379,11 @@ function. It must record every call so a test can assert on the request.
 **Verify:** `cd client && npm test -- requests`
 
 **Definition of done**
-- [ ] The helper file exists and is covered by its own test.
-- [ ] `stubFetch` returns a teardown and records calls.
-- [ ] No existing test file is changed yet — that happens in step 1.3.
+- [x] The helper file exists and is covered by its own test.
+- [x] `stubFetch` records every call and can restore the real `fetch`.
+- [x] No existing test file is changed yet — that happens in step 1.3.
+- [x] The helper's own test passes under `--sequence.shuffle`, so it has no
+      order dependency.
 
 ---
 
