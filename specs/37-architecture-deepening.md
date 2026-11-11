@@ -145,7 +145,7 @@ stuck; say so rather than leaving it ambiguous.
 | 4.2 refresh-trigger rules | done | opencode | 567b29b |
 | 4.3 the background lock | done | opencode | 7d680ea |
 | 4.4 the offline gate | done | opencode | 48b6046 |
-| 4.5 the session probe | not started | | |
+| 4.5 the session probe | done | opencode | 21dd211 |
 | 4.6 the offline-mode flag | not started | | |
 | 5.1 decide the precedence chain | not started | | |
 | 5.2 the rule in one module | not started | | |
