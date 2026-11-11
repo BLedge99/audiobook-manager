@@ -833,7 +833,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return sendConditional(request, reply, roots);
   });
 
-  app.post<{ Body: { path?: string; label?: string } }>("/api/library-roots", async (request, reply) => {
+  app.post<{ Body: { path?: string; label?: string } }>("/api/library-roots", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          label: { type: "string" },
+        },
+      },
+    },
+  }, async (request, reply) => {
     if (accountExperience === "demo") return fail(reply, 404, "not_found");
     const rootPath = request.body.path?.trim();
     if (!rootPath) return fail(reply, 400, "library_path_required");
@@ -850,7 +860,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return reply.code(201).send(root);
   });
 
-  app.delete<{ Params: { id: string } }>("/api/library-roots/:id", async (request, reply) => {
+  app.delete<{ Params: { id: string } }>("/api/library-roots/:id", {
+    schema: {
+      params: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+      },
+    },
+  }, async (request, reply) => {
     if (accountExperience === "demo") return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
@@ -858,7 +876,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return reply.code(204).send();
   });
 
-  app.post<{ Body: { rootId?: number } }>("/api/scan", async (request, reply) => {
+  app.post<{ Body: { rootId?: number } }>("/api/scan", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          rootId: { type: "integer" },
+        },
+      },
+    },
+  }, async (request, reply) => {
     if (accountExperience === "demo") return fail(reply, 404, "not_found");
     const roots = request.body?.rootId
       ? await prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
@@ -1922,7 +1949,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // Progress (profile-scoped)
-  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/progress", async (request, reply) => {
+  app.get<{ Params: { id: string } }>("/api/audiobooks/:id/progress", {
+    schema: {
+      params: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+      },
+    },
+  }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
@@ -1934,7 +1969,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return { position: row?.position ?? 0, completed: row?.completed ?? false };
   });
 
-  app.put<{ Params: { id: string }; Body: { position?: number; completed?: boolean } }>("/api/audiobooks/:id/progress", async (request, reply) => {
+  app.put<{ Params: { id: string }; Body: { position?: number; completed?: boolean } }>("/api/audiobooks/:id/progress", {
+    schema: {
+      params: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+      },
+      body: {
+        type: "object",
+        properties: {
+          position: { type: "number" },
+          completed: { type: "boolean" },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
@@ -1961,7 +2011,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return { position: saved.position, completed: saved.completed };
   });
 
-  app.post<{ Params: { id: string }; Body: { fromPosition?: number; toPosition?: number; speed?: number; startedAt?: string; endedAt?: string } }>("/api/audiobooks/:id/sessions", async (request, reply) => {
+  app.post<{ Params: { id: string }; Body: { fromPosition?: number; toPosition?: number; speed?: number; startedAt?: string; endedAt?: string } }>("/api/audiobooks/:id/sessions", {
+    schema: {
+      params: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+      },
+      body: {
+        type: "object",
+        properties: {
+          fromPosition: { type: "number" },
+          toPosition: { type: "number" },
+          speed: { type: "number" },
+          startedAt: { type: "string" },
+          endedAt: { type: "string" },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
@@ -2019,7 +2087,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return prisma.profile.findMany({ orderBy: { createdAt: "asc" }, select: profileSummary });
   });
 
-  app.post<{ Body: { name?: string; color?: string } }>("/api/profiles", async (request, reply) => {
+  app.post<{ Body: { name?: string; color?: string } }>("/api/profiles", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          color: { type: "string" },
+        },
+      },
+    },
+  }, async (request, reply) => {
     if (accountExperience === "demo") return fail(reply, 404, "not_found");
     if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
     const name = request.body?.name?.trim();
@@ -2037,7 +2115,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return reply.code(201).send(profile);
   });
 
-  app.delete<{ Params: { id: string } }>("/api/profiles/:id", async (request, reply) => {
+  app.delete<{ Params: { id: string } }>("/api/profiles/:id", {
+    schema: {
+      params: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+      },
+    },
+  }, async (request, reply) => {
     if (accountExperience === "demo") return fail(reply, 404, "not_found");
     if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
     await prisma.profile.delete({ where: { id: parseIdParam(request.params.id) ?? -1 } });
@@ -2069,7 +2155,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // Right to rectification (GDPR Art. 16): the authenticated profile may
   // correct their own display name and colour.
-  app.patch<{ Body: { name?: string; color?: string } }>("/api/me", async (request, reply) => {
+  app.patch<{ Body: { name?: string; color?: string } }>("/api/me", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          color: { type: "string" },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const { name, color } = request.body ?? {};
