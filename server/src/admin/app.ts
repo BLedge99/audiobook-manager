@@ -10,7 +10,7 @@ import { EnrichmentManager } from "../metadata/run";
 import type { ScanManager } from "../scanner";
 import { upsertLibraryRoot, deleteLibraryRoot } from "../library-roots";
 import { startScanWithEnrichment } from "../scanning";
-import { ADMIN_DB_TABLES, executeReadOnlyQuery, validateReadOnlySql, type AdminDbTable } from "./read-only-sql";
+import { ADMIN_DB_TABLES, executeReadOnlyQuery, validateReadOnlySql, type AdminDbTable, type SqliteConnection } from "./read-only-sql";
 import { fileURLToPath } from "node:url";
 import {
   createSignedStorageUploadUrl,
@@ -24,6 +24,24 @@ function routeDocs(app: FastifyInstance): { method: string | string[]; url: stri
     ...route,
     schema: route.schema && typeof route.schema === "object" ? route.schema : {},
   }));
+}
+
+/**
+ * One readonly driver connection to the SQLite file for the whole admin
+ * lifetime, not one per request. Prisma owns writes; this exists for raw
+ * introspection (`table_info`) and browsing. Returns null for PostgreSQL —
+ * introspection goes through Prisma's `information_schema` there.
+ */
+async function openReadonlySqlite(): Promise<SqliteConnection | null> {
+  const url = process.env.DATABASE_URL ?? "";
+  if (!url.startsWith("file:")) return null;
+  const driver = await import("better-sqlite3");
+  return new driver.default(fileURLToPath(url.split("?")[0]), { readonly: true, fileMustExist: true, timeout: 5_000 });
+}
+
+/** The table param must be on the allowlist, whatever the schema says. */
+function isAllowedTable(table: string): table is AdminDbTable {
+  return (ADMIN_DB_TABLES as readonly string[]).includes(table);
 }
 
 export async function buildAdminApp(options: {
@@ -40,6 +58,12 @@ export async function buildAdminApp(options: {
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false, trustProxy: ["127.0.0.1", "::1"] });
   const enrichmentManager = new EnrichmentManager(options.prisma);
+  const readonlySqlite = await openReadonlySqlite();
+  if (readonlySqlite) {
+    app.addHook("onClose", async () => {
+      readonlySqlite.close();
+    });
+  }
   const apiDocs: { method: string | string[]; url: string; schema: unknown }[] = [];
   app.decorate("apiDocs", apiDocs);
   app.addHook("onRoute", (route) => {
@@ -183,17 +207,12 @@ export async function buildAdminApp(options: {
     }));
   });
   app.get("/api/admin/db/tables", { preHandler: requireAdminSession(options.auth) }, async () => {
-    const provider = (process.env.DATABASE_URL ?? "").startsWith("file:") ? "sqlite" : "postgresql";
-    const sqliteUrl = process.env.DATABASE_URL ?? "";
-    const driver = provider === "sqlite" ? await import("better-sqlite3") : null;
-    const db = driver ? new driver.default(fileURLToPath(sqliteUrl.split("?")[0]), { readonly: true, fileMustExist: true }) : null;
-    let tables: { name: AdminDbTable; count: number }[];
-    try {
-      tables = await Promise.all(ADMIN_DB_TABLES.map(async (table) => ({
-        name: table,
-        count: db ? Number((db.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get() as { count: number }).count) : Number((await options.prisma.$queryRawUnsafe<[{ count: bigint | number }]>(`SELECT COUNT(*) AS count FROM "${table}"`))[0].count),
-      })));
-    } finally { db?.close(); }
+    const tables = await Promise.all(ADMIN_DB_TABLES.map(async (table) => ({
+      name: table,
+      count: readonlySqlite
+        ? Number((readonlySqlite.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get() as { count: number }).count)
+        : Number((await options.prisma.$queryRawUnsafe<[{ count: bigint | number }]>(`SELECT COUNT(*) AS count FROM "${table}"`))[0].count),
+    })));
     return { tables };
   });
   app.get<{ Params: { table: string }; Querystring: { page?: number; pageSize?: number } }>("/api/admin/db/tables/:table", {
@@ -202,30 +221,24 @@ export async function buildAdminApp(options: {
       params: { type: "object", properties: { table: { type: "string", enum: [...ADMIN_DB_TABLES] } }, required: ["table"], additionalProperties: false },
       querystring: { type: "object", properties: { page: { type: "integer", minimum: 1, maximum: 100000 }, pageSize: { type: "integer", minimum: 1, maximum: 100 } }, additionalProperties: false },
     },
-  }, async (request) => {
+  }, async (request, reply) => {
     const table = request.params.table as AdminDbTable;
+    // Defense in depth beneath the schema enum: the table reaches raw SQL.
+    if (!isAllowedTable(table)) return fail(reply, 400, "not_found");
     const page = request.query.page ?? 1;
     const pageSize = request.query.pageSize ?? 25;
-    const provider = (process.env.DATABASE_URL ?? "").startsWith("file:") ? "sqlite" : "postgresql";
-    const sqliteUrl = process.env.DATABASE_URL ?? "";
-    const driver = provider === "sqlite" ? await import("better-sqlite3") : null;
-    const db = driver ? new driver.default(fileURLToPath(sqliteUrl.split("?")[0]), { readonly: true, fileMustExist: true }) : null;
     let columns: unknown[];
     let rows: unknown[];
-    try {
-      if (db) {
-        columns = db.pragma(`table_info("${table}")`) as unknown[];
-        rows = db.prepare(`SELECT * FROM "${table}" ORDER BY 1 LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize);
-      } else {
-        columns = await options.prisma.$queryRawUnsafe("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position", table);
-        rows = await options.prisma.$queryRawUnsafe(`SELECT * FROM "${table}" ORDER BY 1 LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`);
-      }
-    } catch (error) {
-      db?.close();
-      throw error;
+    if (readonlySqlite) {
+      columns = readonlySqlite.pragma(`table_info("${table}")`) as unknown[];
+      rows = readonlySqlite.prepare(`SELECT * FROM "${table}" ORDER BY 1 LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize);
+    } else {
+      columns = await options.prisma.$queryRawUnsafe("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position", table);
+      rows = await options.prisma.$queryRawUnsafe(`SELECT * FROM "${table}" ORDER BY 1 LIMIT $1 OFFSET $2`, pageSize, (page - 1) * pageSize);
     }
-    const total = db ? Number((db.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get() as { count: number } | undefined)?.count ?? 0) : Number((await options.prisma.$queryRawUnsafe<[{ count: bigint | number }]>(`SELECT COUNT(*) AS count FROM "${table}"`))[0].count);
-    db?.close();
+    const total = readonlySqlite
+      ? Number((readonlySqlite.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get() as { count: number } | undefined)?.count ?? 0)
+      : Number((await options.prisma.$queryRawUnsafe<[{ count: bigint | number }]>(`SELECT COUNT(*) AS count FROM "${table}"`))[0].count);
     return { table, columns, rows, page, pageSize, total };
   });
   app.get("/api/admin/api-docs", { preHandler: requireAdminSession(options.auth) }, async () => ({
@@ -241,7 +254,7 @@ export async function buildAdminApp(options: {
     if (invalid) return reply.code(400).send({ code: "admin_query_rejected", reason: invalid });
     try {
       const provider = (process.env.DATABASE_URL ?? "").startsWith("file:") ? "sqlite" : "postgresql";
-      const rows = await executeReadOnlyQuery(provider, sql);
+      const rows = await executeReadOnlyQuery(provider, sql, readonlySqlite);
       return { rows: rows.slice(0, 500), truncated: rows.length > 500, rowCount: Math.min(rows.length, 500) };
     } catch (error) {
       request.log.warn({ error }, "admin read-only query failed");

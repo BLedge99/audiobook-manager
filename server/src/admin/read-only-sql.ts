@@ -3,6 +3,8 @@ import { Client as PgClient } from "pg";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+export type SqliteConnection = InstanceType<typeof Database>;
+
 export const ADMIN_DB_TABLES = [
   "LibraryRoot", "MediaItem", "Track", "ScanState", "Profile", "Session",
   "AdminCredential", "AdminSession", "ProfileLibraryEntry", "ListeningHistory",
@@ -33,24 +35,41 @@ export function validateReadOnlySql(sql: string): string | null {
   return null;
 }
 
-export async function executeReadOnlyQuery(provider: "sqlite" | "postgresql", sql: string) {
+/**
+ * Execute one validated read-only statement.
+ *
+ * `sqliteConnection`, when given, runs on the admin app's shared readonly
+ * connection instead of opening a one-off connection per statement (spec 37,
+ * X.10: one driver connection per process, not one per request). The
+ * free-form entry point stays available for tests and standalone callers.
+ */
+export async function executeReadOnlyQuery(
+  provider: "sqlite" | "postgresql",
+  sql: string,
+  sqliteConnection?: SqliteConnection | null,
+) {
   const invalid = validateReadOnlySql(sql);
   if (invalid) throw new Error(invalid);
   const statement = sql.trim().replace(/;\s*$/, "");
   if (provider === "sqlite") {
-    const url = process.env.DATABASE_URL ?? "";
-    if (!url.startsWith("file:")) throw new Error("SQLite database path is not configured.");
-    const raw = url.slice("file:".length).split("?")[0];
-    let filename: string;
-    try { filename = new URL(url).protocol === "file:" ? fileURLToPath(url.split("?")[0]) : path.resolve(process.cwd(), decodeURIComponent(raw)); }
-    catch { filename = path.resolve(process.cwd(), decodeURIComponent(raw)); }
-    const db = new Database(filename, { readonly: true, fileMustExist: true, timeout: 5_000 });
+    const raw = process.env.DATABASE_URL ?? "";
+    if (!raw.startsWith("file:")) throw new Error("SQLite database path is not configured.");
+    const shared = sqliteConnection ?? null;
+    const own = shared ?? (() => {
+      const rawPath = raw.slice("file:".length).split("?")[0];
+      let filename: string;
+      try { filename = new URL(raw).protocol === "file:" ? fileURLToPath(raw.split("?")[0]) : path.resolve(process.cwd(), decodeURIComponent(rawPath)); }
+      catch { filename = path.resolve(process.cwd(), decodeURIComponent(rawPath)); }
+      return new Database(filename, { readonly: true, fileMustExist: true, timeout: 5_000 });
+    })();
     try {
-      db.pragma("query_only = ON");
-      const query = db.prepare(statement);
+      own.pragma("query_only = ON");
+      const query = own.prepare(statement);
       if (!query.reader) throw new Error("Only read-only statements are allowed.");
       return query.all();
-    } finally { db.close(); }
+    } finally {
+      if (!shared) own.close();
+    }
   }
 
   const url = process.env.DATABASE_URL;
