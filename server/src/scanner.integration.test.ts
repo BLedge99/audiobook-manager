@@ -186,14 +186,39 @@ describe("scanner: a single-file book", () => {
 });
 
 /**
- * A book whose embedded chapter TOC is corrupt used to kill the whole scan --
- * `music-metadata` throws "Truncated CTOC child element ID" from a truncated
- * `CTOC` frame, the scanner had no per-file handling, and the single scan-wide
- * try/catch turned that into a failed scan in which the book never appeared.
- *
- * The fix degrades: the file is kept in the library, with a single chapter that
- * covers the whole file, rather than being dropped with the scan.
+ * Spec 37 / ADR 028: enriched metadata wins over embedded tags for fields that
+ * are not user-overridden, so a rescan must not discard enrichment.
  */
+describe("scanner respects enrichment precedence", () => {
+  it.skipIf(!HAS_FIXTURES)("keeps an enriched title when rescanned", async () => {
+    const source = sampleLibrary();
+    const enrichedRoot = path.join(db.dir, "enriched-root");
+    const bookFolder = path.join(enrichedRoot, path.basename(source!));
+    mkdirSync(bookFolder, { recursive: true });
+    cpSync(source!, bookFolder, { recursive: true });
+
+    const root = await prisma.libraryRoot.create({ data: { path: enrichedRoot, label: "Enriched" } });
+    const scanner = createScanManager(prisma);
+    await scanner.scanRoot(root.id);
+
+    const item = await prisma.mediaItem.findFirstOrThrow({ where: { libraryRootId: root.id } });
+    await prisma.mediaItem.update({
+      where: { id: item.id },
+      data: {
+        title: "My Enriched Title",
+        metadataSource: "openlibrary",
+        enrichmentStatus: "applied",
+        enrichedAt: new Date(),
+      },
+    });
+
+    await scanner.scanRoot(root.id);
+
+    const rescanned = await prisma.mediaItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(rescanned.title).toBe("My Enriched Title");
+  });
+});
+
 describe("scanner: a book with corrupt embedded chapter data", () => {
   it.skipIf(!HAS_FIXTURES)("degrades to a whole-file chapter instead of failing the scan", async () => {
     const skelligSource = path.join(__dirname, "..", "..", "test", "Skellig");

@@ -3,6 +3,7 @@ import { coverFilename, fetchCover } from "./cover";
 import { applyGenres, reconcileContributors, upsertSeries, type ContributorSpec } from "./taxonomy-service";
 import { applyChapterTitles } from "./chapters";
 import { normalizeText, type ProviderCandidate, type ProviderId } from "./types";
+import { canEnrichmentWrite } from "./precedence";
 
 /**
  * Spec 16 — persisting and applying candidates.
@@ -160,8 +161,9 @@ export async function applyCandidate(
   const fields: string[] = [];
   const data: Record<string, unknown> = {};
 
-  // ADR 009: enrichment never writes a field the user has set.
-  const writable = (field: string) => !locked.has(field);
+  // ADR 009/028: enrichment never writes a field the user has set, but it may
+  // change or clear any non-overridden field (enriched wins over embedded).
+  const writable = (field: string) => canEnrichmentWrite(field, locked);
 
   if (candidate.title?.trim() && writable("title")) {
     data.title = candidate.title.trim();

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   METADATA_FIELDS,
+  decideOverrideAction,
+  lockedFields,
   resolveField,
   resolveFields,
   scannableFields,
@@ -143,6 +145,34 @@ describe("toPrismaData", () => {
       seriesName: { field: "seriesName", value: "The Expanse", source: "enriched", isOverridden: false },
     });
     expect(data.seriesNameRaw).toBe("The Expanse");
+  });
+});
+
+describe("locked and override decisions (spec 37 step 5.2)", () => {
+  it("reports which fields a human has locked", () => {
+    expect(lockedFields([])).toEqual(new Set());
+    expect(lockedFields(["narrator"])).toEqual(new Set(["narrator"]));
+    expect(lockedFields(["title", "coverImagePath", "notARealField"]).has("notARealField")).toBe(false);
+  });
+
+  it("records an override, and does not record an empty one", () => {
+    expect(decideOverrideAction("title", "Dune", undefined)).toEqual({ action: "upsert", value: "Dune" });
+    expect(decideOverrideAction("title", "  Dune  ", "Old")).toEqual({ action: "upsert", value: "Dune" });
+    expect(decideOverrideAction("title", "", undefined)).toEqual({ action: "noop" });
+    expect(decideOverrideAction("title", "   ", undefined)).toEqual({ action: "noop" });
+    expect(decideOverrideAction("seriesPosition", 0, undefined)).toEqual({ action: "noop" });
+    expect(decideOverrideAction("title", null, undefined)).toEqual({ action: "noop" });
+  });
+
+  it("clears the override when a field is cleared", () => {
+    expect(decideOverrideAction("title", "", "Old title")).toEqual({ action: "delete" });
+    expect(decideOverrideAction("title", "   ", "Old title")).toEqual({ action: "delete" });
+    expect(decideOverrideAction("seriesPosition", 0, 1)).toEqual({ action: "delete" });
+    expect(decideOverrideAction("title", null, "Old title")).toEqual({ action: "delete" });
+  });
+
+  it("does not record an unchanged value as a new override", () => {
+    expect(decideOverrideAction("title", "Dune", "Dune")).toEqual({ action: "noop" });
   });
 });
 

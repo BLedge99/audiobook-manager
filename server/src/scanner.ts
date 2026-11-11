@@ -6,6 +6,7 @@ import ffmpeg from "fluent-ffmpeg";
 import { execFile } from "node:child_process";
 import * as musicMetadata from "music-metadata";
 import { PrismaClient } from "@prisma/client";
+import { canScannerWrite } from "./metadata/precedence";
 import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./scan-utils";
 import { addBookToFollowingProfiles } from "./library-membership";
 import { stripTrackNumberPrefix, parseTrackTitleOverrides, resolveTrackTitle } from "./metadata/chapters";
@@ -290,45 +291,46 @@ export function createScanManager(prisma: PrismaClient) {
         const coverImagePath = await saveCover(primary, coverDir);
         const existingRow = await prisma.mediaItem.findUnique({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
-          select: { id: true, metadataSource: true, coverImagePath: true },
+          select: { id: true, metadataSource: true, coverImagePath: true, enrichmentStatus: true },
         });
         const staleCover = existingRow?.coverImagePath
           ? !(await coverFileExists(existingRow.coverImagePath))
           : false;
-        // Spec 17 / ADR 009: per-field overrides replace the spec 07 all-or-nothing
-        // `metadataSource === "user"` sentinel. Fixing only a narrator must no
-        // longer freeze the title against rescans.
-        //
-        // Only the spec 07 `user` sentinel gets the blanket legacy lock, and
-        // only when no per-field overrides exist (those rows predate spec 17).
-        // `manual` is deliberately NOT locked wholesale: it is written by the
-        // spec 16/17 routes, which record real per-field overrides for what
-        // the user actually set. Blanket-freezing on `manual` silently and
-        // permanently blocked the scanner from ever correcting a title.
         const overrideRows = existingRow
           ? await prisma.fieldOverride.findMany({ where: { mediaItemId: existingRow.id }, select: { field: true } })
           : [];
+        const overrideFieldNames = overrideRows.map((row) => row.field);
+        const locked = new Set<string>(overrideFieldNames);
         const legacyLock = existingRow?.metadataSource === "user" && overrideRows.length === 0;
-        const locked = new Set<string>(overrideRows.map((row) => row.field));
         if (legacyLock) {
-          locked.add("title").add("author").add("narrator").add("releaseDate").add("genre").add("coverImagePath");
+          for (const field of ["title", "author", "narrator", "releaseDate", "genre", "coverImagePath"]) {
+            locked.add(field);
+          }
         }
-        const writable = (field: string) => !locked.has(field);
+        const hasEnrichedLayer = existingRow?.enrichmentStatus === "applied";
+        // The scanner writes embedded values. It may set a field only when no
+        // human override protects it and no enriched value wins over it.
+        const scannerCanWrite = (field: string) =>
+          canScannerWrite(field, legacyLock ? locked : overrideFieldNames, hasEnrichedLayer);
 
-        // Provenance is bookkeeping, not content, so it is always refreshed.
-        const embedded: Record<string, unknown> = { metadataSource: "embedded" };
-        if (writable("title")) embedded.title = audiobookTitle(group);
-        if (writable("author")) embedded.author = primary.author;
-        if (writable("narrator")) {
+        // Provenance is refreshed only when the scanner is the source of the
+        // content it writes; an enriched item keeps its provenance.
+        const embedded: Record<string, unknown> = {};
+        if (!hasEnrichedLayer) embedded.metadataSource = "embedded";
+        if (scannerCanWrite("title")) embedded.title = audiobookTitle(group);
+        if (scannerCanWrite("author")) embedded.author = primary.author;
+        if (scannerCanWrite("narrator")) {
           // The display string is comma-joined when a recording has a full
           // cast; the per-person rows in `contributors` are what filters
           // actually match against.
           embedded.narrator = primary.narrators?.length ? primary.narrators.join(", ") : primary.narrator;
         }
-        if (writable("releaseDate")) embedded.releaseDate = primary.releaseDate;
-        if (writable("genre")) embedded.genre = primary.genre;
-        if (writable("coverImagePath") || staleCover) {
-          embedded.coverImagePath = staleCover ? null : coverImagePath;
+        if (scannerCanWrite("releaseDate")) embedded.releaseDate = primary.releaseDate;
+        if (scannerCanWrite("genre")) embedded.genre = primary.genre;
+        // A cover path that points at a missing file is broken regardless of
+        // provenance; clear it so a later enrichment or scan can replace it.
+        if (scannerCanWrite("coverImagePath") || staleCover) {
+          embedded.coverImagePath = staleCover ? null : (scannerCanWrite("coverImagePath") ? coverImagePath : existingRow?.coverImagePath ?? coverImagePath);
         }
         const item = await prisma.mediaItem.upsert({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },

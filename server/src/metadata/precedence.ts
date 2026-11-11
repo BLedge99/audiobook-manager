@@ -84,8 +84,85 @@ export function resolveFields(layers: Record<string, FieldLayer>): Partial<Recor
  * behaviour where correcting a narrator also froze the title forever.
  */
 export function scannableFields(overriddenFields: Iterable<string>): Set<MetadataField> {
-  const locked = new Set<string>(overriddenFields);
+  const locked = new Set(overriddenFields);
   return new Set(METADATA_FIELDS.filter((field) => !locked.has(field)));
+}
+
+/** Which metadata fields a human has explicitly locked via overrides. */
+export function lockedFields(overriddenFields: Iterable<string>): Set<string> {
+  const locked = new Set<string>();
+  for (const field of overriddenFields) {
+    if ((METADATA_FIELDS as readonly string[]).includes(field)) {
+      locked.add(field);
+    }
+  }
+  return locked;
+}
+
+/** True when a user override protects this field from every writer. */
+export function isFieldOverridden(field: string, overriddenFields: Iterable<string>): boolean {
+  for (const overridden of overriddenFields) {
+    if (overridden === field) return true;
+  }
+  return false;
+}
+
+/**
+ * The scanner writes embedded-tag values. It may set a field only when no
+ * human override protects it and no enriched value wins over it (ADR 028).
+ */
+export function canScannerWrite(
+  field: string,
+  overriddenFields: Iterable<string>,
+  hasEnrichedLayer: boolean,
+): boolean {
+  return !isFieldOverridden(field, overriddenFields) && !hasEnrichedLayer;
+}
+
+/**
+ * The enrichment applier writes enriched values. It may set or clear any field
+ * that is not protected by a user override (ADR 028).
+ */
+export function canEnrichmentWrite(field: string, overriddenFields: Iterable<string>): boolean {
+  return !isFieldOverridden(field, overriddenFields);
+}
+
+export type OverrideAction =
+  | { action: "upsert"; value: string }
+  | { action: "delete" }
+  | { action: "noop" };
+
+/**
+ * Decide how to persist a user edit as a field override (ADR 009/028).
+ *
+ * - empty/whitespace/null/0: not a user-chosen value; remove an existing
+ *   override so the scanner may fill the field, otherwise record nothing.
+ * - unchanged from the previous value: no override write needed.
+ * - otherwise: record the override.
+ */
+export function decideOverrideAction(
+  _field: string,
+  nextValue: unknown,
+  previousValue?: unknown,
+): OverrideAction {
+  const isEmpty =
+    nextValue === null ||
+    nextValue === undefined ||
+    (typeof nextValue === "string" && nextValue.trim() === "") ||
+    nextValue === 0;
+  const hadOverride = previousValue !== null && previousValue !== undefined && previousValue !== "";
+
+  if (isEmpty) {
+    return hadOverride ? { action: "delete" } : { action: "noop" };
+  }
+
+  const normalized =
+    typeof nextValue === "string" ? nextValue.trim() : String(nextValue);
+  if (previousValue !== null && previousValue !== undefined && String(previousValue) === String(nextValue)) {
+    return { action: "noop" };
+  }
+
+  return { action: "upsert", value: normalized };
 }
 
 /** Convert a resolved field set into a Prisma-shaped update payload. */

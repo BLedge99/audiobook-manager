@@ -14,6 +14,7 @@ import { COVER_DIR } from "./enrichment";
 import { resolveInsideRoot } from "./safePath";
 import { applyCandidate, rowToCandidate, storeCandidates } from "./metadata/apply";
 import { coverFilename, fetchCover } from "./metadata/cover";
+import { decideOverrideAction } from "./metadata/precedence";
 import { runChain } from "./metadata/chain";
 import { trackTitleOverrideField } from "./metadata/chapters";
 import { buildQuery, EnrichmentManager } from "./metadata/run";
@@ -1182,12 +1183,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         const column = CANDIDATE_OVERRIDE_COLUMNS[field] ?? field;
         if (!column) continue;
         const value = refreshed ? (refreshed as Record<string, unknown>)[column] : undefined;
-        if (value === null || value === undefined || value === "") continue;
-        await prisma.fieldOverride.upsert({
-          where: { mediaItemId_field: { mediaItemId: id, field } },
-          create: { mediaItemId: id, field, value: String(value) },
-          update: { value: String(value) },
-        });
+        const action = decideOverrideAction(field, value);
+        if (action.action === "upsert") {
+          await prisma.fieldOverride.upsert({
+            where: { mediaItemId_field: { mediaItemId: id, field } },
+            create: { mediaItemId: id, field, value: action.value },
+            update: { value: action.value },
+          });
+        } else if (action.action === "delete") {
+          await prisma.fieldOverride.deleteMany({ where: { mediaItemId: id, field } });
+        }
       }
     } else {
       if (body.title !== undefined) data.title = body.title.trim();
@@ -1475,23 +1480,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const before = item as unknown as Record<string, unknown>;
     for (const field of overrideFields) {
       const value = data[field];
-      const isEmptyValue =
-        value === null || value === undefined || (typeof value === "string" && value.trim() === "") || value === 0;
       const previous = before[field];
-      const unchanged = value !== null && value !== undefined && String(value) === String(previous ?? "");
-
-      if (isEmptyValue) {
-        // Clearing a field releases the override so the scanner may fill it in.
+      const action = decideOverrideAction(field, value, previous);
+      if (action.action === "delete") {
         await prisma.fieldOverride.deleteMany({ where: { mediaItemId: id, field } });
-        continue;
+      } else if (action.action === "upsert") {
+        await prisma.fieldOverride.upsert({
+          where: { mediaItemId_field: { mediaItemId: id, field } },
+          create: { mediaItemId: id, field, value: action.value },
+          update: { value: action.value },
+        });
       }
-      if (unchanged) continue;
-
-      await prisma.fieldOverride.upsert({
-        where: { mediaItemId_field: { mediaItemId: id, field } },
-        create: { mediaItemId: id, field, value: String(value) },
-        update: { value: String(value) },
-      });
     }
 
     return { ok: true, overriddenFields: overrideFields };

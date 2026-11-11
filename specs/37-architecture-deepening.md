@@ -148,7 +148,7 @@ stuck; say so rather than leaving it ambiguous.
 | 4.5 the session probe | done | opencode | 21dd211 |
 | 4.6 the offline-mode flag | done | opencode | 97412bb |
 | 5.1 decide the precedence chain | done | opencode | c24b6db |
-| 5.2 the rule in one module | not started | | |
+| 5.2 the rule in one module | done | opencode | df135f9 |
 | 6.1 the personal-data list | not started | | |
 | 6.2 the schema guard | not started | | |
 | 7.1 the route table as a test + schemas | not started | | |
