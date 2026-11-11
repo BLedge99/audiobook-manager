@@ -1001,11 +1001,6 @@ export const copy = {
       coversCached: (bytes: string) => `${bytes} of cover art cached, so covers still show with no connection.`,
       clearCovers: "Clear cached covers",
       coversCleared: "Cached covers cleared. They will come back as you browse.",
-      /** Offline mode section */
-      offlineModeHeading: "Offline mode",
-      offlineModeHint:
-        "The app is running offline. Downloaded books still play, but new books need the home server.",
-      reconnectButton: "Reconnect to server",
     },
 
     serverSetup: {

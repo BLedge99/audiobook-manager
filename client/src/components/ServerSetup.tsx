@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Plug } from "lucide-react";
 import { getServerUrl, setServerUrl } from "../lib/api";
-import { requestRaw } from "../lib/request";
+import { probeCandidateUrl } from "../lib/reachability";
 import { copy } from "../copy";
 import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
 
@@ -59,7 +59,9 @@ export function ServerSetup({
     setStatus("checking");
     setMessage("");
     try {
-      const response = await requestRaw(`${saved}/api/health`);
+      // See Settings: the probe bypasses explicit offline mode, or this
+      // screen reports offline mode as a network failure.
+      const response = await probeCandidateUrl(saved);
       if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
       onDone();
     } catch (error) {

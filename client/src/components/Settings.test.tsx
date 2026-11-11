@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Settings } from "./Settings";
+import { setOfflineMode } from "../lib/offlineMode";
 import { TEST_SERVER_URL } from "../test/constants";
 
 /**
@@ -30,9 +31,11 @@ beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
   window.localStorage.clear();
+  setOfflineMode(false);
 });
 
 afterEach(() => {
+  setOfflineMode(false);
   vi.unstubAllGlobals();
 });
 
@@ -85,6 +88,25 @@ describe("Settings save server", () => {
 
     await waitFor(() => expect(screen.getByText(/Could not reach/)).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("still tests the address when the app is in explicit offline mode", async () => {
+    // Regression: offline mode used to refuse the request inside the client,
+    // so "Save and test" reported the app's own offline choice as a network
+    // failure and the listener had no way out from Settings once the former
+    // "Reconnect to server" button was removed.
+    setOfflineMode(true);
+    fetchMock.mockResolvedValue(fakeResponse({ status: "ok" }));
+    const onSaved = vi.fn();
+    renderSettings({ onSaved });
+
+    const input = screen.getByLabelText("Server address");
+    fireEvent.change(input, { target: { value: TEST_SERVER_URL } });
+    fireEvent.click(screen.getByRole("button", { name: /Save and test/ }));
+
+    await waitFor(() => expect(screen.getByText("Connected.")).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalled();
   });
 
   it("reports enter address when the field is empty and does not call fetch", async () => {

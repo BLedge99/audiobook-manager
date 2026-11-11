@@ -32,8 +32,9 @@ with individual credentials yet).
 - Native clients may explicitly continue in offline mode from the account or
   profile gate. This opens only device-held downloads and locally unlocked
   private data. It does not create a server profile or validate a household
-  password. The choice persists across app restarts until **Reconnect to server**
-  is selected in Settings.
+  password. The choice persists across app restarts until the listener saves a
+  working server address with **Save and test** in Settings, which ends the
+  offline choice (a reachable server is proof it can end).
 - An offline biometric unlock that cannot establish a server session is an
   offline sign-in: clear the in-memory server credential, retain the remembered
   profile id, and do not probe the server again during that offline session.

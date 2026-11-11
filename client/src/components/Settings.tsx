@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { HardDriveDownload, LoaderCircle, Save, Server, WifiOff } from "lucide-react";
 import { getServerUrl, setServerUrl } from "../lib/api";
-import { requestRaw } from "../lib/request";
+import { probeCandidateUrl } from "../lib/reachability";
 import { copy } from "../copy";
 import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
 import { PasskeySettings } from "./PasskeySettings";
@@ -21,12 +21,10 @@ export interface SettingsProps {
   /** Forget every cached cover. Optional, so a caller may omit the control. */
   onClearCovers?: () => void;
   onClose: () => void;
-  /** Re-run the library load after a URL change. */
+  /** Re-run the library load after a URL change. When this address works,
+      the app also leaves explicit offline mode (spec 29) — the same exit the
+      former "Reconnect to server" button offered. */
   onSaved: () => void;
-  /** True when user has explicitly chosen offline mode. */
-  offlineMode?: boolean;
-  /** Callback to exit offline mode and attempt reconnection. */
-  onReconnect?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -51,8 +49,6 @@ export function Settings({
   coverBytes,
   onClearCovers,
   onSaved,
-  offlineMode,
-  onReconnect,
   onClose,
 }: SettingsProps) {
   const [value, setValue] = useState(getServerUrl());
@@ -77,7 +73,11 @@ export function Settings({
     setStatus("checking");
     setMessage("");
     try {
-      const response = await requestRaw(`${saved}/api/health`);
+      // `probeCandidateUrl`, not `requestRaw`: explicit offline mode must not
+      // veto the listener asking whether the server is back, or the button
+      // reports "The app is in offline mode" for an address it could not
+      // even look at.
+      const response = await probeCandidateUrl(saved);
       if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
       setStatus("ok");
       setMessage(copy.operator.settings.connected);
@@ -170,26 +170,10 @@ export function Settings({
             </Notice>
           )}
 
-          {/* Reconnect to server section - shown when user has explicitly chosen offline mode */}
-          {offlineMode && onReconnect && (
-            <section className="panel mt-4 p-5 border-2 border-tan bg-tan/5">
-              <h3 className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
-                <WifiOff size={17} className="text-tan-ink" aria-hidden="true" />
-                {copy.operator.settings.offlineModeHeading}
-              </h3>
-              <p className="mt-2 text-sm text-ink2">
-                {copy.operator.settings.offlineModeHint}
-              </p>
-              <Btn
-                type="button"
-                variant="primary"
-                onClick={onReconnect}
-                className="mt-4 w-full"
-              >
-                {copy.operator.settings.reconnectButton}
-              </Btn>
-            </section>
-          )}
+          {/* Exiting explicit offline mode is folded into "Save and test"
+              above (spec 29): saving an address that answers proves the
+              server is back, so there is one obvious control instead of two
+              doing similar jobs. */}
 
           {/*
             Covers are cached separately from downloads, and for a different

@@ -53,8 +53,9 @@ Related: [`decisions/018-offline-cache-is-provable-two-ways.md`](../decisions/01
 
 Offline means the server is unreachable or the listener explicitly chose offline
 mode. An explicit choice is persisted for cold starts, clears the in-memory
-server credential, and blocks API calls until **Reconnect to server** is chosen
-in Settings. It is not inferred from `navigator.onLine`.
+server credential, and blocks API calls until the listener saves a working
+address with **Save and test** in Settings (the saved, reachable address ends
+the offline choice). It is not inferred from `navigator.onLine`.
 
 When offline mode was not explicitly selected, the app probes on launch and
 rechecks on foreground after a known outage. A probe decides reachability; a

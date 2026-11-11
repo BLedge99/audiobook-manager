@@ -1090,17 +1090,21 @@ function App() {
           downloadedCount={device.books.length}
           offline={offline}
           coverBytes={coverCacheBytes()}
-          offlineMode={offlineMode}
-          onReconnect={() => {
+          onClearCovers={async () => { await clearCoverCache(); }}
+          onClose={() => setShowSettings(false)}
+          onSaved={() => {
+            // Spec 29: a saved address that answers ends the listener's
+            // explicit offline choice. This used to live behind a separate
+            // "Reconnect to server" button; it is now what "Save and test"
+            // does when the server is reachable.
             offlineModeRef.current = false;
             persistOfflineMode(false);
             setOfflineMode(false);
             setServerReachable(undefined);
             void probeServer(true);
+            void refresh();
+            void device.refresh();
           }}
-          onClearCovers={async () => { await clearCoverCache(); }}
-          onClose={() => setShowSettings(false)}
-          onSaved={() => { void refresh(); void device.refresh(); }}
         />
       )}
     </div>

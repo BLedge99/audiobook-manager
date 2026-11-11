@@ -36,7 +36,7 @@ branch.
 | Connected, fingerprint sign-in | Server device exchange succeeds | Continue signed in online |
 | Connected, fingerprint sign-in | Local Vault unlock succeeds but server exchange is unreachable/not configured | Enter explicit offline mode with the local key retained; do not probe again |
 | Explicit offline mode | App restarts, refreshes, or returns to foreground | Stay offline; do not issue API requests or probes |
-| Explicit offline mode | Listener selects **Reconnect to server** in Settings | Clear the preference, enable API calls, probe and show the normal sign-in/setup flow |
+| Explicit offline mode | Listener saves a working address with **Save and test** in Settings (a reachable server ends the choice) | Clear the preference, enable API calls, probe and show the normal sign-in/setup flow |
 
 Unexpected server loss remains distinct from explicit offline mode: a failed
 probe opens the existing offline gate, and normal recovery can retry when

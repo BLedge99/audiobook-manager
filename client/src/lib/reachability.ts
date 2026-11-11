@@ -20,6 +20,7 @@
  */
 
 import { boundedFetch } from "./api";
+import { fetchWithDeadline } from "./bounded";
 
 /** How long to wait for the server before deciding it is not there. */
 export const PROBE_TIMEOUT_MS = 10_000;
@@ -35,6 +36,28 @@ export interface ServerProbe {
    * being absent.
    */
   authed: boolean;
+}
+
+/**
+ * Ask an address the listener just typed whether it is the server.
+ *
+ * `probeServer` answers "is the *configured* server there", by way of the
+ * shared request interface, which refuses while explicit offline mode is on.
+ * That is the right answer for the app as a whole — "do not contact the
+ * server until I reconnect" — but the wrong one for the address box: the
+ * listener pressing "Save and test" is *asking* "is the server there now",
+ * so refusing to look would report offline mode as a network failure and
+ * strand them on the screen meant to fix it.
+ *
+ * So this bypasses the offline gate only. It is deliberately not a general
+ * escape hatch: a bare health check, no session header, no credentials, and
+ * no report to the outage handler — the caller decides what the result means.
+ */
+export async function probeCandidateUrl(
+  candidate: string,
+  timeoutMs: number = PROBE_TIMEOUT_MS,
+): Promise<Response> {
+  return fetchWithDeadline(`${candidate}/api/health`, {}, timeoutMs);
 }
 
 /**
