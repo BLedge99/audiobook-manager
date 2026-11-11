@@ -165,7 +165,7 @@ stuck; say so rather than leaving it ambiguous.
 | 8.3 copy out of the local modules | done | opencode | 6871634 |
 | 9.1 inject the AI adapter | done | opencode | ba647ae |
 | 9.2 stop sending the server path | done | opencode | 912102e |
-| 10.1 move the provider clients | not started | | |
+| 10.1 move the provider clients | done | opencode | 1eb6c2b |
 | 10.2 one similarity function | not started | | |
 | 10.3 clean the ADR 008 artefact | not started | | |
 

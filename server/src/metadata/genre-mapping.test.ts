@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { GENRE_TAXONOMY, PROVIDER_GENRE_MAPPING } from "./taxonomy";
-import { normalizeSubjects, isJunkSubject } from "../enrichment";
+import { normalizeSubjects, isJunkSubject } from "./provider-utils";
 
 /**
  * Spec 25 — genre mapping integrity.

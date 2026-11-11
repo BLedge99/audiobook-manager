@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { RecommendationService } from "./recommend-service";
-import { clearSubjectPoolCache } from "../enrichment";
+import { clearSubjectPoolCache } from "./openlibrary";
 import type { ProviderCandidate } from "./types";
 
 /**
@@ -18,8 +18,8 @@ import type { ProviderCandidate } from "./types";
  */
 
 const subjectSearch = vi.hoisted(() => vi.fn());
-vi.mock("../enrichment", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../enrichment")>()),
+vi.mock("./openlibrary", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./openlibrary")>()),
   searchOpenLibraryBySubject: subjectSearch,
 }));
 

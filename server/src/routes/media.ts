@@ -8,7 +8,7 @@ import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
-import { COVER_DIR } from "../enrichment";
+import { COVER_DIR } from "../metadata/cover";
 import { fail } from "../http-errors";
 import { isDemoMode, type AccountExperience } from "../auth/demo-policy";
 import { issueMediaToken } from "../auth/media-token";

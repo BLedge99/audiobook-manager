@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { searchOpenLibraryBySubject } from "../enrichment";
+import { searchOpenLibraryBySubject } from "./openlibrary";
 import {
   buildOwnedIdentities,
   buildSeed,

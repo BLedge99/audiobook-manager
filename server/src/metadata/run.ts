@@ -3,7 +3,7 @@ import { applyCandidate, storeCandidates } from "./apply";
 import { AudnexusProvider, extractAsin } from "./audnexus";
 import { applyChapterTitles } from "./chapters";
 import { DEFAULT_CONFIDENCE_THRESHOLD, runChain, selectCoverSource, UNKNOWN_AUTHOR } from "./chain";
-import { fetchOpenLibraryDescription } from "../enrichment";
+import { fetchOpenLibraryDescription } from "./openlibrary";
 import { upsertSeries } from "./taxonomy-service";
 import type { EnrichmentQuery, ProviderId } from "./types";
 import { shouldAutoApply } from "./types";

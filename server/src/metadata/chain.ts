@@ -1,6 +1,7 @@
 import { AudnexusProvider } from "./audnexus";
 import { LibrivoxProvider } from "./librivox";
-import { searchGoogleBooks, searchOpenLibrary } from "../enrichment";
+import { GoogleBooksProvider } from "./googlebooks";
+import { OpenLibraryProvider } from "./openlibrary";
 import {
   PROVIDER_IDS,
   type EnrichmentQuery,
@@ -70,57 +71,6 @@ export function resolveProviderOrder(query: EnrichmentQuery): ProviderId[] {
   return looksLikeLibriVox(query)
     ? ["librivox", "googlebooks", "openlibrary"]
     : ["googlebooks", "openlibrary", "librivox"];
-}
-
-/** Adapters over the two spec 07 clients so the chain treats all four alike. */
-class GoogleBooksProvider implements MetadataProvider {
-  id = "googlebooks" as const;
-  // Book-oriented: no narrators, no series. Only fills description/cover gaps.
-  supportsRichFields = false;
-  async search(query: EnrichmentQuery): Promise<ProviderCandidate[]> {
-    const results = await searchGoogleBooks(query.title, query.authorIsUnknown ? undefined : query.author);
-    return results.map((result) => ({
-      source: "googlebooks",
-      title: result.title,
-      author: result.author,
-      coverUrl: result.coverUrl,
-      description: result.description,
-      // Spec 25: these were always in the payload and never read.
-      genres: result.genres,
-      publisher: result.publisher,
-      publishedYear: result.publishedYear,
-      isbn: result.isbn,
-      language: result.language,
-      confidence: result.confidence,
-      raw: result.raw,
-    }));
-  }
-}
-
-class OpenLibraryProvider implements MetadataProvider {
-  id = "openlibrary" as const;
-  supportsRichFields = false;
-  async search(query: EnrichmentQuery): Promise<ProviderCandidate[]> {
-    const results = await searchOpenLibrary(query.title, query.authorIsUnknown ? undefined : query.author);
-    return results.map((result) => ({
-      source: "openlibrary",
-      title: result.title,
-      author: result.author,
-      coverUrl: result.coverUrl,
-      description: result.description,
-      // Spec 25: series_name and series_position are in the default search
-      // response and were never read, which is why series was 0/12.
-      genres: result.genres,
-      publisher: result.publisher,
-      publishedYear: result.publishedYear,
-      isbn: result.isbn,
-      language: result.language,
-      seriesName: result.seriesName,
-      seriesPosition: result.seriesPosition,
-      confidence: result.confidence,
-      raw: result.raw,
-    }));
-  }
 }
 
 /**
