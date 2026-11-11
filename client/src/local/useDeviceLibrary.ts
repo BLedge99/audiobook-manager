@@ -28,6 +28,7 @@ import {
   totalReplicaBytes,
 } from "./replica";
 import { listUnclaimedOnDevice, recoverBooks, type RecoveryResult } from "./recover";
+import { localErrorMessage } from "./errorMessage";
 import { readProgress } from "./privateCache";
 import type { ReplicaBook, LocalLibraryDatabase } from "./db";
 import type { FileSystemPort } from "./replica";
@@ -155,7 +156,7 @@ export function useDeviceLibrary(
       // so instead of pretending there is nothing here.
       console.error("Could not read the on-device audiobook library.", error);
       setRows({});
-      setLibraryReadError(error instanceof Error ? error.message : String(error));
+      setLibraryReadError(localErrorMessage(error));
     } finally {
       setLoading(false);
     }

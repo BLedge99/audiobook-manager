@@ -145,7 +145,7 @@ describe("downloadBook", () => {
     const { files } = fakeFiles();
     await expect(
       downloadBook(book({ tracks: [] }), { db, files, trackUrl: (id) => `url/${id}` }),
-    ).rejects.toThrow(/no tracks/i);
+    ).rejects.toMatchObject({ code: "no-tracks" });
     expect(await db.books.get(key(7))).toBeUndefined();
   });
 

@@ -33,7 +33,7 @@ import { profileHeaders } from "../lib/api";
 import { isNativeShell } from "../lib/platform";
 import { localDb } from "./db";
 import type { FileSystemPort } from "./replica";
-import { copy } from "../copy";
+import { LocalError } from "./errors";
 
 type FilesystemPlugin = (typeof import("@capacitor/filesystem"))["Filesystem"];
 
@@ -72,7 +72,7 @@ function pluginRegistry(): Record<string, unknown> {
   const bridge = (globalThis as { Capacitor?: { Plugins?: Record<string, unknown> } }).Capacitor;
   const plugins = bridge?.Plugins;
   if (!plugins) {
-    throw new Error(copy.errors.bridgeNotReady);
+    throw new LocalError("bridge-not-ready");
   }
   return plugins;
 }
@@ -81,7 +81,7 @@ let filesystemPlugin: FilesystemPlugin | undefined;
 async function fs(): Promise<FilesystemPlugin> {
   if (!filesystemPlugin) {
     filesystemPlugin = pluginRegistry().Filesystem as FilesystemPlugin;
-    if (!filesystemPlugin) throw new Error(copy.errors.filesystemUnavailable);
+    if (!filesystemPlugin) throw new LocalError("filesystem-unavailable");
   }
   return filesystemPlugin;
 }
@@ -92,38 +92,38 @@ let fileTransferPlugin: FileTransferPlugin | undefined;
 async function fileTransfer(): Promise<FileTransferPlugin> {
   if (!fileTransferPlugin) {
     fileTransferPlugin = pluginRegistry().FileTransfer as FileTransferPlugin;
-    if (!fileTransferPlugin) throw new Error(copy.errors.fileTransferUnavailable);
+    if (!fileTransferPlugin) throw new LocalError("file-transfer-unavailable");
   }
   return fileTransferPlugin;
 }
 
 /**
- * Turn a plugin failure into something worth showing a household user.
+ * Turn a plugin failure into a code the caller maps to on-screen copy.
  *
  * `FileTransfer` reports real error codes, unlike the deprecated
  * `Filesystem.downloadFile`. The important one is `OS-PLUG-FLTR-0010`: the
  * server answered with an HTTP error. That is overwhelmingly an auth failure
- * here, and saying "HTTP 401" is far more use than "the operation failed".
+ * here, and naming it is far more use than an opaque failure.
  */
-export function describeTransferError(error: unknown): Error {
+export function describeTransferError(error: unknown): LocalError {
   const candidate = error as { code?: string; message?: string; data?: { httpStatus?: number; body?: string } };
   const httpStatus = candidate?.data?.httpStatus;
   if (httpStatus === 401 || httpStatus === 403) {
-    return new Error(copy.errors.downloadRejected(httpStatus));
+    return new LocalError("download-rejected", { httpStatus });
   }
   if (typeof httpStatus === "number") {
-    return new Error(copy.errors.trackFailed(httpStatus));
+    return new LocalError("track-failed", { httpStatus });
   }
-  const message = (candidate?.message || copy.errors.downloadFailed)
-    .replace(/([?&]media=)[^&\s]+/gi, "$1[redacted]");
+  const message = candidate?.message
+    ? candidate.message.replace(/([?&]media=)[^&\s]+/gi, "$1[redacted]")
+    : undefined;
   // A connection failure says nothing useful on its own. "The server is down"
   // and "the phone cannot reach the server" look identical to the person
-  // holding the phone, and they have different fixes -- so the message names
-  // both.
-  if (/connect|unreachable|refused|timeout/i.test(message)) {
-    return new Error(copy.errors.cannotReachServer);
+  // holding the phone, and they have different fixes -- so name both.
+  if (message && /connect|unreachable|refused|timeout/i.test(message)) {
+    return new LocalError("cannot-reach-server");
   }
-  return new Error(message);
+  return new LocalError("plugin-failed", message ? { message } : undefined);
 }
 
 /**
@@ -139,15 +139,13 @@ export function describeTransferError(error: unknown): Error {
  */
 export function validateDownloadedSize(bytes: number, expectedBytes: number): void {
   if (bytes <= 0) {
-    throw new Error(copy.errors.downloadNoData);
+    throw new LocalError("download-no-data");
   }
   if (expectedBytes <= 0) return;
   // A small tolerance: some servers pad or the final chunk is reported early.
   const tolerance = Math.max(1024, Math.floor(expectedBytes * 0.01));
   if (Math.abs(bytes - expectedBytes) > tolerance) {
-    throw new Error(
-      copy.errors.downloadIncomplete(bytes, expectedBytes),
-    );
+    throw new LocalError("download-incomplete", { bytes, expectedBytes });
   }
 }
 
@@ -167,7 +165,7 @@ const DEVICE_DIRECTORY = "DATA" as Directory;
 function convertFileSrc(fileUri: string): string {
   const bridge = (window as unknown as { Capacitor?: { convertFileSrc?: (uri: string) => string } }).Capacitor;
   if (typeof bridge?.convertFileSrc !== "function") {
-    throw new Error(copy.errors.bridgeNotReady);
+    throw new LocalError("bridge-not-ready");
   }
   return bridge.convertFileSrc(fileUri);
 }

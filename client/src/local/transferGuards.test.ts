@@ -1,5 +1,19 @@
 import { describe, it, expect } from "vitest";
+import { copy } from "../copy";
 import { describeTransferError, isDirectoryExists, isSameDownload, validateDownloadedSize } from "./device";
+import { LocalError } from "./errors";
+import { localErrorMessage } from "./errorMessage";
+
+/** The code a thrown LocalError carries; fails the test if nothing is thrown. */
+function codeOf(run: () => void): string {
+  try {
+    run();
+  } catch (error) {
+    expect(error).toBeInstanceOf(LocalError);
+    return (error as LocalError).code;
+  }
+  throw new Error("expected a LocalError to be thrown");
+}
 
 /**
  * These guard the bug that made downloads look successful while producing
@@ -27,11 +41,11 @@ describe("validateDownloadedSize", () => {
 
   it("rejects an empty file", () => {
     // The 401-body case can also produce nothing at all.
-    expect(() => validateDownloadedSize(0, 0)).toThrow(/saved nothing/i);
+    expect(codeOf(() => validateDownloadedSize(0, 0))).toBe("download-no-data");
   });
 
   it("rejects a truncated file", () => {
-    expect(() => validateDownloadedSize(29, 7_558_385)).toThrow(/stopped partway/i);
+    expect(codeOf(() => validateDownloadedSize(29, 7_558_385))).toBe("download-incomplete");
   });
 
   it("tolerates a small mismatch, so a padded final chunk is not a failure", () => {
@@ -47,24 +61,29 @@ describe("validateDownloadedSize", () => {
 describe("describeTransferError", () => {
   it("names an auth failure rather than failing opaquely", () => {
     const error = describeTransferError({ code: "OS-PLUG-FLTR-0010", data: { httpStatus: 401 } });
-    expect(error.message).toMatch(/401/);
-    expect(error.message).toMatch(/sign in/i);
+    expect(error.code).toBe("download-rejected");
+    expect(error.data?.httpStatus).toBe(401);
+    expect(localErrorMessage(error)).toMatch(/sign in/i);
   });
 
   it("reports any other HTTP status with its code", () => {
     const error = describeTransferError({ code: "OS-PLUG-FLTR-0010", data: { httpStatus: 404 } });
-    expect(error.message).toMatch(/404/);
+    expect(error.code).toBe("track-failed");
+    expect(error.data?.httpStatus).toBe(404);
+    expect(localErrorMessage(error)).toMatch(/404/);
   });
 
   it("falls back to the plugin message when there is no HTTP status", () => {
     const error = describeTransferError({ code: "OS-PLUG-FLTR-0008", message: "The transfer was aborted." });
-    expect(error.message).toBe("The transfer was aborted.");
+    expect(error.code).toBe("plugin-failed");
+    expect(error.data?.message).toBe("The transfer was aborted.");
+    expect(localErrorMessage(error)).toBe(copy.errors.downloadFailed);
   });
 
   it("redacts scoped media credentials from plugin errors", () => {
     const error = describeTransferError({ message: "GET /stream?media=signed-secret failed" });
-    expect(error.message).not.toContain("signed-secret");
-    expect(error.message).toContain("media=[redacted]");
+    expect(error.data?.message).not.toContain("signed-secret");
+    expect(error.data?.message).toContain("media=[redacted]");
   });
 
   it("turns a connection failure into something the listener can act on", () => {
@@ -73,13 +92,14 @@ describe("describeTransferError", () => {
     // could not reach it. Those have different fixes, so the message has to
     // name both.
     const error = describeTransferError({ code: "OS-PLUG-FLTR-0008", message: "Failed to connect to server." });
-    expect(error.message).toMatch(/could not reach the server/i);
-    expect(error.message).toMatch(/home network/i);
-    expect(error.message).toMatch(/settings/i);
+    expect(error.code).toBe("cannot-reach-server");
+    expect(localErrorMessage(error)).toMatch(/could not reach the server/i);
+    expect(localErrorMessage(error)).toMatch(/home network/i);
+    expect(localErrorMessage(error)).toMatch(/settings/i);
   });
 
   it("survives an error that is not an object", () => {
-    expect(describeTransferError("boom")).toBeInstanceOf(Error);
+    expect(describeTransferError("boom")).toBeInstanceOf(LocalError);
   });
 });
 

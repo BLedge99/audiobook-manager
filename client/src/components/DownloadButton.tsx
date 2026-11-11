@@ -4,6 +4,7 @@ import type { Audiobook } from "../types";
 import type { DownloadProgress } from "../local/download";
 import { DownloadStalledError } from "../local/trace";
 import { copy } from "../copy";
+import { localErrorMessage } from "../local/errorMessage";
 import { Btn, Notice } from "../ui/primitives";
 
 export interface DownloadButtonProps {
@@ -59,8 +60,7 @@ export function DownloadButton({
       // silently for a long time precisely because the catch produced nothing
       // worth reading. The trace is mirrored to the console so logcat carries
       // the same information.
-      const message =
-        downloadError instanceof Error ? downloadError.message : String(downloadError);
+      const message = localErrorMessage(downloadError);
       setError(message);
       const steps = downloadError instanceof DownloadStalledError ? downloadError.trace : [];
       setTrace(steps.map((s) => `${s.stage} — ${s.status} (${s.ms}ms)`));

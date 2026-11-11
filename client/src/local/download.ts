@@ -22,6 +22,7 @@ import { validateDownloadedSize } from "./device";
 import { DownloadTrace } from "./trace";
 import type { Audiobook, Track } from "../types";
 import type { LocalLibraryDatabase } from "./db";
+import { LocalError } from "./errors";
 import {
   extensionFor,
   putDownloadedTrack,
@@ -29,7 +30,6 @@ import {
   trackPath,
   type FileSystemPort,
 } from "./replica";
-import { copy } from "../copy";
 
 export interface DownloadProgress {
   bookId: number;
@@ -113,7 +113,7 @@ export async function downloadBook(
 ): Promise<void> {
   const tracks = book.tracks ?? [];
   if (tracks.length === 0) {
-    throw new Error(copy.errors.noTracks(book.title));
+    throw new LocalError("no-tracks", { title: book.title });
   }
 
   const { now, extension } = await trace.step(
@@ -216,7 +216,7 @@ async function sizeOf(
     return await trace.step(`${label}: stat file`, STEP_BUDGETS.stat, () => files.stat(path));
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(copy.errors.sizeUnreadable(detail));
+    throw new LocalError("size-unreadable", { detail });
   }
 }
 
