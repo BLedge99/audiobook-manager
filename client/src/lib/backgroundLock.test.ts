@@ -1,8 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
 import {
+  BACKGROUND_LOCK_CHECK_MS,
   BACKGROUND_LOCK_IDLE_MS,
   isAudioPlaying,
   shouldLock,
+  useBackgroundLock,
 } from "./backgroundLock";
 
 /**
@@ -72,5 +75,77 @@ describe("isAudioPlaying", () => {
     Object.defineProperty(audio, "ended", { value: true, configurable: true });
     expect(isAudioPlaying(document)).toBe(false);
     audio.remove();
+  });
+});
+
+describe("the background lock sequence", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("clears the session and returns to the gate", () => {
+    const lock = vi.fn();
+    const { unmount } = renderHook(() => useBackgroundLock({ enabled: true, lock }));
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    act(() => {
+      vi.advanceTimersByTime(BACKGROUND_LOCK_IDLE_MS + 1);
+    });
+
+    expect(lock).toHaveBeenCalled();
+    unmount();
+  });
+
+  it("waits for playback to finish before locking", () => {
+    const lock = vi.fn();
+    const { unmount } = renderHook(() => useBackgroundLock({ enabled: true, lock }));
+
+    const audio = document.createElement("audio");
+    Object.defineProperty(audio, "paused", { value: false, configurable: true });
+    Object.defineProperty(audio, "ended", { value: false, configurable: true });
+    document.body.appendChild(audio);
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    act(() => {
+      vi.advanceTimersByTime(BACKGROUND_LOCK_IDLE_MS + 1);
+    });
+    // Still playing: the lock waits.
+    expect(lock).not.toHaveBeenCalled();
+
+    // Playback finishes, and the lock takes the app down.
+    Object.defineProperty(audio, "paused", { value: true, configurable: true });
+    Object.defineProperty(audio, "ended", { value: true, configurable: true });
+    act(() => {
+      vi.advanceTimersByTime(BACKGROUND_LOCK_CHECK_MS);
+    });
+    expect(lock).toHaveBeenCalled();
+
+    audio.remove();
+    unmount();
+  });
+
+  it("does nothing while the app is in view", () => {
+    const lock = vi.fn();
+    const { unmount } = renderHook(() => useBackgroundLock({ enabled: true, lock }));
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    act(() => {
+      vi.advanceTimersByTime(BACKGROUND_LOCK_IDLE_MS * 10);
+    });
+
+    expect(lock).not.toHaveBeenCalled();
+    unmount();
   });
 });

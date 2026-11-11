@@ -143,7 +143,7 @@ stuck; say so rather than leaving it ambiguous.
 | 3.3 collapse the merge | done | opencode | 70a7972 |
 | 4.1 profile-resolution rules | done | opencode | f254368 |
 | 4.2 refresh-trigger rules | done | opencode | 567b29b |
-| 4.3 the background lock | not started | | |
+| 4.3 the background lock | done | opencode | 7d680ea |
 | 4.4 the offline gate | not started | | |
 | 4.5 the session probe | not started | | |
 | 4.6 the offline-mode flag | not started | | |

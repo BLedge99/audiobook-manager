@@ -51,12 +51,7 @@ import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/sea
 import { isNativeShell } from "./lib/platform";
 import { resolveProfileContext } from "./lib/profiles";
 import { refreshTriggered, type RefreshTrigger } from "./lib/refreshPolicy";
-import {
-  BACKGROUND_LOCK_CHECK_MS,
-  BACKGROUND_LOCK_IDLE_MS,
-  isAudioPlaying,
-  shouldLock,
-} from "./lib/backgroundLock";
+import { useBackgroundLock } from "./lib/backgroundLock";
 import { getServerUrl } from "./lib/api";
 import { probeServer as probeServerRequest } from "./lib/reachability";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
@@ -337,45 +332,16 @@ function App() {
   //
   // It waits for playback to finish, because the gate replaces the app and the
   // app holds the audio element. See lib/backgroundLock.ts.
-  useEffect(() => {
-    if (!isNativeShell()) return;
-    let hiddenAt: number | null = null;
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const lock = () => {
-      void lockLocal();
-      setOfflineUnlocked(false);
-      // The token is gone, so the app is no longer signed in. Saying otherwise
-      // is what left every request failing with a 401.
-      setAuthed(false);
-      setSession(null);
-    };
-    const consider = () => {
-      if (hiddenAt === null) return;
-      const hiddenForMs = Date.now() - hiddenAt;
-      if (!shouldLock({ hiddenForMs, idleMs: BACKGROUND_LOCK_IDLE_MS, audioPlaying: isAudioPlaying() })) return;
-      if (timer) clearInterval(timer);
-      timer = undefined;
-      hiddenAt = null;
-      lock();
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        hiddenAt = Date.now();
-        if (timer) clearInterval(timer);
-        timer = setInterval(consider, BACKGROUND_LOCK_CHECK_MS);
-      } else if (hiddenAt !== null) {
-        consider();
-        if (timer) clearInterval(timer);
-        timer = undefined;
-        hiddenAt = null;
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      if (timer) clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
+  const lockToGate = useCallback(() => {
+    void lockLocal();
+    setOfflineUnlocked(false);
+    // The token is gone, so the app is no longer signed in. Saying otherwise
+    // is what left every request failing with a 401.
+    setAuthed(false);
+    setSession(null);
   }, []);
+
+  useBackgroundLock({ enabled: isNativeShell(), lock: lockToGate });
 
   /** Write the current view (tab + filters + search) to the URL. */
   const syncUrl = useCallback((nextTab: Tab, nextFilters: Filters, nextSearch: string) => {

@@ -26,6 +26,8 @@
  * then does its job.
  */
 
+import { useEffect } from "react";
+
 /** How long the app may be out of view before it locks. */
 export const BACKGROUND_LOCK_IDLE_MS = 5 * 60 * 1000;
 
@@ -64,4 +66,59 @@ export function isAudioPlaying(doc: Document | undefined = typeof document === "
   const audio = doc.querySelector("audio");
   if (!audio) return false;
   return !audio.paused && !audio.ended;
+}
+
+export interface UseBackgroundLockOptions {
+  /** Whether the lock is armed. The native shell only. */
+  enabled: boolean;
+  /**
+   * Clear the local keys and return the app to the account gate.
+   *
+   * The module owns the sequence, never the consequence: the app owns the
+   * state, the module just waits and fires.
+   */
+  lock: () => void | Promise<void>;
+}
+
+/**
+ * The background lock, as a hook.
+ *
+ * Owns the orchestration the App used to hold inline: the visibility listener,
+ * the check interval, and the wait-for-playback-then-lock sequencing. The
+ * decision (`shouldLock`) and the playback question (`isAudioPlaying`) are
+ * pure and live here too; the App supplies the thing that actually clears the
+ * lock.
+ */
+export function useBackgroundLock({ enabled, lock }: UseBackgroundLockOptions): void {
+  useEffect(() => {
+    if (!enabled) return;
+    let hiddenAt: number | null = null;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const consider = () => {
+      if (hiddenAt === null) return;
+      const hiddenForMs = Date.now() - hiddenAt;
+      if (!shouldLock({ hiddenForMs, idleMs: BACKGROUND_LOCK_IDLE_MS, audioPlaying: isAudioPlaying() })) return;
+      if (timer) clearInterval(timer);
+      timer = undefined;
+      hiddenAt = null;
+      void lock();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        if (timer) clearInterval(timer);
+        timer = setInterval(consider, BACKGROUND_LOCK_CHECK_MS);
+      } else if (hiddenAt !== null) {
+        consider();
+        if (timer) clearInterval(timer);
+        timer = undefined;
+        hiddenAt = null;
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      if (timer) clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [enabled, lock]);
 }
