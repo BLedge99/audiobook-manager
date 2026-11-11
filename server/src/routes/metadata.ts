@@ -454,7 +454,7 @@ export async function registerMetadataRoutes(
     }
     const candidates = await prisma.metadataCandidate.findMany({ where: { mediaItemId: id }, orderBy: { confidence: "desc" }, take: 5 });
     if (candidates.length === 0) return { available: true, suggestion: null };
-    const prompt = `Embedded metadata: title="${item.title}", author="${item.author}", path="${item.filePath}".\nCandidates:\n${candidates.map((c, i) => `${i + 1}. ${c.title} — ${c.author ?? "unknown"} (${c.source})`).join("\n")}\nReply with just the number of the best match, or 0 for none.`;
+    const prompt = `Embedded metadata: title="${item.title}", author="${item.author}".\nCandidates:\n${candidates.map((c, i) => `${i + 1}. ${c.title} — ${c.author ?? "unknown"} (${c.source})`).join("\n")}\nReply with just the number of the best match, or 0 for none.`;
     const answer = await adapter.chat([{ role: "user", content: prompt }]).catch(() => "");
     const pick = Number(answer.trim().match(/\d+/)?.[0]);
     const suggestion = pick >= 1 && pick <= candidates.length ? candidates[pick - 1] : null;

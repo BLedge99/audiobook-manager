@@ -78,4 +78,19 @@ describe("POST /api/audiobooks/:id/ai-suggest", () => {
     expect(response.json()).toEqual({ available: true, suggestion: null });
     expect(llm.chat).not.toHaveBeenCalled();
   });
+
+  it("asks the model without the server's filesystem path", async () => {
+    const prompts: string[] = [];
+    vi.mocked(llm.chat).mockImplementation(async (messages) => {
+      prompts.push(messages.map((message) => message.content).join("\n"));
+      return "2";
+    });
+    const response = await app.inject({ method: "POST", url: `/api/audiobooks/${bookId}/ai-suggest` });
+    expect(response.statusCode).toBe(200);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("The Right Book");
+    expect(prompts[0]).toContain("Candidate Two");
+    expect(prompts[0]).not.toContain("/metadata-test-root");
+    expect(prompts[0]).not.toContain("secret-file.mp3");
+  });
 });
