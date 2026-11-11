@@ -154,7 +154,7 @@ stuck; say so rather than leaving it ambiguous.
 | 7.1 the route table as a test + schemas | done | opencode | 53b57a4 |
 | 7.2 taxonomy routes | done | opencode | 1b6a42e |
 | 7.3 discover and wishlist routes | done | opencode | e397a05 |
-| 7.4 library and membership routes | not started | | |
+| 7.4 library and membership routes | done | opencode | e7308ff |
 | 7.5 enrichment routes | not started | | |
 | 7.6 the demo-mode policy | not started | | |
 | 7.7 the remaining routes | not started | | |
