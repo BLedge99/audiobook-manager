@@ -1,4 +1,3 @@
-import { registerPlugin } from "@capacitor/core";
 import { isNativeShell } from "./platform";
 import { copy } from "../copy";
 
@@ -10,7 +9,33 @@ interface BiometricVaultPlugin {
   clear(options: { profileId: number }): Promise<void>;
 }
 
-const vault = registerPlugin<BiometricVaultPlugin>("BiometricVault");
+/**
+ * Resolve the plugin at call time via the bridge's own registry, never at
+ * module scope and never via `registerPlugin`.
+ *
+ * `registerPlugin()` at module scope ran the plugin registry during app
+ * evaluation, before Capacitor's bridge exists in the browser bundle — that
+ * blanked the screen twice. `local/device.ts` learned the same lesson for
+ * the filesystem plugin: `window.Capacitor.Plugins` is the bridge's own
+ * registry, populated before the web app loads, so it needs no module graph
+ * entry at all.
+ */
+function pluginRegistry(): Record<string, unknown> {
+  const bridge = (globalThis as { Capacitor?: { Plugins?: Record<string, unknown> } }).Capacitor;
+  const plugins = bridge?.Plugins;
+  if (!plugins) {
+    throw new Error(copy.errors.bridgeNotReady);
+  }
+  return plugins;
+}
+
+function vault(): BiometricVaultPlugin {
+  const plugin = pluginRegistry().BiometricVault as BiometricVaultPlugin | undefined;
+  if (!plugin) {
+    throw new Error(copy.errors.bridgeNotReady);
+  }
+  return plugin;
+}
 
 /**
  * Whether the Vault holds a value that carries a device secret.
@@ -67,7 +92,7 @@ export const biometricVault = {
       return false;
     }
     try {
-      const result = await vault.isAvailable();
+      const result = await vault().isAvailable();
       console.log("[BiometricVault] Available check result:", result.available);
       return result.available;
     } catch (error) {
@@ -81,7 +106,7 @@ export const biometricVault = {
       return false;
     }
     try {
-      const result = await vault.hasSavedValue({ profileId });
+      const result = await vault().hasSavedValue({ profileId });
       console.log(`[BiometricVault] Has saved value for profile ${profileId}:`, result.saved);
       return result.saved;
     } catch (error) {
@@ -105,7 +130,7 @@ export const biometricVault = {
     // Retry logic: first attempt can fail transiently while sensor/Keystore warms up
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        await vault.save({
+        await vault().save({
           profileId,
           payload: JSON.stringify(payload),
           title: copy.security.vaultPromptTitle,
@@ -139,7 +164,7 @@ export const biometricVault = {
   async unlock<T>(profileId: number): Promise<T> {
     console.log(`[BiometricVault] Unlocking for profile ${profileId}...`);
     try {
-      const result = await vault.unlock({
+      const result = await vault().unlock({
         profileId,
         title: copy.security.vaultPromptTitle,
         subtitle: copy.security.vaultPromptSubtitle,
@@ -155,7 +180,7 @@ export const biometricVault = {
   async clear(profileId: number): Promise<void> {
     console.log(`[BiometricVault] Clearing for profile ${profileId}...`);
     try {
-      await vault.clear({ profileId });
+      await vault().clear({ profileId });
       console.log(`[BiometricVault] Clear successful for profile ${profileId}`);
       // The value is gone, so it cannot carry a secret any more.
       writeSecretMarker(profileId, false);

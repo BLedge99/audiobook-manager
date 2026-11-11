@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// Mock the Capacitor plugin - must be defined before import
+// The Vault lives on the bridge's own registry, not on a module import —
+// which is the whole point of the fix. Mock the bridge, not a plugin module.
 const mockVault = {
   isAvailable: vi.fn(),
   hasSavedValue: vi.fn(),
@@ -8,10 +9,6 @@ const mockVault = {
   unlock: vi.fn(),
   clear: vi.fn(),
 };
-
-vi.mock("@capacitor/core", () => ({
-  registerPlugin: () => mockVault,
-}));
 
 vi.mock("./platform", () => ({
   isNativeShell: () => true,
@@ -24,6 +21,9 @@ vi.mock("../copy", () => ({
       vaultPromptSubtitle: "Test Subtitle",
       vaultPromptCancel: "Cancel",
     },
+    errors: {
+      bridgeNotReady: "Bridge not ready",
+    },
   },
 }));
 
@@ -33,9 +33,17 @@ const { biometricVault } = await import("./biometricVault");
 describe("biometricVault", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (globalThis as { Capacitor?: unknown }).Capacitor = {
+      Plugins: { BiometricVault: mockVault },
+    };
     // Clear console mocks
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    delete (globalThis as { Capacitor?: unknown }).Capacitor;
+    vi.restoreAllMocks();
   });
 
   describe("hasSavedValue", () => {
