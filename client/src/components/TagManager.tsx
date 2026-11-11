@@ -2,8 +2,7 @@ import { useState } from "react";
 import { GitMerge, Plus, Tag as TagIcon, Trash2 } from "lucide-react";
 import type { TagSummary } from "../types";
 import { copy } from "../copy";
-import { responseErrorText } from "../lib/apiError";
-import { profileHeaders } from "../lib/api";
+import { request } from "../lib/request";
 import { Btn, Field, MachineHead, Notice } from "../ui/primitives";
 
 /**
@@ -15,16 +14,6 @@ import { Btn, Field, MachineHead, Notice } from "../ui/primitives";
  * This is dense data, not a browsing surface, so the rows stay tight and
  * scannable. The toy lives in the panel it sits in, not in every line of it.
  */
-
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { ...profileHeaders() };
-  if (options?.body) headers["Content-Type"] = "application/json";
-  const response = await fetch(url, { ...options, headers: { ...headers, ...(options?.headers as Record<string, string>) } });
-  if (!response.ok) {
-    throw new Error(await responseErrorText(response));
-  }
-  return response.status === 204 ? (undefined as T) : response.json();
-}
 
 export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged: () => void }) {
   const [name, setName] = useState("");
@@ -49,7 +38,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
     event.preventDefault();
     if (!name.trim()) return;
     void run(async () => {
-      await request("/api/tags", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
+      await request("/api/tags", { method: "POST", body: { name: name.trim() } });
       setName("");
       setMessage(undefined);
     });
@@ -115,7 +104,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                     variant="primary"
                     onClick={() =>
                       void run(async () => {
-                        await request(`/api/tags/${tag.id}`, { method: "PATCH", body: JSON.stringify({ name: renameValue }) });
+                        await request(`/api/tags/${tag.id}`, { method: "PATCH", body: { name: renameValue } });
                         setRenamingId(undefined);
                       })
                     }
@@ -189,7 +178,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                 void run(async () => {
                   const moved = await request<{ moved: number }>(`/api/tags/${mergingId}/merge`, {
                     method: "POST",
-                    body: JSON.stringify({ targetTagId: mergeTarget }),
+                    body: { targetTagId: mergeTarget },
                   });
                   setMessage(
                     copy.operator.tags.merged(

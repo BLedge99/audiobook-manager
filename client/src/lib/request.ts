@@ -33,7 +33,7 @@
  * The interface is deliberately small: a path, and a handful of options.
  * Everything else is a composition of things that already existed.
  */
-import { apiUrl, boundedFetch, REQUEST_TIMEOUT_MS, sessionHeaders } from "./api";
+import { boundedFetch, REQUEST_TIMEOUT_MS, resolveApiRequest, sessionHeaders } from "./api";
 import { responseErrorText } from "./apiError";
 
 /** How to shape a request. */
@@ -97,7 +97,12 @@ export async function requestRaw(path: string, options: RequestOptions = {}): Pr
   if (hasBody) headers["Content-Type"] = "application/json";
 
   return boundedFetch(
-    apiUrl(path),
+    // `resolveApiRequest`, not `apiUrl`: a bare path is resolved against the
+    // configured server, but an absolute URL is passed through untouched. The
+    // server-setup screens probe an address the listener just typed, which is
+    // not the configured server, and `apiUrl` would have prepended the base
+    // to it.
+    resolveApiRequest(path),
     {
       method: options.method ?? "GET",
       credentials: "include",

@@ -3,15 +3,18 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { copy } from "../copy";
 
 const mocks = vi.hoisted(() => ({
-  apiFetch: vi.fn(),
+  request: vi.fn(),
   rewrapProfileKey: vi.fn(),
   deleteProfileCache: vi.fn(),
   profileId: "7",
 }));
 
 vi.mock("../lib/api", () => ({
-  apiFetch: mocks.apiFetch,
   getActiveProfileId: () => mocks.profileId,
+}));
+
+vi.mock("../lib/request", () => ({
+  request: mocks.request,
 }));
 
 vi.mock("../local/privateCache", () => ({
@@ -37,7 +40,7 @@ describe("PasswordSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.profileId = "7";
-    mocks.apiFetch.mockResolvedValue({ ok: true });
+    mocks.request.mockResolvedValue({ ok: true });
     mocks.rewrapProfileKey.mockResolvedValue(true);
     mocks.deleteProfileCache.mockResolvedValue(undefined);
   });
@@ -48,12 +51,12 @@ describe("PasswordSettings", () => {
     fireEvent.click(screen.getByRole("button", { name: copy.security.passwordChange }));
 
     await waitFor(() =>
-      expect(mocks.apiFetch).toHaveBeenCalledWith("/api/auth/password", {
+      expect(mocks.request).toHaveBeenCalledWith("/api/auth/password", {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           currentPassword: "old-password-9",
           newPassword: "new-password-9",
-        }),
+        },
       }),
     );
     await waitFor(() =>
@@ -73,12 +76,12 @@ describe("PasswordSettings", () => {
     fireEvent.click(screen.getByRole("button", { name: copy.security.passwordChange }));
 
     expect(await screen.findByText(copy.account.mismatch)).toBeInTheDocument();
-    expect(mocks.apiFetch).not.toHaveBeenCalled();
+    expect(mocks.request).not.toHaveBeenCalled();
     expect(mocks.rewrapProfileKey).not.toHaveBeenCalled();
   });
 
   it("shows the reviewed sentence when the current password is wrong", async () => {
-    mocks.apiFetch.mockRejectedValue(new Error(copy.login.wrongPassword));
+    mocks.request.mockRejectedValue(new Error(copy.login.wrongPassword));
     render(<PasswordSettings />);
     fill("not-the-password", "new-password-9");
     fireEvent.click(screen.getByRole("button", { name: copy.security.passwordChange }));

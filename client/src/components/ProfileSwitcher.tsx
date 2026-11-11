@@ -1,8 +1,8 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { LockKeyhole, Trash2 } from "lucide-react";
 import { copy } from "../copy";
-import { getActiveProfileId, lockSession, setActiveProfileId } from "../lib/api";
-import { responseErrorText } from "../lib/apiError";
+import { describeFailure, getActiveProfileId, lockSession, setActiveProfileId } from "../lib/api";
+import { request } from "../lib/request";
 import { Btn, Field, cn } from "../ui/primitives";
 
 interface Profile {
@@ -24,20 +24,27 @@ export function ProfileSwitcher() {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch("/api/auth/session");
-        if (res.ok) {
-          const body = (await res.json()) as { via?: "profile" | "household" | "device" };
-          setVia(body.via ?? null);
-        }
+        const body = await request<{ via?: "profile" | "household" | "device" }>("/api/auth/session");
+        setVia(body.via ?? null);
       } catch {
         // The select still works for the break-glass path.
       }
     })();
   }, []);
 
+  /**
+   * Load the profile list.
+   *
+   * This used to have no `try/catch` and no timeout, so a rejected fetch was
+   * an unhandled rejection and the dropdown was silently empty -- a listener
+   * whose phone had lost the network was given no explanation at all.
+   */
   const load = async () => {
-    const res = await fetch("/api/profiles");
-    if (res.ok) setProfiles(await res.json());
+    try {
+      setProfiles(await request<Profile[]>("/api/profiles"));
+    } catch (loadError) {
+      setError(describeFailure(loadError, copy.profile.loadFailed(0)));
+    }
   };
 
   useEffect(() => { void load(); }, []);
@@ -80,28 +87,25 @@ export function ProfileSwitcher() {
       return;
     }
     setError("");
-    const res = await fetch("/api/profiles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (res.ok) {
-      const profile = await res.json();
+    try {
+      // The server answers a duplicate name with `profile_name_taken`, which
+      // the error vocabulary already maps to `copy.profile.duplicate` -- so
+      // the 409 needs no special case here.
+      const profile = await request<Profile>("/api/profiles", { method: "POST", body: { name } });
       setNewName("");
       setShowAdd(false);
       await load();
       select(profile.id);
-    } else if (res.status === 409) {
-      setError(copy.profile.duplicate);
-    } else {
-      setError(await responseErrorText(res));
+    } catch (createError) {
+      setError(describeFailure(createError, copy.profile.createFailed(0)));
     }
   };
 
   const remove = async (id: number) => {
-    const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      setError(await responseErrorText(res));
+    try {
+      await request(`/api/profiles/${id}`, { method: "DELETE" });
+    } catch (removeError) {
+      setError(describeFailure(removeError, copy.profile.loadFailed(0)));
       return;
     }
     if (String(id) === currentId) {

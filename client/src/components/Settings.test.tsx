@@ -58,7 +58,8 @@ describe("Settings save server", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save and test/ }));
 
     await waitFor(() => expect(screen.getByText("Connected.")).toBeInTheDocument());
-    expect(fetchMock).toHaveBeenCalledWith(`${TEST_SERVER_URL}/api/health`);
+    // The URL is the first argument; the second is the request init.
+    expect(fetchMock.mock.calls[0][0]).toBe(`${TEST_SERVER_URL}/api/health`);
     expect(onSaved).toHaveBeenCalled();
   });
 

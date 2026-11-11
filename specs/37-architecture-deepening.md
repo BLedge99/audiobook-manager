@@ -131,8 +131,8 @@ stuck; say so rather than leaving it ambiguous.
 | 0.1 typecheck into `make test` | done | opencode | (this commit) |
 | 0.2 client request test helper | done | opencode | fe5b2ad |
 | 1.1 name the request guarantees | done | opencode | d1521bb |
-| 1.2 `useLibrary` + `useBrowse` | done | opencode | (next commit) |
-| 1.3 the components | not started | | |
+| 1.2 `useLibrary` + `useBrowse` | done | opencode | 331f336 |
+| 1.3 the components | done | opencode | (next commit) |
 | 1.4 the admin client | not started | | |
 | 1.5 retire the fetch shim | not started | | |
 | 2.1 prove the key collision | not started | | |
@@ -553,7 +553,10 @@ cd client && npx tsc -b
 - `client/src/components/ChapterPlayer.tsx` (progress and session saves only)
 - `client/src/components/Settings.tsx`, `client/src/components/ServerSetup.tsx`
   (the two health checks)
+- `client/src/components/PasswordSettings.tsx` (the last `apiFetch` caller)
+- `client/src/components/ProfileSwitcher.test.tsx` — **new** (it had none)
 - `client/src/lib/api.ts` — delete `apiFetch` and `apiAssetUrl`
+- `client/src/lib/api.test.ts` — the tests that moved with them
 
 **Test first:** for each component, one test that fails without the change:
 
@@ -572,6 +575,31 @@ and `apiAssetUrl` (zero callers).
 `keepalive: true`, which must survive the move. `request()` needs a
 `keepalive` option — add it in step 1.1 if it is not there.
 
+**Note (implemented) — the interface resolves absolute URLs.** `Settings` and
+`ServerSetup` probe an address the listener just typed, which is not the
+configured server. `apiUrl` would have prepended the base to it and produced
+`http://server:3000http://server:3000/api/health`. The interface uses
+`resolveApiRequest`, which passes an absolute URL through untouched, and a
+test pins that.
+
+**Note (implemented) — `CoverImage` deliberately keeps its own fetch.** It
+reads the response as a **blob**, not as JSON, and it is the one path that
+talks to a media URL with a token in the query string. It was not on this
+step's list and it is not broken, so it stays as it is.
+
+**Note (implemented) — two behaviours were tightened rather than copied.**
+`AudiobookDetail.apply` used to check `res.ok` and do nothing on a failure,
+which left a button that looked like it had worked; it now shows the error.
+`ProfileSwitcher.load` had no `try/catch` at all, so a failure was an
+unhandled rejection — Vitest reports those as errors that fail the whole
+run, which is exactly what `LIMITATIONS.md` §5 warns about.
+
+**Note (implemented) — `apiFetch`'s tests moved rather than vanished.** The
+profile header, the credentials, the catalogued sentence and the two
+fallbacks all moved to `request.test.ts`. The two fallback tests — the
+non-JSON body and the unknown code — had no equivalent there and would have
+been lost.
+
 **Verify:**
 ```bash
 cd client && npm test
@@ -580,9 +608,11 @@ make check-copy
 ```
 
 **Definition of done**
-- [ ] No component in the list calls `fetch` directly.
-- [ ] `apiFetch` and `apiAssetUrl` are deleted and nothing imports them.
-- [ ] `keepalive` still reaches the server on the progress save.
+- [x] No component in the list calls `fetch` directly.
+- [x] `apiFetch` and `apiAssetUrl` are deleted and nothing imports them.
+- [x] `keepalive` still reaches the server on the progress save.
+- [x] `ProfileSwitcher` has a test file, and its unhandled rejection is gone.
+- [x] `apiFetch`'s two fallback tests moved to `request.test.ts`.
 - [ ] The whole client suite is green.
 
 ### Step 1.4 — Give the admin client its own request module

@@ -109,6 +109,27 @@ describe("request", () => {
     await expect(request("/api/audiobooks/9")).rejects.toThrow(copy.apiErrors.audiobookNotFound);
   });
 
+  it("falls back to the generic sentence when the error is not JSON", async () => {
+    // A proxy's HTML error page must never reach a listener.
+    stub = stubFetch(
+      () =>
+        ({ ok: false, status: 502, text: async () => "<html>oops</html>" }) as unknown as Response,
+    );
+
+    await expect(request("/api/audiobooks")).rejects.toThrow(
+      "The server did not answer as expected (HTTP 502). Try again in a moment.",
+    );
+  });
+
+  it("falls back to the generic sentence for a code it does not know", async () => {
+    // An older client must survive a newer server adding a code.
+    stub = stubFetch(() => fakeResponse({ code: "a_code_from_a_newer_server" }, { status: 409 }));
+
+    await expect(request("/api/audiobooks")).rejects.toThrow(
+      "The server did not answer as expected (HTTP 409). Try again in a moment.",
+    );
+  });
+
   it("refuses in explicit offline mode", async () => {
     setExplicitOfflineMode(true);
     stub = stubFetch(() => fakeResponse([]));
@@ -162,6 +183,17 @@ describe("request", () => {
 
     expect(stub.last()?.body).toBeUndefined();
     expect(stub.last()?.headers["content-type"]).toBeUndefined();
+  });
+
+  it("passes an absolute URL through untouched", async () => {
+    // The server-setup screens probe an address the listener just typed, which
+    // is not the configured server. Resolving it against the configured base
+    // would produce "http://server:3000http://server:3000/api/health".
+    stub = stubFetch(() => fakeResponse({}));
+
+    await request("http://other-server:3000/api/health");
+
+    expect(stub.last()?.url).toBe("http://other-server:3000/api/health");
   });
 });
 

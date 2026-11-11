@@ -6,6 +6,7 @@ import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
 import { copy } from "../copy";
+import { request } from "../lib/request";
 import { Btn, cn, durationLabel } from "../ui/primitives";
 import { RemoveFromLibraryQuestion, useRemoveFromLibrary } from "./removeFromLibrary";
 
@@ -19,6 +20,15 @@ interface Candidate {
   confidence?: number;
 }
 
+/**
+ * A candidate as the lookup returns it.
+ *
+ * The lookup answers with the provider's candidates, which have no row id of
+ * their own -- the id belongs to the stored row, and the stored rows are
+ * fetched separately. So the placeholder id here is the list index.
+ */
+type EnrichCandidate = Omit<Candidate, "id">;
+
 function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () => void }) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -26,13 +36,11 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   const enrich = async () => {
     setState("loading");
     try {
-      const res = await fetch(`/api/audiobooks/${book.id}/enrich`, { method: "POST" });
-      if (!res.ok) throw new Error();
-      const list = await res.json();
-      const rows: Candidate[] = list.map((candidate: { source: string; title: string; author?: string; coverUrl?: string; description?: string; confidence?: number }, index: number) => ({ id: index, ...candidate }));
+      const list = await request<EnrichCandidate[]>(`/api/audiobooks/${book.id}/enrich`, { method: "POST" });
+      const rows: Candidate[] = list.map((candidate, index) => ({ ...candidate, id: index }));
       // Re-fetch stored candidates so we have real ids
-      const stored = await fetch(`/api/audiobooks/${book.id}/candidates`);
-      setCandidates(stored.ok ? await stored.json() : rows);
+      const stored = await request<Candidate[]>(`/api/audiobooks/${book.id}/candidates`);
+      setCandidates(stored.length ? stored : rows);
       setState("ready");
     } catch {
       setState("error");
@@ -40,12 +48,16 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
   };
 
   const apply = async (candidateId: number) => {
-    const res = await fetch(`/api/audiobooks/${book.id}/metadata`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidateId }),
-    });
-    if (res.ok) onUpdated();
+    try {
+      await request(`/api/audiobooks/${book.id}/metadata`, { method: "POST", body: { candidateId } });
+      onUpdated();
+    } catch {
+      // The old code checked `res.ok` and did nothing on a failure, which left
+      // the listener with a button that looked like it had worked. Saying so
+      // is better than doing nothing -- and better than an unhandled
+      // rejection, which this button's `void` would have made.
+      setState("error");
+    }
   };
 
   return (

@@ -472,22 +472,23 @@ function reportServerUnreachable() {
  * Idempotent: installing twice would double-wrap and call the shim from the
  * shim, so it is guarded. Call once at startup, before anything fetches.
  *
- * ## Why credentials are set here rather than only in `apiFetch`
+ * ## Why credentials are set here as well as in the request interface
  *
  * `credentials: "include"` is what lets the `house_session` cookie cross
  * origins from the Android WebView (`https://localhost` -> the LAN server).
  *
  * It was originally added to `apiFetch` alone, which looked correct and had a
- * passing unit test -- but `apiFetch` is barely called. The app has ~8
+ * passing unit test -- but `apiFetch` was barely called. The app had ~8
  * near-identical private `request` helpers (`useLibrary`, `useBrowse`,
  * `ReviewQueue`, `TagManager`, ...) plus raw `fetch` calls in `LoginGate`,
  * `ProfileGate`, `ProfileSwitcher`, `ChapterPlayer` and `AudiobookDetail`. None
- * of them route through `apiFetch`, so the cookie still did not travel and the
+ * of them routed through `apiFetch`, so the cookie still did not travel and the
  * app still 401'd. The test passed and proved nothing.
  *
- * This shim is the only choke point every one of those calls passes through,
- * so setting it here is what actually fixes the app. `apiFetch` keeps its own
- * explicit `credentials` so it is correct even if the shim is not installed.
+ * The request interface (`lib/request.ts`) now sets `credentials` on every
+ * call, so the guarantee belongs to the call site rather than to a global side
+ * effect. This shim keeps setting it as well, for the calls that have not
+ * moved onto the interface yet and for the code paths that bypass it.
  */
 export function installApiBaseUrl(): void {
   if (typeof window === "undefined") return;
@@ -510,9 +511,9 @@ export function installApiBaseUrl(): void {
     return original(resolveApiRequest(input) as RequestInfo, {
       ...init,
       headers: token ? headers : init?.headers,
-      // See the long note below: this, not `apiFetch`, is the only place a
-      // credentialed fetch can be guaranteed, because most call sites never go
-      // through `apiFetch`.
+      // See the long note above: the request interface sets this on every call
+      // too, but the shim still has to, because a call that has not moved onto
+      // the interface yet goes through here and nowhere else.
       credentials: "include",
     }).catch((requestError: unknown) => {
       // The one place every request in the app passes through, and therefore
@@ -588,35 +589,6 @@ export async function boundedFetch(
 }
 
 /**
- * Fetch a JSON response from the API, with the profile header attached.
- *
- * Throws with the reviewed sentence for the server's error code, so the text a
- * person reads always comes from the catalog (`specs/15b` feature 7b) rather
- * than from whatever prose the server happened to send.
- */
-export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { ...profileHeaders() };
-  if (options?.body) headers["Content-Type"] = "application/json";
-  const response = await boundedFetch(apiUrl(path), {
-    // The session cookie only crosses origins when the client opts in with
-    // `credentials: "include"`. Without it every cross-origin call -- which is
-    // every call from the Android shell's https://localhost WebView -- gets no
-    // cookie and so 401s even though the user "logged in". The server must also
-    // send `Access-Control-Allow-Credentials: true` with a specific origin
-    // (never `*`), which it does since the same fix landed server-side.
-    credentials: "include",
-    ...options,
-    headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) },
-  });
-
-  if (!response.ok) {
-    throw new Error(await responseErrorText(response));
-  }
-
-  return response.status === 204 ? (undefined as T) : response.json();
-}
-
-/**
  * Headers for a native plugin request that bypasses fetch.
  *
  * These bypass the `fetch` shim, so the in-memory native session must be
@@ -660,9 +632,9 @@ export async function mediaAssetUrl(path: string, kind: MediaResourceKind, id: n
  * Two things are easy to get wrong here, and both look identical in the UI --
  * every cover silently falls back to the placeholder:
  *
- * 1. It must go through `apiAssetUrl`. A bare `/api/audiobooks/N/cover` resolves
- *    against the WebView's `https://localhost` origin and returns the bundled
- *    `index.html`, which is not an image.
+ * 1. It must be resolved against the configured server. A bare
+ *    `/api/audiobooks/N/cover` resolves against the WebView's `https://localhost`
+ *    origin and returns the bundled `index.html`, which is not an image.
  * 2. A native request gets a short-lived resource token; the web uses its
  *    same-origin HttpOnly cookie.
  *
@@ -674,14 +646,4 @@ export function coverUrl(bookId: number): Promise<string> {
   return mediaAssetUrl(`/api/audiobooks/${bookId}/cover`, "cover", bookId);
 }
 
-/**
- * Resolve a relative asset URL (cover art, audio) for the current shell.
- *
- * Cover URLs come back from the server as `/api/covers/...`. In a browser they
- * resolve against the dev server, which proxies them. In the Android shell
- * they must be pointed at the configured server explicitly.
- */
-export function apiAssetUrl(path: string): string {
-  if (/^https?:\/\//i.test(path)) return path;
-  return apiUrl(path);
-}
+

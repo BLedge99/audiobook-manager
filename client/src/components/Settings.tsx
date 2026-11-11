@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { HardDriveDownload, LoaderCircle, Save, Server, WifiOff } from "lucide-react";
 import { getServerUrl, setServerUrl } from "../lib/api";
+import { requestRaw } from "../lib/request";
 import { copy } from "../copy";
 import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
 import { PasskeySettings } from "./PasskeySettings";
@@ -76,7 +77,7 @@ export function Settings({
     setStatus("checking");
     setMessage("");
     try {
-      const response = await fetch(`${saved}/api/health`);
+      const response = await requestRaw(`${saved}/api/health`);
       if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
       setStatus("ok");
       setMessage(copy.operator.settings.connected);

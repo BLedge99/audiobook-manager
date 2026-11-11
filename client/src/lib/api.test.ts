@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { copy } from "../copy";
 import {
-  apiAssetUrl,
-  apiFetch,
   apiUrl,
   boundedFetch,
   clearServerUrl,
@@ -99,24 +96,6 @@ describe("apiUrl", () => {
   });
 });
 
-describe("apiAssetUrl", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  it("points cover art at the configured server", () => {
-    // The server returns "/api/covers/1.jpg", which in the Android shell would
-    // otherwise resolve against the phone's own https://localhost origin.
-    setServerUrl(TEST_SERVER_URL);
-    expect(apiAssetUrl("/api/covers/1.jpg")).toBe(`${TEST_SERVER_URL}/api/covers/1.jpg`);
-  });
-
-  it("leaves an already-absolute URL alone", () => {
-    setServerUrl(TEST_SERVER_URL);
-    expect(apiAssetUrl("https://covers.example.com/a.jpg")).toBe("https://covers.example.com/a.jpg");
-  });
-});
-
 describe("needsServerUrl", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -179,84 +158,6 @@ describe("describeFailure", () => {
 
   it("falls back when there is no message to use", () => {
     expect(describeFailure(undefined, "fallback")).toBe("fallback");
-  });
-});
-
-describe("apiFetch", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    window.localStorage.removeItem("profileId");
-  });
-
-  it("sends the profile header so progress stays profile-scoped", async () => {
-    window.localStorage.setItem("profileId", "7");
-    const calls: { url: string; init?: RequestInit }[] = [];
-    const original = globalThis.fetch;
-    globalThis.fetch = ((input: string, init?: RequestInit) => {
-      calls.push({ url: String(input), init });
-      return Promise.resolve(new Response("[]", { status: 200 }));
-    }) as typeof fetch;
-
-    try {
-      await apiFetch("/api/audiobooks");
-    } finally {
-      globalThis.fetch = original;
-    }
-
-    expect(calls[0].url).toBe("/api/audiobooks");
-    expect((calls[0].init?.headers as Record<string, string>)["x-profile-id"]).toBe("7");
-  });
-
-  it("sends credentials so the session cookie crosses origins", async () => {
-    const calls: { url: string; init?: RequestInit }[] = [];
-    const original = globalThis.fetch;
-    globalThis.fetch = ((input: string, init?: RequestInit) => {
-      calls.push({ url: String(input), init });
-      return Promise.resolve(new Response("[]", { status: 200 }));
-    }) as typeof fetch;
-
-    try {
-      await apiFetch("/api/audiobooks");
-    } finally {
-      globalThis.fetch = original;
-    }
-
-    expect(calls[0].init?.credentials).toBe("include");
-  });
-
-  it("renders the catalog's sentence for the server's error code", async () => {
-    const original = globalThis.fetch;
-    globalThis.fetch = (() =>
-      Promise.resolve(new Response(JSON.stringify({ code: "audiobook_not_found" }), { status: 404 }))) as typeof fetch;
-
-    try {
-      await expect(apiFetch("/api/audiobooks/1")).rejects.toThrow(copy.apiErrors.audiobookNotFound);
-    } finally {
-      globalThis.fetch = original;
-    }
-  });
-
-  it("falls back to the generic sentence when the error is not JSON", async () => {
-    const original = globalThis.fetch;
-    globalThis.fetch = (() => Promise.resolve(new Response("<html>oops</html>", { status: 502 }))) as typeof fetch;
-
-    try {
-      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("The server did not answer as expected (HTTP 502). Try again in a moment.");
-    } finally {
-      globalThis.fetch = original;
-    }
-  });
-
-  it("falls back to the generic sentence for a code it does not know", async () => {
-    const original = globalThis.fetch;
-    globalThis.fetch = (() =>
-      Promise.resolve(new Response(JSON.stringify({ code: "a_code_from_a_newer_server" }), { status: 409 }))) as typeof fetch;
-
-    try {
-      await expect(apiFetch("/api/audiobooks")).rejects.toThrow("The server did not answer as expected (HTTP 409). Try again in a moment.");
-    } finally {
-      globalThis.fetch = original;
-    }
   });
 });
 

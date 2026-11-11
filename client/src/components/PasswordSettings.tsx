@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { copy } from "../copy";
-import { apiFetch, getActiveProfileId } from "../lib/api";
+import { getActiveProfileId } from "../lib/api";
+import { request } from "../lib/request";
 import { deleteProfileCache, rewrapProfileKey } from "../local/privateCache";
 import { Btn, Field, Notice } from "../ui/primitives";
 
@@ -46,9 +47,9 @@ export function PasswordSettings({ offline = false }: { offline?: boolean }) {
 
     setBusy(true);
     try {
-      await apiFetch("/api/auth/password", {
+      await request("/api/auth/password", {
         method: "POST",
-        body: JSON.stringify({ currentPassword, newPassword }),
+        body: { currentPassword, newPassword },
       });
 
       let cacheReset = false;
