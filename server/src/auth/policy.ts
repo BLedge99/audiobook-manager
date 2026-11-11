@@ -1,5 +1,3 @@
-import type { AuthContext } from "./service";
-
 /**
  * Which routes belong to the operator, not the listener (spec 28).
  *
@@ -40,9 +38,4 @@ export function isAdminRoute(method: string, path: string): boolean {
   if (/^\/api\/tracks\/\d+\/title$/.test(path) && method === "PUT") return true;
 
   return false;
-}
-
-/** Admin actions are open only when auth is disabled (development). */
-export function mayAdmin(context: AuthContext | null, authEnabled: boolean): boolean {
-  return !authEnabled || context?.role === "admin";
 }
