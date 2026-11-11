@@ -59,7 +59,7 @@ import { getServerUrl } from "./lib/api";
 import { probeServer as probeServerRequest } from "./lib/reachability";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
 import { useDeviceLibrary } from "./local/useDeviceLibrary";
-import { replicaBookKey } from "./local/replica";
+import { mergeShelves } from "./local/librarySource";
 import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
@@ -100,7 +100,7 @@ function App() {
   const canManageLibrary = session?.role === "admin";
   const library = useLibrary(canManageLibrary);
   const {
-    audiobooks,
+    books,
     roots,
     loading,
     refreshing,
@@ -405,22 +405,22 @@ function App() {
    * being away from home is the case the whole feature exists for, so it must
    * not look like a failure. Offline with nothing downloaded is still the app:
    * the library tab shows an honest empty state (spec 29).
+   *
+   * The merge itself is in `local/librarySource.ts`, with the key format it
+   * uses. It used to be written out here, which meant the format was in two
+   * places -- and a change to one would silently produce a duplicate shelf
+   * entry, or make one server's book disappear behind another's.
    */
   const offline = offlineMode || serverReachable === false;
-  const libraryBooks = useMemo(() => {
-    const books = new Map<string, Audiobook>();
-    if (!offline) {
-      // The key format is the replica's, not a copy of it: two servers can both
-      // number their books from 1, so the key has to say which shelf a book is
-      // on or the two collide.
-      for (const book of audiobooks) books.set(replicaBookKey(getServerUrl(), book.id), book);
-    }
-    for (const book of device.books) {
-      const key = replicaBookKey(book.serverId ?? getServerUrl(), book.id);
-      if (!books.has(key)) books.set(key, book);
-    }
-    return [...books.values()];
-  }, [offline, audiobooks, device.books]);
+  const libraryBooks = useMemo(
+    () =>
+      mergeShelves(
+        offline ? null : { books, serverId: getServerUrl() },
+        { books: device.books },
+        getServerUrl(),
+      ),
+    [offline, books, device.books],
+  );
 
   const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);
   // Search narrows the chip-filtered result rather than replacing it, so both
@@ -741,7 +741,7 @@ function App() {
     ? offlineScreen({
         deviceLoading: device.loading,
         booksOnDevice: device.books.length,
-        libraryReadError: device.libraryReadError,
+        libraryReadError: device.error,
         hasProfile: Boolean(activeProfileId),
         cache: cacheState,
         unlocked: offlineUnlocked,

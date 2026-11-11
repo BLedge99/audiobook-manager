@@ -93,8 +93,7 @@ describe("useLibrary", () => {
     );
 
     const view = renderHook(() => useLibrary());
-    await waitFor(() => expect(view.result.current.error).toBeDefined());
-
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
     expect(view.result.current.error).toBe(copy.profile.sessionExpired);
   });
 
@@ -109,8 +108,8 @@ describe("useLibrary", () => {
     const { result } = renderHook(() => useLibrary(false));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.audiobooks.map(({ title }) => title)).toEqual(["My book"]);
-    expect(result.current.error).toBeUndefined();
+    expect(result.current.books.map(({ title }) => title)).toEqual(["My book"]);
+    expect(result.current.error).toBeNull();
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("library-roots"))).toBe(false);
   });
 
@@ -214,7 +213,7 @@ describe("useLibrary", () => {
       });
 
       expect(bookListReads).toBe(2);
-      expect(result.current.audiobooks.map(({ id }) => id)).toEqual([1]);
+      expect(result.current.books.map(({ id }) => id)).toEqual([1]);
     });
 
     it("removes a book with a DELETE", async () => {
@@ -293,7 +292,7 @@ describe("useLibrary", () => {
 
   it("keeps the books on screen while a refresh is in flight", async () => {
     const { result } = await mountWith([book(1, "One"), book(2, "Two")]);
-    expect(result.current.audiobooks).toHaveLength(2);
+    expect(result.current.books).toHaveLength(2);
 
     // A refresh that never resolves is the worst case, and the one the user
     // reported: the round trip took the best part of a minute.
@@ -312,14 +311,14 @@ describe("useLibrary", () => {
 
     await waitFor(() => expect(result.current.refreshing).toBe(true));
     // The whole point: rows, and no "loading" that would replace them.
-    expect(result.current.audiobooks).toHaveLength(2);
+    expect(result.current.books).toHaveLength(2);
     expect(result.current.loading).toBe(false);
 
     await act(async () => {
       release?.();
     });
     await waitFor(() => expect(result.current.refreshing).toBe(false));
-    expect(result.current.audiobooks).toHaveLength(2);
+    expect(result.current.books).toHaveLength(2);
   });
 
   it("collapses concurrent refreshes into one request per endpoint", async () => {
@@ -338,7 +337,7 @@ describe("useLibrary", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     const bookCalls = fetchMock.mock.calls.filter(([url]) => !String(url).includes("library-roots"));
     expect(bookCalls).toHaveLength(1);
-    expect(result.current.audiobooks).toHaveLength(1);
+    expect(result.current.books).toHaveLength(1);
   });
 
   it("sends the stored ETag and treats 304 as unchanged", async () => {
@@ -358,8 +357,8 @@ describe("useLibrary", () => {
     const secondCall = fetchMock.mock.calls.find(([url, init]) => !String(url).includes("library-roots") && (init as { headers?: Record<string, string> })?.headers?.["If-None-Match"]);
     expect(secondCall).toBeTruthy();
     // Rows survive, and a 304 is not reported as a failure.
-    expect(first.result.current.audiobooks).toHaveLength(1);
-    expect(first.result.current.error).toBeUndefined();
+    expect(first.result.current.books).toHaveLength(1);
+    expect(first.result.current.error).toBeNull();
     expect(first.result.current.refreshing).toBe(false);
   });
 
@@ -373,7 +372,7 @@ describe("useLibrary", () => {
 
     // A failed refresh must not empty a library that already loaded -- that is
     // the same "nothing in library" symptom by a different route.
-    expect(result.current.audiobooks).toHaveLength(1);
+    expect(result.current.books).toHaveLength(1);
     expect(result.current.error).toBe("network down");
     expect(result.current.loading).toBe(false);
   });
@@ -383,7 +382,7 @@ describe("useLibrary", () => {
     const { result } = renderHook(() => useLibrary());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.audiobooks).toHaveLength(0);
+    expect(result.current.books).toHaveLength(0);
     expect(result.current.error).toBe("server unreachable");
   });
 

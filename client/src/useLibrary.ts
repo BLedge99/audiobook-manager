@@ -43,7 +43,7 @@ export function useLibrary(canManageLibrary = true) {
    * showing what it has while this is true.
    */
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string | null>(null);
 
   /**
    * Spec 27: every book the server has, with a flag for the ones this
@@ -112,7 +112,7 @@ export function useLibrary(canManageLibrary = true) {
           setRoots([]);
           rootsEtagRef.current = null;
         }
-        setError(undefined);
+        setError(null);
       } catch (requestError) {
         setError(describeFailure(requestError, copy.errors.loadLibrary));
       } finally {
@@ -255,7 +255,14 @@ export function useLibrary(canManageLibrary = true) {
   }, [roots, refresh]);
 
   return {
-    audiobooks,
+    /**
+     * The books the server holds.
+     *
+     * Named `books`, not `audiobooks`, because this is one shelf of books and
+     * the device shelf is another -- they share a shape, and the shelf the
+     * listener sees is the merge of the two.
+     */
+    books: audiobooks,
     roots,
     loading,
     refreshing,

@@ -136,11 +136,11 @@ stuck; say so rather than leaving it ambiguous.
 | 1.4 the admin client | done | opencode | 287e256 |
 | 1.5 retire the fetch shim's leftovers | done | opencode | b2b3df3 |
 | 1.6 delete the fetch shim | not started | | |
-| 2.1 prove the key collision | done | opencode | (next commit) |
-| 2.2 server-scoped private keys | done | opencode | (next commit) |
-| 3.1 the library source interface | not started | | |
-| 3.2 both hooks satisfy it | not started | | |
-| 3.3 collapse the merge | not started | | |
+| 2.1 prove the key collision | done | opencode | cee4ba2 |
+| 2.2 server-scoped private keys | done | opencode | cee4ba2 |
+| 3.1 the library source interface | done | opencode | 70a7972 |
+| 3.2 both hooks satisfy it | done | opencode | 70a7972 |
+| 3.3 collapse the merge | done | opencode | 70a7972 |
 | 4.1 profile-resolution rules | not started | | |
 | 4.2 refresh-trigger rules | not started | | |
 | 4.3 the background lock | not started | | |
