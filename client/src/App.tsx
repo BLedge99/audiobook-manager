@@ -50,6 +50,7 @@ import {
 import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { isNativeShell } from "./lib/platform";
 import { resolveProfileContext } from "./lib/profiles";
+import { refreshTriggered, type RefreshTrigger } from "./lib/refreshPolicy";
 import {
   BACKGROUND_LOCK_CHECK_MS,
   BACKGROUND_LOCK_IDLE_MS,
@@ -515,74 +516,62 @@ function App() {
    * the empty state is now correct in every case.
    */
   const [libraryTick, setLibraryTick] = useState(0);
-  useEffect(() => {
-    if (!libraryTick) return;
-    void refresh();
-  }, [libraryTick, refresh]);
-
-  /**
-   * LIMITATIONS 1.7: the first fetch happens before a profile exists, so its
-   * response carries no `progress`. Picking a profile has to trigger a second
-   * fetch or the dock reads as empty until the listener leaves and comes back.
-   *
-   * Keyed on the profile itself rather than on a tick, so it fires on every
-   * change of who is listening, including a switch from the profile menu.
-   */
-  useEffect(() => {
-    if (!profileId) return;
-    void refreshForProfile();
-  }, [profileId, refreshForProfile]);
-
-  useEffect(() => {
-    if (!profileId) return;
-    const refetch = () => { void refresh(); };
-    window.addEventListener("focus", refetch);
-    const onVisible = () => { if (document.visibilityState === "visible") refetch(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.removeEventListener("focus", refetch);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [profileId, refresh]);
-
-  /**
-   * Coming back online has to fetch the library again.
-   *
-   * While the server was unreachable the app was showing the *device's* books,
-   * so the server's list is stale the moment the connection returns -- and
-   * nothing refetched it, because the only triggers were the profile changing
-   * and the window regaining focus. Without this, the app says "online" and
-   * shows the wrong list.
-   */
   const wasOffline = useRef(false);
-  useEffect(() => {
-    if (serverReachable === false) {
-      wasOffline.current = true;
-      return;
-    }
-    if (serverReachable !== true) return;
-    if (!wasOffline.current) return;
-    wasOffline.current = false;
-    void refresh();
-  }, [serverReachable, refresh]);
+  const lastProfileIdRef = useRef<string | null>(null);
 
-  // Re-probe when the app comes back to the foreground. Without this, someone
-  // who opened the app at home, left, and came back would stay stuck in the
-  // offline branch until they force-quit and restart it.
+  /**
+   * One effect owns the shelf's refresh triggers. It asks the refresh policy
+   * what the current situation owes, and acts on the answer; the rules live in
+   * `lib/refreshPolicy.ts` so they are testable without the App.
+   */
   useEffect(() => {
-    const recheck = () => {
-      // Don't probe when user has explicitly chosen offline mode
-      if (offlineMode) return;
-      if (serverReachable === false) probeServer();
+    const ask = (trigger: RefreshTrigger) => {
+      if (!refreshTriggered(trigger)) return;
+      switch (trigger.kind) {
+        case "library-tick":
+          void refresh();
+          return;
+        case "server-recovered":
+          void refresh();
+          return;
+        case "window-focus":
+          if (profileId) void refresh();
+          return;
+        case "visibility-visible":
+          if (profileId) void refresh();
+          return;
+        case "profile-changed":
+          if (profileId) void refreshForProfile();
+          return;
+      }
     };
-    window.addEventListener("focus", recheck);
-    const onVisible = () => { if (document.visibilityState === "visible") recheck(); };
-    document.addEventListener("visibilitychange", onVisible);
+
+    // What the current state says is owed.
+    const owed: RefreshTrigger[] = [];
+    if (libraryTick > 0) owed.push({ kind: "library-tick", tick: libraryTick });
+    const profileChanged = profileId !== null && profileId !== lastProfileIdRef.current;
+    lastProfileIdRef.current = profileId;
+    if (profileId && profileChanged) owed.push({ kind: "profile-changed", profileId });
+    if (serverReachable === true && wasOffline.current) {
+      wasOffline.current = false;
+      owed.push({ kind: "server-recovered" });
+    }
+    if (serverReachable === false) wasOffline.current = true;
+    for (const trigger of owed) ask(trigger);
+
+    // Events the shelf cannot see from state: window focus and visibility.
+    const onWindowFocus = () => ask({ kind: "window-focus" });
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      ask({ kind: "visibility-visible", becameVisible: true });
+    };
+    window.addEventListener("focus", onWindowFocus);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.removeEventListener("focus", recheck);
-      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onWindowFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [offlineMode, serverReachable, probeServer]);
+  }, [libraryTick, profileId, serverReachable, refresh, refreshForProfile]);
 
   /**
    * Decide whether offline can be opened at all.
