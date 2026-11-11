@@ -709,39 +709,48 @@ function App() {
       })
     : null;
 
-  if (screen?.kind === "waiting" && device.loading) return <Splash />;
-
-  if (screen?.kind === "libraryReadFailed") {
-    return (
-      <OfflineNotice
-        hasBooks={device.books.length > 0}
-        libraryReadFailed
-        onRetry={retryOffline}
-        onChangeServer={openServerSetup}
-      />
-    );
-  }
-
-  if (screen?.kind === "unlock" && device.books.length === 0) {
-    return (
-      <OfflineUnlock
-        onUnlocked={() => {
-          setOfflineUnlocked(true);
-          // Re-read the replica now that the key is in memory, so cached
-          // progress appears on the shelf immediately.
-          void device.refresh();
-          void browse.refresh();
-        }}
-        onChangeServer={openServerSetup}
-        onListenWithoutProgress={() => setSkippedUnlock(true)}
-      />
-    );
-  }
-
-  // A browser has no on-device library, so "No books downloaded" would be the
-  // wrong sentence there. The notice keeps both exits and says the honest thing.
-  if (screen?.kind === "shell" && device.books.length === 0 && !isNativeShell()) {
-    return <OfflineNotice hasBooks={false} onRetry={retryOffline} onChangeServer={openServerSetup} />;
+  if (offline && screen) {
+    // The ladder in `offlineGate` picked the screen; render what it picked. The
+    // precedence lives there, not here.
+    switch (screen.kind) {
+      case "waiting":
+        if (device.loading) return <Splash />;
+        break;
+      case "libraryReadFailed":
+        return (
+          <OfflineNotice
+            hasBooks={device.books.length > 0}
+            libraryReadFailed
+            onRetry={retryOffline}
+            onChangeServer={openServerSetup}
+          />
+        );
+      case "unlock":
+        if (device.books.length === 0) {
+          return (
+            <OfflineUnlock
+              onUnlocked={() => {
+                setOfflineUnlocked(true);
+                // Re-read the replica now that the key is in memory, so cached
+                // progress appears on the shelf immediately.
+                void device.refresh();
+                void browse.refresh();
+              }}
+              onChangeServer={openServerSetup}
+              onListenWithoutProgress={() => setSkippedUnlock(true)}
+            />
+          );
+        }
+        break;
+      case "shell":
+        // A browser has no on-device library, so "No books downloaded" would be
+        // the wrong sentence there. The notice keeps both exits and says the
+        // honest thing.
+        if (device.books.length === 0 && !isNativeShell()) {
+          return <OfflineNotice hasBooks={false} onRetry={retryOffline} onChangeServer={openServerSetup} />;
+        }
+        break;
+    }
   }
 
   /** Whether progress and favourites can actually be read on this screen. */
