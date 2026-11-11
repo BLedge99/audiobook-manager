@@ -176,6 +176,11 @@ household key.
   creation time, last use and a `current` marker. `DELETE
   /api/auth/sessions/:id` revokes one; `POST /api/auth/logout` revokes the
   current one.
+  > **Amended 2026-11-11 by
+  > [`specs/36-device-identity-and-sessions.md`](36-device-identity-and-sessions.md).**
+  > The endpoint now returns `{ devices: [...] }` — one entry per **device**,
+  > not per sign-in — and `DELETE /api/auth/sessions/device/:key` signs a whole
+  > device out.
 - Password change revokes every other session for that profile. Admin reset
   revokes every session and device credential for that profile.
 - Expired and revoked rows are deleted by a best-effort cleanup on login and at
@@ -246,6 +251,15 @@ household key.
   people.
 
 ### Android biometric unlock
+
+> **Amended 2026-11-11 by
+> [`specs/36-device-identity-and-sessions.md`](36-device-identity-and-sessions.md).**
+> A device credential now owns its session: exchanging the device secret
+> rotates the token on that session instead of creating a new row, so one
+> phone is one row in the "Signed-in devices" panel. The panel lists devices
+> rather than sign-ins, and a device is named from the phone's own model. The
+> prompt behaviour below is unchanged — see
+> [`decisions/027-android-keeps-the-biometric-gate.md`](../decisions/027-android-keeps-the-biometric-gate.md).
 
 - After a successful password sign-in, the app offers **Unlock with
   fingerprint or face**. Enabling it calls `POST /api/auth/devices` with a

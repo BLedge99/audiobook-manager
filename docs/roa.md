@@ -40,9 +40,9 @@ spec 35 and ADR 026.
 | Field | Value |
 |-------|-------|
 | **Activity** | Password-based sign-in, passkey/WebAuthn sign-in, OAuth sign-in, session issuance and validation |
-| **Personal data** | `Session.tokenHash`, `Session.profileId`, `Session.expiresAt`, `Session.userAgent`, `Session.deviceLabel`, `Session.createdAt`; `DeviceCredential.publicKey`, `DeviceCredential.label`; `WebAuthnCredential.credentialId`, `WebAuthnCredential.publicKey`, `WebAuthnCredential.counter`; `WebAuthnChallenge.challenge`, `WebAuthnChallenge.expiresAt` |
+| **Personal data** | `Session.tokenHash`, `Session.profileId`, `Session.expiresAt`, `Session.userAgent`, `Session.deviceLabel`, `Session.deviceCredentialId`, `Session.createdAt`; `DeviceCredential.secretHash`, `DeviceCredential.label`, `DeviceCredential.deviceId`; `WebAuthnCredential.credentialId`, `WebAuthnCredential.publicKey`, `WebAuthnCredential.counter`; `WebAuthnChallenge.challenge`, `WebAuthnChallenge.expiresAt` |
 | **Lawful basis** | Art. 6(1)(b) contract — session management necessary to provide the service; Art. 6(1)(a) consent for passkey registration ceremony |
-| **Retention** | Sessions: TTL-based expiry, automated cleanup (Phase 6); challenges: ephemeral, single-use, short expiry; credentials: until removed by user or account deletion |
+| **Retention** | Sessions: TTL-based expiry, automated cleanup (Phase 6); challenges: ephemeral, single-use, short expiry; credentials: until removed by user or account deletion. A device id is an opaque installation identifier kept only to name a device in the "Signed-in devices" panel; it authorises nothing and is deleted with its credential |
 | **Recipients** | Server only; session token in HttpOnly cookie (browser) or memory (Android) |
 | **Cross-border transfer** | None |
 | **Automated decision-making** | None |

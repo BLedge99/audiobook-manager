@@ -243,4 +243,37 @@ category or table. The RoPA entry for profile management applies:
   an authentication credential. No household password, temporary profile, or
   pending registration is stored on the device.
 
+### Device identity and session reuse (2026-11-11)
+
+[`specs/36-device-identity-and-sessions.md`](../specs/36-device-identity-and-sessions.md)
+gives a session a device and makes the "Signed-in devices" panel list devices
+rather than sign-ins. Two columns are added and no personal-data category is
+introduced:
+
+- `Session.deviceCredentialId` — a link to the device credential the session
+  was minted from. It identifies a device the household already has a record
+  of; it is not a new identifier.
+- `DeviceCredential.deviceId` — an opaque installation identifier the Android
+  client generates once so two phones can be told apart. It names a device in
+  the panel and authorises nothing.
+
+- **Lawful basis:** Art. 6(1)(b), the same basis as the session and device
+  credential it names. Reusing a session instead of adding one does not
+  create new processing; it reduces it.
+- **Retention:** unchanged. A reused session keeps its original creation date,
+  so the 30-day sliding TTL and the 90-day hard cap are still measured from
+  the first sign-in on that device. The device id is deleted with its
+  credential and never outlives it.
+- **Rights impact:** access and export are unchanged — the device id and the
+  device credential link are personal data about the caller's own account and
+  are included in the export. Erasure is unchanged: both columns cascade with
+  the profile. Rectification is unchanged: the device label is the caller's own
+  text and is editable at enrolment. The one new right impact is that a
+  device can now be signed out in a single action, which is a strengthening of
+  Art. 17 rather than a new obligation.
+
+The biometric gate is deliberately unchanged (ADR 027): no credential is stored
+on the device that would let anyone holding an unlocked phone read the
+profile's progress without the fingerprint.
+
 Start: Phase 1.

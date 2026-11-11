@@ -22,6 +22,12 @@ LAN HTTP requests; see §1.6.
 **Updated 2026-11-10** with the Row-Level Security work that closed the
 Supabase "table publicly accessible" finding; see §4.
 
+**Updated 2026-11-11** with the device-identity and session work. The Android
+app added a **session row on every sign-in**, so one phone appeared many times
+in "Signed-in devices" — the panel was listing sign-ins, not devices. A session
+now belongs to a device. See §3 and
+[`specs/36-device-identity-and-sessions.md`](specs/36-device-identity-and-sessions.md).
+
 Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
 than intended · **DEFERRED** = deliberately not built.
 
@@ -463,6 +469,7 @@ Audnexus reachable permanently rather than incidentally.
 | **Spec 28 - accounts, passkeys and biometrics** | Implementation through phases 1-8 is present on `deepseek-skill`; automated suites pass (507 server, 401 client, 51 Playwright), the live-database migration was rehearsed with `prisma migrate deploy`, and Caddy/Compose config validates. Caddy/CA deployment and Windows Hello, real Android biometric flows (including Motorola Defy) remain unverified. Android media still uses household-LAN HTTP. See [`specs/28-accounts-passkeys-biometrics.md`](specs/28-accounts-passkeys-biometrics.md) and the live [`handoff.md`](handoff.md). |
 | **Spec 29 - offline resilience (device pass)** | Implemented 2026-10-29; client 521 tests, copy gate, server 507 tests and a debug APK all pass. What remains is on the phone, not in the code: cold-start offline with a working fingerprint, listen-without-progress, the invalidated-key path after a new enrolment, offline with nothing downloaded, and **Find them** on orphaned folders. The numbered checklist and its ticked state live in [`specs/29-offline-resilience.md`](specs/29-offline-resilience.md). |
 | **Spec 15 — GUI redesign** | The only roadmap item with **no spec file at all**. Needs `specs/15-*.md` written first. Now sequenced **after** spec 26, since restyling a shell that is about to be wrapped in an APK would mean restyling it twice. |
+| **Spec 36 - device identity and sessions** | Implemented 2026-11-11: a session now belongs to a device, the panel lists devices rather than sign-ins, and the legacy pile can be cleared in one action. What remains is on the phone, not in the code: five sign-ins leaving **one** row, the offline enrolment upgrading in place once the server answers, and an invalidated fingerprint re-enrolling the same credential. See [`specs/36-device-identity-and-sessions.md`](specs/36-device-identity-and-sessions.md). |
 | **Spec 32 - production external OAuth/email sign-in** | **Accepted 2026-11-04** per [`specs/32-oauth-email-signin.md`](specs/32-oauth-email-signin.md) and [`decisions/023-oauth-email-signin-production-demo.md`](decisions/023-oauth-email-signin-production-demo.md). Google + GitHub OAuth and minimal email/password sign-in for the production demo audience; email verification/reset deferred; offline not needed for the online demo; Android untouched. Implementation status is tracked in the spec. |
 | **Spec 33 - production account experience** | Planned 2026-11-04. The production demo still uses household-oriented profile selection/switching and may expose profile concepts through shared surfaces. Replace those only in an explicit server-selected demo mode, audit API account isolation/privacy, and add email self-sign-up; keep local household behavior unchanged. See [`specs/33-production-account-experience.md`](specs/33-production-account-experience.md) and [`decisions/024-production-demo-account-experience.md`](decisions/024-production-demo-account-experience.md). |
 | **Chapter/track title editor UI** | Spec 24 shipped the `PUT /tracks/:trackNumber/title` endpoint and the `FieldOverride` storage, but **no UI**. A hand-set narrator/track title is only reachable via API. |
