@@ -163,7 +163,7 @@ stuck; say so rather than leaving it ambiguous.
 | 8.1 copy out of `position.ts` | done | opencode | 09efff2 |
 | 8.2 copy out of `browse.ts` | done | opencode | de645f3 |
 | 8.3 copy out of the local modules | done | opencode | 6871634 |
-| 9.1 inject the AI adapter | not started | | |
+| 9.1 inject the AI adapter | done | opencode | ba647ae |
 | 9.2 stop sending the server path | not started | | |
 | 10.1 move the provider clients | not started | | |
 | 10.2 one similarity function | not started | | |

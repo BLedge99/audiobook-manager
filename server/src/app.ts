@@ -46,6 +46,8 @@ export interface BuildAppOptions {
   mediaTokenSecret?: string;
   /** External OAuth providers for production sign-in (spec 32 / ADR 023). */
   oauth?: OAuthConfig;
+  /** Test seam; production constructs the real LM Studio adapter in the route. */
+  llm?: import("./ai/llm").LLMAdapter;
   /** Loopback target for the isolated admin listener; absent in unit tests. */
   adminProxyTarget?: string;
   /** Production demo account surface; defaults to household for safety. */
@@ -338,7 +340,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerLibraryRoutes(app, { prisma, accountExperience, scanner, enrichment, logger: app.log, parseIdParam, optionalProfileId, requireProfileId, requireAccountProfileId, canReadMediaItem, sendConditional });
   await registerEnrichmentRoutes(app, { prisma, accountExperience, enrichment, parseIdParam });
   await registerTaxonomyRoutes(app, { prisma, accountExperience, parseIdParam, optionalProfileId });
-  await registerMetadataRoutes(app, { prisma, accountExperience, parseIdParam, canReadMediaItem });
+  await registerMetadataRoutes(app, { prisma, accountExperience, parseIdParam, canReadMediaItem, llm: options.llm });
   await registerDiscoverRoutes(app, { prisma, accountExperience, recommendations, parseIdParam, requireProfileId });
   await registerProgressRoutes(app, { prisma, parseIdParam, requireProfileId });
   await registerProfilesRoutes(app, { prisma, accountExperience, authEnabled, parseIdParam, requireProfileId });

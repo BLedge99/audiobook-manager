@@ -7,7 +7,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
 import { isDemoMode, type AccountExperience } from "../auth/demo-policy";
-import { LMStudioAdapter } from "../ai/llm";
+import { LMStudioAdapter, type LLMAdapter } from "../ai/llm";
 import { applyCandidate, rowToCandidate } from "../metadata/apply";
 import { decideOverrideAction } from "../metadata/precedence";
 import { coverFilename, fetchCover } from "../metadata/cover";
@@ -21,6 +21,8 @@ export interface MetadataRouteDeps {
   accountExperience: AccountExperience;
   parseIdParam: (raw: string | undefined) => number | null;
   canReadMediaItem: (request: FastifyRequest, mediaItemId: number) => Promise<boolean>;
+  /** Injected in tests; production falls back to the real LM Studio adapter. */
+  llm?: LLMAdapter;
 }
 
 /**
@@ -47,7 +49,7 @@ export async function registerMetadataRoutes(
   app: FastifyInstance,
   deps: MetadataRouteDeps,
 ): Promise<void> {
-  const { prisma, accountExperience, parseIdParam, canReadMediaItem } = deps;
+  const { prisma, accountExperience, parseIdParam, canReadMediaItem, llm } = deps;
 
   // ---------------------------------------------------------------------
   // Spec 16 — metadata enrichment (the review/accept surface)
@@ -446,7 +448,7 @@ export async function registerMetadataRoutes(
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
-    const adapter = new LMStudioAdapter();
+    const adapter: LLMAdapter = llm ?? new LMStudioAdapter();
     if (!(await adapter.available())) {
       return { available: false, suggestion: null };
     }
