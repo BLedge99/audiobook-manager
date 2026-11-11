@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
-import { seriesLabel, type Shelf } from "../lib/browse";
+import { seriesPosition, type Shelf } from "../lib/browse";
 import { copy, plural } from "../copy";
 import { CapsuleMarks, MachineHead, ShellCover, cn } from "../ui/primitives";
 
@@ -16,6 +16,13 @@ import { CapsuleMarks, MachineHead, ShellCover, cn } from "../ui/primitives";
  * uses the same capsule shell as the library grid rather than a second style
  * for the same thing.
  */
+
+/** Screen-reader-only series position for one book in a series shelf. */
+function SeriesPositionLabel({ book, total }: { book: Audiobook; total: number }) {
+  const position = seriesPosition(book, total);
+  if (position === null) return null;
+  return <span className="sr-only">{copy.series.positionInSeries(position.position, position.total)}</span>;
+}
 
 function ShelfCard({
   book,
@@ -116,9 +123,7 @@ export function ShelfRow({
               favourited={favouriteIds.has(book.id)}
               onToggleFavourite={() => onToggleFavourite(book.id)}
             />
-            {showSeriesLabel && seriesLabel(book, shelf.books.length) && (
-              <span className="sr-only">{seriesLabel(book, shelf.books.length)}</span>
-            )}
+            {showSeriesLabel && <SeriesPositionLabel book={book} total={shelf.books.length} />}
           </div>
         ))}
       </div>

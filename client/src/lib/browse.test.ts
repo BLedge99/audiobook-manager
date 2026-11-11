@@ -11,7 +11,7 @@ import {
   filtersFromQuery,
   filtersToQuery,
   isFilterActive,
-  seriesLabel,
+  seriesPosition,
   sortBySeriesPosition,
   toggleFilter,
   type Filters,
@@ -321,13 +321,13 @@ describe("buildSeriesShelves", () => {
   });
 });
 
-describe("seriesLabel", () => {
-  it("labels a known position", () => {
-    expect(seriesLabel(dune, 5)).toBe("Book 1 of 5");
+describe("seriesPosition", () => {
+  it("returns the position data for a known position", () => {
+    expect(seriesPosition(dune, 5)).toEqual({ position: 1, total: 5 });
   });
 
   it("returns null for an unknown position", () => {
-    expect(seriesLabel(emma, 3)).toBeNull();
+    expect(seriesPosition(emma, 3)).toBeNull();
   });
 });
 

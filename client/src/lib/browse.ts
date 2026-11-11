@@ -1,13 +1,12 @@
 import type { Audiobook } from "../types";
-import { copy } from "../copy";
 
 /**
  * Spec 20 — browsing, filtering and shelf grouping.
  *
  * Pure and dependency-free so the rules that decide what a user sees are
  * unit-testable rather than buried in JSX. This is the same discipline spec 14
- * applied to position maths. The one thing it reads is `copy.ts`, which is
- * itself dependency-free.
+ * applied to position maths. No `copy.ts` import here — this module returns
+ * data and the components render the words.
  */
 
 export type FacetKey = "genre" | "author" | "narrator" | "series" | "tag";
@@ -195,10 +194,13 @@ export function buildSeriesShelves(books: Audiobook[], minSize = 1): Shelf[] {
     .sort((a, b) => b.books.length - a.books.length || a.title.localeCompare(b.title));
 }
 
-/** "Book 2 of 5", or null when the position is unknown. */
-export function seriesLabel(book: Audiobook, total: number): string | null {
+/**
+ * Position data for a book in a series, or null when the position is unknown.
+ * The components render this via `copy.series.positionInSeries`.
+ */
+export function seriesPosition(book: Audiobook, total: number): { position: number; total: number } | null {
   if (book.seriesPosition === null || book.seriesPosition === undefined) return null;
-  return copy.series.positionInSeries(book.seriesPosition, total);
+  return { position: book.seriesPosition, total };
 }
 
 // --- URL state ------------------------------------------------------------

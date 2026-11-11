@@ -161,7 +161,7 @@ stuck; say so rather than leaving it ambiguous.
 | 7.8 share the listener logic | done | opencode | ebe23c4 |
 | 7.9 the admin proxy's scope | done | opencode | d2ed1d6 |
 | 8.1 copy out of `position.ts` | done | opencode | 09efff2 |
-| 8.2 copy out of `browse.ts` | not started | | |
+| 8.2 copy out of `browse.ts` | done | opencode | de645f3 |
 | 8.3 copy out of the local modules | not started | | |
 | 9.1 inject the AI adapter | not started | | |
 | 9.2 stop sending the server path | not started | | |
