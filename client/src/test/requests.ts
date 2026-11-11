@@ -35,6 +35,14 @@ export interface RecordedRequest {
   headers: Record<string, string>;
   /** The request body, as a string, or `undefined` when there was none. */
   body?: string;
+  /**
+   * The credentials mode the caller asked for.
+   *
+   * Recorded because it is the difference between a request that carries the
+   * session cookie across origins and one that silently does not -- and the
+   * Android WebView is cross-origin from the server.
+   */
+  credentials?: RequestCredentials;
 }
 
 /** What `stubFetch` hands back. */
@@ -91,6 +99,49 @@ export type FetchHandler = (
 ) => Response | Promise<Response>;
 
 /**
+ * Race a handler's answer against the caller's abort signal.
+ *
+ * A real `fetch` rejects with an `AbortError` when its signal fires, even
+ * though the network request is still in flight. A stub that ignored the
+ * signal would make every deadline untestable -- and the deadline is the whole
+ * point of the bounded fetch.
+ */
+function respondToSignal(
+  init: RequestInit | undefined,
+  answer: Response | Promise<Response>,
+): Promise<Response> {
+  const signal = init?.signal;
+  if (!signal) return Promise.resolve(answer);
+
+  if (signal.aborted) return Promise.reject(abortError());
+
+  return new Promise<Response>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve(answer).then(
+      (response) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(response);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+/** The error a real `fetch` rejects with when its signal fires. */
+function abortError(): Error {
+  if (typeof DOMException === "function") {
+    return new DOMException("The operation was aborted.", "AbortError");
+  }
+  const error = new Error("The operation was aborted.");
+  error.name = "AbortError";
+  return error;
+}
+
+/**
  * Install a `fetch` stub that records what it was asked for.
  *
  * ```ts
@@ -127,8 +178,9 @@ export function stubFetch(handler: FetchHandler): FetchStub {
       method,
       headers,
       body: typeof init?.body === "string" ? init.body : undefined,
+      credentials: init?.credentials,
     });
-    return handler(url, init);
+    return respondToSignal(init, handler(url, init));
   };
 
   vi.stubGlobal("fetch", impl);

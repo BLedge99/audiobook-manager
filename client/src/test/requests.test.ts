@@ -94,6 +94,19 @@ describe("stubFetch", () => {
     }
   });
 
+  it("records the credentials mode the caller asked for", async () => {
+    // The Android WebView is cross-origin from the server, so a request that
+    // does not ask for credentials silently arrives without the session
+    // cookie and 401s. The difference is invisible unless it is recorded.
+    const stub = stubFetch(() => fakeResponse({}));
+    try {
+      await fetch("/api/audiobooks", { credentials: "include" });
+      expect(stub.last()?.credentials).toBe("include");
+    } finally {
+      stub.restore();
+    }
+  });
+
   it("finds the requests that mention a fragment of the URL", async () => {
     const stub = stubFetch(() => fakeResponse([]));
     try {
@@ -121,6 +134,37 @@ describe("stubFetch", () => {
     });
     try {
       await expect(fetch("/api/audiobooks")).rejects.toThrow("network error");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("rejects when the caller aborts, even if the handler never settles", async () => {
+    // A real `fetch` rejects with an AbortError when its signal fires, even
+    // though the network request is still in flight. A stub that ignored the
+    // signal would make every deadline untestable -- and the deadline is the
+    // whole point of the bounded fetch.
+    const stub = stubFetch(() => new Promise<Response>(() => {}));
+    try {
+      const controller = new AbortController();
+      const pending = fetch("/api/audiobooks", { signal: controller.signal });
+      controller.abort();
+      await expect(pending).rejects.toThrow(/abort/i);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("rejects with an AbortError, not a generic failure", async () => {
+    // The caller distinguishes "we gave up" from "the server said no".
+    const stub = stubFetch(() => new Promise<Response>(() => {}));
+    try {
+      const controller = new AbortController();
+      const pending = fetch("/api/audiobooks", { signal: controller.signal });
+      controller.abort();
+      await expect(pending).rejects.toThrowError(
+        expect.objectContaining({ name: "AbortError" }),
+      );
     } finally {
       stub.restore();
     }

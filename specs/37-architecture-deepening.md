@@ -129,8 +129,8 @@ stuck; say so rather than leaving it ambiguous.
 | Step | Status | Claimed by | Commit |
 |---|---|---|---|
 | 0.1 typecheck into `make test` | done | opencode | (this commit) |
-| 0.2 client request test helper | done | opencode | (next commit) |
-| 1.1 name the request guarantees | not started | | |
+| 0.2 client request test helper | done | opencode | fe5b2ad |
+| 1.1 name the request guarantees | done | opencode | (next commit) |
 | 1.2 `useLibrary` + `useBrowse` | not started | | |
 | 1.3 the components | not started | | |
 | 1.4 the admin client | not started | | |
@@ -437,23 +437,43 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   signal?: AbortSignal;
   timeoutMs?: number;
+  keepalive?: boolean;
 }
 export async function request<T>(path: string, options?: RequestOptions): Promise<T>
 export async function requestRaw(path: string, options?: RequestOptions): Promise<Response>
 ```
 
 It composes the pieces that already exist — `boundedFetch`, `apiUrl`,
-`sessionHeaders`, `profileHeaders`, `responseErrorText` — and owns nothing
-new. `request` returns parsed JSON (or `undefined` on 204); `requestRaw`
-returns the `Response` for the few callers that need the body as a stream.
+`sessionHeaders`, `responseErrorText` — and owns nothing new. `request`
+returns parsed JSON (or `undefined` on 204); `requestRaw` returns the
+`Response` for the few callers that need the body as a stream, and does **not**
+throw on a failure, because a conditional GET treats a `304` as "nothing
+changed" rather than as an error.
+
+`keepalive` is an option because the progress saver needs it: the browser
+cancels in-flight requests on navigation, and the final save is exactly the
+case where the app is being closed.
+
+**Note (implemented):** `sessionHeaders()` already carries the profile
+header, so `request` uses it rather than `profileHeaders()` — one call, and
+the session header is attached explicitly rather than depending on the global
+fetch shim. The shim checks for the header before adding its own, so nothing
+is duplicated.
+
+**Note (implemented):** the shared `stubFetch` helper from step 0.2 had to
+learn to honour the abort signal, or the deadline guarantee would have been
+untestable — a stub that ignored the signal makes every timeout look like it
+passed. It now rejects with an `AbortError`, the way a real `fetch` does.
+That change is in step 0.2's helper, with its own tests.
 
 **Verify:** `cd client && npm test -- request`
 
 **Definition of done**
-- [ ] Five guarantee tests exist and pass.
-- [ ] Each test fails if the corresponding guarantee is removed (prove one of
-      them by breaking it, then restore it).
-- [ ] `request.ts` imports no React and touches no DOM.
+- [x] Five guarantee tests exist and pass.
+- [x] Each test fails if the corresponding guarantee is removed (proved two:
+      removing `credentials: "include"` failed the authentication test, and
+      removing the timeout failed the bounded test — both restored).
+- [x] `request.ts` imports no React and touches no DOM.
 
 ### Step 1.2 — Point `useLibrary` and `useBrowse` at it
 
