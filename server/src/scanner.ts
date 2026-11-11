@@ -289,27 +289,22 @@ export function createScanManager(prisma: PrismaClient) {
         const coverImagePath = await saveCover(primary, coverDir);
         const existingRow = await prisma.mediaItem.findUnique({
           where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
-          select: { id: true, metadataSource: true, coverImagePath: true, enrichmentStatus: true },
+          select: { id: true, coverImagePath: true, enrichmentStatus: true },
         });
         const staleCover = existingRow?.coverImagePath
           ? !(await coverFileExists(existingRow.coverImagePath))
           : false;
+        // ADR 028: users protect fields with a FieldOverride, not a provenance
+        // sentinel. Nothing writes metadataSource === "user" any more.
         const overrideRows = existingRow
           ? await prisma.fieldOverride.findMany({ where: { mediaItemId: existingRow.id }, select: { field: true } })
           : [];
         const overrideFieldNames = overrideRows.map((row) => row.field);
-        const locked = new Set<string>(overrideFieldNames);
-        const legacyLock = existingRow?.metadataSource === "user" && overrideRows.length === 0;
-        if (legacyLock) {
-          for (const field of ["title", "author", "narrator", "releaseDate", "genre", "coverImagePath"]) {
-            locked.add(field);
-          }
-        }
         const hasEnrichedLayer = existingRow?.enrichmentStatus === "applied";
         // The scanner writes embedded values. It may set a field only when no
         // human override protects it and no enriched value wins over it.
         const scannerCanWrite = (field: string) =>
-          canScannerWrite(field, legacyLock ? locked : overrideFieldNames, hasEnrichedLayer);
+          canScannerWrite(field, overrideFieldNames, hasEnrichedLayer);
 
         // Provenance is refreshed only when the scanner is the source of the
         // content it writes; an enriched item keeps its provenance.
