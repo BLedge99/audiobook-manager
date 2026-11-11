@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
+import { isDemoMode } from "../auth/demo-policy";
 import { RecommendationService, DEFAULT_PAGE_SIZE } from "../metadata/recommend-service";
 
 const MAX_PAGE_SIZE = 20;
@@ -110,7 +111,7 @@ export async function registerDiscoverRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo" && request.auth?.session.profileId == null) return fail(reply, 401, "auth_required");
+    if (isDemoMode(accountExperience) && request.auth?.session.profileId == null) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const exists = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });

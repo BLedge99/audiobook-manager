@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
 import { createTag, mergeTags, renameTag } from "../metadata/tags";
+import { isDemoMode } from "../auth/demo-policy";
 
 export interface TaxonomyRouteDeps {
   prisma: PrismaClient;
@@ -50,7 +51,7 @@ export async function registerTaxonomyRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const body = request.body as { slug: string; name: string; parentId?: number; sortOrder?: number };
     const existing = await prisma.genre.findUnique({ where: { slug: body.slug } });
     if (existing) return fail(reply, 409, "genre_slug_taken");
@@ -75,7 +76,7 @@ export async function registerTaxonomyRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const genre = await prisma.genre.findUnique({ where: { id } });
@@ -86,7 +87,7 @@ export async function registerTaxonomyRoutes(
   app.delete<{ Params: { id: string } }>("/api/genres/:id", {
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const genre = await prisma.genre.findUnique({ where: { id } });
@@ -118,7 +119,7 @@ export async function registerTaxonomyRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const body = request.body as { name: string };
     const result = await createTag(prisma, body.name, optionalProfileId(request));
     if ("reason" in result) return fail(reply, 409, "tag_name_rejected", { reason: result.reason });
@@ -136,7 +137,7 @@ export async function registerTaxonomyRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const result = await renameTag(prisma, id, (request.body as { name: string }).name);
@@ -147,7 +148,7 @@ export async function registerTaxonomyRoutes(
   app.delete<{ Params: { id: string } }>("/api/tags/:id", {
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const tag = await prisma.tag.findUnique({ where: { id } });
@@ -168,7 +169,7 @@ export async function registerTaxonomyRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const { targetTagId } = request.body as { targetTagId: number };
@@ -181,3 +182,4 @@ export async function registerTaxonomyRoutes(
     return { moved: result.moved, mergedInto: targetTagId };
   });
 }
+

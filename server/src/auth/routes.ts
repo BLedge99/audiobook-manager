@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Profile } from "@prisma/client";
 import { fail } from "../http-errors";
+import { isDemoMode } from "./demo-policy";
 import {
   SESSION_COOKIE,
   SESSION_TTL_MS,
@@ -109,7 +110,7 @@ export async function registerAuthRoutes(
   auth: AuthService,
   options: RegisterAuthOptions,
 ): Promise<void> {
-  const demoMode = () => (options.accountExperienceResolver?.() ?? options.accountExperience) === "demo";
+  const demoMode = () => isDemoMode(options.accountExperienceResolver?.() ?? options.accountExperience);
   // The device secret is presented only after the OS biometric prompt has
   // released it from the native Vault. It is exchanged for an ordinary,
   // revocable profile session and is never returned again.

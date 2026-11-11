@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
 import { publicMediaItem } from "../book-payload";
 import type { EnrichmentManager } from "../metadata/run";
+import { isDemoMode } from "../auth/demo-policy";
 
 export interface EnrichmentRouteDeps {
   prisma: PrismaClient;
@@ -31,7 +32,7 @@ export async function registerEnrichmentRoutes(
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const candidates = await enrichment.enrichOneNow(id);
@@ -51,17 +52,17 @@ export async function registerEnrichmentRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const body = (request.body ?? {}) as { mediaItemId?: number; force?: boolean };
     return enrichment.enqueue({ mediaItemId: body.mediaItemId, force: body.force });
   });
 
   app.get("/api/enrichment/status", async (_request, reply) =>
-    accountExperience === "demo" ? fail(reply, 404, "not_found") : enrichment.status());
+    isDemoMode(accountExperience) ? fail(reply, 404, "not_found") : enrichment.status());
 
   /** The spec 16 review queue: everything below the auto-apply threshold. */
   app.get("/api/enrichment/review-queue", async (_request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const items = await prisma.mediaItem.findMany({
       where: { enrichmentStatus: "review" },
       orderBy: { updatedAt: "desc" },
@@ -69,3 +70,4 @@ export async function registerEnrichmentRoutes(
     return items.map(publicMediaItem);
   });
 }
+

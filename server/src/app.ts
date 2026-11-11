@@ -25,6 +25,7 @@ import { RecommendationService } from "./metadata/recommend-service";
 import { fail } from "./http-errors";
 import { AuthService } from "./auth/service";
 import { isAdminRoute } from "./auth/policy";
+import { isDemoMode, isPublicApiPath } from "./auth/demo-policy";
 import { PasskeyService, passkeyConfigFromEnv, registerPasskeyRoutes, type PasskeyConfig } from "./auth/passkeys";
 import { registerAuthRoutes } from "./auth/routes";
 import { SESSION_HEADER, sessionTokenFromRequest } from "./auth/session";
@@ -59,31 +60,6 @@ export interface BuildAppOptions {
 }
 
 /** Test seam for proving that the family listener has no admin surface. */
-
-/** Public API paths; everything else under `/api/` needs a session. */
-function isPublicApiPath(path: string): boolean {
-  // `/api/auth/:provider/authorize` and `/api/auth/:provider/callback` are the
-  // two legs of an OAuth flow that must complete before a session exists
-  // (spec 32 / ADR 023). They carry no credentials; the authorize leg redirects
-  // away to the provider and the callback leg answers the provider.
-  const rest = path.slice("/api/auth".length);
-  const segments = rest.split("/").filter(Boolean);
-  const isOAuthFlowPath = segments.length === 2 && (segments[1] === "authorize" || segments[1] === "callback");
-  return (
-    path === "/api/health" ||
-    path === "/api/config" ||
-    path === "/api/auth/login" ||
-    path === "/api/auth/register-profile" ||
-    path === "/api/auth/signup" ||
-    path === "/api/auth/providers" ||
-    path === "/api/auth/accounts" ||
-    path === "/api/auth/claim" ||
-    path === "/api/auth/logout" ||
-    path === "/api/auth/devices/session" ||
-    path.startsWith("/api/auth/passkeys/login/") ||
-    isOAuthFlowPath
-  );
-}
 
 function headerProfileId(request: FastifyRequest): number | null {
   const profileId = Number(request.headers["x-profile-id"]);
@@ -130,7 +106,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     now: options.now,
   });
   const authEnabled = auth.enabled;
-  if (accountExperience === "demo" && !authEnabled) {
+  if (isDemoMode(accountExperience) && !authEnabled) {
     throw new Error("APP_PASSWORD must be configured when ACCOUNT_EXPERIENCE=demo");
   }
   const mediaTokenSecret = options.mediaTokenSecret ?? process.env.MEDIA_TOKEN_SECRET ??
@@ -277,7 +253,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // routes (which require a session-bound profile) stay unreachable for them.
     // The decision is recorded in spec 33; local behaviour is unchanged.
     if (!request.auth) return fail(reply, 401, "auth_required");
-    if (accountExperience === "demo" && isAdminRoute(request.method, path)) {
+    if (isDemoMode(accountExperience) && isAdminRoute(request.method, path)) {
       return fail(reply, 404, "not_found");
     }
     if (isAdminRoute(request.method, path) && request.auth.role !== "admin") {
@@ -337,7 +313,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     secureCookie,
     accountExperience,
     accountExperienceResolver: () => accountExperience,
-    emailSignUpAllowed: accountExperience === "demo",
+    emailSignUpAllowed: isDemoMode(accountExperience),
   });
   await registerPasskeyRoutes(app, passkeys, auth, {
     secureCookie,
@@ -550,7 +526,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   function optionalProfileId(request: FastifyRequest): number | null {
     const sessionProfileId = request.auth?.session.profileId ?? null;
     if (sessionProfileId !== null) return sessionProfileId;
-    if (accountExperience === "demo") return null;
+    if (isDemoMode(accountExperience)) return null;
     if (request.auth && request.auth.via !== "household") return null;
     const profileId = headerProfileId(request);
     return profileId;
@@ -558,7 +534,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   /** In demo mode an account scope must always come from an authenticated profile session. */
   function requireAccountProfileId(request: FastifyRequest, reply: FastifyReply): number | null {
-    if (accountExperience === "demo") {
+    if (isDemoMode(accountExperience)) {
       const profileId = request.auth?.session.profileId;
       if (profileId === null || profileId === undefined) {
         fail(reply, 401, "auth_required");
@@ -604,11 +580,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Development without APP_PASSWORD intentionally has no auth boundary and
     // therefore needs no bearer token on media URLs.
     if (!authEnabled) return { token: null, expiresAt: null };
-    const profileId = accountExperience === "demo"
+    const profileId = isDemoMode(accountExperience)
       ? requireAccountProfileId(request, reply)
       : optionalProfileId(request);
     if (profileId === null) {
-      return accountExperience === "demo" && reply.sent ? undefined : fail(reply, accountExperience === "demo" ? 401 : 400, accountExperience === "demo" ? "auth_required" : "profile_required");
+      return isDemoMode(accountExperience) && reply.sent ? undefined : fail(reply, isDemoMode(accountExperience) ? 401 : 400, isDemoMode(accountExperience) ? "auth_required" : "profile_required");
     }
     if (!mediaTokenSecret || Buffer.byteLength(mediaTokenSecret, "utf8") < 32) {
       return fail(reply, 503, "media_token_not_configured");
@@ -650,7 +626,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     });
     if (!item) return fail(reply, 404, "audiobook_not_found");
-    if (accountExperience === "demo" && !(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
+    if (isDemoMode(accountExperience) && !(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
     // Spec 11: strip filePath / coverImagePath (and track paths) from the payload.
     // One book shape everywhere: same contributors/genres/tags mapping as the lists.
     return publicBookPayload(item);
@@ -666,7 +642,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const roots = request.body?.rootId
       ? await prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
       : await prisma.libraryRoot.findMany();
@@ -690,7 +666,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.get("/api/scan/status", async (_request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const roots = await prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { id: "asc" } });
     return roots.map((root) => ({
       rootId: root.id,
@@ -809,7 +785,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
@@ -840,7 +816,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
@@ -918,7 +894,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/tags", {
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
-    if (accountExperience === "demo" && request.auth?.session.profileId == null) return fail(reply, 401, "auth_required");
+    if (isDemoMode(accountExperience) && request.auth?.session.profileId == null) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({
@@ -931,7 +907,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     });
     if (!item) return fail(reply, 404, "audiobook_not_found");
-    if (accountExperience === "demo" && !(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
+    if (isDemoMode(accountExperience) && !(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
 
     const overridden = new Set(item.overrides.map((row) => row.field));
     return {
@@ -1000,7 +976,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
@@ -1120,7 +1096,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.post<{ Params: { id: string } }>("/api/audiobooks/:id/metadata/reset", {
     schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
@@ -1211,7 +1187,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   /** Every metadata route requires a profile; favourites are per profile. */
   function requireProfileId(request: FastifyRequest): number | null {
-    return request.auth?.session.profileId ?? (accountExperience === "demo" ? null : optionalProfileId(request));
+    return request.auth?.session.profileId ?? (isDemoMode(accountExperience) ? null : optionalProfileId(request));
   }
 
   app.put<{ Params: { id: string } }>("/api/audiobooks/:id/favourite", {
@@ -1288,7 +1264,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // AI: optional metadata match assistant (works only if LM Studio is up)
   app.post<{ Params: { id: string } }>("/api/audiobooks/:id/ai-suggest", async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id } });
@@ -1440,7 +1416,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     followsServerLibrary: true,
   } as const;
   app.get("/api/profiles", async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
     return prisma.profile.findMany({ orderBy: { createdAt: "asc" }, select: profileSummary });
   });
@@ -1456,7 +1432,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
     const name = request.body?.name?.trim();
     if (!name) return fail(reply, 400, "profile_name_required");
@@ -1482,7 +1458,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
     await prisma.profile.delete({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     return reply.code(204).send();

@@ -156,7 +156,7 @@ stuck; say so rather than leaving it ambiguous.
 | 7.3 discover and wishlist routes | done | opencode | e397a05 |
 | 7.4 library and membership routes | done | opencode | e7308ff |
 | 7.5 enrichment routes | done | opencode | a936235 |
-| 7.6 the demo-mode policy | not started | | |
+| 7.6 the demo-mode policy | done | opencode | 6bdc76f |
 | 7.7 the remaining routes | not started | | |
 | 7.8 share the listener logic | not started | | |
 | 7.9 the admin proxy's scope | not started | | |

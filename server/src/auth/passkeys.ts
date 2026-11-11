@@ -10,6 +10,7 @@ import {
   type RegistrationResponseJSON,
 } from "@simplewebauthn/server";
 import { fail } from "../http-errors";
+import { isDemoMode } from "./demo-policy";
 import type { AuthService, AuthContext, SessionMetadata } from "./service";
 import { AuthFailure } from "./service";
 import { deviceLabelFromUserAgent } from "./session";
@@ -432,7 +433,7 @@ export async function registerPasskeyRoutes(
   auth: AuthService,
   options: RegisterAuthOptions,
 ): Promise<void> {
-  const demoMode = () => (options.accountExperienceResolver?.() ?? options.accountExperience) === "demo";
+  const demoMode = () => isDemoMode(options.accountExperienceResolver?.() ?? options.accountExperience);
   app.post<{ Body: { profileId?: number } }>("/api/auth/passkeys/login/options", {
     schema: {
       body: {

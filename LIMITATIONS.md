@@ -595,6 +595,14 @@ Mitigations in place ([`decisions/014-webview-http-scheme.md`](decisions/014-web
 - Session cookies are HttpOnly/Secure/SameSite; tokens are hashed at rest; `cleanupExpired()` removes expired sessions.
 
 The genuinely correct fix — terminate TLS on the server and trust the CA on each phone — is recorded in ADR 014 as the destination if the app ever leaves a trusted LAN. This risk is assessed in the production-demo DPIA ([`docs/dpia.md`](docs/dpia.md)) and is covered by the breach procedure ([`docs/breach-procedure.md`](docs/breach-procedure.md)) should a session be intercepted.
+
+**Two write endpoints are not hidden in the demo (documented 2026-11-11, spec 37 step 7.6).** The demo-mode policy table (`server/src/auth/demo-policy.ts`) treats a route as demo-hidden only when its handler/module checks `isDemoMode`. Two destructive endpoints have no such check, so a demo account with a valid session can call them:
+
+- `POST /api/metadata/reset-all` — deletes **every** `FieldOverride` row in the deployment and resets all books' `enrichmentStatus` to pending. Intended as an admin/testing convenience in household mode; in the shared demo database this would wipe user-set metadata for every account.
+- `POST /api/auth/accounts/:id/unlock` — unlocks a locked profile without admin scope beyond the caller's own session.
+
+Neither was changed in this step: hiding them is a policy decision for the demo operator, and silently changing what authenticated users can do is not acceptable. Until the operator decides (gate both behind the admin listener, or hide them in demo), treat them as reachable in the demo by any signed-in account. Both are covered by the household auth boundary (a session is required), just not by the demo policy.
+
 ## 5. Developer-experience friction
 
 - **`make local` did not crash the server. It powered off the virtual

@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
 import { publicBookPayload } from "../book-payload";
 import { addBookToProfile, libraryEntriesFor, removeBookFromProfile } from "../library-membership";
+import { isDemoMode } from "../auth/demo-policy";
 
 export interface LibraryRouteDeps {
   prisma: PrismaClient;
@@ -38,10 +39,10 @@ export async function registerLibraryRoutes(
   app.get("/api/audiobooks", async (request, reply) => {
     // Spec 20: the browse UI needs genres, series and custom tags on the list
     // payload -- fetching them per-book would be an N+1 request per shelf.
-    const profileId = accountExperience === "demo"
+    const profileId = isDemoMode(accountExperience)
       ? requireAccountProfileId(request, reply)
       : optionalProfileId(request);
-    if (accountExperience === "demo" && profileId === null) return;
+    if (isDemoMode(accountExperience) && profileId === null) return;
     // Spec 27: a profile sees its own library, not the whole server's.
     //
     // With no profile there is no caller to scope to, so the whole server
@@ -100,10 +101,10 @@ export async function registerLibraryRoutes(
    * the tab never has to join two lists itself.
    */
   app.get("/api/server-library", async (request, reply) => {
-    const profileId = accountExperience === "demo"
+    const profileId = isDemoMode(accountExperience)
       ? requireAccountProfileId(request, reply)
       : optionalProfileId(request);
-    if (accountExperience === "demo" && profileId === null) return;
+    if (isDemoMode(accountExperience) && profileId === null) return;
     const items = await prisma.mediaItem.findMany({
       orderBy: { title: "asc" },
       include: {
@@ -172,7 +173,7 @@ export async function registerLibraryRoutes(
   });
 
   app.get("/api/library-roots", async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     // Conditional for the same reason as the library, and separately: scan
     // state changes during a scan even when no book does, so sharing one tag
     // with `/api/audiobooks` would hide a running scan.
@@ -191,7 +192,7 @@ export async function registerLibraryRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const rootPath = request.body.path?.trim();
     if (!rootPath) return fail(reply, 400, "library_path_required");
     try {
@@ -216,10 +217,11 @@ export async function registerLibraryRoutes(
       },
     },
   }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     await prisma.libraryRoot.delete({ where: { id } });
     return reply.code(204).send();
   });
 }
+
