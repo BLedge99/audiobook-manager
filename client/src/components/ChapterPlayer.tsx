@@ -15,6 +15,7 @@ import {
   parseSegments,
   timeLabel,
   totalDuration as computeTotalDuration,
+  type Segment,
 } from "../lib/position";
 import { headingText, remainingLabel } from "../lib/segmentCopy";
 import {
@@ -23,7 +24,7 @@ import {
   planPosition,
   planSegment,
   previousSegmentIndex,
-  segmentEnd,
+  reachedSegmentEnd,
 } from "../lib/playback";
 import { usePlayerSource } from "../lib/usePlayerSource";
 
@@ -171,9 +172,9 @@ export function ChapterPlayer({
   // resolved identity has not changed (a renewed media token).
   const forceReloadRef = useRef(false);
   const tokenRetriedRef = useRef(false);
-  // Absolute book position at which "end of chapter" should stop playback.
-  // A boundary, not an index, so it can be recomputed when the listener seeks.
-  const stopAtRef = useRef<number | null>(null);
+  // Which segment "end of chapter" stops playback at, kept as the segment
+  // so the check can use reachedSegmentEnd (which guards zero-duration segs).
+  const stopSegmentRef = useRef<Segment | null>(null);
   const sleepTimerRef = useRef<number | null>(null);
   const sessionRef = useRef<{ fromPosition: number; startedAt: string } | null>(null);
 
@@ -319,7 +320,7 @@ export function ChapterPlayer({
     setPosition(next);
 
     if (options.play !== undefined) setIntent(options.play);
-    if (stopAtRef.current !== null) stopAtRef.current = segmentEnd(targetPlan.segment);
+    if (stopSegmentRef.current !== null) stopSegmentRef.current = targetPlan.segment;
 
     const audio = audioRef.current;
     const loaded = loadedRef.current;
@@ -395,14 +396,14 @@ export function ChapterPlayer({
       window.clearTimeout(sleepTimerRef.current);
       sleepTimerRef.current = null;
     }
-    stopAtRef.current = null;
+    stopSegmentRef.current = null;
     setSleepMinutes(minutes);
     if (minutes === null) return;
     if (minutes === -1) {
       // "End of chapter" is the end of the chapter they are in *now*, so it is
       // recomputed on every seek -- going back a chapter arms the new one.
       const current = planPosition(book, segments, kind, bookPosition());
-      stopAtRef.current = segmentEnd(current.segment);
+      stopSegmentRef.current = current.segment;
       return;
     }
     sleepTimerRef.current = window.setTimeout(() => {
@@ -524,10 +525,10 @@ export function ChapterPlayer({
 
       // "End of chapter" is detected here, from the position, because a chapter
       // book plays straight through a boundary inside one file and never fires
-      // `ended`. This is the only place that can stop it.
-      const stopAt = stopAtRef.current;
-      if (stopAt !== null && at >= stopAt - 0.05) {
-        stopAtRef.current = null;
+      // `ended`. This is the only place that can stop it. reachedSegmentEnd
+      // keeps the zero-duration guard: an interstitial with no audio never stops.
+      if (reachedSegmentEnd(stopSegmentRef.current, at)) {
+        stopSegmentRef.current = null;
         setSleepMinutes(null);
         setIntent(false);
         audio.pause();
