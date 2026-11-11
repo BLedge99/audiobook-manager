@@ -34,7 +34,9 @@ It is enabled by `ADMIN_PROXY=true`, set by that deployment's compose
 (`docker-compose.yml`) and a bare `node server/index.js` with no flag — the
 family listener registers **no** `/admin` or `/api/admin/*` route at all and
 answers 404 for both. The admin panel is reached on its own port
-(`docker-compose.admin.yml`).
+(own `ADMIN_PORT`; the base household compose publishes it — the
+`docker-compose.admin.yml` override existed briefly and was removed
+2026-11-11 as redundant).
 
 ## Consequences
 

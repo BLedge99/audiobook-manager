@@ -181,10 +181,10 @@ The server exposes a REST API over HTTP. All route inputs are validated with Fas
 |--------|------------------|------------|
 | Database | SQLite (`file:/app/data/library.db`) | PostgreSQL (managed, e.g. Supabase) via `DATABASE_URL` |
 | Reverse proxy | None (client :5173, server :3000 directly) | Caddy terminates HTTPS at `books.home.arpa`; proxies to app |
-| Server port | `3000` (plus admin `3100` opt-in) | `3000` remains available to Android wrapper; web uses `443` via Caddy |
+| Server port | `3000` (plus admin on its own `ADMIN_PORT`, default `3100`, published by the base compose) | `3000` remains available to Android wrapper; web uses `443` via Caddy |
 | Client | Vite dev server on `5173` | Production build served by Caddy |
 | Auth | Single shared household password (`APP_PASSWORD`, defaults `household`) | Required `APP_PASSWORD`; optional OAuth (Google/GitHub) + email/password for demo audience |
-| Admin panel | Opt-in via `docker-compose.admin.yml` | Separate `ADMIN_PANEL_PASSWORD`; operator dashboard |
+| Admin panel | Published on its own `ADMIN_PORT` (default `3100`) by the base compose; loopback-only on the host | Separate `ADMIN_PANEL_PASSWORD`; operator dashboard |
 | Cookies | `COOKIE_SECURE` not set | `COOKIE_SECURE: "true"`; `TRUST_PROXY` set to Caddy internal IP |
 | WebAuthn | `localhost` RP id / origin | `books.home.arpa` RP id / `https://books.home.arpa` origin |
 | Media files | Mounted read-only (`./test:/media:ro` or local library roots) | `${MEDIA_PATH}` mounted read-only; durable audio in private Supabase Storage bucket (operator uploads) |

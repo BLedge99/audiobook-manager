@@ -53,6 +53,9 @@ services:
     # ADMIN_PROXY is deliberately NOT set here. Reach the panel on ADMIN_PORT.
     environment:
       - PORT=${PORT:-3000}
+      # The admin port must be passed through: the ports mapping above uses
+      # ADMIN_PORT for both sides, but the server reads it from the environment.
+      - ADMIN_PORT=${ADMIN_PORT:-3100}
       - DATABASE_URL=file:/app/data/library.db
       - LIBRARY_ROOT=/data/audiobooks
       # The E2E security suite asserts that unauthenticated API calls are

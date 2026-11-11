@@ -148,8 +148,13 @@ A **dedicated admin password**, independent of every profile password:
 
 ### Compose / configuration
 
-- The base `docker-compose.yml` does not publish `ADMIN_PORT`; the operator
-  opts in by adding `docker-compose.admin.yml` to the compose command.
+- The base `docker-compose.yml` publishes `ADMIN_PORT` (default `3100`) and
+  passes it to the server's environment, so the panel is reachable on its own
+  port out of the box. The published port is loopback-only on the host under
+  WSL2 NAT — it is not proxied to the LAN — and the family listener registers
+  no admin route (ADR 029). The separate `docker-compose.admin.yml` opt-in was
+  removed 2026-11-11: it published the same port with nothing to configure,
+  so it only added a second, drifting way to do the same thing.
 - `ADMIN_PANEL_PASSWORD` joins `APP_PASSWORD` in the documented private
   `.env` set.
 - The panel's client build is a separate Vite entry (`client/admin/`), built
