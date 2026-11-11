@@ -13,8 +13,6 @@ export type FacetKey = "genre" | "author" | "narrator" | "series" | "tag";
 
 export type Filters = Partial<Record<FacetKey, string[]>>;
 
-export const EMPTY_FILTERS: Filters = {};
-
 export function isFilterActive(filters: Filters): boolean {
   return Object.values(filters).some((values) => Boolean(values?.length));
 }
