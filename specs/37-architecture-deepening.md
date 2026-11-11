@@ -166,7 +166,7 @@ stuck; say so rather than leaving it ambiguous.
 | 9.1 inject the AI adapter | done | opencode | ba647ae |
 | 9.2 stop sending the server path | done | opencode | 912102e |
 | 10.1 move the provider clients | done | opencode | 1eb6c2b |
-| 10.2 one similarity function | not started | | |
+| 10.2 one similarity function | done | opencode | 1a6b845 |
 | 10.3 clean the ADR 008 artefact | not started | | |
 
 The `X` items in "Cross-cutting work" are tracked the same way; add a row

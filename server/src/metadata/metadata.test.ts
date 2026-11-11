@@ -20,6 +20,8 @@ import {
 } from "./types";
 import { mapLibrivoxBook, titleVariants } from "./librivox";
 import { mapAudnexusBook, mapAudnexusGenres, parseSequence } from "./audnexus";
+import { searchOpenLibrary } from "./openlibrary";
+import { searchGoogleBooks } from "./googlebooks";
 import { isPublicCoverUrl, coverFilename } from "./cover";
 import { rowToCandidate, dedupeCandidates } from "./apply";
 
@@ -807,5 +809,36 @@ describe("selectCoverSource", () => {
   it("carries the provider key so the filename records where art came from", () => {
     const result = selectCoverSource([candidate("googlebooks", 0.5, "https://x/y.jpg", "abc123")]);
     expect(result?.identifier).toBe("abc123");
+  });
+});
+describe("provider confidence is computed by the shared similarity (spec 37, step 10.2)", () => {
+  const query = { title: "The Awakening", author: "Kate Chopin", authorIsUnknown: false, filePath: "books/awakening.mp3", hintText: "" };
+
+  it("LibriVox scores candidates with scoreMatch", () => {
+    const mapped = mapLibrivoxBook({ title: "The Awakening", authors: [{ first_name: "Kate", last_name: "Chopin" }] } as Parameters<typeof mapLibrivoxBook>[0], query);
+    expect(mapped?.confidence).toBe(scoreMatch(query, "The Awakening", "Kate Chopin"));
+  });
+
+  it("Audnexus scores candidates with scoreMatch", () => {
+    const mapped = mapAudnexusBook({ asin: "B01", title: "The Awakening", authors: [{ name: "Kate Chopin" }] } as Parameters<typeof mapAudnexusBook>[0], query);
+    expect(mapped?.confidence).toBe(scoreMatch(query, "The Awakening", "Kate Chopin"));
+  });
+
+  it("Open Library scores candidates with similarity", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      docs: [{ title: "The Awakening", author_name: ["Kate Chopin"] }],
+    }), { status: 200 })));
+    const [candidate] = await searchOpenLibrary("The Awakening");
+    expect(candidate.confidence).toBe(similarity("The Awakening", "The Awakening"));
+    vi.unstubAllGlobals();
+  });
+
+  it("Google Books scores candidates with similarity", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      items: [{ volumeInfo: { title: "The Awakening", authors: ["Kate Chopin"] } }],
+    }), { status: 200 })));
+    const [candidate] = await searchGoogleBooks("The Awakening");
+    expect(candidate.confidence).toBe(similarity("The Awakening", "The Awakening"));
+    vi.unstubAllGlobals();
   });
 });
