@@ -14,7 +14,7 @@
 | 3 | Right of access & data portability — self-service export endpoint | Art. 15, 20 | P0 | **Complete** |
 | 4 | Right to erasure — self-service account deletion endpoint | Art. 17 | P0 | **Complete** |
 | 5 | Right to rectification & restriction — edit/delete individual entries | Art. 16, 18 | P1 | **Complete** (server-side; restriction via `restrictedAt` needs a migration — follow-up) |
-| 6 | Retention & storage limitation — schedule + automated cleanup | Art. 5(1)(e) | P0 | **Complete** |
+| 6 | Retention & storage limitation — schedule + automated cleanup | Art. 5(1)(e) | P0 | **Complete** (enforcement centralized in `server/src/gdpr/personal-data.ts`, spec 37 Phase 6) |
 | 7 | Third-party processors & DPAs — inventory + confirm | Art. 28 | P1 | **Complete** |
 | 8 | Security & breach response — Android TLS, DPIA, breach procedure | Art. 32–35 | P0/P1 | **Complete** (Android TLS documented as accepted risk with mitigations in ADR 014 + LIMITATIONS §4) |
 | 9 | Spec & documentation updates — AGENTS.md, LIMITATIONS.md, specs | AGENTS.md | P1 | **Complete** |

@@ -2,7 +2,7 @@
 
 **Controller:** audiobook-manager (household / production demo)  
 **Contact:** See `docs/gdpr-governance.md`  
-**Last updated:** 2026-11-10  
+**Last updated:** 2026-11-11  
 **Status:** Draft — aligns with `server/prisma/schema.prisma` and `server/prisma/sqlite/schema.prisma`
 
 This RoPA maps every processing activity that involves personal data, its purpose, the personal-data categories, the lawful basis, retention, and recipients. It is the authoritative record referenced by `docs/gdpr-governance.md` and the GDPR audit (`GDPR-AUDIT.md`).
@@ -16,6 +16,13 @@ that owns the tables. This is a technical measure under Art. 32; it changes no
 lawful basis, no retention period and no data-subject right. See
 [`docs/production-database-access-control.md`](production-database-access-control.md),
 spec 35 and ADR 026.
+
+**One definition of personal data.** The profile-owned personal-data table list,
+the 24-month inactive-profile retention rule, and the export/erasure/retention
+operations are defined in one module, `server/src/gdpr/personal-data.ts`; the
+API export and erasure routes and the retention purge read it, so they cannot
+drift apart (spec 37, Phase 6). The schema-guard test keeps that list aligned
+with `profileId`-bearing models in the schema.
 
 ---
 
