@@ -152,7 +152,7 @@ stuck; say so rather than leaving it ambiguous.
 | 6.1 the personal-data list | done | opencode | 4b60a86 |
 | 6.2 the schema guard | done | opencode | 51eface |
 | 7.1 the route table as a test + schemas | done | opencode | 53b57a4 |
-| 7.2 taxonomy routes | not started | | |
+| 7.2 taxonomy routes | done | opencode | 1b6a42e |
 | 7.3 discover and wishlist routes | not started | | |
 | 7.4 library and membership routes | not started | | |
 | 7.5 enrichment routes | not started | | |

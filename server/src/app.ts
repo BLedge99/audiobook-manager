@@ -8,6 +8,7 @@ import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { createScanManager } from "./scanner";
 import type { ScanManager } from "./scanner";
+import { registerTaxonomyRoutes } from "./routes/taxonomy";
 import { addBookToProfile, libraryEntriesFor, removeBookFromProfile } from "./library-membership";
 import { LMStudioAdapter } from "./ai/llm";
 import { COVER_DIR } from "./enrichment";
@@ -20,7 +21,7 @@ import { runChain } from "./metadata/chain";
 import { trackTitleOverrideField } from "./metadata/chapters";
 import { buildQuery, EnrichmentManager } from "./metadata/run";
 import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy-service";
-import { createTag, mergeTags, renameTag, setBookTags } from "./metadata/tags";
+import { setBookTags } from "./metadata/tags";
 import { RecommendationService, DEFAULT_PAGE_SIZE } from "./metadata/recommend-service";
 import { fail } from "./http-errors";
 import { AuthService } from "./auth/service";
@@ -1245,85 +1246,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Spec 17 — taxonomy, tag suite, per-field overrides
   // ---------------------------------------------------------------------
 
-  app.get("/api/genres", async () => {
-    const genres = await prisma.genre.findMany({
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      include: { _count: { select: { items: true } } },
-    });
-    const byId = new Map(genres.map((genre) => [genre.id, genre]));
-    // Build the two-level tree in one pass so the client does not have to.
-    const roots = genres.filter((genre) => genre.parentId === null);
-    return roots.map((root) => ({
-      ...root,
-      children: genres
-        .filter((genre) => genre.parentId === root.id)
-        .map((child) => ({ ...child, count: child._count.items, parent: undefined, _count: undefined })),
-      count: root._count.items,
-    }));
-  });
-
-  app.post("/api/genres", {
-    schema: {
-      body: {
-        type: "object",
-        properties: {
-          slug: { type: "string", minLength: 1, maxLength: 80, pattern: "^[a-z0-9-]+$" },
-          name: { type: "string", minLength: 1, maxLength: 120 },
-          parentId: { type: "integer", minimum: 1 },
-          sortOrder: { type: "integer" },
-        },
-        required: ["slug", "name"],
-        additionalProperties: false,
-      },
-    },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const body = request.body as { slug: string; name: string; parentId?: number; sortOrder?: number };
-    const existing = await prisma.genre.findUnique({ where: { slug: body.slug } });
-    if (existing) return fail(reply, 409, "genre_slug_taken");
-    if (body.parentId) {
-      const parent = await prisma.genre.findUnique({ where: { id: body.parentId } });
-      if (!parent) return fail(reply, 400, "parent_genre_not_found");
-    }
-    return prisma.genre.create({ data: body });
-  });
-
-  app.patch<{ Params: { id: string } }>("/api/genres/:id", {
-    schema: {
-      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
-      body: {
-        type: "object",
-        properties: {
-          name: { type: "string", minLength: 1, maxLength: 120 },
-          parentId: { type: "integer", minimum: 1 },
-          sortOrder: { type: "integer" },
-        },
-        additionalProperties: false,
-      },
-    },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const genre = await prisma.genre.findUnique({ where: { id } });
-    if (!genre) return fail(reply, 404, "genre_not_found");
-    return prisma.genre.update({ where: { id }, data: request.body as Record<string, unknown> });
-  });
-
-  app.delete<{ Params: { id: string } }>("/api/genres/:id", {
-    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const genre = await prisma.genre.findUnique({ where: { id } });
-    if (!genre) return fail(reply, 404, "genre_not_found");
-    // The catch-all bucket is load-bearing: unmapped provider genres land
-    // there. Removing it would silently discard genres on the next pass.
-    if (genre.isCatchAll) return fail(reply, 409, "catch_all_genre_undeletable");
-    await prisma.genre.delete({ where: { id } });
-    return { deleted: true };
-  });
+  await registerTaxonomyRoutes(app, { prisma, accountExperience, parseIdParam, optionalProfileId });
 
   /** The full tag suite for one book, with each field's provenance. */
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/tags", {
@@ -1695,88 +1618,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return rows.map((row) => row.mediaItemId);
   });
 
-  app.get("/api/tags", async (_request, reply) => {
-    const tags = await prisma.tag.findMany({
-      orderBy: { name: "asc" },
-      include: { _count: { select: { items: true } } },
-    });
-    // Counts come from the same rows the UI lists, so a count can never
-    // disagree with the number of books behind it.
-    return tags.map((tag) => ({ id: tag.id, name: tag.name, count: tag._count.items }));
-  });
-
-  app.post("/api/tags", {
-    schema: {
-      body: {
-        type: "object",
-        properties: { name: { type: "string", minLength: 1, maxLength: 100 } },
-        required: ["name"],
-        additionalProperties: false,
-      },
-    },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const body = request.body as { name: string };
-    const result = await createTag(prisma, body.name, optionalProfileId(request));
-    if ("reason" in result) return fail(reply, 409, "tag_name_rejected", { reason: result.reason });
-    return reply.code(result.created ? 201 : 200).send(result.tag);
-  });
-
-  app.patch<{ Params: { id: string } }>("/api/tags/:id", {
-    schema: {
-      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
-      body: {
-        type: "object",
-        properties: { name: { type: "string", minLength: 1, maxLength: 100 } },
-        required: ["name"],
-        additionalProperties: false,
-      },
-    },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const result = await renameTag(prisma, id, (request.body as { name: string }).name);
-    if ("reason" in result) return fail(reply, 409, "tag_name_rejected", { reason: result.reason });
-    return result.tag;
-  });
-
-  app.delete<{ Params: { id: string } }>("/api/tags/:id", {
-    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const tag = await prisma.tag.findUnique({ where: { id } });
-    if (!tag) return fail(reply, 404, "tag_not_found");
-    // Cascades to MediaItemTag, so every assignment goes with it.
-    await prisma.tag.delete({ where: { id } });
-    return { deleted: true };
-  });
-
-  app.post<{ Params: { id: string } }>("/api/tags/:id/merge", {
-    schema: {
-      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
-      body: {
-        type: "object",
-        properties: { targetTagId: { type: "integer", minimum: 1 } },
-        required: ["targetTagId"],
-        additionalProperties: false,
-      },
-    },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const { targetTagId } = request.body as { targetTagId: number };
-    const result = await mergeTags(prisma, id, targetTagId);
-    if ("reason" in result) {
-      const status = result.reason === "not-found" ? 404 : 400;
-      return fail(reply, status, "tag_merge_failed", { reason: result.reason });
-    }
-    // The count is reported so the UI can confirm how many books moved.
-    return { moved: result.moved, mergedInto: targetTagId };
-  });
+  // Tag CRUD and merge routes are registered in routes/taxonomy.ts.
 
   // ---------------------------------------------------------------------
   // Spec 19 — Discover & wishlist
