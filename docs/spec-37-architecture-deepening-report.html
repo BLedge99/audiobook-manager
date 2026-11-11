@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deepening the Architecture — Spec 37 Report</title>
+<style>
+:root {
+  --paper: #faf7f0;
+  --card: #ffffff;
+  --ink: #22201c;
+  --ink2: #55524c;
+  --line: #e3ded2;
+  --rasp: #b3402a;
+  --rasp-soft: #f7e4de;
+  --mint: #2e7d5b;
+  --mint-soft: #e3f0e8;
+  --cobalt: #2749c2;
+  --cobalt-soft: #e4e9fa;
+  --tan: #a06b2d;
+  --tan-soft: #f3eadb;
+  --mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
+
+/* ── Cover ─────────────────────────────────────────────────── */
+.cover {
+  padding: 72px 0 44px;
+  border-bottom: 2px solid var(--ink);
+  background: linear-gradient(180deg, #f3efe4 0%, var(--paper) 100%);
+}
+.kicker {
+  font: 700 11px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase;
+  color: var(--rasp); display: flex; gap: 12px; align-items: center; margin-bottom: 18px;
+}
+.kicker::before { content: ""; display:block; width: 42px; height: 2px; background: var(--rasp); }
+h1.title {
+  font-family: Georgia, "Iowan Old Style", serif; font-weight: 700;
+  font-size: clamp(38px, 5.4vw, 64px); line-height: 1.04; margin: 0 0 18px; letter-spacing: -0.5px;
+}
+.subtitle { font-size: 19px; color: var(--ink2); max-width: 780px; margin: 0 0 26px; }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 26px 0 6px; }
+.chip {
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; font-size: 13px; color: var(--ink); white-space: nowrap;
+}
+.chip b { color: var(--cobalt); }
+.cover-meta { color: var(--ink2); font-size: 13.5px; margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; line-height: 2.1; }
+.cover-meta dd, .cover-meta dt { display:inline; margin: 0; }
+.cover-meta dt { font-weight: 700; color: var(--ink); margin-right: .35em; }
+.cover-meta dd { margin-right: 1.5em; }
+
+/* ── TOC ──────────────────────────────────────────────────── */
+.toc { columns: 3; gap: 24px; border-bottom: 1px solid var(--line); padding: 26px 0 34px; font-size: 13.5px; }
+.toc a { display: block; color: var(--ink2); text-decoration: none; padding: 2.5px 0; break-inside: avoid; }
+.toc a:hover { color: var(--rasp); }
+.toc .toc-h { font: 700 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--tan); margin: 14px 0 4px; }
+@media (max-width: 900px) { .toc { columns: 2; } }
+@media (max-width: 560px) { .toc { columns: 1; } }
+
+/* ── Sections ─────────────────────────────────────────────── */
+h2 {
+  font-family: Georgia, "Iowan Old Style", serif; font-size: 30px; letter-spacing: -0.3px;
+  margin: 52px 0 6px; padding-top: 6px; border-top: 2px solid var(--ink); display: inline-block; padding-top: 18px;
+}
+.section-no {
+  font: 700 11px/1 var(--mono); letter-spacing: .2em; color: var(--rasp); text-transform: uppercase;
+  display: block; margin-bottom: 8px;
+}
+h3 { font-size: 19px; margin: 30px 0 8px; font-family: Georgia, "Iowan Old Style", serif; }
+p { max-width: 880px; }
+.lead { font-size: 17.5px; color: var(--ink2); }
+code { font: 13px/1.5 var(--mono); background: #efece1; padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+pre {
+  background: #26241f; color: #ece9df; padding: 14px 16px; border-radius: 10px;
+  font: 12.5px/1.55 var(--mono); overflow-x: auto; max-width: 880px;
+}
+pre code { background: none; padding: 0; white-space: pre; }
+ul { max-width: 880px; }
+li { margin: 3px 0; }
+
+/* ── Stat cards ───────────────────────────────────────────── */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 22px 0 8px; }
+.stat {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+  border-top: 3px solid var(--cobalt);
+}
+.stat.green { border-top-color: var(--mint); }
+.stat.red { border-top-color: var(--rasp); }
+.stat .n { font: 700 26px/1.1 Georgia, serif; letter-spacing: -0.5px; }
+.stat .d { font-size: 12.5px; color: var(--ink2); margin-top: 6px; }
+
+/* ── Phase blocks ─────────────────────────────────────────── */
+.phase {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 20px 22px 18px; margin: 18px 0 6px; page-break-inside: avoid;
+}
+.phase-tag {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; border-bottom: 1px solid var(--line);
+  padding-bottom: 8px; margin-bottom: 10px;
+}
+.phase-tag .tag {
+  font: 700 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #fff;
+  background: var(--cobalt); border-radius: 4px; padding: 4px 8px;
+}
+.phase-tag .tag.x { background: var(--tan); }
+.phase-tag .tag.decision { background: var(--rasp); }
+.phase-tag .tag.finding { background: var(--ink2); }
+.phase-tag h3 { margin: 0; flex: 1; min-width: 200px; }
+.phase-tag .commits { font: 11px/1.7 var(--mono); color: var(--ink2); }
+.phase-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 880px) { .phase-cols { grid-template-columns: 1fr; } }
+.before-after { border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+.before-after h4 { font: 700 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; margin: 0 0 6px; }
+.before { background: var(--rasp-soft); }
+.before h4 { color: var(--rasp); }
+.after { background: var(--mint-soft); }
+.after h4 { color: var(--mint); }
+.why { background: var(--tan-soft); border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-top: 14px; }
+.why b { color: var(--tan); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; font-family: var(--mono); }
+
+/* ── Figures ──────────────────────────────────────────────── */
+figure { margin: 18px 0 6px; page-break-inside: avoid; }
+figcaption { font-size: 13px; color: var(--ink2); margin-top: 8px; }
+figcaption b { color: var(--ink); }
+.fig { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto; }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.box-label { font-size: 12.5px; fill: #22201c; }
+.small-label { font-size: 10.5px; fill: #55524c; }
+.mono-label { font-size: 10.5px; fill: #26241f; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.h-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+
+/* ── Tables ───────────────────────────────────────────────── */
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 16px 0; }
+caption { text-align: left; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 700 10.5px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink2); border-bottom: 2px solid var(--ink); }
+tr:nth-child(even) td { background: #f6f4ec; }
+.table-wrap { overflow-x: auto; }
+
+/* ── Callouts ─────────────────────────────────────────────── */
+.callout { border-left: 4px solid var(--cobalt); background: var(--cobalt-soft); border-radius: 0 10px 10px 0; padding: 10px 14px; margin: 14px 0; font-size: 14.5px; max-width: 880px; }
+.callout.warn { border-color: var(--rasp); background: var(--rasp-soft); }
+.callout.ok { border-color: var(--mint); background: var(--mint-soft); }
+
+/* ── Glossary / appendix ──────────────────────────────────── */
+.gloss { columns: 2; gap: 26px; font-size: 13.5px; }
+.gloss dt { font-weight: 700; margin-top: 8px; }
+.gloss dd { margin: 0 0 4px 0; color: var(--ink2); }
+@media (max-width: 700px) { .gloss { columns: 1; } }
+
+.footer { border-top: 2px solid var(--ink); margin-top: 56px; padding: 22px 0 46px; color: var(--ink2); font-size: 13px; }
+
+@media print {
+  body { background: #fff; font-size: 11.5pt; }
+  .cover { padding-top: 20px; }
+  .phase, figure, .stat, .callout { page-break-inside: avoid; }
+  h2 { page-break-after: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="wrap">
+    <div class="kicker">Engineering report · Spec 37</div>
+    <h1 class="title">Deepening the<br>Architecture</h1>
+    <p class="subtitle">How a household audiobook app stopped re-deriving its own rules — what was changed across
+      48 commits, why, and what it is like to work in the codebase now. Written for engineers who have never seen this project.</p>
+    <div class="chips">
+      <span class="chip"><b>48</b> commits</span>
+      <span class="chip"><b>156</b> files changed</span>
+      <span class="chip"><b>+11,916</b> / −4,639 lines</span>
+      <span class="chip"><b>2,204 → 350</b> lines in <code>app.ts</code></span>
+      <span class="chip"><b>97 → 124</b> test files</span>
+      <span class="chip"><b>3</b> new ADRs (028–030)</span>
+      <span class="chip"><b>11</b> phases · <b>12</b> cross-cutting fixes</span>
+    </div>
+    <div class="cover-meta">
+      <dt>Repository</dt><dd><code>audiobook-manager</code> (private)</dd>
+      <dt>Specification</dt><dd><code>specs/37-architecture-deepening.md</code></dd>
+      <dt>Work performed</dt><dd>2026-11-11, 12:52 → 23:02 UTC</dd>
+      <dt>Landing</dt><dd>fast-forward into <code>master</code> as <code>d1ef3b2</code></dd>
+      <dt>Status</dt><dd>complete; one environmental E2E caveat (§09)</dd>
+    </div>
+  </div>
+</header>
+
+<nav class="wrap toc" aria-label="Contents">
+  <div class="toc-h">Orientation</div>
+  <a href="#s01">01 · The system in one picture</a>
+  <a href="#s02">02 · Why we intervened</a>
+  <a href="#s03">03 · How the work was done</a>
+  <a href="#s04">04 · Before → after, quantified</a>
+  <div class="toc-h">The eleven phases</div>
+  <a href="#p0">Phase 0 · Foundations</a>
+  <a href="#p1">Phase 1 · One request interface</a>
+  <a href="#p2">Phase 2 · One offline key format</a>
+  <a href="#p3">Phase 3 · The library source seam</a>
+  <a href="#p4">Phase 4 · The orchestration layer</a>
+  <a href="#p5">Phase 5 · Field precedence, one owner</a>
+  <a href="#p6">Phase 6 · One personal-data list</a>
+  <a href="#p7">Phase 7 · The route table</a>
+  <a href="#p8">Phase 8 · Copy out of logic modules</a>
+  <a href="#p9">Phase 9 · The AI seam</a>
+  <a href="#p10">Phase 10 · One home for providers</a>
+  <div class="toc-h">The audit fixes</div>
+  <a href="#x">Cross-cutting · X.1–X.12</a>
+  <div class="toc-h">Closing</div>
+  <a href="#decisions">ADR 028, 029, 030</a>
+  <a href="#s08">08 · How it was verified</a>
+  <a href="#s09">09 · What is not done</a>
+  <a href="#s10">10 · Out of scope, deliberately</a>
+  <a href="#glossary">Glossary</a>
+  <a href="#appendix">Appendix · all 48 commits</a>
+</nav>
+
+<main class="wrap">
+
+<!-- ════════════════════ 01 · THE SYSTEM ════════════════════ -->
+<h2 id="s01"><span class="section-no">01 · Orientation</span>The system in one picture</h2>
+<p class="lead">Before the changes, the context. This is a <strong>self-hosted audiobook manager for a household</strong>:
+one Node.js server in the house scans the family's audio files, enriches their metadata, and streams
+them to a Netflix-style web shelf used on phones and laptops. It runs offline-first, including on Android,
+and it never phones home with your library.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 340" width="100%" role="img" aria-label="Architecture map of the audiobook manager">
+  <!-- listeners -->
+  <rect x="10" y="30" width="180" height="86" rx="12" fill="#fff" stroke="#22201c" stroke-width="1.5"/>
+  <text x="100" y="62" text-anchor="middle" class="box-label" font-weight="700">Web shelf</text>
+  <text x="100" y="82" text-anchor="middle" class="small-label">React · Netflix-style grid</text>
+  <text x="100" y="100" text-anchor="middle" class="small-label">desktop + mobile browser</text>
+
+  <rect x="10" y="140" width="180" height="86" rx="12" fill="#fff" stroke="#22201c" stroke-width="1.5"/>
+  <text x="100" y="172" text-anchor="middle" class="box-label" font-weight="700">Android shell</text>
+  <text x="100" y="192" text-anchor="middle" class="small-label">Capacitor wrapper · PWA</text>
+  <text x="100" y="210" text-anchor="middle" class="small-label">native vault · local downloads</text>
+
+  <!-- server -->
+  <rect x="330" y="95" width="260" height="130" rx="14" fill="#26241f"/>
+  <text x="460" y="140" text-anchor="middle" fill="#faf7f0" font-size="17" font-weight="700">Bookle server</text>
+  <text x="460" y="163" text-anchor="middle" fill="#cfc9b8" font-size="11.5">Node · Fastify · TypeScript</text>
+  <text x="460" y="182" text-anchor="middle" fill="#cfc9b8" font-size="11.5">scanner · enrichment · library</text>
+  <text x="460" y="201" text-anchor="middle" fill="#cfc9b8" font-size="11.5">offline-first auth &amp; progress</text>
+
+  <!-- stores -->
+  <rect x="730" y="18" width="220" height="66" rx="10" fill="#fff" stroke="#22201c" stroke-width="1.5"/>
+  <text x="840" y="44" text-anchor="middle" class="box-label" font-weight="700">Database</text>
+  <text x="840" y="64" text-anchor="middle" class="small-label">SQLite (self-host) · PostgreSQL</text>
+
+  <rect x="730" y="104" width="220" height="66" rx="10" fill="#fff" stroke="#22201c" stroke-width="1.5"/>
+  <text x="840" y="130" text-anchor="middle" class="box-label" font-weight="700">Library roots</text>
+  <text x="840" y="150" text-anchor="middle" class="small-label">read-only media files on disk</text>
+
+  <rect x="730" y="190" width="220" height="66" rx="10" fill="#fff" stroke="#22201c" stroke-width="1.5"/>
+  <text x="840" y="216" text-anchor="middle" class="box-label" font-weight="700">Metadata providers</text>
+  <text x="840" y="234" text-anchor="middle" class="small-label">Open Library · Google Books</text>
+  <text x="840" y="250" text-anchor="middle" class="small-label">LibriVox · Audnexus</text>
+
+  <!-- arrows -->
+  <line x1="190" y1="73" x2="328" y2="130" stroke="#22201c" stroke-width="1.5"/>
+  <line x1="190" y1="183" x2="328" y2="180" stroke="#22201c" stroke-width="1.5"/>
+  <line x1="590" y1="145" x2="728" y2="52" stroke="#22201c" stroke-width="1.5"/>
+  <line x1="590" y1="160" x2="728" y2="137" stroke="#22201c" stroke-width="1.5"/>
+  <line x1="590" y1="186" x2="728" y2="220" stroke="#22201c" stroke-width="1.5"/>
+
+  <rect x="330" y="258" width="620" height="58" rx="10" fill="#f3eadb" stroke="#a06b2d" stroke-width="1.2"/>
+  <text x="640" y="282" text-anchor="middle" class="box-label" font-weight="700">AI stays optional</text>
+  <text x="640" y="301" text-anchor="middle" class="small-label">every feature works with no model installed; when LM Studio is present it only enriches suggestions — never gates them</text>
+</svg>
+</div>
+<figcaption><b>Figure 1 —</b> The four moving parts. One server per household, one database per server,
+read-only media on disk, and external providers consulted at scan/enrich time. An optional, local-only AI model
+suggests better matches; nothing in the app depends on it.</figcaption>
+</figure>
+
+<p>Three properties shape everything in this report:</p>
+<ul>
+  <li><strong>Offline-first.</strong> The phone must keep working with the server unreachable: downloads live in an on-device replica, progress lives in an encrypted local cache before it ever reaches the server.</li>
+  <li><strong>Multi-server capable.</strong> One household can own several servers; a device may see books from more than one catalogue. Identities that look interchangeable (“book #7”) are not — which turned out to be a live data-corruption class of bug (<a href="#p2">Phase 2</a>).</li>
+  <li><strong>Privacy by default.</strong> GDPR obligations are enforced in code (erasure, export, retention), not written down and hoped for — which is why the personal-data list is now a module with a test that reads the database schema (<a href="#p6">Phase 6</a>).</li>
+</ul>
+
+<!-- ════════════════════ 02 · WHY ════════════════════ -->
+<h2 id="s02"><span class="section-no">02 · The finding</span>Why we intervened</h2>
+<p class="lead">An architecture review in November 2026 found nine “shallow module” smells. They share one recurring shape,
+and it is worth internalising before reading any of the changes:</p>
+<div class="callout"><strong>A rule was extracted into a pure, tested function — but the code that runs kept its own copy of the rule.</strong>
+The test proves the function is right; it says nothing about whether the app calls the function, or a lookalike sitting next to it.</div>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 300" width="100%" role="img" aria-label="The recurring shape: tested rule ignored, copies at call sites">
+  <!-- divider -->
+  <line x1="490" y1="20" x2="490" y2="280" stroke="#e3ded2" stroke-width="2"/>
+
+  <text x="245" y="26" text-anchor="middle" class="h-label" fill="#b3402a">BEFORE — FIVE COPIES OF ONE RULE</text>
+  <!-- the dead, tested module -->
+  <rect x="30" y="52" width="185" height="56" rx="10" fill="#ffffff" stroke="#b3402a" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="122" y="76" text-anchor="middle" class="mono-label">metadata/precedence.ts</text>
+  <text x="122" y="94" text-anchor="middle" class="small-label">tested · imported by nobody</text>
+  <!-- three copies on the right of the panel -->
+  <g fill="#f7e4de" stroke="#b3402a" stroke-width="1.5">
+    <rect x="250" y="52" width="200" height="44" rx="9"/>
+    <rect x="250" y="108" width="200" height="44" rx="9"/>
+    <rect x="250" y="164" width="200" height="44" rx="9"/>
+  </g>
+  <g class="small-label">
+    <text x="350" y="70" text-anchor="middle">scanner.ts</text><text x="350" y="88" text-anchor="middle" class="mono-label">writable(field)</text>
+    <text x="350" y="126" text-anchor="middle">apply.ts</text><text x="350" y="144" text-anchor="middle" class="mono-label">writable(field)</text>
+    <text x="350" y="182" text-anchor="middle">run.ts</text><text x="350" y="200" text-anchor="middle" class="mono-label">writable(field)</text>
+  </g>
+  <!-- app.ts inline copies -->
+  <rect x="30" y="164" width="185" height="68" rx="10" fill="#f7e4de" stroke="#b3402a" stroke-width="1.5"/>
+  <text x="122" y="191" text-anchor="middle" class="small-label">app.ts — twice more,</text>
+  <text x="122" y="209" text-anchor="middle" class="mono-label">inline, slightly different</text>
+  <text x="32" y="254" class="small-label" fill="#b3402a">five homes, five behaviours, none of them the tested one</text>
+
+  <text x="735" y="26" text-anchor="middle" class="h-label" fill="#2e7d5b">AFTER — ONE MODULE, IMPORTED</text>
+  <rect x="560" y="66" width="330" height="96" rx="12" fill="#e3f0e8" stroke="#2e7d5b" stroke-width="1.8"/>
+  <text x="725" y="98" text-anchor="middle" class="mono-label" font-weight="700">metadata/precedence.ts</text>
+  <text x="725" y="120" text-anchor="middle" class="small-label">one module, one rule,</text>
+  <text x="725" y="138" text-anchor="middle" class="small-label">called by the code that runs</text>
+  <!-- importers -->
+  <g class="mono-label" fill="#2e7d5b">
+    <text x="560" y="216">→ imported by scanner · apply · run</text>
+    <text x="560" y="240">→ the two app.ts copies deleted</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>Figure 2 —</b> The plan’s single organizing insight, using the field-precedence rule (<a href="#p5">Phase 5</a>)
+as the example. The same pattern appeared in the request layer, the GDPR table list, the demo-mode policy, the offline key format,
+and the error-classification of the biometric vault.</figcaption>
+</figure>
+
+<p>Nine concrete findings fell out of this shape. Appendix A of the spec numbers them; the report folds them into the phases that fix them. The ones that were <em>live risks</em>, not just untidiness:</p>
+<ul>
+  <li><strong>Data corruption.</strong> Progress was keyed by bare book id; two servers holding book <code>#7</code> overwrote each other’s resume position.</li>
+  <li><strong>Compliance gap.</strong> The GDPR export omitted <code>webAuthnChallenge</code>, which the erasure route did delete — export and erase disagreed.</li>
+  <li><strong>Invalid data reaching the database.</strong> 35 of 60 routes had no input schema; a position of <code>NaN</code> or a speed of <code>Infinity</code> could be written to a listener’s progress row.</li>
+  <li><strong>Privacy leak.</strong> The AI prompt embedded <code>item.filePath</code> — the absolute server path of a family member’s files — and sent it to a third-party model.</li>
+  <li><strong>Security posture.</strong> The admin console could page raw table rows with an interpolated <code>LIMIT</code> and a bypassable table allowlist, opening a fresh driver connection per request.</li>
+  <li><strong>Silent dead ends.</strong> “Press Use password” at the biometric prompt re-opened the prompt; device sign-in ground to a permanent halt.</li>
+</ul>
+
+<!-- ════════════════════ 03 · METHOD ════════════════════ -->
+<h2 id="s03"><span class="section-no">03 · Method</span>How the work was done</h2>
+<p>Everything in this report was produced under five ground rules, lifted from the spec’s own working agreement:</p>
+<ol>
+  <li><strong>Red first.</strong> A test is written and observed failing before the implementation exists — a test that cannot fail for the right reason is not a test.</li>
+  <li><strong>One step, one commit.</strong> Every commit names its step (<code>spec 37 step 7.2</code>); the tree is never left half-migrated across steps.</li>
+  <li><strong>Green tree, always.</strong> <code>make test</code> — copy rules, typecheck, server and client suites — passed at the end of every step.</li>
+  <li><strong>Decisions before code.</strong> Where the plan touched a recorded architectural decision, an ADR was written first (028, 029, 030), never after the fact.</li>
+  <li><strong>Move, never rewrite.</strong> The plan reordered and consolidated existing behaviour; it never “rewrote for beauty”. HTTP response shapes were preserved.</li>
+</ol>
+<div class="callout"><strong>ADR = Architecture Decision Record.</strong> Short documents in <code>decisions/NNN-slug.md</code> that record why a choice was made and what alternatives were rejected. This repository treats them as the ranking authority over code. Three new ones were needed: <a href="#decisions">028, 029, 030</a>.</div>
+
+<!-- ════════════════════ 04 · SCORECARD ════════════════════ -->
+<h2 id="s04"><span class="section-no">04 · Impact</span>Before → after, quantified</h2>
+
+<div class="stats">
+  <div class="stat green"><div class="n">2,204 → 350</div><div class="d">lines in <code>server/src/app.ts</code> — the composition root shrank to wiring; −84%</div></div>
+  <div class="stat green"><div class="n">1,212 → 1,110</div><div class="d">lines in <code>client/src/App.tsx</code> — smaller, but more importantly its logic is now tested in modules</div></div>
+  <div class="stat green"><div class="n">433 → 0</div><div class="d">lines in <code>enrichment.ts</code> — deleted; its two provider clients moved beside their peers</div></div>
+  <div class="stat green"><div class="n">97 → 124</div><div class="d">test files — the thinnest-covered code attracted the most new tests</div></div>
+  <div class="stat red"><div class="n">35 → 0</div><div class="d">routes without an input schema; every input-taking route now validates, and a malformed body returns 400</div></div>
+  <div class="stat green"><div class="n">655 + 680</div><div class="d">server and client tests passing on the merged tree (server: 3 skipped environmental)</div></div>
+</div>
+
+<div class="table-wrap">
+<table>
+<caption>Scale and health, at the two ends of the work</caption>
+<thead><tr><th>Measure</th><th>Before</th><th>After</th><th>Why it matters</th></tr></thead>
+<tbody>
+<tr><td><code>server/src/app.ts</code></td><td>2,204 lines, 64 routes, 106 inline Prisma calls</td><td>350 lines: hooks, error handler, wiring</td><td>A 2k-line function was both composition root and the place every bug hid; reviewers could not hold it in their heads</td></tr>
+<tr><td>Test totals (merged tree)</td><td>—</td><td>server 655 passed / 3 skipped · client 680 passed</td><td>The 3 skips are platform/fixture-dependent tests that gate themselves (missing sample library, Windows symlink support); none are skipped for breakage</td></tr>
+<tr><td><code>client/src/App.tsx</code></td><td>untested orchestration: 20 <code>useState</code>, 13 <code>useEffect</code></td><td>logic lives in six tested modules (<code>profiles</code>, <code>refreshPolicy</code>, <code>backgroundLock</code>, <code>offlineGate</code>, <code>useSession</code>, <code>offlineMode</code>)</td><td>The riskiest file in the client now delegates to named, tested rules</td></tr>
+<tr><td>Field-precedence enforcement</td><td><code>precedence.ts</code> existed, tested, imported by nobody; 5 divergent inline copies</td><td>one module owns <code>canScannerWrite</code>, override record/clear; ADR 028 documents the chain</td><td>Enriched titles survive a rescan; user overrides remain absolute</td></tr>
+<tr><td>Offline progress key</td><td>bare book id; cross-server collision</td><td><code>serverId#bookId</code> via the one shared <code>replicaBookKey</code>/<code>replicaScopedKey</code></td><td>Two households’ shelves can no longer eat each other’s resume position</td></tr>
+<tr><td>GDPR export / erasure / retention</td><td>three hand-maintained lists, in two orders, disagreeing</td><td>one module <code>gdpr/personal-data.ts</code>; a test reads <code>schema.prisma</code> and forces every personal-data table into the list</td><td>A forgotten table now fails CI instead of failing an audit</td></tr>
+<tr><td>Request handling (family client)</td><td>~8 idioms (<code>fetch</code>, shim-monkey-patch, <code>boundedFetch</code>, <code>conditionalRequest</code>…) with different guarantees</td><td>one <code>request&lt;T&gt;()</code>: bounded, authenticated, profile-scoped, one error vocabulary, offline-aware</td><td>Every call site gets the same five guarantees; the global <code>window.fetch</code> patch is gone</td></tr>
+<tr><td>Input validation</td><td>35 of 60 routes unschematised; 6 with unvalidated bodies</td><td>all input routes validated; route-table snapshot test freezes the surface</td><td><code>NaN</code>/<code>Infinity</code> can no longer reach progress rows</td></tr>
+<tr><td>AI feature</td><td>concrete class built inside the handler; route untestable; prompt leaked <code>item.filePath</code></td><td>adapter injectable via <code>BuildAppOptions</code>; prompt carries title + candidates only; AI remains optional</td><td>The route is tested; family shelves stop being disclosed to third-party models</td></tr>
+<tr><td>Biometric errors (Android vault)</td><td>client matched English sentences, including a regex over “biometric prompt error code N”</td><td>stable codes in <code>PluginCall</code>’s <code>code</code> slot, mirrored in TS; prose decides nothing</td><td>Pressing “Use password” never re-opens the prompt; a new fingerprint enrolment self-heals</td></tr>
+<tr><td>Admin console (read side)</td><td>interpolated <code>LIMIT</code>/<code>OFFSET</code>, allowlist bypassable, one driver connection per request</td><td>allowlist enforced in-handler, parameters bound, one shared readonly connection</td><td>A defence-in-depth story for the most privileged read surface</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ════════════════════ PHASE 0 ════════════════════ -->
+<h2 id="p0"><span class="section-no">Phase 0</span>Foundations — the gate and the test helper</h2>
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 0</span><h3>0.1 Typecheck into <code>make test</code> · 0.2 Shared request test helper</h3>
+  <span class="commits">0.1 · 0.2 fe5b2ad</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4>
+      <p><code>vitest run</code> never typechecks, so a test file importing a non-existent type passed the whole suite and only failed a manual <code>tsc</code> — easy to skip, and skipped. Every one of the ~40 test files stubbed <code>fetch</code> its own way; three of those stubs disagreed on ETags, and none could assert on what was actually requested.</p>
+    </div>
+    <div class="before-after after"><h4>After</h4>
+      <p><code>make test</code> now runs <code>tsc</code> in both packages before any test runs. A scratch probe proved the gate fails on a bad type, then was deleted. <code>client/src/test/requests.ts</code> provides <code>fakeResponse()</code> and <code>stubFetch()</code>; the stub records every call (URL, method, headers, body) so later phases could assert on requests, not just responses.</p>
+    </div>
+  </div>
+  <div class="why"><b>Why this exists</b> — Phases 1 to 5 rewrite request- and type-heavy code under a strict “green tree” rule. Without a typecheck gate, a suite that runs but proves nothing would have sailed through.</div>
+</div>
+
+<!-- ════════════════════ PHASE 1 ════════════════════ -->
+<h2 id="p1"><span class="section-no">Phase 1 · Candidate 01</span>One request interface</h2>
+<p class="lead">The family client talked to its own server through a <em>global monkey-patch</em>: <code>installApiBaseUrl()</code> rewrote <code>window.fetch</code> in <code>main.tsx</code>, and every call site then picked one of ~8 request idioms, each with a different guarantee set. Correctness was a property of <em>the environment</em>, not of the call.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 250" width="100%" role="img" aria-label="Eight request idioms collapse into one interface">
+  <text x="245" y="24" text-anchor="middle" class="h-label" fill="#b3402a">BEFORE</text>
+  <g class="mono-label">
+    <rect x="20" y="44" width="130" height="30" rx="6" fill="#f7e4de" stroke="#b3402a"/><text x="85" y="63" text-anchor="middle">window.fetch shim</text>
+    <rect x="160" y="44" width="130" height="30" rx="6" fill="#f7e4de" stroke="#b3402a"/><text x="225" y="63" text-anchor="middle">boundedFetch</text>
+    <rect x="300" y="44" width="130" height="30" rx="6" fill="#f7e4de" stroke="#b3402a"/><text x="365" y="63" text-anchor="middle">apiFetch</text>
+    <rect x="440" y="44" width="130" height="30" rx="6" fill="#f7e4de" stroke="#b3402a"/><text x="505" y="63" text-anchor="middle">conditionalRequest</text>
+    <rect x="20" y="86" width="130" height="30" rx="6" fill="#f7e4de" stroke="#b3402a"/><text x="85" y="105" text-anchor="middle">writeRequest</text>
+    <rect x="160" y="86" width="130" height="30" rx="6" fill="#f7e4de" stroke="#b3402a"/><text x="225" y="105" text-anchor="middle">useBrowse.request</text>
+    <rect x="300" y="86" width="130" height="30" rx="6" fill="#f7e4de" stroke="#b3402a"/><text x="365" y="105" text-anchor="middle">CoverImage fetch</text>
+    <rect x="440" y="86" width="130" height="30" rx="6" fill="#f7e4de" stroke="#b3402a"/><text x="505" y="105" text-anchor="middle">raw fetch ×~10</text>
+  </g>
+  <text x="275" y="150" text-anchor="middle" class="small-label">different timeouts · different auth · different bodies · different errors</text>
+
+  <text x="745" y="24" text-anchor="middle" class="h-label" fill="#2e7d5b">AFTER</text>
+  <rect x="600" y="48" width="290" height="110" rx="12" fill="#e3f0e8" stroke="#2e7d5b" stroke-width="1.8"/>
+  <text x="745" y="78" text-anchor="middle" class="mono-label" font-weight="700">request&lt;T&gt;(path, options)</text>
+  <text x="745" y="100" text-anchor="middle" class="small-label">1 bounded · 2 authenticated · 3 profile-scoped</text>
+  <text x="745" y="118" text-anchor="middle" class="small-label">4 one error vocabulary · 5 offline-aware</text>
+  <text x="745" y="138" text-anchor="middle" class="small-label">the shim is deleted; the guarantees belong to the call</text>
+</svg>
+</div>
+<figcaption><b>Figure 3 —</b> One interface, five guarantees, zero global side effects. A double-encoded-body bug class
+(JSON.stringify inside a caller that also serialises) became a compile error once <code>RequestOptions.body</code> was typed <code>object</code>.</figcaption>
+</figure>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 1</span><h3>1.1 Naming the guarantees · 1.2 Points the data hooks at it · 1.3 The components · 1.4 The admin client · 1.5–1.6 The shim dies</h3>
+  <span class="commits">d1521bb · 331f336 · 79473e6 · 287e256 · b2b3df3 · 8ce5409 · 316eedf</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4>
+      <ul>
+        <li><code>installApiBaseUrl()</code> monkey-patched <code>window.fetch</code>; a module using <code>boundedFetch</code> was right only because something else had run first.</li>
+        <li>~30 call sites depended on the shim for base URL, session header and credentials; the native shell broke if any piece went missing.</li>
+        <li>The admin panel (a separate app, separate credential) had 16 raw <code>fetch</code> calls and a near-empty test file.</li>
+        <li><code>ProfileSwitcher.load()</code> had no timeout and no <code>try/catch</code> — a failed load threw an unhandled rejection and the dropdown went silently empty.</li>
+      </ul>
+    </div>
+    <div class="before-after after"><h4>After</h4>
+      <ul>
+        <li><code>lib/request.ts</code> owns the five guarantees; <code>requestConditional</code> absorbed the 304 rule so it is no longer re-derivable per hook.</li>
+        <li><code>lib/bounded.ts</code> holds the deadline, shared by both bundles (race + abort — a fetch that ignores its signal still loses).</li>
+        <li>Admin got its own <code>admin/request.ts</code> (separate door, separate credential), its screens split into a renderable <code>app.tsx</code>, and a bundle-separation test</li>
+        <li>Every component call-site moved; <code>apiFetch</code>, <code>apiAssetUrl</code>, and the shim itself (<code>installApiBaseUrl</code>) are deleted — <code>window.fetch</code> is unpatched.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — correctness of a request is now a property of the <em>call</em>, not of load order. The admin app and the family app each carry only the guarantees they need; the family client lost its single most fragile global side effect; and the interface’s guarantee set is pinned by tests that were watched failing.</div>
+</div>
+
+<!-- ════════════════════ PHASE 2 ════════════════════ -->
+<h2 id="p2"><span class="section-no">Phase 2 · Candidate 02 (part 1)</span>One offline key format</h2>
+<p class="lead">This one is a live bug, not tidiness: two servers could each hold book <code>#7</code>, and the device overwrote one resume position with the other — silently, with no error anywhere.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 240" width="100%" role="img" aria-label="Progress key collision and the server-scoped key">
+  <text x="245" y="24" text-anchor="middle" class="h-label" fill="#b3402a">BEFORE — one key, two owners</text>
+  <rect x="20" y="48" width="90" height="46" rx="10" fill="#fff" stroke="#22201c"/><text x="65" y="75" text-anchor="middle" class="box-label">Server A</text>
+  <rect x="20" y="120" width="90" height="46" rx="10" fill="#fff" stroke="#22201c"/><text x="65" y="147" text-anchor="middle" class="box-label">Server B</text>
+  <line x1="110" y1="71" x2="300" y2="100" stroke="#b3402a" stroke-width="1.5"/>
+  <line x1="110" y1="143" x2="300" y2="110" stroke="#b3402a" stroke-width="1.5"/>
+  <text x="320" y="90" class="mono-label">key: "7"</text>
+  <text x="320" y="108" class="small-label">last write wins → the other position is lost</text>
+
+  <text x="740" y="24" text-anchor="middle" class="h-label" fill="#2e7d5b">AFTER — server-scoped keys</text>
+  <line x1="640" y1="71" x2="810" y2="71" stroke="#2e7d5b" stroke-width="1.5"/>
+  <line x1="640" y1="143" x2="810" y2="143" stroke="#2e7d5b" stroke-width="1.5"/>
+  <rect x="640" y="48" width="110" height="46" rx="10" fill="#fff" stroke="#22201c"/><text x="695" y="75" text-anchor="middle" class="box-label">Server A</text>
+  <rect x="640" y="120" width="110" height="46" rx="10" fill="#fff" stroke="#22201c"/><text x="695" y="147" text-anchor="middle" class="box-label">Server B</text>
+  <rect x="830" y="48" width="130" height="46" rx="10" fill="#e3f0e8" stroke="#2e7d5b" stroke-width="1.5"/><text x="895" y="75" text-anchor="middle" class="mono-label">a.tld#7</text>
+  <rect x="830" y="120" width="130" height="46" rx="10" fill="#e3f0e8" stroke="#2e7d5b" stroke-width="1.5"/><text x="895" y="147" text-anchor="middle" class="mono-label">b.tld#7</text>
+</svg>
+</div>
+<figcaption><b>Figure 4 —</b> Phase 2.1 proved the collision with a failing test; Phase 2.2 fixed it. The same
+<code>replicaBookKey</code> builder the replica already used is now the only place the key format exists — and favourites got the same treatment.</figcaption>
+</figure>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 2</span><h3>2.1 Proving the collision · 2.2 Server-scoped private keys</h3>
+  <span class="commits">cee4ba2 (merged into master ahead of the branch)</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4>
+      <p><code>privateCache.ts</code> stored progress under <code>"progress", "7"</code> while the device replica stored rows under <code>serverId#bookId</code>. Two servers, one key, silent overwrite. Favourites had the same defect one shape over.</p>
+    </div>
+    <div class="before-after after"><h4>After</h4>
+      <p><code>cacheProgress</code>/<code>readProgress</code>/<code>cacheFavourites</code>/<code>readFavourites</code> take a server scope and build keys via <code>replicaBookKey</code>/<code>replicaScopedKey</code>. Legacy rows are read with a fallback but <em>not</em> copied forward — a legacy row cannot say which server it belongs to, so copying it would hand one server’s position to another server’s same-numbered book.</p>
+    </div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — multi-server households stop corrupting each other’s state, and the failure mode changed from silent data loss to (at worst) a legacy row that is simply left behind. The fix is also the <em>one</em> key format in the codebase, which is what Phase 3 builds on.</div>
+</div>
+
+<!-- ════════════════════ PHASE 3 ════════════════════ -->
+<h2 id="p3"><span class="section-no">Phase 3 · Candidate 02 (part 2)</span>The library source seam</h2>
+<p class="lead"><code>useLibrary</code> (the server shelf) and <code>useDeviceLibrary</code> (the on-device replica shelf) are two implementations of one concept with no shared interface. <code>App.tsx</code> hand-merged them, inline, in two places.</p>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 3</span><h3>3.1 The interface and the merge · 3.2 Both hooks satisfy it · 3.3 The hand-merge dies</h3>
+  <span class="commits">70a7972 · caa5484</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4>
+      <ul>
+        <li>Two hooks, two shapes: <code>audiobooks</code> vs <code>books</code>; <code>error</code> vs <code>libraryReadError</code>.</li>
+        <li>The merge lived in <code>App.tsx:404-414</code> with the key format written inline twice.</li>
+        <li><code>useDeviceLibrary</code> — the module wrapping the entire offline experience — had no test file.</li>
+      </ul>
+    </div>
+    <div class="before-after after"><h4>After</h4>
+      <ul>
+        <li><code>local/librarySource.ts</code>: a <code>LibrarySource</code> interface (<code>books / loading / refreshing / error / refresh()</code>) and <code>mergeShelves(sources, offline)</code>.</li>
+        <li>Both hooks return one shape; <code>useDeviceLibrary.test.ts</code> now covers its seven operations.</li>
+        <li><code>App.tsx</code> renders <code>mergeShelves(...)</code>; the inline key formats are gone, and a new <code>App.test.tsx</code> covers the two shelf modes.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — two real adapters finally justified a seam. Future sources (a NAS, a second household server) plug into the same interface; the merge rule has exactly one home and is tested on its own.</div>
+</div>
+
+<!-- ════════════════════ PHASE 4 ════════════════════ -->
+<h2 id="p4"><span class="section-no">Phase 4 · Candidate 03</span>The orchestration layer gets a home</h2>
+<p class="lead"><code>App.tsx</code> was 1,200 lines of orchestration: the wiring between the browser, the server, the offline gates and the player — with 20 <code>useState</code> calls, 13 <code>useEffect</code>s, and essentially no tests of its own. The gate ladder’s precedence was expressed only by vertical position in the file.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 280" width="100%" role="img" aria-label="App.tsx splits into six tested modules">
+  <rect x="40" y="52" width="210" height="180" rx="14" fill="#26241f"/>
+  <text x="145" y="88" text-anchor="middle" fill="#faf7f0" font-size="15" font-weight="700">App.tsx</text>
+  <text x="145" y="110" text-anchor="middle" fill="#cfc9b8" font-size="11">1,212 lines</text>
+  <text x="145" y="128" text-anchor="middle" fill="#cfc9b8" font-size="11">20 useState · 13 useEffect</text>
+  <text x="145" y="146" text-anchor="middle" fill="#cfc9b8" font-size="11">0 tests</text>
+  <text x="145" y="172" text-anchor="middle" fill="#a8c3b2" font-size="11">“who am I?” asked three times,</text>
+  <text x="145" y="190" text-anchor="middle" fill="#a8c3b2" font-size="11">“should I refresh?” asked six times</text>
+
+  <g fill="#ffffff" stroke="#2e7d5b" stroke-width="1.3">
+    <rect x="340" y="24" width="200" height="34" rx="8"/><rect x="340" y="66" width="200" height="34" rx="8"/><rect x="340" y="108" width="200" height="34" rx="8"/>
+    <rect x="340" y="150" width="200" height="34" rx="8"/><rect x="340" y="192" width="200" height="34" rx="8"/><rect x="340" y="234" width="200" height="34" rx="8"/>
+  </g>
+  <g class="mono-label" text-anchor="middle">
+    <text x="440" y="45">profiles.ts</text>
+    <text x="440" y="87">refreshPolicy.ts</text>
+    <text x="440" y="129">backgroundLock.ts</text>
+    <text x="440" y="171">useSession.ts</text>
+    <text x="440" y="213">offlineMode.ts</text>
+    <text x="440" y="255">offlineGate.ts</text>
+  </g>
+  <g class="small-label">
+    <text x="570" y="45">→ resolveProfileContext: shelf vs player profile</text>
+    <text x="570" y="87">→ the four refresh triggers, once</text>
+    <text x="570" y="129">→ the lock sequence, not just the 3-line predicate</text>
+    <text x="570" y="171">→ the probe: one source of truth for “signed in?”</text>
+    <text x="570" y="213">→ the offline flag, in exactly one home</text>
+    <text x="570" y="255">→ the ladder as a list, not a vertical accident</text>
+  </g>
+  <line x1="250" y1="142" x2="338" y2="41" stroke="#2e7d5b" stroke-width="1.2"/>
+  <line x1="250" y1="142" x2="338" y2="83" stroke="#2e7d5b" stroke-width="1.2"/>
+  <line x1="250" y1="142" x2="338" y2="125" stroke="#2e7d5b" stroke-width="1.2"/>
+  <line x1="250" y1="142" x2="338" y2="167" stroke="#2e7d5b" stroke-width="1.2"/>
+  <line x1="250" y1="142" x2="338" y2="209" stroke="#2e7d5b" stroke-width="1.2"/>
+  <line x1="250" y1="142" x2="338" y2="251" stroke="#2e7d5b" stroke-width="1.2"/>
+</svg>
+</div>
+<figcaption><b>Figure 5 —</b> The riskiest file in the client, decomposed. <code>App.tsx</code> shrank by only ~100 lines —
+the win is not size, it is that every remaining line delegates to a named, tested rule.</figcaption>
+</figure>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 4</span><h3>4.1 Profile resolution · 4.2 Refresh triggers · 4.3 The background lock · 4.4 The offline gate · 4.5 The session probe · 4.6 The offline flag</h3>
+  <span class="commits">f254368 · 567b29b · 7d680ea · 48b6046 · 21dd211 · 97412bb · 9468585 · 4edb62e · e364c8d · f4f0fc5 · 79752d9 · 346002b</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4>
+      <ul>
+        <li>Shelf profile and player profile were computed differently <em>on purpose</em>; only the variable names hinted at it.</li>
+        <li>Six effects raced to refresh the same shelf; nobody could state the policy.</li>
+        <li>The background-lock sequence — visibility listener, 30-second interval, wait-for-playback, <code>lockLocal()</code> — lived in <code>App.tsx</code> and was entirely untested.</li>
+        <li>The offline flag lived in <strong>three</strong> homes (<code>App.tsx</code> state, <code>localStorage</code>, module-level copy in <code>api.ts</code>) that had to agree.</li>
+        <li><code>probeServer</code> derived “signed in” from two sources, reconciled only by ordering; it could re-probe itself.</li>
+      </ul>
+    </div>
+    <div class="before-after after"><h4>After</h4>
+      <ul>
+        <li><code>profiles.ts</code> — <code>resolveProfileContext</code>, four tested rules.</li>
+        <li><code>refreshPolicy.ts</code> — the four trigger rules, consulted by one effect.</li>
+        <li><code>backgroundLock.ts</code> — <code>useBackgroundLock</code>; the sequence is tested, not just the predicate.</li>
+        <li><code>offlineGate.ts</code> — the ladder returns the screen to render; precedence is a list.</li>
+        <li><code>useSession.ts</code> — one source of truth for <code>session / authed / serverReachable</code>.</li>
+        <li><code>offlineMode.ts</code> — one home; <code>api.ts</code> reads it, <code>App.tsx</code> writes it.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — “untested orchestration” was the finding; “named, tested rules” is the state. The precedence of the offline ladder is now a readable list instead of vertical position, and the shelf-vs-player profile distinction is explicit, documented and enforced by tests.</div>
+</div>
+
+<!-- ════════════════════ PHASE 5 ════════════════════ -->
+<h2 id="p5"><span class="section-no">Phase 5 · Candidate 05 · ADR 028</span>One module owns field precedence</h2>
+<p class="lead">“User edits beat enrichment beats embedded tags beats filename guesses” is the correct order. It existed as a tested module that <em>nothing imported</em>, while three call sites re-derived the rule inline — and a rescan silently overwrote enriched titles with embedded ones.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 250" width="100%" role="img" aria-label="The precedence chain after ADR 028">
+  <text x="490" y="26" text-anchor="middle" class="h-label" fill="#26241f">THE CHAIN — TOP OF STACK WINS, PER FIELD</text>
+  <rect x="240" y="40" width="500" height="44" rx="9" fill="#e4e9fa" stroke="#2749c2" stroke-width="1.6"/>
+  <text x="490" y="66" text-anchor="middle" class="box-label" font-weight="700">user override — always wins, always survives a rescan</text>
+  <rect x="240" y="88" width="500" height="44" rx="9" fill="#fff" stroke="#22201c" stroke-width="1.3"/>
+  <text x="490" y="114" text-anchor="middle" class="box-label">enriched — beats embedded and the scanner, per field</text>
+  <rect x="240" y="136" width="500" height="44" rx="9" fill="#fff" stroke="#22201c" stroke-width="1.3"/>
+  <text x="490" y="162" text-anchor="middle" class="box-label">embedded — the tags inside the file</text>
+  <rect x="240" y="184" width="500" height="44" rx="9" fill="#f3efe4" stroke="#a06b2d" stroke-width="1.3" stroke-dasharray="6 4"/>
+  <text x="490" y="210" text-anchor="middle" class="box-label">derived (filename/folder) — dropped from the chain (ADR 028)</text>
+</svg>
+</div>
+<figcaption><b>Figure 6 —</b> ADR 028 records the decision; Phase 5.2 enforces it. The old “<code>metadataSource === "user"</code>”
+freeze sentinel was read by the scanner but written by nothing — dead policy, removed in X.8 after verifying zero rows in the dev database.</figcaption>
+</figure>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag decision">Decision · ADR 028</span><span class="tag">Phase 5</span><h3>5.1 Deciding what the chain means · 5.2 The rule in one module</h3>
+  <span class="commits">8e775af · fe0a8cc</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4>
+      <ul>
+        <li><code>precedence.ts</code> — tested, complete, dead code.</li>
+        <li>The override rule re-derived at <code>scanner.ts:316</code>, <code>apply.ts:164</code>, <code>run.ts:344</code> — three copies, three behaviours.</li>
+        <li>A rescan could overwrite an <em>enriched</em> title with the <em>embedded</em> one; only user overrides survived.</li>
+        <li>ADR 009 described a chain that production never ran.</li>
+      </ul>
+    </div>
+    <div class="before-after after"><h4>After</h4>
+      <ul>
+        <li>ADR 028 settles the meaning: enriched beats embedded, scanner respects the enriched layer unless a field has a human override; the <code>derived</code> layer is dropped from the chain and documented as dropped.</li>
+        <li><code>precedence.ts</code> gains <code>canScannerWrite</code>, override record/clear helpers — imported by scanner, applier and run. The three inline copies are deleted.</li>
+        <li>A scanner test proves an enriched title survives a rescan; the user-override guarantee is pinned by tests.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — one module decides every “may I write this field?” question, so the three writers can no longer drift apart. The decision is documented (028) rather than living in a commit message.</div>
+</div>
+
+<!-- ════════════════════ PHASE 6 ════════════════════ -->
+<h2 id="p6"><span class="section-no">Phase 6 · Candidate 06</span>One list owns personal data</h2>
+<p class="lead">The GDPR export route, the erasure route and the retention purge each named the personal-data tables by hand — in two different orders — and they already disagreed: <code>webAuthnChallenge</code> was erased but never exported.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 240" width="100%" role="img" aria-label="Three personal-data lists become one module guarded by a schema-reading test">
+  <text x="230" y="24" text-anchor="middle" class="h-label" fill="#b3402a">BEFORE</text>
+  <rect x="30" y="44" width="120" height="40" rx="8" fill="#f7e4de" stroke="#b3402a"/><text x="90" y="68" text-anchor="middle" class="small-label">export route</text>
+  <rect x="30" y="98" width="120" height="40" rx="8" fill="#f7e4de" stroke="#b3402a"/><text x="90" y="122" text-anchor="middle" class="small-label">erasure route</text>
+  <rect x="30" y="152" width="120" height="40" rx="8" fill="#f7e4de" stroke="#b3402a"/><text x="90" y="176" text-anchor="middle" class="small-label">retention purge</text>
+  <g class="small-label" fill="#b3402a">
+    <text x="170" y="68">missing webAuthnChallenge</text>
+    <text x="170" y="122">includes it</text>
+    <text x="170" y="176">includes it</text>
+  </g>
+
+  <text x="640" y="24" text-anchor="middle" class="h-label" fill="#2e7d5b">AFTER</text>
+  <rect x="480" y="56" width="330" height="60" rx="10" fill="#e3f0e8" stroke="#2e7d5b" stroke-width="1.7"/>
+  <text x="645" y="82" text-anchor="middle" class="mono-label">gdpr/personal-data.ts</text>
+  <text x="645" y="102" text-anchor="middle" class="small-label">the one list · the 24-month retention constant</text>
+  <path d="M 170 100 C 300 96, 380 92, 478 86" fill="none" stroke="#2e7d5b" stroke-width="1.6" stroke-dasharray="5 4" stroke-opacity="0.9"/>
+  <rect x="380" y="152" width="520" height="56" rx="10" fill="#26241f"/>
+  <text x="640" y="176" text-anchor="middle" fill="#faf7f0" font-size="11.5">personal-data.test.ts reads schema.prisma, finds every model with a</text>
+  <text x="640" y="194" text-anchor="middle" fill="#faf7f0" font-size="11.5">profileId relation, and fails if the list forgets one</text>
+</svg>
+</div>
+<figcaption><b>Figure 7 —</b> Enforcement moved from “remember to update three places” to a failing test. GDPR docs
+(<code>retention.md</code>, <code>roa.md</code>, <code>GDPR-REMEDIATION-PLAN.md</code>) were updated in the same change, per the repo’s rules.</figcaption>
+</figure>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 6</span><h3>6.1 One module · 6.2 The schema guard</h3>
+  <span class="commits">c85fa15 · bca51d0</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4><p>Export named one set of tables; erasure named another; the purge a third. A new personal-data table had to be added to three hand-written lists — one was already stale.</p></div>
+    <div class="before-after after"><h4>After</h4><p><code>gdpr/personal-data.ts</code> exports the list and the retention constant. Export, erasure and purge read it. A test scans <code>schema.prisma</code>: any personal-data model not in the list fails the suite.</p></div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — a compliance requirement is now enforced by CI rather than by memory. The export/erasure/purge triad cannot silently diverge again.</div>
+</div>
+
+<!-- ════════════════════ PHASE 7 ════════════════════ -->
+<h2 id="p7"><span class="section-no">Phase 7 · Candidate 04</span>Splitting the route table</h2>
+<p class="lead"><code>buildApp</code> was the composition root, the auth gate, the error handler and all 64 handlers in one 2,204-line function — including hand-built payloads, an above-the-fold demo-mode policy, and 35 unvalidated routes.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 300" width="100%" role="img" aria-label="buildApp splits into route modules">
+  <rect x="30" y="40" width="230" height="200" rx="14" fill="#26241f"/>
+  <text x="145" y="96" text-anchor="middle" fill="#faf7f0" font-size="16" font-weight="700">buildApp</text>
+  <text x="145" y="122" text-anchor="middle" fill="#cfc9b8" font-size="11.5">2,204 lines</text>
+  <text x="145" y="142" text-anchor="middle" fill="#cfc9b8" font-size="11.5">64 handlers inline</text>
+  <text x="145" y="162" text-anchor="middle" fill="#cfc9b8" font-size="11.5">106 inline Prisma calls</text>
+  <text x="145" y="182" text-anchor="middle" fill="#cfc9b8" font-size="11.5">35 routes unschematised</text>
+  <text x="145" y="210" text-anchor="middle" fill="#e8c9b0" font-size="11.5">no snapshot to say it worked</text>
+
+  <g fill="#ffffff" stroke="#22201c" stroke-width="1.2">
+    <rect x="330" y="24" width="140" height="40" rx="8"/><rect x="330" y="72" width="140" height="40" rx="8"/><rect x="330" y="120" width="140" height="40" rx="8"/><rect x="330" y="168" width="140" height="40" rx="8"/><rect x="330" y="216" width="140" height="40" rx="8"/>
+    <rect x="500" y="24" width="140" height="40" rx="8"/><rect x="500" y="72" width="140" height="40" rx="8"/><rect x="500" y="120" width="140" height="40" rx="8"/><rect x="500" y="168" width="140" height="40" rx="8"/><rect x="500" y="216" width="140" height="40" rx="8"/>
+    <rect x="670" y="24" width="150" height="40" rx="8"/><rect x="670" y="72" width="150" height="40" rx="8"/><rect x="670" y="120" width="150" height="40" rx="8"/>
+  </g>
+  <g class="mono-label" text-anchor="middle">
+    <text x="400" y="48">taxonomy</text><text x="400" y="96">discover</text><text x="400" y="144">library</text><text x="400" y="192">enrichment</text><text x="400" y="240">progress</text>
+    <text x="570" y="48">profiles</text><text x="570" y="96">gdpr</text><text x="570" y="144">media</text><text x="570" y="192">static</text><text x="570" y="240">metadata</text>
+    <text x="745" y="48">auth/demo-policy</text><text x="745" y="96">book-payload</text><text x="745" y="144">request-context</text>
+  </g>
+  <rect x="670" y="186" width="280" height="70" rx="10" fill="#e3f0e8" stroke="#2e7d5b" stroke-width="1.6"/>
+  <text x="810" y="214" text-anchor="middle" class="mono-label" font-weight="700">app.ts — 350 lines</text>
+  <text x="810" y="234" text-anchor="middle" class="small-label">hooks · error handler · wiring, and nothing else</text>
+  <line x1="260" y1="140" x2="328" y2="140" stroke="#2e7d5b" stroke-width="1.6"/>
+</svg>
+</div>
+<figcaption><b>Figure 8 —</b> The split was mechanical and protected by a route-table snapshot test taken
+<em>before</em> the first move, plus schemas on every input-taking route (<a href="#s08">§08</a>).</figcaption>
+</figure>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 7</span><h3>7.1 Route-table snapshot + schemas · 7.2–7.7 Extract &amp; split · 7.8 Share listener logic · 7.9 Admin proxy scope</h3>
+  <span class="commits">8e10d36 · a850d21 · ce1204d · e36b535 · 84acfce · fe28a35 · 6baa4ad · b2700b8 · 19a0106</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4>
+      <ul>
+        <li>64 handlers inline; the six domain modules that <em>did</em> own rules were bypassed with inline copies (thin orchestration, thick duplication).</li>
+        <li>Two hand-built copies of the <code>contributors</code> payload shape, already diverged.</li>
+        <li>Demo-mode truth spread over 64 checks in 3 mechanisms — two answers wrongly returned <strong>401</strong> while every other demo-hidden route returned <strong>404</strong>.</li>
+        <li>Manual “look up metadata” skipped <code>EnrichmentRun</code>, skipped overrides, and left rows the background pass would re-apply over.</li>
+        <li>The family listener proxied <code>/admin</code> in <em>every</em> deployment, including the household one (ADR 025 allows it only for hosted).</li>
+      </ul>
+    </div>
+    <div class="before-after after"><h4>After</h4>
+      <ul>
+        <li>A snapshot test freezes the route table; every input route has a Fastify schema (35 unschematised routes included) — malformed bodies now 400.</li>
+        <li>Ten route modules + <code>book-payload.ts</code> (one <code>contributors</code> shape) + <code>request-context.ts</code> + <code>conditional.ts</code> (one 304 path).</li>
+        <li>One demo-mode predicate (<code>auth/demo-policy.ts</code>) answers “is this hidden in demo?” — every demo-hidden route is 404.</li>
+        <li>Manual enrich flows through <code>EnrichmentManager</code>: writes the run row, honours overrides.</li>
+        <li><code>lib/library-roots.ts</code> + <code>scanning.ts</code> are shared by both listeners; ADR 029 gates the proxy behind <code>ADMIN_PROXY=true</code>, set only in <code>docker-compose.prod.yml</code>.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — <code>app.ts</code> went from “the file every bug hides in” to a readable wiring layer with a frozen interface. The demo-mode, payload-shape and dual-listener defects all died of the same cause: one rule, one home.</div>
+</div>
+
+<!-- ════════════════════ PHASE 8 ════════════════════ -->
+<h2 id="p8"><span class="section-no">Phase 8 · Candidate 07</span>Copy out of logic modules</h2>
+<p class="lead">Logic modules returned user-facing English. <code>position.ts</code> — documented as pure — returned <code>copy.position.chapterTitle(4)</code>, and its tests asserted the literal words “Chapter 4”, so a wording tweak failed a maths test.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 230" width="100%" role="img" aria-label="Logic returns data; components render copy">
+  <text x="240" y="22" text-anchor="middle" class="h-label" fill="#b3402a">BEFORE</text>
+  <rect x="30" y="46" width="170" height="56" rx="10" fill="#26241f"/><text x="115" y="72" text-anchor="middle" fill="#faf7f0" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11">position.ts</text><text x="115" y="92" text-anchor="middle" fill="#cfc9b8" font-size="10.5">“pure” module</text>
+  <line x1="200" y1="74" x2="320" y2="74" stroke="#b3402a" stroke-width="1.4"/>
+  <rect x="320" y="48" width="210" height="52" rx="10" fill="#f7e4de" stroke="#b3402a"/><text x="425" y="79" text-anchor="middle" class="box-label">"Chapter 4" (English)</text>
+  <text x="530" y="78" class="small-label">← rendered directly; a copy edit breaks a maths test</text>
+
+  <text x="240" y="138" text-anchor="middle" class="h-label" fill="#2e7d5b">AFTER</text>
+  <rect x="30" y="160" width="170" height="56" rx="10" fill="#26241f"/><text x="115" y="186" text-anchor="middle" fill="#faf7f0" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11">position.ts</text><text x="115" y="206" text-anchor="middle" fill="#cfc9b8" font-size="10.5">pure, copy-free</text>
+  <line x1="200" y1="188" x2="320" y2="188" stroke="#2e7d5b" stroke-width="1.4"/>
+  <rect x="320" y="162" width="210" height="52" rx="10" fill="#e3f0e8" stroke="#2e7d5b"/><text x="425" y="193" text-anchor="middle" class="mono-label">{ chapterNumber: 4 }</text>
+  <line x1="530" y1="188" x2="650" y2="188" stroke="#2e7d5b" stroke-width="1.4"/>
+  <rect x="650" y="162" width="280" height="52" rx="10" fill="#fff" stroke="#22201c"/><text x="790" y="183" text-anchor="middle" class="box-label">component + copy.ts</text><text x="790" y="202" text-anchor="middle" class="small-label">renders "Chapter 4"</text>
+</svg>
+</div>
+<figcaption><b>Figure 9 —</b> The same pattern applied to <code>browse.ts</code> (series labels) and the local
+device/download/recover layer (which now raise error codes; callers map codes to reviewed sentences).</figcaption>
+</figure>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 8</span><h3>8.1 position.ts · 8.2 browse.ts · 8.3 The local layer</h3>
+  <span class="commits">5c0d9c5 · 53782d7 · 2c66eec</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4><p>A “pure” module knew the copy catalogue; the local layer raised user-facing sentences from deep inside file I/O, making the layer unusable headlessly and its errors untestable without the whole copy catalogue.</p></div>
+    <div class="before-after after"><h4>After</h4><p><code>position.ts</code>/<code>browse.ts</code> return data. The local modules raise <em>codes</em>; the caller maps codes → reviewed sentences (the same pattern <code>biometricFailure.ts</code> already used). Tests assert data and codes, never English.</p></div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — logic is testable without a dictionary, and the copy catalogue regains single authority over every sentence the listener reads.</div>
+</div>
+
+<!-- ════════════════════ PHASE 9 ════════════════════ -->
+<h2 id="p9"><span class="section-no">Phase 9 · Candidate 08</span>The AI seam</h2>
+<p class="lead">The “suggest metadata with AI” route constructed its one true provider <em>inside the handler</em>, so the route had no test at all — and the prompt it sent to a third-party model embedded <code>item.filePath</code>, the absolute path of a family’s files.</p>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 230" width="100%" role="img" aria-label="Prompt loses the server path; adapter becomes injectable">
+  <text x="250" y="24" text-anchor="middle" class="h-label" fill="#b3402a">BEFORE</text>
+  <rect x="30" y="44" width="200" height="52" rx="9" fill="#26241f"/><text x="130" y="68" text-anchor="middle" fill="#faf7f0" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11">route handler</text><text x="130" y="88" text-anchor="middle" fill="#e8c9b0" font-size="10">new LMStudioAdapter() inside</text>
+  <rect x="270" y="44" width="340" height="64" rx="9" fill="#f7e4de" stroke="#b3402a"/><text x="440" y="70" text-anchor="middle" class="mono-label">“decide for: /app/data/library/</text><text x="440" y="88" text-anchor="middle" class="mono-label">audiobook/book.m4b”</text>
+  <text x="440" y="130" text-anchor="middle" class="small-label">absolute server path, sent to whatever model is configured</text>
+
+  <text x="250" y="158" text-anchor="middle" class="h-label" fill="#2e7d5b">AFTER</text>
+  <rect x="30" y="172" width="200" height="44" rx="9" fill="#ffffff" stroke="#22201c"/><text x="130" y="197" text-anchor="middle" class="mono-label">BuildAppOptions { llm? }</text>
+  <rect x="270" y="172" width="340" height="44" rx="9" fill="#e3f0e8" stroke="#2e7d5b"/><text x="440" y="198" text-anchor="middle" class="small-label">title + candidate titles only</text>
+  <text x="650" y="198" class="small-label">testable with a fake; no path, ever</text>
+</svg>
+</div>
+<figcaption><b>Figure 10 —</b> The route now has a test (it had none). Production is unchanged when no adapter is injected;
+when there is no model at all, every feature still works — the AI never gates anything.</figcaption>
+</figure>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag">Phase 9</span><h3>9.1 Inject the adapter · 9.2 Stop sending the path</h3>
+  <span class="commits">047f9fd · 4139fab</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4><p><code>LLMAdapter</code> had one implementation, never used as a type; the route could not be tested; the prompt disclosed the library’s directory layout to the model provider.</p></div>
+    <div class="before-after after"><h4>After</h4><p><code>BuildAppOptions.llm</code> injects any adapter (tests use a fake); the handler falls back to <code>LMStudioAdapter</code> when none is injected. The prompt contains title and candidate titles — nothing else.</p></div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — a feature that was literally untestable became one with a test that captures the prompt and asserts the path is gone.</div>
+</div>
+
+<!-- ════════════════════ PHASE 10 ════════════════════ -->
+<h2 id="p10"><span class="section-no">Phase 10 · Candidate 09 · ADR 030</span>One home for the provider clients</h2>
+<p class="lead">LibriVox and Audnexus lived under <code>metadata/</code>; Open Library and Google Books lived one directory up, so <code>chain.ts</code> re-mapped every field to make them fit — and each pair scored matches with a <em>different</em> similarity function.</p>
+
+<div class="phase">
+  <div class="phase-tag"><span class="tag decision">Decision · ADR 030</span><span class="tag">Phase 10</span><h3>10.1 Move the clients · 10.2 One similarity · 10.3 Audnexus leaves the chain’s interface</h3>
+  <span class="commits">5a3f4de · 1ff01dd · be00cd1 · e4d1519</span></div>
+  <div class="phase-cols">
+    <div class="before-after before"><h4>Before</h4>
+      <ul>
+        <li>Provider clients in two directories; <code>enrichment.ts</code> kept a private <code>similarity</code> that <code>metadata/types.ts</code> was written to replace.</li>
+        <li><code>ProviderId</code> advertised <code>"audnexus"</code> as a title-driven provider the chain would never walk — an ADR 008 artefact.</li>
+        <li>Dead exports (<code>candidateCoverFilename</code>, <code>downloadCover</code>) shadowed <code>metadata/cover.ts</code>.</li>
+      </ul>
+    </div>
+    <div class="before-after after"><h4>After</h4>
+      <ul>
+        <li>All three title-driven clients live under <code>metadata/</code>; <code>enrichment.ts</code> deleted (433 lines, zero remaining).</li>
+        <li>One <code>similarity</code> (in <code>metadata/types.ts</code>) scores all four providers; a cross-provider test pins it.</li>
+        <li>ADR 030: Audnexus leaves the title-driven <code>MetadataProvider</code>; its ASIN-keyed chapter lookup survives as a named capability (<code>AudnexusAsin</code>). <code>PROVIDER_IDS</code> matches reality.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="why"><b>Why this is an improvement</b> — the interface no longer advertises capabilities the chain will not use, and “which provider scored this match?” finally has one answer.</div>
+</div>
+
+<!-- ════════════════════ CROSS-CUTTING ════════════════════ -->
+<h2 id="x"><span class="section-no">Cross-cutting · X.1–X.12</span>The audit’s small print, fixed one by one</h2>
+<p>Twelve smaller defects found during the review itself. Each is one focused change; each shipped with tests.</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>Step</th><th>What was wrong</th><th>What changed</th><th>Commit</th></tr></thead>
+<tbody>
+<tr><td>X.1</td><td>Favourites keyed per profile, not per server — same collision class as progress</td><td>Folded into 2.2: server-scoped keys via <code>replicaScopedKey</code></td><td><code>cee4ba2</code></td></tr>
+<tr><td>X.2</td><td><code>reachedSegmentEnd</code> existed, tested — and the player re-implemented it without the zero-duration guard</td><td><code>ChapterPlayer</code> now uses the shared helper; “end of chapter” sleep timer can’t stop on an empty interstitial</td><td><code>c2ba403</code></td></tr>
+<tr><td>X.3</td><td><code>registerPlugin("BiometricVault")</code> at module scope — the exact blank-screen crash <code>local/device.ts</code> documented</td><td>Plugin resolved lazily from <code>window.Capacitor.Plugins</code> at call time; tests mock the bridge</td><td><code>6745f32</code></td></tr>
+<tr><td>X.4</td><td>Dead exports: <code>apiFetch</code>, <code>apiAssetUrl</code>, <code>listReplicaAudiobooks</code>, <code>countReplicaBooks</code>, <code>totalReplicaBytes</code>, <code>EMPTY_FILTERS</code></td><td>Deleted across steps 1.3, 10.1, and <code>EMPTY_FILTERS</code> separately</td><td><code>e4d1519</code></td></tr>
+<tr><td>X.5</td><td><code>transferGuards.test.ts</code> tested <code>./device</code> under the wrong name</td><td>Renamed to <code>device.test.ts</code></td><td><code>64552c1</code></td></tr>
+<tr><td>X.6</td><td><code>mayAdmin()</code> exported, called from nowhere</td><td>Deleted; admin authorization lives behind one path-based policy module</td><td><code>e3ee777</code></td></tr>
+<tr><td>X.7</td><td><code>AUDIO_EXTENSIONS</code> duplicated byte-for-byte in <code>scanner.ts</code> and <code>scan-utils.ts</code></td><td>One list, in <code>scan-utils.ts</code>; <code>scanner.ts</code> imports it</td><td><code>0c85163</code></td></tr>
+<tr><td>X.8</td><td><code>scanner.ts</code> honoured a legacy <code>metadataSource === "user"</code> freeze that nothing wrote any more</td><td>Dropped after verifying <strong>zero</strong> such rows in the dev database; FieldOverride rows are the sole protection</td><td><code>bbd4451</code></td></tr>
+<tr><td>X.9</td><td>Admin table browser: <code>LIMIT</code>/<code>OFFSET</code> interpolated into raw SQL; table allowlist bypassable</td><td>Parameters bound; allowlist enforced inside the handler beneath the schema enum</td><td><code>7452ef7</code></td></tr>
+<tr><td>X.10</td><td>Admin opened a <em>second</em> <code>better-sqlite3</code> connection per request</td><td>One shared readonly connection per admin app (ADR 022)</td><td><code>7452ef7</code></td></tr>
+<tr><td>X.11</td><td>Biometric failure classified by matching English sentences, incl. a regex over “biometric prompt error code N”</td><td>Java rejects with stable codes in <code>PluginCall</code>’s <code>code</code> slot; the client classifies on <code>error.code</code> only; the save-retry had the same prose bug, fixed via <code>shouldRetryBiometricSave</code></td><td><code>3bad3d3</code></td></tr>
+<tr><td>X.12</td><td>Eight raw <code>localStorage</code> reads/writes of the profile id bypassing <code>lib/api.ts</code> accessors; <code>PENDING_PROFILE_KEY</code> duplicated in two files</td><td><code>getActiveProfileIdNumber</code>, <code>get/set/clearPendingProfileId</code> accessors; one module-private constant; biometric unlock bails to the offline-no-cache copy instead of passing NaN to the plugin</td><td><code>d1ef3b2</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<figure>
+<div class="fig">
+<svg viewBox="0 0 980 210" width="100%" role="img" aria-label="Biometric error contract before and after">
+  <text x="245" y="24" text-anchor="middle" class="h-label" fill="#b3402a">BEFORE — prose is the contract</text>
+  <rect x="30" y="44" width="430" height="56" rx="9" fill="#f7e4de" stroke="#b3402a"/>
+  <text x="245" y="68" text-anchor="middle" class="mono-label">call.reject("BIOMETRIC_CANCELLED: Biometric prompt</text>
+  <text x="245" y="86" text-anchor="middle" class="mono-label">error code 10: User canceled")</text>
+  <text x="245" y="130" text-anchor="middle" class="small-label">client: regex over the sentence, hope the wording never changes</text>
+
+  <text x="735" y="24" text-anchor="middle" class="h-label" fill="#2e7d5b">AFTER — the code slot is the contract</text>
+  <rect x="530" y="44" width="420" height="56" rx="9" fill="#e3f0e8" stroke="#2e7d5b" stroke-width="1.6"/>
+  <text x="740" y="68" text-anchor="middle" class="mono-label">call.reject("User canceled", "BIOMETRIC_CANCELLED")</text>
+  <text x="740" y="88" text-anchor="middle" class="small-label">bridge copies code → Error.code · client switches on it</text>
+  <text x="740" y="130" text-anchor="middle" class="small-label">prose decides nothing; unknown code → destroy nothing</text>
+</svg>
+</div>
+<figcaption><b>Figure 11 —</b> X.11, the Android vault’s error surface. The Java plugin and the TypeScript classifier now share
+seven constant names; both files say “change both together”. A missing or unknown code classifies as <code>unknown</code> and never clears the saved value.</figcaption>
+</figure>
+
+<!-- ════════════════════ DECISIONS ════════════════════ -->
+<h2 id="decisions"><span class="section-no">Decisions</span>ADR 028, 029, 030 — the three calls the plan needed</h2>
+<div class="phase">
+  <div class="phase-tag"><span class="tag decision">ADR 028</span><h3>Field-level metadata precedence</h3><span class="commits">decisions/028-metadata-field-precedence-chain.md · fe0a8cc</span></div>
+  <p><strong>The drift:</strong> ADR 009 promised a <code>user &gt; enriched &gt; embedded &gt; derived</code> chain; production ran “last writer wins”. <strong>The decision:</strong> keep the four-layer intent minus <code>derived</code> (never implemented in production); the scanner writes embedded values but must not touch a field protected by a <code>FieldOverride</code>, and must not overwrite an enriched value; the applier writes enriched values and honours overrides. <code>metadataSource === "user"</code> is retired as a protection sentinel. <strong>Enforced by:</strong> <code>metadata/precedence.ts</code> (<code>canScannerWrite</code>), imported everywhere.</p>
+</div>
+<div class="phase">
+  <div class="phase-tag"><span class="tag decision">ADR 029</span><h3>The admin proxy belongs to the hosted, single-port deployment only</h3><span class="commits">decisions/029-admin-proxy-scope.md · 19a0106</span></div>
+  <p><strong>The drift:</strong> ADR 025 permits the family listener to proxy <code>/admin</code> for the hosted Render deployment. <code>index.ts</code> set <code>adminProxyTarget</code> unconditionally, so the household deployment also exposed <code>/admin</code> on the family port (and published port 3100 by default). <strong>The decision:</strong> the family listener registers no admin routes by default — the proxy is enabled only when <code>ADMIN_PROXY=true</code>, set only in <code>docker-compose.prod.yml</code>. Household: <code>/admin</code> answers 404. Tests cover both states.</p>
+</div>
+<div class="phase">
+  <div class="phase-tag"><span class="tag decision">ADR 030</span><h3>Audnexus is an ASIN-keyed capability, not a title-driven provider</h3><span class="commits">decisions/030-audnexus-provider-role.md · be00cd1</span></div>
+  <p><strong>The drift:</strong> ADR 008 removed Audnexus from the title-driven chain; ADR 011 made it an ASIN-keyed chapter lookup. But <code>PROVIDER_IDS</code> still listed it and <code>createProviders()</code> still built it — an interface advertising a capability the chain will not use. <strong>The decision:</strong> it leaves <code>MetadataProvider</code> entirely; the ASIN lookup survives as a named capability (<code>AudnexusAsin</code>, with <code>bookByAsin</code>/<code>chaptersByAsin</code> and genre mapping unchanged). <code>PROVIDER_IDS</code> now lists only <code>librivox | googlebooks | openlibrary</code>.</p>
+</div>
+
+<!-- ════════════════════ 08 · VERIFICATION ════════════════════ -->
+<h2 id="s08"><span class="section-no">08 · Safety net</span>How 156 files changed without breaking the house</h2>
+<ul>
+  <li><strong>The route-table snapshot test</strong> (<code>app.test.ts</code>) — written <em>before</em> the first handler moved. It derives the expected list from the app’s own <code>onRoute</code> hook, so it cannot drift. The split was proven to change nothing before anything changed.</li>
+  <li><strong>The personal-data schema guard</strong> — reads <code>schema.prisma</code>, finds every model with a <code>profileId</code> relation, and fails if the export/erasure/purge list forgets one.</li>
+  <li><strong>The typecheck gate</strong> — <code>make test</code> now fails on a bad type before any test runs; it caught a double-encoded body (string-in-JSON) and made it a compile error.</li>
+  <li><strong>Migration safety, not migration theatre</strong> — pre-existing offline progress rows are read via a legacy fallback but deliberately <em>not</em> rewritten, because a legacy row cannot say which server it belonged to.</li>
+  <li><strong>Both directions of the admin proxy</strong> are pinned by tests: family listener without the flag → 404 for <code>/admin</code>; with it → proxy.</li>
+  <li><strong>Manual verification against the dev database</strong> preceded the X.8 removal of the legacy provenance sentinel (zero <code>metadataSource = 'user'</code> rows confirmed inside the running container).</li>
+</ul>
+
+<!-- ════════════════════ 09 · NOT DONE ════════════════════ -->
+<h2 id="s09"><span class="section-no">09 · Honesty</span>What is not done, and what it costs</h2>
+<div class="callout warn"><strong>E2E is red, and it is environmental — not a regression.</strong>
+The Playwright suite reports 45 passed / 8 failed; every failure traces to (a) the dev database referencing deleted <code>./test</code> fixtures, so media streams answer 403, (b) a missing PWA manifest, or (c) Windows Hello being unavailable in this environment. None of the failures are in code paths this work changed. The fix is either restoring the fixtures or <code>make reset</code> (which wipes the dev database) — a product decision, deliberately left to the owner.</div>
+<ul>
+  <li><strong>The Android plugin is unverified by a compiler here.</strong> <code>BiometricVaultPlugin.java</code> was changed as part of X.11 (all reject sites now carry a stable <code>code</code>; every arity used was checked against <code>PluginCall.java</code>). No Android SDK exists in the working environment; the next APK build must compile it. The web bundle is unaffected either way — the classifier has full vitest coverage with bridge-shaped errors.</li>
+  <li><strong>Seven pre-existing copy warnings</strong> (<code>account</code> → <code>profile</code> GLOSSARY warnings in <code>copy.ts</code>) predate this work and were left alone; the copy check passes with warnings.</li>
+  <li><strong><code>App.tsx</code> did not get smaller, dramatically.</strong> The plan’s goal was testability, not deletion; the file went 1,212 → 1,110 lines. The win is the six tested modules it now delegates to.</li>
+  <li><strong>The <code>derived</code> precedence layer</strong> stays undocumented in code by design — ADR 028 drops it from the chain instead.</li>
+</ul>
+
+<!-- ════════════════════ 10 · OUT OF SCOPE ════════════════════ -->
+<h2 id="s10"><span class="section-no">10 · Boundaries</span>Out of scope, deliberately</h2>
+<ul>
+  <li><strong>No rewrite.</strong> Every step was a move or a rule extraction — never a rewrite of a 2,000-line function “for hygiene”. HTTP response shapes were preserved.</li>
+  <li><strong>No framework, state library, or test runner</strong> was introduced (no router, no React Query, no Zustand).</li>
+  <li><strong>No change to the enrichment pipeline’s behaviour</strong> — LIMITATIONS §1.1/§1.2 (Open Library / Google Books reliability) are product bugs with their own specs.</li>
+  <li><strong>No change to the library scanner’s throughput</strong> — roadmap item 01.</li>
+  <li><strong>The admin client remains a separate app</strong> (ADR 022): separate credential, separate bundle, separate origin — now with a shared <em>deadline rule</em> and a shared <em>readonly</em> connection, never shared credentials.</li>
+</ul>
+
+<!-- ════════════════════ GLOSSARY ════════════════════ -->
+<h2 id="glossary"><span class="section-no">Appendix ·</span>Glossary for the uninitiated</h2>
+<div class="gloss">
+  <dt>ADR</dt><dd>Architecture Decision Record — a short <code>decisions/NNN-slug.md</code> documenting one consequential choice and the rejected alternatives.</dd>
+  <dt>Break-glass</dt><dd>The household shared password path: acceptable for setup/recovery, never the daily sign-in.</dd>
+  <dt>Composition root</dt><dd>The one place a server wires its dependencies together; here, <code>buildApp</code>.</dd>
+  <dt>Demo policy</dt><dd>Which routes exist when the deployment serves a public demo (most admin surfaces must 404).</dd>
+  <dt>ETag / 304</dt><dd>Conditional GET: the client asks “changed since?”, server answers “not modified” with no body — the library shelf uses it to avoid re-downloading.</dd>
+  <dt>Field override</dt><dd>A per-field human lock (“this title is <em>Our House</em>, full stop”); nothing may overwrite an overridden field.</dd>
+  <dt>GDPR export / erasure / retention</dt><dd>The three data-subject-rights flows this codebase supports; all read one list of personal-data tables.</dd>
+  <dt>Library root</dt><dd>A configured disk directory the scanner may read. Nothing outside a configured root is ever touched.</dd>
+  <dt>PWA</dt><dd>Progressive Web App — the installable, offline-capable web build; the Android shell wraps the same bundle.</dd>
+  <dt>Replica</dt><dd>The on-device copy of a server’s shelf, used offline; keyed per server precisely so several shelves cannot collide.</dd>
+  <dt>Route-table snapshot</dt><dd>A test asserting the set of registered routes equals a frozen list — the safety net for mechanical moves.</dd>
+  <dt>Seam</dt><dd>A place where a dependency can be substituted (a parameter, an interface). Spec 37 creates several so tests can verify behaviour instead of hoping.</dd>
+  <dt>Shallow module</dt><dd>A module whose interface is nearly as complex as its implementation — most of this codebase’s trouble started there.</dd>
+  <dt>Shelf (device / server)</dt><dd>The “your books” screen. Server shelf = the house server’s catalogue; device shelf = downloads on this device.</dd>
+</div>
+
+<!-- ════════════════════ APPENDIX ════════════════════ -->
+<h2 id="appendix"><span class="section-no">Appendix ·</span>All 48 commits, in order</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>#</th><th>Hash</th><th>Commit</th></tr></thead>
+<tbody id="commit-list"></tbody>
+</table>
+</div>
+<script>
+const commits = [
+"cce3ae5 docs: plan the architecture deepening (spec 37)",
+"7799582 build: typecheck both packages and gate the suite on it (spec 37 step 0.1)",
+"fe5b2ad test(client): one helper for stubbing requests (spec 37 step 0.2)",
+"d1521bb refactor(client): one request interface with five guarantees (spec 37 step 1.1)",
+"331f336 refactor(client): the library and browse hooks use the request interface (spec 37 step 1.2)",
+"79473e6 refactor(client): the components use the request interface (spec 37 step 1.3)",
+"287e256 refactor(client): the admin panel gets its own request interface (spec 37 step 1.4)",
+"b2b3df3 refactor(client): a bounded request owns its guarantees (spec 37 step 1.5)",
+"cee4ba2 fix(client): scope the private cache to a server (spec 37 steps 2.1 and 2.2)",
+"caa5484 refactor(client): the library source seam (spec 37 steps 3.1-3.3)",
+"9468585 refactor(client): the profile-resolution rules (spec 37 step 4.1)",
+"4edb62e refactor(client): the refresh-trigger rules (spec 37 step 4.2)",
+"e364c8d refactor(client): the background lock hook (spec 37 step 4.3)",
+"f4f0fc5 refactor(client): the offline gate dispatch (spec 37 step 4.4)",
+"79752d9 refactor(client): the session probe hook (spec 37 step 4.5)",
+"346002b refactor(client): the offline mode flag (spec 37 step 4.6)",
+"8e775af docs(spec37): decide the metadata field-precedence chain (step 5.1)",
+"fe0a8cc refactor(server): move field-precedence rule into the module (spec 37 step 5.2)",
+"c85fa15 refactor(server): one module owns personal-data tables and retention (spec 37 step 6.1)",
+"bca51d0 test(server): guard the personal-data list and centralize enforcement docs (spec 37 step 6.2)",
+"8e10d36 refactor(server): capture route table and add schemas (spec 37 step 7.1)",
+"a850d21 refactor(server): extract taxonomy routes (spec 37 step 7.2)",
+"ce1204d refactor(server): extract discover and wishlist routes (spec 37 step 7.3)",
+"e36b535 refactor(server): extract library and membership routes (spec 37 step 7.4)",
+"84acfce refactor(server): extract enrichment routes; manual enrich via manager (spec 37 step 7.5)",
+"fe28a35 refactor(server): one table for the demo-mode policy (spec 37 step 7.6)",
+"6baa4ad refactor(server): split the route table into modules (spec 37 step 7.7)",
+"b2700b8 refactor(server): share the duplicated listener logic (spec 37 step 7.8)",
+"19a0106 security(server): gate the admin proxy to the hosted single-port deployment (spec 37 step 7.9, ADR 029)",
+"5c0d9c5 refactor(client): position.ts returns data, components render copy (spec 37 step 8.1)",
+"53782d7 refactor(client): browse.ts returns series data, shelf renders copy (spec 37 step 8.2)",
+"2c66eec refactor(client): local layer raises error codes, callers render copy (spec 37 step 8.3)",
+"047f9fd refactor(server): inject the LLM adapter seam for the ai-suggest route (spec 37 step 9.1)",
+"4139fab security(server): stop sending the server path to the model (spec 37 step 9.2)",
+"5a3f4de refactor(server): move the Open Library and Google Books clients under metadata/ (spec 37 step 10.1)",
+"e4d1519 chore(client): drop the unused EMPTY_FILTERS export (spec 37 cross-phase X.4)",
+"1ff01dd test(server): prove all four providers score with the shared similarity (spec 37 step 10.2)",
+"be00cd1 refactor(server): Audnexus leaves the title-driven provider interface (spec 37 step 10.3, ADR 030)",
+"316eedf refactor(client): delete the fetch shim (spec 37 step 1.6)",
+"c2ba403 refactor(client): use reachedSegmentEnd in ChapterPlayer (spec 37 x.2)",
+"6745f32 fix(client): resolve the biometric vault lazily off the native bridge (spec 37 x.3)",
+"64552c1 test(client): rename transferGuards.test.ts to device.test.ts (spec 37 x.5)",
+"e3ee777 chore(server): delete the unused mayAdmin export (spec 37 x.6)",
+"0c85163 chore(server): one AUDIO_EXTENSIONS, in scan-utils (spec 37 x.7)",
+"bbd4451 refactor(server): scanner stops reading the dead user-provenance sentinel (spec 37 x.8)",
+"7452ef7 security(server): parameterize the admin browser's paging and share one readonly driver connection (spec 37 x.9 x.10)",
+"3bad3d3 refactor(client): biometric vault rejects with a stable code the client classifies, not prose (spec 37 x.11)",
+"d1ef3b2 refactor(client): one accessor set for the profile keys (spec 37 x.12)"
+];
+document.getElementById("commit-list").innerHTML = commits.map((c, i) => {
+  const [h, ...rest] = c.split(" ");
+  return `<tr><td>${i + 1}</td><td><code>${h}</code></td><td>${rest.join(" ")}</td></tr>`;
+}).join("");
+</script>
+<p style="color: var(--ink2); font-size: 13px;">Hashes are as reachable in <code>git history</code>
+(<code>git log --grep='spec 37'</code>). Under the plan’s claim/release protocol the spec tracker updates its row and
+<em>then</em> amends the commit, so a few tracker rows name the pre-amend hash (e.g. the 1.6 row says <code>8ce5409</code>;
+the shipped commit is <code>316eedf</code>). The list above reflects what shipped. Phases 0–2 merged into <code>master</code>
+ahead of the branch (<code>cee4ba2</code>); the branch fast-forwarded <code>master</code> to <code>d1ef3b2</code> on 2026-11-11.
+The planning commit <code>cce3ae5</code> is counted so the range sums to 48. Forty-seven are implementation commits; the forty-eighth, <code>cce3ae5</code>, is the planning document itself.</p>
+
+<footer class="footer">
+  <strong>Deepening the Architecture — Spec 37</strong> · Engineering report · Generated 2026-11-11 from
+  <code>specs/37-architecture-deepening.md</code>, <code>decisions/</code>, and <code>git log</code> ·
+  The complete plan of record lives in <code>specs/37-architecture-deepening.md</code>; the merge into <code>master</code> is <code>d1ef3b2</code>.
+</footer>
+</main>
+</body>
+</html>
