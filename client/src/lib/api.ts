@@ -34,6 +34,7 @@
 import { isNativeShell } from "./platform";
 import { copy } from "../copy";
 import { responseErrorText } from "./apiError";
+import { fetchWithDeadline, REQUEST_TIMEOUT_MS } from "./bounded";
 
 export const SERVER_URL_KEY = "serverUrl";
 
@@ -549,23 +550,17 @@ export function profileHeaders(): Record<string, string> {
  * So every request gets a deadline, and a request that runs out of time
  * fails like any other error — which the callers already know how to show.
  *
- * The default is generous, because a slow home server on a phone is still a
- * working server. The reachability probe uses a shorter one; see
- * `lib/reachability.ts`.
- */
-export const REQUEST_TIMEOUT_MS = 30_000;
-
-/**
- * `fetch`, with a deadline.
- *
- * The signal is composed rather than replaced, so a caller that already set
- * one keeps it.
+ * The deadline itself lives in `lib/bounded.ts`, because the admin panel needs
+ * it too and must not import this module. What this adds is the family's
+ * offline-mode check.
  *
  * **Not every call site uses this yet.** The per-component `request` helpers
  * in `ReviewQueue`, `TagManager`, `AudiobookDetail` and the gates still use a
  * raw `fetch`, and each of them can still spin forever when the server is
  * unreachable. `LIMITATIONS.md` §5 records that as the remaining work.
  */
+export { REQUEST_TIMEOUT_MS } from "./bounded";
+
 export async function boundedFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -574,18 +569,7 @@ export async function boundedFetch(
   if (explicitOfflineMode) {
     throw new Error(OFFLINE_MODE_ERROR);
   }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const outer = init.signal;
-  if (outer) {
-    if (outer.aborted) controller.abort();
-    else outer.addEventListener("abort", () => controller.abort());
-  }
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  return fetchWithDeadline(input, init, timeoutMs);
 }
 
 /**

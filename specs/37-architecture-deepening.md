@@ -132,8 +132,8 @@ stuck; say so rather than leaving it ambiguous.
 | 0.2 client request test helper | done | opencode | fe5b2ad |
 | 1.1 name the request guarantees | done | opencode | d1521bb |
 | 1.2 `useLibrary` + `useBrowse` | done | opencode | 331f336 |
-| 1.3 the components | done | opencode | (next commit) |
-| 1.4 the admin client | not started | | |
+| 1.3 the components | done | opencode | 79473e6 |
+| 1.4 the admin client | done | opencode | (next commit) |
 | 1.5 retire the fetch shim | not started | | |
 | 2.1 prove the key collision | not started | | |
 | 2.2 server-scoped private keys | not started | | |
@@ -624,15 +624,19 @@ own `copy.ts`, its own bundle and its own origin. It has 16 raw `fetch` calls
 and a 1.2 KB test file that tests almost nothing.
 
 **Files:**
+- `client/src/lib/bounded.ts` — **new** (the deadline rule, shared)
+- `client/src/lib/bounded.test.ts` — **new**
+- `client/src/lib/api.ts` — `boundedFetch` now delegates to it
 - `client/src/admin/request.ts` — **new**
 - `client/src/admin/request.test.ts` — **new**
-- `client/src/admin/main.tsx`
-- `client/src/admin/main.test.tsx`
+- `client/src/admin/app.tsx` — **new** (the screens, split out of the entry)
+- `client/src/admin/app.test.tsx` — **new**
+- `client/src/admin/main.tsx` — now just the mount
 
 **Test first:** `client/src/admin/request.test.ts` — the admin panel talks to
 `/api/admin/*` with `credentials: "include"` and needs no profile header and
-no session header (it has its own credential). Assert that, and that a
-failed request produces the admin copy's sentence.
+no session header (it has its own credential). Assert that, and that a failed
+request throws an error carrying the server's code and status.
 
 **Then:** implement `admin/request.ts` as a small sibling of `lib/request.ts`.
 Do **not** import `lib/request.ts` into the admin bundle — the admin app is a
@@ -642,6 +646,32 @@ family client's session logic into it.
 Then move all 16 call sites, and write the admin tests that are missing
 (status dashboard, DB table list, API docs).
 
+**Note (implemented) — the deadline rule moved to `lib/bounded.ts`.** The
+admin panel needs the deadline, and `lib/api.ts` carries the family's session
+handling, the listener's copy catalogue and the private cache. So the deadline
+became `lib/bounded.ts`: a module with no application state in it, which both
+bundles import. `lib/api.ts`'s `boundedFetch` now composes it with the
+family's offline-mode check.
+
+**Note (implemented) — the deadline got stronger.** The old rule aborted the
+signal and relied on the fetch honouring it. The new one aborts **and** races
+the promise against the timer, so the call rejects even if the underlying
+fetch ignores its signal. Relying on the abort alone would have meant the
+deadline was only as good as the fetch implementation — and a fetch that
+ignores its signal is exactly the hang the deadline exists to prevent. The
+outer signal now rejects the call too, rather than only aborting it.
+
+**Note (implemented) — the entry and the screens were split.** The panel's
+screens were not exported and the file ended in a `createRoot` call, so no test
+could render them: the admin suite could not reach the panel's behaviour at
+all. `admin/app.tsx` now holds the screens and `admin/main.tsx` is just the
+mount. The built bundle is byte-identical (`index-CJY7DUMZ.js`), so the split
+changed nothing about what ships.
+
+**Note (implemented) — one `fetch` stays.** The upload to object storage is a
+raw fetch on purpose: it goes to a different host, with a signed URL of its
+own, a binary body and no admin credential.
+
 **Verify:**
 ```bash
 cd client && npm test -- admin
@@ -649,9 +679,11 @@ make check-copy
 ```
 
 **Definition of done**
-- [ ] `admin/main.tsx` contains no direct `fetch` call.
-- [ ] The admin bundle does not import `lib/api.ts`.
-- [ ] The admin suite covers the status dashboard and the DB table list.
+- [x] `admin/app.tsx` contains no direct `fetch` call except the object
+      storage upload.
+- [x] The admin bundle does not import `lib/api.ts`. A test asserts it, over
+      every file in `admin/`.
+- [x] The admin suite covers the status dashboard and the DB table list.
 
 ### Step 1.5 — Retire the fetch shim's leftovers
 
