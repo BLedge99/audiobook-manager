@@ -130,8 +130,8 @@ stuck; say so rather than leaving it ambiguous.
 |---|---|---|---|
 | 0.1 typecheck into `make test` | done | opencode | (this commit) |
 | 0.2 client request test helper | done | opencode | fe5b2ad |
-| 1.1 name the request guarantees | done | opencode | (next commit) |
-| 1.2 `useLibrary` + `useBrowse` | not started | | |
+| 1.1 name the request guarantees | done | opencode | d1521bb |
+| 1.2 `useLibrary` + `useBrowse` | done | opencode | (next commit) |
 | 1.3 the components | not started | | |
 | 1.4 the admin client | not started | | |
 | 1.5 retire the fetch shim | not started | | |
@@ -480,23 +480,49 @@ That change is in step 0.2's helper, with its own tests.
 **State on entry:** Step 1.1 merged.
 
 **Files:**
+- `client/src/lib/request.ts` — **extended** (see the note below)
+- `client/src/lib/request.test.ts` — **extended**
 - `client/src/useLibrary.ts`
 - `client/src/useBrowse.ts`
+- `client/src/App.tsx` (pass the profile id to `useBrowse`)
 - their two test files
 
 **Test first:** the existing tests in `useLibrary.test.tsx` and
-`useBrowse.test.tsx` already cover the behaviour. Add one test each that
-asserts the *new* guarantee the interface brings — that a failed request
-throws the catalogued sentence:
+`useBrowse.test.tsx` already cover the behaviour. Add the tests that assert
+the *new* guarantees the interface brings:
 
 ```ts
+it("asks for credentials, so the session cookie travels", async () => { /* ... */ });
 it("reports a failed library load with the catalogued sentence", async () => { /* ... */ });
 ```
 
 **Then:** delete `conditionalRequest` and `writeRequest` from `useLibrary.ts`
-and `request` from `useBrowse.ts`; call `request()` from `lib/request.ts`
-instead. `useLibrary` needs the `Response` for its ETag, so it uses
-`requestRaw` and keeps its 304 handling.
+and `request` from `useBrowse.ts`; call the interface instead.
+
+**Note (implemented) — the conditional GET moved into the interface.** The
+plan said `useLibrary` "uses `requestRaw` and keeps its 304 handling". On
+writing it, that put the rule back where it came from: a private helper in
+one hook, re-imposable by the next caller. The 304 rule is not a fact about
+the library hook — it is a fact about talking to this server — so it belongs
+where every caller can have it. `lib/request.ts` gained `requestConditional`,
+and the private helpers are gone from both hooks rather than rewritten.
+
+**Note (implemented) — `useBrowse` takes the profile id.** It used to read
+`localStorage` during render to notice a profile switch, which meant it polled
+a global for a change it should have been told about. The id now arrives as an
+argument, and `App.tsx` passes `activeProfileId` — the session-aware value,
+not the raw stored hint. The hook call moved down in `App.tsx` to sit after
+`activeProfileId` is defined; `browse` is not used before that point.
+
+**Note (implemented) — a double-encoded body, found and fixed.** The old
+private helper took a `RequestInit`, whose `body` is a string, so three call
+sites passed `JSON.stringify(...)`. The new interface serialises the body
+itself, so those sites would have sent a JSON string containing JSON — the
+server would read a string where it expects an object, and the write would
+silently do nothing. `RequestOptions.body` is therefore typed `object`, which
+makes that a **type error** rather than a bug, and the three call sites now
+pass the object. The typecheck gate from step 0.1 is what makes this class
+of mistake visible at all.
 
 **Verify:**
 ```bash
@@ -505,10 +531,15 @@ cd client && npx tsc -b
 ```
 
 **Definition of done**
-- [ ] The private helpers are gone from both files.
-- [ ] Both hooks still pass their existing tests unchanged.
-- [ ] `useBrowse.ts` no longer reads `localStorage` during render (line 52) —
+- [x] The private helpers are gone from both files.
+- [x] Both hooks still pass their existing tests unchanged.
+- [x] `useBrowse.ts` no longer reads `localStorage` during render (line 52) —
       the profile id arrives as a parameter instead.
+- [x] The credentials guarantee is proven: both hooks' new tests failed with
+      `expected undefined to be 'include'` before the move, and pass after.
+- [x] The double-encode guard is proven: reintroducing `JSON.stringify` at a
+      call site made `tsc` fail with `Type 'string' is not assignable to type
+      'object'`.
 
 ### Step 1.3 — Move the components onto it
 

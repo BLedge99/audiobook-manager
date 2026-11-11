@@ -34,11 +34,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mount() {
-  return renderHook(() => useBrowse());
+function mount(profileId: string | null = null) {
+  return renderHook(({ id }: { id: string | null }) => useBrowse(id), {
+    initialProps: { id: profileId },
+  });
 }
 
 describe("useBrowse", () => {
+  it("asks for credentials, so the session cookie travels", async () => {
+    // The Android WebView is cross-origin from the server, so a request
+    // without `credentials: "include"` arrives with no session cookie and
+    // 401s. This used to be the global fetch shim's job, which meant the
+    // guarantee did not belong to the call site at all.
+    fetchMock.mockImplementation(async () => fakeResponse([]));
+    const view = mount("7");
+    await waitFor(() => expect(view.result.current.loaded).toBe(true));
+
+    expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe("include");
+  });
+
   it("fetches favourites for the signed-in profile on mount", async () => {
     window.localStorage.setItem("profileId", "7");
     fetchMock.mockImplementation(async (url: string) => {
@@ -54,21 +68,26 @@ describe("useBrowse", () => {
   });
 
   it("re-fetches favourites when the profileId changes", async () => {
-    window.localStorage.setItem("profileId", "7");
+    // The profile id arrives as a parameter. It used to be read from
+    // localStorage during render, which meant the hook polled a global to
+    // notice a change it should have been told about.
+    let currentProfile: string | null = "7";
     fetchMock.mockImplementation(async (url: string) => {
       if (String(url).endsWith("/api/favourites/ids")) {
-        return fakeResponse(window.localStorage.getItem("profileId") === "7" ? [1, 2, 3] : [4, 5]);
+        return fakeResponse(currentProfile === "7" ? [1, 2, 3] : [4, 5]);
       }
       return fakeResponse([]);
     });
 
-    const view = mount();
+    const view = renderHook(({ id }: { id: string | null }) => useBrowse(id), {
+      initialProps: { id: "7" as string | null },
+    });
     await waitFor(() => expect(view.result.current.favourites).toEqual([1, 2, 3]));
 
-    // Switch to profile 8: change localStorage and re-render the hook.
-    window.localStorage.setItem("profileId", "8");
+    // Switch to profile 8.
+    currentProfile = "8";
     act(() => {
-      view.rerender();
+      view.rerender({ id: "8" });
     });
 
     await waitFor(() => expect(view.result.current.favourites).toEqual([4, 5]));
@@ -76,11 +95,10 @@ describe("useBrowse", () => {
   });
 
   it("falls back to cached favourites for the new profile when the server is unreachable", async () => {
-    window.localStorage.setItem("profileId", "7");
     cacheMocks.readFavourites.mockResolvedValue([9, 10]);
     fetchMock.mockRejectedValue(new Error("server unreachable"));
 
-    const view = mount();
+    const view = mount("7");
     await waitFor(() => expect(view.result.current.favourites).toEqual([9, 10]));
     expect(cacheMocks.readFavourites).toHaveBeenCalled();
   });

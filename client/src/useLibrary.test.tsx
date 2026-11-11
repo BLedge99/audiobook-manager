@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useLibrary } from "./useLibrary";
+import { copy } from "./copy";
 import type { Audiobook } from "./types";
 
 /**
@@ -70,6 +71,33 @@ async function mountWith(books: Audiobook[]) {
 }
 
 describe("useLibrary", () => {
+  it("asks for credentials, so the session cookie travels", async () => {
+    // The Android WebView is cross-origin from the server, so a request
+    // without `credentials: "include"` arrives with no session cookie and
+    // 401s. This used to be the global fetch shim's job, which meant the
+    // guarantee did not belong to the call site at all.
+    respondWith([book(1, "My book")]);
+    const view = renderHook(() => useLibrary());
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+
+    const libraryCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/api/audiobooks"));
+    expect(libraryCall?.[1]?.credentials).toBe("include");
+  });
+
+  it("reports a failed library load with the catalogued sentence", async () => {
+    // ADR 015: the server answers with a stable code and the client owns
+    // every word. A sentence the server wrote would be invisible to the
+    // copy check.
+    fetchMock.mockImplementation(async () =>
+      fakeResponse({ code: "auth_required" }, { status: 401 }),
+    );
+
+    const view = renderHook(() => useLibrary());
+    await waitFor(() => expect(view.result.current.error).toBeDefined());
+
+    expect(view.result.current.error).toBe(copy.profile.sessionExpired);
+  });
+
   it("loads a member's books without requesting admin-only library roots", async () => {
     fetchMock.mockImplementation(async (url: string) => {
       if (url.includes("library-roots")) {

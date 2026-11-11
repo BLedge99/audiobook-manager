@@ -108,7 +108,6 @@ function App() {
     refreshForProfile,
   } = library;
   const device = useDeviceLibrary(isNativeShell());
-  const browse = useBrowse();
   const discover = useDiscover();
   // Read the device cover cache into memory once, before the grid renders its
   // first card (spec 15b feature 1). Without this a cold start asks IndexedDB
@@ -147,6 +146,12 @@ function App() {
   const playerProfileId = accountExperience === "demo"
     ? (session?.profile ? "demo-account" : null)
     : activeProfileId;
+  // Browse is mounted here rather than with the other data hooks, because it
+  // needs to know who is listening: the profile id is what tells it to
+  // refetch. It used to read that id out of localStorage during render, which
+  // meant it polled a global to notice a change it should have been told
+  // about.
+  const browse = useBrowse(activeProfileId);
   /** A probe in flight, so a failing probe cannot trigger another one. */
   const probeInFlight = useRef(false);
   /**

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { copy } from "../copy";
 import { fakeResponse, stubFetch, type FetchStub } from "../test/requests";
-import { request, requestRaw } from "./request";
+import { request, requestConditional, requestRaw } from "./request";
 import { setActiveProfileId, setExplicitOfflineMode, setSessionToken } from "./api";
 
 /**
@@ -142,6 +142,19 @@ describe("request", () => {
     expect(stub.last()?.body).toBe(JSON.stringify({ position: 12 }));
   });
 
+  it("sends the body as a JSON object, not as a JSON string containing JSON", async () => {
+    // The interface serialises the body itself, so a caller that passed an
+    // already-stringified body would send it double-encoded -- the server
+    // would read a string where it expects an object, and the write would
+    // silently do nothing. `body` is typed `object` so that is a type error;
+    // this test is the runtime half of the same guard.
+    stub = stubFetch(() => fakeResponse({}));
+
+    await request("/api/audiobooks/1/tags", { method: "PUT", body: { title: "A book" } });
+
+    expect(JSON.parse(stub.last()?.body ?? "null")).toEqual({ title: "A book" });
+  });
+
   it("sends no body and no content-type when none is given", async () => {
     stub = stubFetch(() => fakeResponse([]));
 
@@ -170,5 +183,51 @@ describe("requestRaw", () => {
     const response = await requestRaw("/api/audiobooks");
 
     expect(response.status).toBe(304);
+  });
+});
+
+describe("requestConditional", () => {
+  it("treats a 304 as nothing changed", async () => {
+    // The shelf must not be blanked by a response that says "same as last
+    // time". A refresh that changed nothing must send nothing.
+    stub = stubFetch(() => fakeResponse(undefined, { status: 304 }));
+
+    expect(await requestConditional("/api/audiobooks", { etag: '"abc"' })).toEqual({
+      changed: false,
+    });
+  });
+
+  it("returns the data and the new etag", async () => {
+    stub = stubFetch(() => fakeResponse([{ id: 1 }], { etag: '"next"' }));
+
+    expect(await requestConditional("/api/audiobooks", { etag: '"abc"' })).toEqual({
+      changed: true,
+      data: [{ id: 1 }],
+      etag: '"next"',
+    });
+  });
+
+  it("sends the etag it was given", async () => {
+    stub = stubFetch(() => fakeResponse([]));
+
+    await requestConditional("/api/audiobooks", { etag: '"abc"' });
+
+    expect(stub.last()?.headers["if-none-match"]).toBe('"abc"');
+  });
+
+  it("sends no etag when it has none", async () => {
+    stub = stubFetch(() => fakeResponse([]));
+
+    await requestConditional("/api/audiobooks", {});
+
+    expect(stub.last()?.headers["if-none-match"]).toBeUndefined();
+  });
+
+  it("throws the catalogued sentence on a failure", async () => {
+    stub = stubFetch(() => fakeResponse({ code: "audiobook_not_found" }, { status: 404 }));
+
+    await expect(requestConditional("/api/audiobooks/9", {})).rejects.toThrow(
+      copy.apiErrors.audiobookNotFound,
+    );
   });
 });

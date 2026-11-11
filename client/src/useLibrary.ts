@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
-import { boundedFetch, describeFailure, sessionHeaders } from "./lib/api";
-import { responseErrorText } from "./lib/apiError";
+import { describeFailure } from "./lib/api";
+import { request, requestConditional, type Conditional } from "./lib/request";
 import { copy } from "./copy";
 import { cacheLibraryPrivateState } from "./local/privateCache";
 
@@ -25,43 +25,14 @@ import { cacheLibraryPrivateState } from "./local/privateCache";
  * flight. The grid keeps rendering whatever it has.
  */
 
-type Conditional<T> = { changed: false } | { changed: true; data: T; etag: string | null };
-
 /**
- * A conditional GET: sends `If-None-Match`, and treats 304 as "nothing changed".
+ * The conditional GET and the write used to be private helpers here.
  *
- * `response.ok` is false for 304 -- `ok` only covers 2xx -- so a 304 has to be
- * handled before the error branch, or an unchanged library looks like a failed
- * one.
+ * They are now the request interface's job. The conditional GET's rule --
+ * "a 304 means nothing changed, and an unchanged library must not look like
+ * a failed one" -- is not a fact about the library hook, it is a fact about
+ * talking to this server, so it belongs where every caller can have it.
  */
-async function conditionalRequest<T>(url: string, etag: string | null): Promise<Conditional<T>> {
-  const headers: Record<string, string> = { ...sessionHeaders() };
-  if (etag) headers["If-None-Match"] = etag;
-
-  // Bounded, because a request to an unreachable host can hang rather than
-  // fail -- and a library refresh that never settles leaves "Refreshing…"
-  // spinning for good.
-  const response = await boundedFetch(url, { headers });
-  if (response.status === 304) return { changed: false };
-  if (!response.ok) {
-    throw new Error(await responseErrorText(response));
-  }
-  return { changed: true, data: (await response.json()) as T, etag: response.headers.get("etag") };
-}
-
-async function writeRequest<T>(url: string, method: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { ...sessionHeaders() };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await boundedFetch(url, {
-    method,
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    headers,
-  });
-  if (!response.ok) {
-    throw new Error(await responseErrorText(response));
-  }
-  return response.status === 204 ? (undefined as T) : response.json();
-}
 
 export function useLibrary(canManageLibrary = true) {
   const [audiobooks, setAudiobooks] = useState<Audiobook[]>([]);
@@ -117,9 +88,9 @@ export function useLibrary(canManageLibrary = true) {
         // tag for a reason the client cannot see. Only admins can read roots;
         // a member's protected operator request must not block their library.
         const [books, libraryRoots] = await Promise.all([
-          conditionalRequest<Audiobook[]>("/api/audiobooks", booksEtagRef.current),
+          requestConditional<Audiobook[]>("/api/audiobooks", { etag: booksEtagRef.current }),
           canManageLibrary
-            ? conditionalRequest<LibraryRoot[]>("/api/library-roots", rootsEtagRef.current)
+            ? requestConditional<LibraryRoot[]>("/api/library-roots", { etag: rootsEtagRef.current })
             : Promise.resolve<Conditional<LibraryRoot[]>>({ changed: false }),
         ]);
         // A 304 leaves state alone -- which is the whole point. An error does
@@ -178,17 +149,17 @@ export function useLibrary(canManageLibrary = true) {
   }, [refresh]);
 
   const addRoot = async (path: string, label: string) => {
-    await writeRequest<LibraryRoot>("/api/library-roots", "POST", { path, label });
+    await request<LibraryRoot>("/api/library-roots", { method: "POST", body: { path, label } });
     await refresh();
   };
 
   const removeRoot = async (id: number) => {
-    await writeRequest<void>(`/api/library-roots/${id}`, "DELETE");
+    await request<void>(`/api/library-roots/${id}`, { method: "DELETE" });
     await refresh();
   };
 
   const scan = async (rootId?: number) => {
-    await writeRequest("/api/scan", "POST", rootId ? { rootId } : {});
+    await request("/api/scan", { method: "POST", body: rootId ? { rootId } : {} });
     await refresh();
   };
 
@@ -201,7 +172,7 @@ export function useLibrary(canManageLibrary = true) {
   const loadServerLibrary = useCallback(async () => {
     setServerLibraryLoading(true);
     try {
-      setServerLibrary(await writeRequest<Audiobook[]>("/api/server-library", "GET"));
+      setServerLibrary(await request<Audiobook[]>("/api/server-library"));
       setServerLibraryError(undefined);
     } catch (requestError) {
       setServerLibraryError(describeFailure(requestError, copy.errors.loadAllBooks));
@@ -229,7 +200,7 @@ export function useLibrary(canManageLibrary = true) {
         current.map((book) => (book.id === bookId ? { ...book, inLibrary: true } : book)),
       );
       try {
-        await writeRequest(`/api/audiobooks/${bookId}/library`, "POST");
+        await request(`/api/audiobooks/${bookId}/library`, { method: "POST" });
       } catch (requestError) {
         setServerLibrary((current) =>
           current.map((book) => (book.id === bookId ? { ...book, inLibrary: false } : book)),
@@ -259,7 +230,7 @@ export function useLibrary(canManageLibrary = true) {
         current.map((book) => (book.id === bookId ? { ...book, inLibrary: false } : book)),
       );
       try {
-        await writeRequest(`/api/audiobooks/${bookId}/library`, "DELETE");
+        await request(`/api/audiobooks/${bookId}/library`, { method: "DELETE" });
       } catch (requestError) {
         setServerLibrary((current) =>
           current.map((book) => (book.id === bookId ? { ...book, inLibrary: true } : book)),

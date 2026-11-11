@@ -9,8 +9,7 @@ import type {
   TagSummary,
   WishlistItem,
 } from "./types";
-import { boundedFetch, profileHeaders } from "./lib/api";
-import { responseErrorText } from "./lib/apiError";
+import { request } from "./lib/request";
 import { copy } from "./copy";
 import {
   cacheFavourites,
@@ -22,34 +21,27 @@ import {
 /**
  * Spec 20 — data layer for the browse, Discover, favourites and tag surfaces.
  *
- * Uses the same profile-header request helper as `useLibrary` so the
- * `x-profile-id` header and error handling cannot drift between the two.
+ * Uses the same request interface as `useLibrary`, so the `x-profile-id`
+ * header, the credentials, the deadline and the error handling cannot drift
+ * between the two.
  */
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (options?.body) headers["Content-Type"] = "application/json";
-  const response = await boundedFetch(url, {
-    ...options,
-    headers: { ...profileHeaders(), ...headers, ...(options?.headers as Record<string, string> | undefined) },
-  });
-  if (!response.ok) {
-    throw new Error(await responseErrorText(response));
-  }
-  return response.status === 204 ? (undefined as T) : response.json();
-}
-
-export function useBrowse() {
+/**
+ * @param profileId Who is listening.
+ *
+ * The profile id arrives as an argument rather than being read from
+ * `localStorage` during render. Reading a global to notice a change the
+ * caller already knows about is how a hook ends up polling, and how two
+ * sources of truth for "who is listening" start to disagree. It is a refresh
+ * trigger only -- the header itself comes from the request interface.
+ */
+export function useBrowse(profileId: string | null = null) {
   const [genres, setGenres] = useState<GenreNode[]>([]);
   const [tags, setTags] = useState<TagSummary[]>([]);
   const [favourites, setFavourites] = useState<number[]>([]);
   const [enrichment, setEnrichment] = useState<EnrichmentStatus>();
   const [reviewQueue, setReviewQueue] = useState<Audiobook[]>([]);
   const [loaded, setLoaded] = useState(false);
-
-  // Re-read on every render so a profile switch triggers a re-fetch. `request`
-  // reads the same key, so the server call always scopes to the current profile.
-  const profileId = typeof window !== "undefined" ? window.localStorage.getItem("profileId") : null;
 
   const refresh = useCallback(async () => {
     try {
@@ -221,7 +213,7 @@ export function useDiscover() {
   const save = useCallback(async (recommendation: Recommendation, seedMediaItemId?: number) => {
     await request("/api/wishlist", {
       method: "POST",
-      body: JSON.stringify({
+      body: {
         title: recommendation.title,
         author: recommendation.author,
         narrators: recommendation.narrators,
@@ -234,7 +226,7 @@ export function useDiscover() {
         provider: recommendation.provider,
         providerKey: recommendation.providerKey,
         seedMediaItemId,
-      }),
+      },
     });
     await loadWishlist();
   }, [loadWishlist]);
@@ -249,7 +241,7 @@ export function useDiscover() {
   const markOwned = useCallback(async (id: number, owned: boolean) => {
     const updated = await request<WishlistItem>(`/api/wishlist/${id}/owned`, {
       method: "PUT",
-      body: JSON.stringify({ owned }),
+      body: { owned },
     });
     const next = wishlist.map((item) => (item.id === id ? updated : item));
     setWishlist(next);
@@ -284,7 +276,7 @@ export function useTagSuite(bookId: number | undefined) {
 
   const save = useCallback(async (changes: Record<string, unknown>) => {
     if (!bookId) return;
-    await request(`/api/audiobooks/${bookId}/tags`, { method: "PUT", body: JSON.stringify(changes) });
+    await request(`/api/audiobooks/${bookId}/tags`, { method: "PUT", body: changes });
     await load();
   }, [bookId, load]);
 
