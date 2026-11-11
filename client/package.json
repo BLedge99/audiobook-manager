@@ -13,6 +13,7 @@
     "build:android": "tsc -b && vite build --mode android",
     "preview": "vite preview",
     "test": "vitest run",
+    "typecheck": "tsc -b",
     "check:copy": "node ../scripts/check-copy.mjs src/copy.ts src/admin/copy.ts --profile consumer-plain --operator-profile professional-b2b --scan src --fail-on-scan --config ../scripts/copy.config.json"
   },
   "dependencies": {

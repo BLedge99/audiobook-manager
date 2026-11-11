@@ -128,7 +128,7 @@ stuck; say so rather than leaving it ambiguous.
 
 | Step | Status | Claimed by | Commit |
 |---|---|---|---|
-| 0.1 typecheck into `make test` | not started | | |
+| 0.1 typecheck into `make test` | done | opencode | (this commit) |
 | 0.2 client request test helper | not started | | |
 | 1.1 name the request guarantees | not started | | |
 | 1.2 `useLibrary` + `useBrowse` | not started | | |
@@ -294,9 +294,20 @@ make test        # passes, and now includes the typecheck
 ```
 
 **Definition of done**
-- [ ] `make typecheck` exists and passes on a clean tree.
-- [ ] `make test` invokes it.
-- [ ] The probe file proved the gate fails on a bad type, and was deleted.
+- [x] `make typecheck` exists and passes on a clean tree.
+- [x] `make test` invokes it.
+- [x] The probe file proved the gate fails on a bad type, and was deleted.
+
+**Note (implemented):** `make` is not on the Windows `PATH` in this
+environment — it lives in WSL (`/usr/bin/make`), and Git Bash has no `make`
+either. The working invocation is:
+
+```
+wsl -e bash -lc "cd '/mnt/c/c/Users/benle/Documents/Projects/TechNative/audiobook-manager' && make test"
+```
+
+`npm run typecheck` works directly from PowerShell in both packages, which is
+the faster inner loop while working on a step.
 
 ### Step 0.2 — A client test helper for stubbed requests
 

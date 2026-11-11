@@ -224,13 +224,30 @@ client:
 server:
 	cd server && npm run dev
 
-test: check-copy test-server test-client
+test: check-copy typecheck test-server test-client
 
 test-server:
 	cd server && npm test
 
 test-client:
 	cd client && npm test
+
+## Typecheck both packages.
+# `vitest run` does not typecheck, so a test file importing a type that does not
+# exist passes the whole suite and only fails `tsc` -- which, being a separate
+# manual step, is easy to skip. Found 2026-10-19 when `recommend-service.test.ts`
+# imported an `EnrichmentCandidate` that is actually called `ProviderCandidate`:
+# all 8 of its tests were green and the type error was invisible.
+#
+# `client`'s `tsc -b` is the project-reference build, so it shares the build
+# info with `npm run build` and `build:android`. `server`'s is `tsc --noEmit`,
+# because the server's `build` script also runs `prisma generate` and this gate
+# is only about types.
+#
+# Part of `make test`, and of CI.
+typecheck:
+	cd server && npm run typecheck
+	cd client && npm run typecheck
 
 ## Check the interface copy against the ui-copy rules (spec 15b feature 7).
 # The catalog check is the gate: a banned word in a listener-facing string

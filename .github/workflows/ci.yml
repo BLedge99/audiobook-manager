@@ -34,6 +34,8 @@ jobs:
         working-directory: server
       - run: npx prisma generate
         working-directory: server
+      - run: npm run typecheck
+        working-directory: server
       - run: npm test
         working-directory: server
         env:
@@ -59,5 +61,5 @@ jobs:
         working-directory: client
       - run: npm test
         working-directory: client
-      - run: npx tsc -b
+      - run: npm run typecheck
         working-directory: client
