@@ -482,6 +482,26 @@ The column is in the schema and nothing populates it. ASIN extraction is
 filename-only, and only at enrichment time. Writing it at scan time would make
 Audnexus reachable permanently rather than incidentally.
 
+### 2.11 Metadata field precedence is not enforced (last writer wins)
+**Status: LIMITED — contradicts ADR 009; intended rule recorded in ADR 028, not yet enforced.**
+
+`server/src/metadata/precedence.ts` defines the per-field chain but nothing in
+production imports it. The scanner, the enrichment applier/run, and the routes
+re-derive their own guards, so the effective rule is **last writer wins** for
+any field that is not user-overridden: the scanner writes embedded values and
+the enrichment applier writes enriched ones. A rescan can therefore overwrite an
+*enriched* value with an *embedded* one, and only a user override survives a
+later conflicting write. There is no derived (filename/folder) layer, and
+`metadataSource === "user"` is read as a legacy freeze signal but never written,
+so that freeze is unrecoverable.
+
+[ADR 028](decisions/028-metadata-field-precedence-chain.md) sets the intended
+chain as `user override > enriched > embedded > derived` (derived reserved), with
+enriched winning over embedded, user overrides per-field and always winning, and
+enrichment free to change or clear non-overridden fields. Step 5.2 of spec 37
+moves the rule into the module that owns it; until then, this file records the
+current behaviour.
+
 ---
 
 ## 3. Deferred
