@@ -26,6 +26,20 @@ export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * The expiry a session gets when it is created, or when its token is rotated.
+ *
+ * The 30-day TTL slides, but the 90-day cap is measured from **creation**, not
+ * from the last use. A session that is reused (spec 36: one session per
+ * device) therefore keeps its original creation date, and this function is the
+ * only place that decides where that puts the expiry.
+ */
+export function sessionExpiry(now: Date, createdAt: Date): Date {
+  const cap = new Date(createdAt.getTime() + SESSION_MAX_AGE_MS);
+  const proposed = new Date(now.getTime() + SESSION_TTL_MS);
+  return proposed.getTime() < cap.getTime() ? proposed : cap;
+}
+
 /** Store a useful, non-identifying device label beside the raw user agent. */
 export function deviceLabelFromUserAgent(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;

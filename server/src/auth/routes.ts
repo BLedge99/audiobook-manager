@@ -127,13 +127,33 @@ export async function registerAuthRoutes(
     }
   });
 
-  app.post<{ Body: { label?: string } }>("/api/auth/devices", {
-    schema: { body: { type: "object", properties: { label: { type: "string", maxLength: 80 } }, additionalProperties: false } },
+  /**
+   * Enrol a device.
+   *
+   * `deviceId` is the client's own installation identifier (spec 36). It names
+   * the device in the "Signed-in devices" panel and authorises nothing; the
+   * session it mints is anchored to the credential this route returns.
+   */
+  app.post<{ Body: { label?: string; deviceId?: string } }>("/api/auth/devices", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          label: { type: "string", maxLength: 80 },
+          deviceId: { type: "string", maxLength: 100 },
+        },
+        additionalProperties: false,
+      },
+    },
   }, async (request, reply) => {
     if (demoMode()) return fail(reply, 404, "not_found");
     if (!request.auth?.profile) return fail(reply, 403, "forbidden");
     try {
-      return await auth.createDeviceCredential(request.auth.profile.id, request.body.label ?? null);
+      return await auth.createDeviceCredential(
+        request.auth.profile.id,
+        request.body.label ?? null,
+        request.body.deviceId ?? null,
+      );
     } catch (error) {
       return sendAuthFailure(reply, error);
     }
@@ -403,9 +423,51 @@ export async function registerAuthRoutes(
     }
   });
 
+  /**
+   * The caller's signed-in devices.
+   *
+   * Spec 36: this used to return one row per sign-in, so an Android phone that
+   * signed in fifty times appeared fifty times. It returns one row per
+   * **device** now.
+   */
   app.get("/api/auth/sessions", async (request, reply) => {
     if (!request.auth) return fail(reply, 401, "auth_required");
-    return { sessions: await auth.listSessions(request.auth) };
+    return { devices: await auth.listDevices(request.auth) };
+  });
+
+  /**
+   * Sign one device out: every session it holds is revoked.
+   *
+   * The key is a device credential id, or a session id for a browser. Both are
+   * resolved against the calling profile.
+   */
+  app.delete<{ Params: { key: string } }>("/api/auth/sessions/device/:key", {
+    schema: {
+      params: {
+        type: "object",
+        properties: { key: { type: "string", minLength: 1, maxLength: 80 } },
+        required: ["key"],
+      },
+    },
+  }, async (request, reply) => {
+    if (!request.auth) return fail(reply, 401, "auth_required");
+    try {
+      const revoked = await auth.revokeDeviceSessions(request.auth, request.params.key);
+      return { ok: true, revoked };
+    } catch (error) {
+      return sendAuthFailure(reply, error);
+    }
+  });
+
+  /** Sign every other device out, leaving the caller's own session alone. */
+  app.delete("/api/auth/sessions/others", async (request, reply) => {
+    if (!request.auth) return fail(reply, 401, "auth_required");
+    try {
+      const revoked = await auth.revokeOtherSessions(request.auth);
+      return { ok: true, revoked };
+    } catch (error) {
+      return sendAuthFailure(reply, error);
+    }
   });
 
   app.delete<{ Params: { id: string } }>("/api/auth/sessions/:id", {

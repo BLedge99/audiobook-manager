@@ -211,7 +211,7 @@ leaves a revoked-but-readable session rather than a broken foreign key.
 | `POST` | `/api/auth/devices` | profile session | Enrol a device; body `{ label?, deviceId? }` |
 | `GET` | `/api/auth/devices` | profile session | List the caller's device credentials |
 | `DELETE` | `/api/auth/devices/:id` | profile session | Revoke a device credential |
-| `POST` | `/api/auth/devices/session` | public | Exchange a device secret for a session; body `{ secret, deviceId? }` |
+| `POST` | `/api/auth/devices/session` | public | Exchange a device secret for a session; body `{ secret }` |
 | `GET` | `/api/auth/sessions` | profile session | List the caller's **devices** (`{ devices: [...] }`) |
 | `DELETE` | `/api/auth/sessions/:id` | profile session | Revoke one session by id |
 | `DELETE` | `/api/auth/sessions/device/:key` | profile session | Sign one device out |

@@ -2058,7 +2058,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       }),
       prisma.session.findMany({
         where: { profileId },
-        select: { id: true, expiresAt: true, userAgent: true, deviceLabel: true, createdAt: true },
+        // Spec 36: the device a session belongs to is part of the caller's own
+        // data, so the export says which device each session was.
+        select: { id: true, expiresAt: true, userAgent: true, deviceLabel: true, deviceCredentialId: true, createdAt: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.listeningHistory.findMany({
@@ -2088,7 +2090,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       }),
       prisma.deviceCredential.findMany({
         where: { profileId },
-        select: { label: true, createdAt: true },
+        select: { label: true, deviceId: true, createdAt: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.webAuthnCredential.findMany({

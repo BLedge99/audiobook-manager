@@ -418,10 +418,19 @@ model Session {
   expiresAt   DateTime
   revokedAt   DateTime?
 
-  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  // Spec 36: the device this session belongs to. A session is a device's
+  // session, not a sign-in's session, so the panel can list devices and a
+  // device can be signed out in one action. Set null if the credential is
+  // deleted, which leaves a revoked-but-readable row rather than a dangling
+  // foreign key.
+  deviceCredentialId String?
+
+  profile         Profile?         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  deviceCredential DeviceCredential? @relation(fields: [deviceCredentialId], references: [id], onDelete: SetNull)
 
   @@index([profileId])
   @@index([expiresAt])
+  @@index([deviceCredentialId])
 }
 
 // Spec 31 / ADR 022: admin-panel login is independent of every profile session.
@@ -453,9 +462,16 @@ model DeviceCredential {
   expiresAt  DateTime
   revokedAt  DateTime?
 
-  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  // Spec 36: an opaque installation identifier the client generates once, so
+  // two phones can be told apart and a re-enrolled phone keeps its identity.
+  // It names a device and authorises nothing.
+  deviceId String?
+
+  profile Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  sessions Session[]
 
   @@index([profileId])
+  @@index([deviceId])
 }
 
 // Spec 28: Windows Hello / WebAuthn. Web-only and additive; never the only

@@ -460,8 +460,9 @@ describe("sessions", () => {
     });
     const token = tokenOf(loginResponse);
     const list = await app.inject({ method: "GET", url: "/api/auth/sessions", headers: { [SESSION_HEADER]: token } });
-    expect(list.json<{ sessions: { deviceLabel: string | null; userAgent: string | null }[] }>().sessions[0])
-      .toMatchObject({ deviceLabel: "Windows device", userAgent: expect.stringContaining("Windows NT") });
+    // Spec 36: the panel lists devices, so each row is a device's sessions.
+    expect(list.json<{ devices: { label: string | null; userAgent: string | null }[] }>().devices[0])
+      .toMatchObject({ label: "Windows device", userAgent: expect.stringContaining("Windows NT") });
   });
 
   it("lists and revokes the caller's sessions", async () => {
@@ -475,17 +476,17 @@ describe("sessions", () => {
       headers: { [SESSION_HEADER]: first },
     });
     expect(list.statusCode).toBe(200);
-    const sessions = list.json<{
-      sessions: { id: string; current: boolean }[];
-    }>().sessions;
-    expect(sessions).toHaveLength(2);
-    expect(sessions.filter((session) => session.current)).toHaveLength(1);
+    const devices = list.json<{
+      devices: { key: string; current: boolean }[];
+    }>().devices;
+    expect(devices).toHaveLength(2);
+    expect(devices.filter((device) => device.current)).toHaveLength(1);
 
-    const other = sessions.find((session) => !session.current);
+    const other = devices.find((device) => !device.current);
     expect(other).toBeTruthy();
     const revoke = await app.inject({
       method: "DELETE",
-      url: `/api/auth/sessions/${other?.id}`,
+      url: `/api/auth/sessions/${other?.key}`,
       headers: { [SESSION_HEADER]: first },
     });
     expect(revoke.statusCode).toBe(200);
