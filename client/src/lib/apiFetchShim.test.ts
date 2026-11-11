@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  boundedFetch,
   installApiBaseUrl,
   onServerUnreachable,
   resolveApiRequest,
@@ -194,8 +195,7 @@ describe("installApiBaseUrl", () => {
     expect(headers["x-house-session"]).toBe("explicit");
   });
 
-  it("reports the server as unreachable when a request cannot be answered", async () => {
-    // The app used to learn the server was gone only from a probe, and the
+  it("reports the server as unreachable when a request cannot be answered", async () => {    // The app used to learn the server was gone only from a probe, and the
     // probe only ran at startup and on window focus. A phone that lost the
     // server went on showing the shelf it had loaded, with buttons that
     // looked alive and silently did nothing -- which is what the household
@@ -251,6 +251,33 @@ describe("installApiBaseUrl", () => {
       // guard keeps that from happening on a re-render or hot reload.
       expect(window.fetch).toBe(second);
       expect(second).not.toBe(first);
+    } finally {
+      window.fetch = original;
+    }
+  });
+
+  it("is no longer what makes a request correct", async () => {
+    // The inverted test. The shim used to resolve the URL, attach the session
+    // token and set the credentials -- so a module that used `boundedFetch`
+    // was right only because something else had run first.
+    //
+    // Now the request owns those guarantees, and the shim is left with the
+    // two things only a global patch can do: the raw call sites that have not
+    // moved onto the interface, and the "the server stopped answering" report.
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const original = window.fetch;
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: typeof input === "string" ? input : String(input), init });
+      return Promise.resolve(new Response("[]", { status: 200 }));
+    }) as typeof fetch;
+
+    try {
+      setServerUrl(TEST_SERVER_URL);
+      // No `installApiBaseUrl()`.
+      await boundedFetch("/api/audiobooks");
+
+      expect(calls[0].url).toBe(`${TEST_SERVER_URL}/api/audiobooks`);
+      expect(calls[0].init?.credentials).toBe("include");
     } finally {
       window.fetch = original;
     }

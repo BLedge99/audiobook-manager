@@ -463,7 +463,7 @@ function reportServerUnreachable() {
 
 /**
  * Make every `fetch` in the app resolve `/api/...` against the configured
- * server.
+ * server, and notice when the server stops answering.
  *
  * A deliberate alternative to editing all fourteen modules that call `fetch`.
  * Those call sites are correct as written -- they say what they want, not where
@@ -473,23 +473,24 @@ function reportServerUnreachable() {
  * Idempotent: installing twice would double-wrap and call the shim from the
  * shim, so it is guarded. Call once at startup, before anything fetches.
  *
- * ## Why credentials are set here as well as in the request interface
+ * ## What it used to do, and what it does now
  *
- * `credentials: "include"` is what lets the `house_session` cookie cross
- * origins from the Android WebView (`https://localhost` -> the LAN server).
+ * This shim used to be what made a request **work**. It resolved the base
+ * URL, attached the session token and set the credentials, and the app's own
+ * request helpers relied on it: `apiFetch` had its own `credentials` and a
+ * passing test, yet the eight near-identical private helpers around it did
+ * not route through it, so the cookie never travelled and the Android app
+ * 401'd on everything. The test passed and proved nothing.
  *
- * It was originally added to `apiFetch` alone, which looked correct and had a
- * passing unit test -- but `apiFetch` was barely called. The app had ~8
- * near-identical private `request` helpers (`useLibrary`, `useBrowse`,
- * `ReviewQueue`, `TagManager`, ...) plus raw `fetch` calls in `LoginGate`,
- * `ProfileGate`, `ProfileSwitcher`, `ChapterPlayer` and `AudiobookDetail`. None
- * of them routed through `apiFetch`, so the cookie still did not travel and the
- * app still 401'd. The test passed and proved nothing.
+ * The request interface (`lib/request.ts`) and `boundedFetch` now own those
+ * guarantees, so a request is correct whether or not anything has been
+ * installed. What is left here is the part only a global patch can do:
  *
- * The request interface (`lib/request.ts`) now sets `credentials` on every
- * call, so the guarantee belongs to the call site rather than to a global side
- * effect. This shim keeps setting it as well, for the calls that have not
- * moved onto the interface yet and for the code paths that bypass it.
+ *  - the call sites that still make a raw `fetch` -- the cover fetcher and
+ *    the reachability probe -- still get their URL resolved, their
+ *    credentials set and, in the native shell, their session header attached;
+ *  - and the "the server stopped answering" report, which has to see *every*
+ *    request, including ones this module knows nothing about.
  */
 export function installApiBaseUrl(): void {
   if (typeof window === "undefined") return;
@@ -502,19 +503,28 @@ export function installApiBaseUrl(): void {
       return Promise.reject(new Error(OFFLINE_MODE_ERROR));
     }
 
-    // Attach the session token here rather than at each call site. The app has
-    // ~8 duplicated private `request` helpers plus raw `fetch` calls, so any
-    // per-call-site approach silently misses most of them -- that is exactly how
-    // the first attempt at this fix shipped a passing test and a broken app.
+    // Attach the session token for the raw call sites that have not moved
+    // onto the request interface. `boundedFetch` attaches it too, and checks
+    // first, so nothing is duplicated.
+    //
+    // The reachability probe is the one that genuinely needs it: it reads
+    // "401" as "the server is there and wants a password", so without the
+    // token the native shell would decide it was signed out when it was not.
     const token = isNativeShell() ? readSessionToken() : "";
     const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
     if (token && !hasHeader(headers, SESSION_HEADER)) headers[SESSION_HEADER] = token;
+
     return original(resolveApiRequest(input) as RequestInfo, {
       ...init,
       headers: token ? headers : init?.headers,
-      // See the long note above: the request interface sets this on every call
-      // too, but the shim still has to, because a call that has not moved onto
-      // the interface yet goes through here and nowhere else.
+      // The session cookie only crosses origins when the client opts in with
+      // `credentials: "include"`. Without it every cross-origin call -- which is
+      // every call from the Android shell's https://localhost WebView -- gets no
+      // cookie and so 401s even though the user "logged in".
+      //
+      // The request interface sets this too, and so does `boundedFetch`. It is
+      // still here for the two call sites that make a raw `fetch` -- the cover
+      // fetcher and the reachability probe.
       credentials: "include",
     }).catch((requestError: unknown) => {
       // The one place every request in the app passes through, and therefore
@@ -534,9 +544,9 @@ export function profileHeaders(): Record<string, string> {
 }
 
 /**
- * A fetch that always finishes.
+ * A fetch that always finishes, and that is correct on its own.
  *
- * ## Why this exists
+ * ## Why the deadline exists
  *
  * A `fetch` to an unreachable host does not always fail — it **hangs**. A stale
  * DHCP address on a network that blackholes packets never sends a RST, so the
@@ -551,13 +561,20 @@ export function profileHeaders(): Record<string, string> {
  * fails like any other error — which the callers already know how to show.
  *
  * The deadline itself lives in `lib/bounded.ts`, because the admin panel needs
- * it too and must not import this module. What this adds is the family's
- * offline-mode check.
+ * it too and must not import this module.
  *
- * **Not every call site uses this yet.** The per-component `request` helpers
- * in `ReviewQueue`, `TagManager`, `AudiobookDetail` and the gates still use a
- * raw `fetch`, and each of them can still spin forever when the server is
- * unreachable. `LIMITATIONS.md` §5 records that as the remaining work.
+ * ## Why the request owns its own guarantees
+ *
+ * This used to rely on a global `window.fetch` patch, installed in
+ * `main.tsx`, to resolve the base URL, attach the session token and set the
+ * credentials. That made a request correct only because something else had
+ * run first — a property of the environment rather than of the call. A module
+ * that used `boundedFetch` was right by accident.
+ *
+ * So the guarantees live here, and the request is correct whether or not
+ * anything has been installed. The global patch still exists, for the two
+ * call sites that make a raw `fetch` and for the "the server stopped
+ * answering" report; it is on its way out.
  */
 export { REQUEST_TIMEOUT_MS } from "./bounded";
 
@@ -569,7 +586,26 @@ export async function boundedFetch(
   if (explicitOfflineMode) {
     throw new Error(OFFLINE_MODE_ERROR);
   }
-  return fetchWithDeadline(input, init, timeoutMs);
+
+  // The session header, for the native shell. The browser relies on the
+  // HttpOnly cookie and has no token to send.
+  const token = isNativeShell() ? readSessionToken() : "";
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) };
+  if (token && !hasHeader(headers, SESSION_HEADER)) headers[SESSION_HEADER] = token;
+
+  return fetchWithDeadline(
+    resolveApiRequest(input),
+    {
+      ...init,
+      headers: token ? headers : init.headers,
+      // The session cookie only crosses origins when the client opts in with
+      // `credentials: "include"`. Without it every cross-origin call -- which is
+      // every call from the Android shell's https://localhost WebView -- gets no
+      // cookie and so 401s even though the user "logged in".
+      credentials: "include",
+    },
+    timeoutMs,
+  );
 }
 
 /**

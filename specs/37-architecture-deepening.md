@@ -133,8 +133,9 @@ stuck; say so rather than leaving it ambiguous.
 | 1.1 name the request guarantees | done | opencode | d1521bb |
 | 1.2 `useLibrary` + `useBrowse` | done | opencode | 331f336 |
 | 1.3 the components | done | opencode | 79473e6 |
-| 1.4 the admin client | done | opencode | (next commit) |
-| 1.5 retire the fetch shim | not started | | |
+| 1.4 the admin client | done | opencode | 287e256 |
+| 1.5 retire the fetch shim's leftovers | done | opencode | (next commit) |
+| 1.6 delete the fetch shim | not started | | |
 | 2.1 prove the key collision | not started | | |
 | 2.2 server-scoped private keys | not started | | |
 | 3.1 the library source interface | not started | | |
@@ -689,29 +690,57 @@ make check-copy
 
 **State on entry:** Step 1.4 merged.
 
-**Why:** `installApiBaseUrl` monkey-patches `window.fetch`. Once every call
-site goes through `request()`, the shim is a global side effect that duplicates
-what the interface now owns. But it is **not safe to delete in the same
-commit** — it is the one thing that makes a forgotten call site work.
+> **The premise of this step was wrong, and the step was rewritten.**
+>
+> The plan said: "once every call site goes through `request()`, the shim is a
+> global side effect that duplicates what the interface now owns" — and then
+> to delete it.
+>
+> That is not true yet. **~30 call sites still call `boundedFetch` directly**
+> — `AccountGate`, `ProfileGate`, `ProfileRegistration`, `SessionSettings`,
+> `DeviceUnlockSettings`, `AccountMenu`, `lib/passkeys.ts`, `local/device.ts`,
+> `local/useDeviceLibrary.ts` — and the shim is what makes them resolve the
+> base URL, carry the session header and send credentials. Deleting it would
+> break the native shell on every one of them.
+>
+> So the step was rewritten to do the part that is true and safe: **make the
+> request own its guarantees**, so the shim stops being what makes a request
+> *work* and is left with only what only a global patch can do. Deleting the
+> shim outright is **step 1.6**, once the last raw call sites have moved.
+
+**Why:** `installApiBaseUrl` monkey-patches `window.fetch`. It used to be the
+thing that made a request *correct* — resolving the base URL, attaching the
+session token, setting the credentials — which made the guarantee a property
+of the environment rather than of the call. A module that used `boundedFetch`
+was right only because something else had run first.
 
 **Files:**
 - `client/src/lib/api.ts`
-- `client/src/main.tsx`
+- `client/src/lib/boundedRequest.test.ts` — **new**
 - `client/src/lib/apiFetchShim.test.ts`
 
-**Test first:** the shim test currently proves the shim works. Write the
-**inverse** test first: a request that bypasses `request()` must **fail** once
-the shim is gone — i.e. assert that the shim is no longer installed, so a
-stray raw `fetch` is visible rather than silently working.
+**Test first:** a bounded request must be correct with **nothing installed**.
+`client/src/lib/boundedRequest.test.ts` asserts that a bounded request
+resolves the path against the configured server, asks for credentials,
+attaches the session header in the native shell, and leaves an absolute URL
+alone — all without the shim.
 
-```ts
-it("no longer patches window.fetch", () => {
-  expect((window as unknown as { fetch: unknown }).fetch).not.toBe(patchedFetch);
-});
-```
+**Then:** move those guarantees from the shim into `boundedFetch`. The shim
+keeps the two things only a global patch can do: the raw call sites that have
+not moved onto the interface (the cover fetcher and the reachability probe),
+and the "the server stopped answering" report, which has to see *every*
+request.
 
-**Then:** remove `installApiBaseUrl` and its call in `main.tsx`. Keep
-`resolveApiRequest` / `apiUrl` — `request()` uses them to build the URL.
+**Note (implemented) — the session header stayed in the shim.** Removing it
+broke a test, and the test was right: the reachability probe reads "401" as
+"the server is there and wants a password", so without the session header the
+native shell would decide it was signed out when it was not. The probe is
+one of the two raw call sites, so it still needs the shim.
+
+**Note (implemented) — the inverted test.** The plan asked for "a request that
+bypasses `request()` must fail once the shim is gone". The stronger and
+achievable version is: **a bounded request must be correct without the shim
+installed at all**. That is now a test.
 
 **Verify:**
 ```bash
@@ -720,11 +749,46 @@ cd client && npx tsc -b
 ```
 
 **Definition of done**
+- [x] A bounded request resolves its URL, carries credentials and carries the
+      session header **without** the global patch.
+- [x] The shim is no longer what makes a request correct.
+- [x] The shim still does what only a global patch can do: the unreachable
+      report, and the two raw call sites.
+- [x] The native shell is unaffected — `npm run build:android` succeeds, and
+      the reachability probe still tells "signed out" from "server gone".
+- [ ] The shim is deleted. **That is step 1.6**, and it is not done yet.
+
+### Step 1.6 — Delete the fetch shim
+
+**State on entry:** Step 1.5 merged.
+
+> **Not done yet, and deliberately.** This is the step the original plan had
+> at 1.5, and it is still ahead. It cannot happen until the last raw call
+> sites have moved.
+>
+> What must move first:
+>
+>  - the **reachability probe** (`lib/reachability.ts:48`), which makes a raw
+>    `fetch` and needs the session header to tell "signed out" from "server
+>    gone". It should use `boundedFetch` with its own 10-second deadline, or
+>    `requestRaw` with a timeout.
+>  - the **cover fetcher** (`local/CoverImage.tsx:306`), which reads the
+>    response as a blob. It needs the media token in the query, and it must
+>    not carry the family's session header to a media URL.
+>
+> The unreachable report has to move too. Today the shim is the one place that
+> sees *every* request, including ones nobody wrote. Once the two raw call
+> sites are gone, the report belongs to `boundedFetch` — which sees every
+> request the app makes — and the shim has nothing left to do.
+>
+> **Then** delete `installApiBaseUrl` and its call in `main.tsx`, and delete
+> `apiFetchShim.test.ts`'s shim block, keeping the `resolveApiRequest` tests.
+
+**Definition of done**
 - [ ] `window.fetch` is not monkey-patched.
-- [ ] Every app request still carries credentials and the session header
-      (the step 1.1 guarantee tests prove this).
-- [ ] `npm run build:android` succeeds — the native shell is the case where
-      a missing session header is a 401 on every call.
+- [ ] Every app request still carries credentials and the session header.
+- [ ] The unreachable report still fires, and the app still re-probes.
+- [ ] `npm run build:android` succeeds.
 
 ---
 
