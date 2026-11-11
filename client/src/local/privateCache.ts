@@ -33,6 +33,7 @@
 import { scryptAsync } from "@noble/hashes/scrypt";
 import type { BookProgress, WishlistItem } from "../types";
 import { localDb, type LocalLibraryDatabase } from "./db";
+import { replicaBookKey, replicaScopedKey } from "./replica";
 
 export const CACHE_VERSION = 1;
 /** 16 bytes, per spec. */
@@ -423,44 +424,90 @@ export async function getPrivateValue<T>(
  */
 export async function cacheLibraryPrivateState(
   books: { id: number; progress?: BookProgress | null }[],
+  serverId: string,
   db: LocalLibraryDatabase = localDb,
 ): Promise<void> {
   const profileId = activeCacheProfileId();
   if (profileId === null) return;
   for (const book of books) {
     if (book.progress) {
-      await putPrivateValue("progress", String(book.id), book.progress, db);
+      await putPrivateValue("progress", replicaBookKey(serverId, book.id), book.progress, db);
     } else {
-      await deletePrivateValue("progress", String(book.id), db);
+      await deletePrivateValue("progress", replicaBookKey(serverId, book.id), db);
     }
   }
 }
 
+/**
+ * The private row key for a book's progress.
+ *
+ * Scoped to the server, because the device library is a set of per-server
+ * shelves (spec 30) and two servers can both number their books from 1. The
+ * key is the **same** one the replica rows use, so there is one key format in
+ * the codebase rather than two that agree by hand.
+ */
+function progressKey(serverId: string, bookId: number): string {
+  return replicaBookKey(serverId, bookId);
+}
+
+/**
+ * Store a book's saved position.
+ *
+ * The `serverId` says which server's catalogue the book came from. Two
+ * servers' book number 7 are different books, and their positions must not
+ * overwrite each other.
+ */
 export async function cacheProgress(
   bookId: number,
   progress: BookProgress,
+  serverId: string,
   db: LocalLibraryDatabase = localDb,
 ): Promise<boolean> {
-  return putPrivateValue("progress", String(bookId), progress, db);
+  return putPrivateValue("progress", progressKey(serverId, bookId), progress, db);
 }
 
+/**
+ * Read a book's saved position.
+ *
+ * Falls back to the pre-scope key, which was the bare book id. An upgrade
+ * must not lose a listener's place, and the row is still there under the old
+ * key until the next save rewrites it in the right place.
+ */
 export async function readProgress(
   bookId: number,
+  serverId: string,
   db: LocalLibraryDatabase = localDb,
 ): Promise<BookProgress | undefined> {
+  const scoped = await getPrivateValue<BookProgress>("progress", progressKey(serverId, bookId), db);
+  if (scoped !== undefined) return scoped;
   return getPrivateValue<BookProgress>("progress", String(bookId), db);
 }
 
+/**
+ * Store the favourites list.
+ *
+ * Scoped to the server for the same reason the progress is: a favourite id
+ * names a book on one server's catalogue.
+ */
 export async function cacheFavourites(
   ids: number[],
+  serverId: string,
   db: LocalLibraryDatabase = localDb,
 ): Promise<boolean> {
-  return putPrivateValue("favourites", "ids", ids, db);
+  return putPrivateValue("favourites", replicaScopedKey(serverId, "favourites"), ids, db);
 }
 
+/** Read the favourites list, falling back to the pre-scope key. */
 export async function readFavourites(
+  serverId: string,
   db: LocalLibraryDatabase = localDb,
 ): Promise<number[] | undefined> {
+  const scoped = await getPrivateValue<number[]>(
+    "favourites",
+    replicaScopedKey(serverId, "favourites"),
+    db,
+  );
+  if (scoped !== undefined) return scoped;
   return getPrivateValue<number[]>("favourites", "ids", db);
 }
 

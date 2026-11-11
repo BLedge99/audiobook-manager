@@ -59,6 +59,7 @@ import { getServerUrl } from "./lib/api";
 import { probeServer as probeServerRequest } from "./lib/reachability";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
 import { useDeviceLibrary } from "./local/useDeviceLibrary";
+import { replicaBookKey } from "./local/replica";
 import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
@@ -409,10 +410,13 @@ function App() {
   const libraryBooks = useMemo(() => {
     const books = new Map<string, Audiobook>();
     if (!offline) {
-      for (const book of audiobooks) books.set(`${getServerUrl()}#${book.id}`, book);
+      // The key format is the replica's, not a copy of it: two servers can both
+      // number their books from 1, so the key has to say which shelf a book is
+      // on or the two collide.
+      for (const book of audiobooks) books.set(replicaBookKey(getServerUrl(), book.id), book);
     }
     for (const book of device.books) {
-      const key = `${book.serverId ?? getServerUrl()}#${book.id}`;
+      const key = replicaBookKey(book.serverId ?? getServerUrl(), book.id);
       if (!books.has(key)) books.set(key, book);
     }
     return [...books.values()];

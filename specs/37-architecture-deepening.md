@@ -134,10 +134,10 @@ stuck; say so rather than leaving it ambiguous.
 | 1.2 `useLibrary` + `useBrowse` | done | opencode | 331f336 |
 | 1.3 the components | done | opencode | 79473e6 |
 | 1.4 the admin client | done | opencode | 287e256 |
-| 1.5 retire the fetch shim's leftovers | done | opencode | (next commit) |
+| 1.5 retire the fetch shim's leftovers | done | opencode | b2b3df3 |
 | 1.6 delete the fetch shim | not started | | |
-| 2.1 prove the key collision | not started | | |
-| 2.2 server-scoped private keys | not started | | |
+| 2.1 prove the key collision | done | opencode | (next commit) |
+| 2.2 server-scoped private keys | done | opencode | (next commit) |
 | 3.1 the library source interface | not started | | |
 | 3.2 both hooks satisfy it | not started | | |
 | 3.3 collapse the merge | not started | | |
@@ -836,8 +836,14 @@ the row key `"7"`.
 and the existing tests must still pass.
 
 **Definition of done**
-- [ ] The new test exists and fails for the stated reason.
-- [ ] Nothing else changed yet.
+- [x] The new test exists and fails for the stated reason.
+- [x] Nothing else changed yet.
+
+**Note (implemented):** the red came from **two** places, which is the right
+signal for an interface change. The test failed at runtime, and `tsc` failed
+with `Expected 2-3 arguments, but got 4` on every new call. A test that
+cannot even be called the way the new interface wants is a real failure, and
+the typecheck gate from step 0.1 is what makes it visible.
 
 ### Step 2.2 — Give the private cache a server-scoped key
 
@@ -877,11 +883,44 @@ cd client && npx tsc -b
 ```
 
 **Definition of done**
-- [ ] The step 2.1 test passes.
-- [ ] A progress row written before the upgrade is still readable, and is
+- [x] The step 2.1 test passes.
+- [x] A progress row written before the upgrade is still readable, and is
       rewritten under the new key.
-- [ ] `replicaBookKey` is the only place the key format is written.
-- [ ] `App.tsx:407,410` no longer writes the key format inline.
+- [x] `replicaBookKey` is the only place the key format is written.
+- [x] `App.tsx:407,410` no longer writes the key format inline.
+
+**Note (implemented) — the legacy fallback is a read, not a move.** The
+progress row is read from the server-scoped key, and falls back to the old
+bare-id key when it is absent. The fallback is **not** migrated forward: a
+legacy row does not say which server it belongs to, so on a device with two
+shelves, copying it forward would hand one server's position to another
+server's same-numbered book and make the mistake permanent. The first save
+writes the correctly-scoped key, and the legacy row is simply left behind.
+
+That is the same rule as the rest of the plan: a rule that only one caller
+holds is a rule the next caller will re-impose, slightly differently.
+
+**Note (implemented) — `replicaScopedKey` was added.** `replicaBookKey` takes
+a numeric book id, and the favourites list is not a book. It is now
+`replicaScopedKey(serverId, name)` in the same module, so the favourites key
+is built the same way as the progress key.
+
+**Note (implemented) — the server scope is resolved at the call site.**
+`ChapterPlayer` uses `book.serverId ?? getServerUrl()`, `useDeviceLibrary`
+uses `row.serverId ?? getServerUrl()`, and `useBrowse` and `useLibrary` use
+`getServerUrl()`. That is the pattern the replica already used.
+
+**Files (implemented):**
+- `client/src/local/privateCache.ts` — the four functions plus
+  `cacheLibraryPrivateState`
+- `client/src/local/privateCache.test.ts` — the three new tests
+- `client/src/local/replica.ts` — `replicaScopedKey`
+- `client/src/local/useDeviceLibrary.ts` — the reader
+- `client/src/components/ChapterPlayer.tsx` — the two call sites
+- `client/src/useBrowse.ts` — the favourites
+- `client/src/useLibrary.ts` — the library refresh
+- `client/src/App.tsx` — the merge's key format
+- `client/src/useBrowse.test.tsx` — the favourites assertions
 
 ---
 

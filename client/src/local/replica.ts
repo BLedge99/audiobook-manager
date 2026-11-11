@@ -54,6 +54,17 @@ export function replicaBookKey(serverId: string, bookId: number): string {
 }
 
 /**
+ * The same key, for something that is not a book.
+ *
+ * The favourites list is per server for the same reason a book's progress is:
+ * a favourite id names a book on one server's catalogue, and the same id on
+ * another server is a different book.
+ */
+export function replicaScopedKey(serverId: string, name: string): string {
+  return `${serverId}#${name}`;
+}
+
+/**
  * Where one track is stored.
  *
  * Keyed by book and track id rather than the track's filename: filenames come

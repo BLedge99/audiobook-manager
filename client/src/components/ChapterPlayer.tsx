@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook } from "../types";
-import { getActiveProfileId } from "../lib/api";
+import { getActiveProfileId, getServerUrl } from "../lib/api";
 import { request } from "../lib/request";
 import { cacheProgress, readProgress } from "../local/privateCache";
 import { copy } from "../copy";
@@ -210,6 +210,15 @@ export function ChapterPlayer({
 
   /* ------------------------------------------------------------- saving */
 
+  /**
+   * Which server's shelf this book belongs to.
+   *
+   * An offline book adopted or downloaded from another server lives in that
+   * server's shelf, so its saved position belongs to that server too. A book
+   * from the connected server has no `serverId` of its own.
+   */
+  const bookServerId = book.serverId ?? getServerUrl();
+
   const saveProgress = (at: number, onSettled?: () => void, completed = false) => {
     // `onSettled` lets the shell refetch the library once the *final* save has
     // actually landed, rather than on a guessed delay that races this request.
@@ -223,7 +232,7 @@ export function ChapterPlayer({
       body: { position: at, ...(completed ? { completed: true } : {}) },
     })
       .catch(() => undefined)
-      .then(() => cacheProgress(book.id, progress))
+      .then(() => cacheProgress(book.id, progress, bookServerId))
       .catch(() => undefined)
       .then(() => onSettled?.());
   };
@@ -423,7 +432,7 @@ export function ChapterPlayer({
       } catch {
         // Offline or unauthorised: the encrypted row is the last position this
         // profile saw. It only exists while the profile key is unlocked.
-        saved = (await readProgress(book.id))?.position ?? 0;
+        saved = (await readProgress(book.id, bookServerId))?.position ?? 0;
       }
       applyResume(saved);
     })();

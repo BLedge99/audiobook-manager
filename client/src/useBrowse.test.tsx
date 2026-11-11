@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useBrowse } from "./useBrowse";
+import { getServerUrl } from "./lib/api";
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -64,7 +65,9 @@ describe("useBrowse", () => {
     await waitFor(() => expect(view.result.current.favourites).toEqual([1, 2, 3]));
 
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/favourites/ids"))).toBe(true);
-    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([1, 2, 3]);
+    // The favourites are cached against the server they came from, so two
+    // shelves keep two separate lists.
+    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([1, 2, 3], getServerUrl());
   });
 
   it("re-fetches favourites when the profileId changes", async () => {
@@ -91,7 +94,7 @@ describe("useBrowse", () => {
     });
 
     await waitFor(() => expect(view.result.current.favourites).toEqual([4, 5]));
-    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([4, 5]);
+    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([4, 5], getServerUrl());
   });
 
   it("falls back to cached favourites for the new profile when the server is unreachable", async () => {

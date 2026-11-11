@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
-import { describeFailure } from "./lib/api";
+import { describeFailure, getServerUrl } from "./lib/api";
 import { request, requestConditional, type Conditional } from "./lib/request";
 import { copy } from "./copy";
 import { cacheLibraryPrivateState } from "./local/privateCache";
@@ -100,7 +100,10 @@ export function useLibrary(canManageLibrary = true) {
           booksEtagRef.current = books.etag;
           // Keep the encrypted offline copy in step with the last successful
           // online view. No-op until the profile key is unlocked.
-          void cacheLibraryPrivateState(books.data);
+          //
+          // The scope is the server these books came from, so a device with
+          // two shelves keeps two separate positions.
+          void cacheLibraryPrivateState(books.data, getServerUrl());
         }
         if (libraryRoots.changed) {
           setRoots(libraryRoots.data);

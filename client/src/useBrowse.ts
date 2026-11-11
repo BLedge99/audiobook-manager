@@ -10,6 +10,7 @@ import type {
   WishlistItem,
 } from "./types";
 import { request } from "./lib/request";
+import { getServerUrl } from "./lib/api";
 import { copy } from "./copy";
 import {
   cacheFavourites,
@@ -57,12 +58,12 @@ export function useBrowse(profileId: string | null = null) {
       setFavourites(favIds);
       setEnrichment(status);
       setReviewQueue(review);
-      void cacheFavourites(favIds);
+      void cacheFavourites(favIds, getServerUrl());
     } catch {
       // Browse degrades to the plain library rather than an error screen. If
       // the profile key is unlocked (offline sign-in), show the last encrypted
       // favourites instead of an empty heart set.
-      const cached = await readFavourites();
+      const cached = await readFavourites(getServerUrl());
       if (cached) setFavourites(cached);
     } finally {
       setLoaded(true);
@@ -90,7 +91,7 @@ export function useBrowse(profileId: string | null = null) {
       setFavourite(bookId, !favourited);
       try {
         await request(`/api/audiobooks/${bookId}/favourite`, { method: favourited ? "DELETE" : "PUT" });
-        void cacheFavourites(next);
+        void cacheFavourites(next, getServerUrl());
       } catch (error) {
         setFavourite(bookId, favourited); // roll back
         throw error;

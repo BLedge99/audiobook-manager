@@ -107,7 +107,11 @@ export function useDeviceLibrary(enabled: boolean): DeviceLibrary {
         // The replica stores only shared metadata. Progress is private and
         // comes back from the encrypted rows when the profile key is unlocked;
         // without a key the book is still playable, just with no resume point.
-        const progress = await readProgress(row.book.id);
+        //
+        // The row's own server is what scopes the read: two shelves can hold
+        // the same book number, and their positions are different books'
+        // positions.
+        const progress = await readProgress(row.book.id, row.serverId ?? getServerUrl());
         next[row.bookKey] = progress ? { ...row, book: { ...row.book, progress } } : row;
       }
       setRows(next);

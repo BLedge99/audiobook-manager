@@ -3,6 +3,7 @@ import { LocalLibraryDatabase } from "./db";
 import {
   activeCacheProfileId,
   cacheFavourites,
+  cacheProgress,
   deleteProfileCache,
   exportActiveProfileKey,
   getPrivateValue,
@@ -11,6 +12,7 @@ import {
   offlineCacheState,
   putPrivateValue,
   readFavourites,
+  readProgress,
   rememberProfileKey,
   rewrapProfileKey,
   unlockProfileCache,
@@ -74,7 +76,7 @@ describe("the offline cache envelope", () => {
 
   it("fails a wrong password without deleting anything", async () => {
     await rememberProfileKey(7, "correct-horse-9", db);
-    await cacheFavourites([1, 2, 3], db);
+    await cacheFavourites([1, 2, 3], "https://a.example", db);
 
     lockOfflineCache();
     await expect(unlockProfileCache(7, "wrong-password", db)).rejects.toBeInstanceOf(
@@ -85,7 +87,7 @@ describe("the offline cache envelope", () => {
     // The correct password still opens the same data: a failed attempt is not
     // a destructive one.
     await unlockProfileCache(7, "correct-horse-9", db);
-    expect(await readFavourites(db)).toEqual([1, 2, 3]);
+    expect(await readFavourites("https://a.example", db)).toEqual([1, 2, 3]);
   });
 
   it("rewraps the key without re-encrypting rows", async () => {
@@ -124,5 +126,63 @@ describe("the offline cache envelope", () => {
       "CacheKeyMissingError",
     );
     expect(await hasProfileCache(99, db)).toBe(false);
+  });
+});
+
+describe("the private cache is scoped to a server", () => {
+  /**
+   * The device library is a union of per-server shelves (spec 30), so a
+   * phone pointed at two servers holds two different books that both happen to
+   * be number 7.
+   *
+   * The replica rows are keyed `<serverId>#<bookId>`. The **private** rows
+   * were keyed by the bare book id, so the second server's book 7 overwrote
+   * the first server's resume position -- and the encrypted row the listener
+   * last saved was the one that disappeared.
+   */
+  it("keeps two servers' progress for the same book id apart", async () => {
+    await rememberProfileKey(7, "correct-horse-9", db);
+
+    await cacheProgress(
+      7,
+      { position: 100, completed: false, lastPlayed: "2026-11-11T00:00:00.000Z" },
+      "https://a.example",
+      db,
+    );
+    await cacheProgress(
+      7,
+      { position: 900, completed: false, lastPlayed: "2026-11-11T00:00:00.000Z" },
+      "https://b.example",
+      db,
+    );
+
+    expect((await readProgress(7, "https://a.example", db))?.position).toBe(100);
+    expect((await readProgress(7, "https://b.example", db))?.position).toBe(900);
+  });
+
+  it("keeps two servers' favourites apart", async () => {
+    // A favourite id means a book on a particular server's catalogue. On
+    // another server the same id is a different book.
+    await rememberProfileKey(7, "correct-horse-9", db);
+
+    await cacheFavourites([1, 2, 3], "https://a.example", db);
+    await cacheFavourites([4, 5], "https://b.example", db);
+
+    expect(await readFavourites("https://a.example", db)).toEqual([1, 2, 3]);
+    expect(await readFavourites("https://b.example", db)).toEqual([4, 5]);
+  });
+
+  it("still finds a position written before the server scope existed", async () => {
+    // An upgrade must not lose a listener's place. The old rows are keyed by
+    // the bare book id, so the read falls back to them.
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await putPrivateValue(
+      "progress",
+      "42",
+      { position: 1234, completed: false, lastPlayed: "2026-11-11T00:00:00.000Z" },
+      db,
+    );
+
+    expect((await readProgress(42, "https://a.example", db))?.position).toBe(1234);
   });
 });
