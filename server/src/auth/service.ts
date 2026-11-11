@@ -606,7 +606,20 @@ export class AuthService {
     return this.createSession(profileId, via, meta, options);
   }
 
-  /** Create a device-bound secret. Only its hash is stored by the server. */
+  /**
+   * Create a device-bound secret. Only its hash is stored by the server.
+   *
+   * Spec 36: a device that reports an id it has already used **rotates** its
+   * credential rather than getting a second one. Two credentials for one phone
+   * is what made the "signed-in devices" list grow every time the phone
+   * re-enrolled -- which is what happened after the Keystore key was
+   * invalidated and the phone had to be set up again.
+   *
+   * The rotation replaces the secret, so the previous one stops working. The
+   * caller is already signed in as the profile, and it could have revoked the
+   * credential outright, so handing the phone a fresh secret for it gives it
+   * nothing it did not already have.
+   */
   async createDeviceCredential(
     profileId: number,
     label: string | null,
@@ -616,11 +629,37 @@ export class AuthService {
     if (!profile) throw new AuthFailure(404, "not_found");
     if (profile.disabled) throw new AuthFailure(403, "account_disabled");
     const secret = randomBytes(32).toString("base64url");
+    const trimmedDeviceId = deviceId?.trim() || null;
+
+    if (trimmedDeviceId) {
+      const existing = await this.prisma.deviceCredential.findFirst({
+        where: { profileId, deviceId: trimmedDeviceId, revokedAt: null },
+        orderBy: { createdAt: "desc" },
+      });
+      if (existing) {
+        const rotated = await this.prisma.deviceCredential.update({
+          where: { id: existing.id },
+          data: {
+            secretHash: hashSessionToken(secret),
+            label: label?.trim() || existing.label,
+            lastUsedAt: this.now(),
+          },
+        });
+        return {
+          id: rotated.id,
+          secret,
+          label: rotated.label,
+          deviceId: rotated.deviceId,
+          expiresAt: rotated.expiresAt,
+        };
+      }
+    }
+
     const created = await this.prisma.deviceCredential.create({
       data: {
         id: randomUUID(), profileId, secretHash: hashSessionToken(secret),
         label: label?.trim() || null,
-        deviceId: deviceId?.trim() || null,
+        deviceId: trimmedDeviceId,
         expiresAt: new Date(this.now().getTime() + 90 * 24 * 60 * 60 * 1000),
       },
     });

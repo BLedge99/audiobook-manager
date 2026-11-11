@@ -494,6 +494,14 @@ export const copy = {
     deviceLocked:
       "Too many tries with fingerprint or face. Wait a moment, or sign in with your password.",
     /**
+     * The Vault holds a value but no device secret: the phone was set up while
+     * the server was unreachable, or the secret was lost with an invalidated
+     * Keystore key. The fingerprint can open the profile locally, but the
+     * phone cannot sign in to the server on its own.
+     */
+    deviceNeedsPasswordOnline:
+      "Fingerprint unlock is set up for offline use only. Sign in with your password to turn it on for this server.",
+    /**
      * Spec 32 / ADR 023: the external sign-in surface (Google/GitHub) and the
      * email sign-in path that wraps it. The provider names themselves are not
      * copy — the listener only ever sees the outcome.

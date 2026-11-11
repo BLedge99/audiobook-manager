@@ -263,6 +263,45 @@ describe("the signed-in devices panel", () => {
   });
 });
 
+describe("re-enrolling the same device", () => {
+  it("rotates the credential instead of adding a second one", async () => {
+    const profile = await createProfile();
+    const token = tokenOf(await login(profile));
+
+    const first = await enrol(profile, token, "Pixel 4a", "installation-abc");
+    const second = await enrol(profile, token, "Pixel 4a", "installation-abc");
+
+    expect(second.id).toBe(first.id);
+    expect(second.secret).not.toBe(first.secret);
+
+    const credentials = await prisma.deviceCredential.findMany({
+      where: { profileId: profile.id },
+    });
+    expect(credentials).toHaveLength(1);
+
+    // The old secret stops working: it is the same credential, with a new one.
+    const stale = await exchange(first.secret);
+    expect(stale.statusCode).toBe(401);
+    expect(stale.json()).toMatchObject({ code: "device_auth_failed" });
+
+    const live = await exchange(second.secret);
+    expect(live.statusCode).toBe(200);
+  });
+
+  it("gives two phones on the same model two credentials", async () => {
+    const profile = await createProfile();
+    const token = tokenOf(await login(profile));
+
+    await enrol(profile, token, "Pixel 4a", "installation-one");
+    await enrol(profile, token, "Pixel 4a", "installation-two");
+
+    const credentials = await prisma.deviceCredential.findMany({
+      where: { profileId: profile.id },
+    });
+    expect(credentials).toHaveLength(2);
+  });
+});
+
 describe("revoking a device credential", () => {
   it("ends the sessions the device holds", async () => {
     const profile = await createProfile();

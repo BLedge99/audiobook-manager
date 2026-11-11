@@ -57,6 +57,8 @@ makes the panel say what it is showing.
 6. **A revoked device credential revokes its sessions.** Signing a device out
    removes the credential's sessions; revoking the credential itself also ends
    them, so a stolen phone cannot keep a session that nobody can use.
+7. **Enrolling with a known device id rotates the credential.** One phone, one
+   credential, however many times it is set up again.
 
 ## Behaviour
 
@@ -160,13 +162,13 @@ lock now returns the app to the account gate, where the prompt belongs.
 
 Enrolling biometrics while the server is unreachable stores the profile key in
 the Vault but no device secret, because there is no server to ask. That entry
-could not sign in online afterwards: the client saw no secret, assumed it was
-offline, and never contacted the server again.
+cannot sign in online: the client sees no secret, and the phone cannot ask for
+one either, because enrolling a device needs a session and the session is what
+the secret would buy.
 
-The entry is now **upgraded in place**: the next unlock that finds a server
-registers a device credential and rewrites the Vault entry with the secret.
-The upgrade happens inside the biometric prompt that is already open, so it
-costs no extra prompt.
+So the phone says so, and asks for the password. The password sign-in re-enrols
+the phone, and the Vault entry is rewritten with the secret. The listener is
+never stuck: the password form is always there.
 
 ### Re-enrolment is keyed on the Vault
 
@@ -177,8 +179,15 @@ cleared while the credential survives, so biometrics could never be set up
 again without going into Settings — where each attempt created *another*
 credential.
 
-Automatic enrolment is now skipped only when the Vault already holds a secret.
-An invalidated key re-enrols the same credential instead of adding a second.
+Automatic enrolment is now skipped only when the **Vault** holds a value that
+carries a device secret. The app records what it put in the Vault, because the
+Vault holds ciphertext and cannot be read without unlocking it. The marker is
+not a secret and nothing is authorised with it.
+
+The server closes the other half of the loop: enrolling with a device id that
+already has a credential **rotates** that credential instead of creating a
+second one. Two credentials for one phone is what made the list grow every
+time the phone was set up again.
 
 ## Data model
 
@@ -208,7 +217,7 @@ leaves a revoked-but-readable session rather than a broken foreign key.
 
 | Method | URL | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/api/auth/devices` | profile session | Enrol a device; body `{ label?, deviceId? }` |
+| `POST` | `/api/auth/devices` | profile session | Enrol a device; body `{ label?, deviceId? }`. A known `deviceId` rotates the credential rather than adding one |
 | `GET` | `/api/auth/devices` | profile session | List the caller's device credentials |
 | `DELETE` | `/api/auth/devices/:id` | profile session | Revoke a device credential |
 | `POST` | `/api/auth/devices/session` | public | Exchange a device secret for a session; body `{ secret }` |
@@ -285,8 +294,9 @@ Every user-facing string lives in `client/src/copy.ts` and passes
 - [x] `DELETE /api/auth/sessions/others` leaves the caller's own session alone.
 - [x] A member cannot revoke another profile's session by key.
 - [x] Revoking a device credential ends its sessions.
-- [x] A Vault entry with no secret is upgraded in place once the server answers.
+- [x] A Vault entry with no secret asks for the password rather than signing in offline for good.
 - [x] An invalidated Keystore key re-enrols the same credential, not a new one.
+- [x] Enrolling with a known device id rotates the credential; two device ids give two credentials.
 - [x] After the five-minute background lock the app returns to the account gate.
 - [x] The pruning script is dry-run by default.
 

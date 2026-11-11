@@ -167,8 +167,22 @@ export function AccountGate({
     }
   };
 
+  /**
+   * Set the phone up for fingerprint sign-in, if it is not set up already.
+   *
+   * Spec 36: this used to be skipped whenever the **server** held a
+   * credential for the profile. That is the wrong test. The Keystore key is
+   * invalidated when a new fingerprint is enrolled, and the saved value is
+   * then cleared while the server's credential survives -- so biometrics could
+   * never be set up again, and every attempt in Settings added another
+   * credential to the list.
+   *
+   * The test is now the Vault: does this phone hold a value that can sign in
+   * on its own?
+   */
   const enrollDeviceUnlock = async (profileId: number) => {
-    if (!biometricsAvailable || mode.kind !== "password" || mode.account.hasDeviceUnlock) return;
+    if (!biometricsAvailable || mode.kind !== "password") return;
+    if (biometricVault.hasSecret(profileId)) return;
     let deviceId: string | undefined;
     try {
       const key = await exportActiveProfileKey(profileId);
@@ -178,6 +192,8 @@ export function AccountGate({
         headers: { "Content-Type": "application/json" },
         // The phone names itself (spec 36): "Pixel 4a" rather than "Android
         // device", so the signed-in devices panel can tell two phones apart.
+        // The device id also makes this a rotation of the phone's existing
+        // credential rather than a second one.
         body: JSON.stringify({
           label: deviceName(copy.security.thisDevice),
           deviceId: getInstallationId(),
@@ -316,22 +332,33 @@ export function AccountGate({
         setError(copy.login.deviceOtherProfile);
         return;
       }
+      if (!saved.secret) {
+        /*
+         * The Vault holds a value but no device secret.
+         *
+         * That happens when the phone was set up while the server was
+         * unreachable, or when the secret was lost with an invalidated
+         * Keystore key and the phone was set up again offline. Either way the
+         * fingerprint can open the profile *locally*, but the phone cannot
+         * sign in to the server on its own, and it cannot ask for a new
+         * secret either: enrolling a device needs a session, and the session
+         * is what the secret would buy.
+         *
+         * So the password is needed once. The password sign-in re-enrols the
+         * phone, which puts the secret back in the Vault.
+         */
+        setError(copy.login.deviceNeedsPasswordOnline);
+        return;
+      }
+
       let token: string | undefined;
-      let response: Response | undefined;
-      let offlineSignIn = !saved.secret;
-      
-      // Only try server authentication if we have a secret (online-registered mode)
-      if (saved.secret) {
-        try {
-          response = await boundedFetch("/api/auth/devices/session", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ secret: saved.secret }),
-          });
-        } catch {
-          // The DEK can open this profile offline; no server session is invented.
-          offlineSignIn = true;
-        }
-        if (response && !response.ok) {
+      let offlineSignIn = false;
+      try {
+        const response = await boundedFetch("/api/auth/devices/session", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secret: saved.secret }),
+        });
+        if (!response.ok) {
           if (response.status === 401 || response.status === 404) {
             await biometricVault.clear(accountId);
             await deleteProfileCache(saved.profileId);
@@ -341,7 +368,10 @@ export function AccountGate({
           setError(copy.login.deviceFailed);
           return;
         }
-        if (response) token = ((await response.json()) as { token?: string }).token;
+        token = ((await response.json()) as { token?: string }).token;
+      } catch {
+        // The DEK can open this profile offline; no server session is invented.
+        offlineSignIn = true;
       }
       // Unlock with the saved key (works for both offline-only and online-registered modes)
       await unlockProfileCacheWithKey(saved.profileId, fromBase64(saved.key));

@@ -7,10 +7,13 @@ const mocks = vi.hoisted(() => ({
   unlock: vi.fn(),
   available: vi.fn(),
   clear: vi.fn(),
+  save: vi.fn(),
+  hasSecret: vi.fn(),
   setToken: vi.fn(),
   setProfile: vi.fn(),
   unlockKey: vi.fn(),
   deleteCache: vi.fn(),
+  exportKey: vi.fn(),
 }));
 
 vi.mock("../lib/api", () => ({
@@ -26,13 +29,21 @@ vi.mock("../lib/passkeys", () => ({
   signInWithPasskey: vi.fn(),
 }));
 vi.mock("../lib/biometricVault", () => ({
-  biometricVault: { available: mocks.available, unlock: mocks.unlock, clear: mocks.clear },
+  biometricVault: {
+    available: mocks.available,
+    unlock: mocks.unlock,
+    clear: mocks.clear,
+    save: mocks.save,
+    hasSecret: mocks.hasSecret,
+  },
 }));
 vi.mock("../local/privateCache", () => ({
   lockOfflineCache: vi.fn(),
   rememberProfileKey: vi.fn(),
   unlockProfileCacheWithKey: mocks.unlockKey,
   deleteProfileCache: mocks.deleteCache,
+  exportActiveProfileKey: mocks.exportKey,
+  toBase64: () => "base64-dek",
   fromBase64: () => new Uint8Array(32),
 }));
 
@@ -47,6 +58,8 @@ describe("AccountGate biometric sign-in", () => {
     vi.clearAllMocks();
     mocks.available.mockResolvedValue(true);
     mocks.unlock.mockResolvedValue({ profileId: 7, secret: "device-secret", key: "wrapped-dek" });
+    mocks.hasSecret.mockReturnValue(true);
+    mocks.exportKey.mockResolvedValue(new Uint8Array(32));
     mocks.fetch.mockImplementation(async (path: string) => {
       if (path === "/api/auth/accounts") return response(200, [{
         id: 7, name: "Ben", role: "member", disabled: false,
@@ -142,6 +155,30 @@ describe("AccountGate biometric sign-in", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
 
     expect(await screen.findByText(copy.security.deviceNeedsPassword)).toBeInTheDocument();
+  });
+
+  it("asks for the password when the Vault holds a value without a device secret", async () => {
+    /*
+     * The phone was set up while the server was unreachable, or the secret
+     * was lost with an invalidated Keystore key. The fingerprint can open the
+     * profile locally, but the phone cannot sign in to the server on its own
+     * -- and it cannot ask for a new secret either, because enrolling a
+     * device needs the session the secret would buy.
+     */
+    mocks.unlock.mockResolvedValue({ profileId: 7, key: "wrapped-dek" });
+    const onSuccess = vi.fn();
+    render(<AccountGate onSuccess={onSuccess} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
+    fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(copy.login.deviceNeedsPasswordOnline);
+    expect(mocks.fetch).not.toHaveBeenCalledWith(
+      "/api/auth/devices/session",
+      expect.anything(),
+    );
+    // The password form is still there: biometrics never trap a person.
+    expect(screen.getByLabelText(copy.account.passwordLabel("Ben"))).toBeInTheDocument();
+    expect(onSuccess).not.toHaveBeenCalled();
   });
 
   it("clears a revoked device secret and its stale offline private data", async () => {    mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"

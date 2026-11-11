@@ -192,6 +192,47 @@ describe("biometricVault", () => {
     });
   });
 
+  describe("hasSecret", () => {
+    it("is false for a value that was saved without a secret", async () => {
+      mockVault.save.mockResolvedValue(undefined);
+      window.localStorage.clear();
+
+      await biometricVault.save(4, { profileId: 4, key: "key-only" });
+
+      expect(biometricVault.hasSecret(4)).toBe(false);
+    });
+
+    it("is true once a value with a secret is saved", async () => {
+      mockVault.save.mockResolvedValue(undefined);
+      window.localStorage.clear();
+
+      await biometricVault.save(4, { profileId: 4, secret: "shh", key: "key" });
+
+      expect(biometricVault.hasSecret(4)).toBe(true);
+    });
+
+    it("is false again after the value is cleared", async () => {
+      mockVault.save.mockResolvedValue(undefined);
+      mockVault.clear.mockResolvedValue(undefined);
+      window.localStorage.clear();
+
+      await biometricVault.save(4, { profileId: 4, secret: "shh", key: "key" });
+      await biometricVault.clear(4);
+
+      expect(biometricVault.hasSecret(4)).toBe(false);
+    });
+
+    it("keeps one profile's answer out of another's", async () => {
+      mockVault.save.mockResolvedValue(undefined);
+      window.localStorage.clear();
+
+      await biometricVault.save(4, { profileId: 4, secret: "shh", key: "key" });
+
+      expect(biometricVault.hasSecret(4)).toBe(true);
+      expect(biometricVault.hasSecret(5)).toBe(false);
+    });
+  });
+
   describe("per-profile isolation", () => {
     it("should handle multiple profiles independently", async () => {
       mockVault.hasSavedValue.mockImplementation(({ profileId }) => 
