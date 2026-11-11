@@ -15,6 +15,7 @@ import { resolveInsideRoot } from "./safePath";
 import { applyCandidate, rowToCandidate, storeCandidates } from "./metadata/apply";
 import { coverFilename, fetchCover } from "./metadata/cover";
 import { decideOverrideAction } from "./metadata/precedence";
+import { eraseProfilePersonalData, exportProfilePersonalData } from "./gdpr/personal-data";
 import { runChain } from "./metadata/chain";
 import { trackTitleOverrideField } from "./metadata/chapters";
 import { buildQuery, EnrichmentManager } from "./metadata/run";
@@ -2050,69 +2051,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
 
-    const [profile, sessions, listeningHistory, playSessions, favourites, wishlistItems, libraryEntries, deviceCredentials, webAuthnCredentials] = await Promise.all([
-      prisma.profile.findUnique({
-        where: { id: profileId },
-        select: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true },
-      }),
-      prisma.session.findMany({
-        where: { profileId },
-        // Spec 36: the device a session belongs to is part of the caller's own
-        // data, so the export says which device each session was.
-        select: { id: true, expiresAt: true, userAgent: true, deviceLabel: true, deviceCredentialId: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.listeningHistory.findMany({
-        where: { profileId },
-        select: { id: true, mediaItemId: true, position: true, completed: true, lastPlayed: true, playedAt: true },
-        orderBy: { playedAt: "desc" },
-      }),
-      prisma.playSession.findMany({
-        where: { profileId },
-        select: { id: true, mediaItemId: true, startedAt: true, endedAt: true, fromPosition: true, toPosition: true, speed: true },
-        orderBy: { startedAt: "desc" },
-      }),
-      prisma.favourite.findMany({
-        where: { profileId },
-        select: { mediaItemId: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.wishlistItem.findMany({
-        where: { profileId },
-        select: { id: true, title: true, author: true, seedMediaItemId: true, owned: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.profileLibraryEntry.findMany({
-        where: { profileId },
-        select: { mediaItemId: true },
-        orderBy: { mediaItemId: "asc" },
-      }),
-      prisma.deviceCredential.findMany({
-        where: { profileId },
-        select: { label: true, deviceId: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.webAuthnCredential.findMany({
-        where: { profileId },
-        select: { credentialId: true, publicKey: true, counter: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      }),
-    ]);
-
-    if (!profile) return fail(reply, 404, "not_found");
-
-    return reply.send({
-      exportedAt: new Date().toISOString(),
-      profile,
-      sessions,
-      listeningHistory,
-      playSessions,
-      favourites,
-      wishlistItems,
-      libraryEntries,
-      deviceCredentials,
-      webAuthnCredentials,
-    });
+    const exported = await exportProfilePersonalData(prisma, profileId);
+    if (!exported) return fail(reply, 404, "not_found");
+    return reply.send(exported);
   });
 
   // Right to erasure (GDPR Art. 17): self-service account deletion. The
@@ -2122,20 +2063,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
 
-    // Cascade: delete every personal-data row owned by this profile.
-    await prisma.$transaction([
-      prisma.webAuthnChallenge.deleteMany({ where: { profileId } }),
-      prisma.webAuthnCredential.deleteMany({ where: { profileId } }),
-      prisma.deviceCredential.deleteMany({ where: { profileId } }),
-      prisma.session.deleteMany({ where: { profileId } }),
-      prisma.listeningHistory.deleteMany({ where: { profileId } }),
-      prisma.playSession.deleteMany({ where: { profileId } }),
-      prisma.favourite.deleteMany({ where: { profileId } }),
-      prisma.wishlistItem.deleteMany({ where: { profileId } }),
-      prisma.profileLibraryEntry.deleteMany({ where: { profileId } }),
-      prisma.profile.delete({ where: { id: profileId } }),
-    ]);
-
+    await eraseProfilePersonalData(prisma, profileId);
     return reply.code(204).send();
   });
 

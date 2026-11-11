@@ -16,6 +16,10 @@ import {
   newSessionToken,
   sessionExpiry,
 } from "./session";
+import {
+  cleanupExpiredPersonalDataArtifacts,
+  purgeInactiveProfiles,
+} from "../gdpr/personal-data";
 import type { OAuthConfig, OAuthIdentity, OAuthProvider } from "./oauth";
 import { exchangeAuthorizationCode, fetchOAuthIdentity, safeEqualStrings } from "./oauth";
 
@@ -936,53 +940,15 @@ export class AuthService {
 
   /** Best effort; correctness never depends on this having run. */
   async cleanupExpired(): Promise<void> {
-    await this.prisma.session.deleteMany({
-      where: {
-        OR: [{ expiresAt: { lt: this.now() } }, { revokedAt: { not: null } }],
-      },
-    });
-    await this.prisma.webAuthnChallenge.deleteMany({
-      where: { expiresAt: { lt: this.now() } },
-    });
-    // Device credentials carry a 90-day expiry; clean up expired or revoked ones.
-    await this.prisma.deviceCredential.deleteMany({
-      where: {
-        OR: [{ expiresAt: { lt: this.now() } }, { revokedAt: { not: null } }],
-      },
-    });
+    const now = this.now();
+    await cleanupExpiredPersonalDataArtifacts(this.prisma, now);
     // Admin sessions follow the same TTL rules as profile sessions.
     await this.prisma.adminSession.deleteMany({
       where: {
-        OR: [{ expiresAt: { lt: this.now() } }, { revokedAt: { not: null } }],
+        OR: [{ expiresAt: { lt: now } }, { revokedAt: { not: null } }],
       },
     });
-    // Inactive profiles: no successful authentication for 24 months.
-    // Profiles never used fall back to createdAt. Cascade deletes every
-    // related personal-data row via the onDelete: Cascade relations.
-    const inactiveBefore = new Date(this.now().getTime() - 24 * 30 * 24 * 60 * 60 * 1000);
-    const inactiveProfiles = await this.prisma.profile.findMany({
-      where: {
-        OR: [
-          { lastActiveAt: { lt: inactiveBefore } },
-          { lastActiveAt: null, createdAt: { lt: inactiveBefore } },
-        ],
-      },
-      select: { id: true },
-    });
-    for (const profile of inactiveProfiles) {
-      await this.prisma.$transaction([
-        this.prisma.webAuthnChallenge.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.webAuthnCredential.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.deviceCredential.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.session.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.listeningHistory.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.playSession.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.favourite.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.wishlistItem.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.profileLibraryEntry.deleteMany({ where: { profileId: profile.id } }),
-        this.prisma.profile.delete({ where: { id: profile.id } }),
-      ]);
-    }
+    await purgeInactiveProfiles(this.prisma, now);
   }
 
   private async createSession(
