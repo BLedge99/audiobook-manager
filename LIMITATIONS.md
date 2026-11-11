@@ -311,6 +311,25 @@ turns up as an audiobook.
 GraphQL recommendations, or Audible's own catalogue). That is a product decision,
 not a bug.
 
+### 1.9 Two servers' books with the same number share one resume position
+**Status: BROKEN — found 2026-11-11, in the architecture review. Not yet fixed.**
+
+The device library is a union of **per-server shelves** (spec 30), so a phone
+pointed at two servers holds two separate books that both happen to be book
+number 7. The replica rows are keyed correctly, as `<serverId>#<bookId>`.
+
+The **private cache is not**. Progress is stored under the bare book id
+(`client/src/local/privateCache.ts:439-452`), so the second server's book 7
+overwrites the first server's row. The offline shelf then shows the wrong
+resume position for one of them, and the encrypted row the listener last
+saved is the one that is gone. Favourites have the same shape problem: one
+favourites list per profile, not per server.
+
+This needs the client to be pointed at more than one server to show, which is
+exactly the case spec 30 was built for. It is fixed in
+[`specs/37-architecture-deepening.md`](specs/37-architecture-deepening.md),
+steps 2.1 and 2.2 — the test that proves it exists there first.
+
 ---
 
 ## 2. Limited
