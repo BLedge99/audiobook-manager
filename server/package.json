@@ -16,6 +16,7 @@
     "scan": "tsx src/scripts/scan.ts",
     "verify:enrichment": "tsx src/scripts/verify-enrichment.ts",
     "seed:profiles": "tsx src/scripts/seed-profiles.ts",
+    "prune:device-sessions": "tsx src/scripts/prune-device-sessions.ts",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:sqlite:generate": "prisma generate --schema prisma/sqlite/schema.prisma",
     "db:sqlite:sync": "node scripts/sync-sqlite-schema.mjs",

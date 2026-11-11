@@ -251,9 +251,18 @@ created before this spec have a null `deviceCredentialId` and are grouped by
 their session id, which is how a browser session is grouped anyway.
 
 The pile that predates this spec is cleaned by
-`server/scripts/prune-device-sessions.ts`, which revokes superseded
-`via=device` rows. It is dry-run by default and requires `--apply` to change
-anything.
+`server/scripts/prune-device-sessions.ts` (`npm run prune:device-sessions`). It
+is dry-run by default and requires `--apply` to change anything.
+
+It works on the credential, which the server minted and can tell apart, rather
+than on the user agent, which names a model and not a handset. For each phone
+it keeps the newest session and **adopts** it into the device's credential, so
+the phone keeps working, becomes one row, and its next sign-in reuses the
+session it already had. The superseded rows are revoked.
+
+It only touches rows with `via = "device"`. Browser sessions are real
+sign-ins from real browsers, and the household clears those with **Sign out
+other devices** in Settings.
 
 ## Copy
 
