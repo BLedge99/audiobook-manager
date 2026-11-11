@@ -1,4 +1,3 @@
-import { AudnexusProvider } from "./audnexus";
 import { LibrivoxProvider } from "./librivox";
 import { GoogleBooksProvider } from "./googlebooks";
 import { OpenLibraryProvider } from "./openlibrary";
@@ -103,7 +102,6 @@ export function selectCoverSource(
 export function createProviders(): Record<ProviderId, MetadataProvider> {
   return {
     librivox: new LibrivoxProvider(),
-    audnexus: new AudnexusProvider(),
     googlebooks: new GoogleBooksProvider(),
     openlibrary: new OpenLibraryProvider(),
   };

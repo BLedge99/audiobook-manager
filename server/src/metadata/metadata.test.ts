@@ -175,7 +175,6 @@ describe("runChain", () => {
     const good = fakeProvider("librivox", [{ source: "librivox", title: "Dune", confidence: 1 }]);
     const later = fakeProvider("googlebooks", [{ source: "googlebooks", title: "Dune", confidence: 1 }]);
     const providers = {
-      audnexus: fakeProvider("audnexus", []),
       librivox: good,
       googlebooks: later,
       openlibrary: fakeProvider("openlibrary", []),
@@ -191,7 +190,6 @@ describe("runChain", () => {
     const weak = fakeProvider("librivox", [{ source: "librivox", title: "Dune", confidence: 0.4 }]);
     const better = fakeProvider("googlebooks", [{ source: "googlebooks", title: "Dune", confidence: 0.95 }]);
     const providers = {
-      audnexus: fakeProvider("audnexus", []),
       librivox: weak,
       googlebooks: better,
       openlibrary: fakeProvider("openlibrary", []),
@@ -211,7 +209,6 @@ describe("runChain", () => {
     };
     const healthy = fakeProvider("googlebooks", [{ source: "googlebooks", title: "Dune", confidence: 1 }]);
     const providers = {
-      audnexus: fakeProvider("audnexus", []),
       librivox: boom,
       googlebooks: healthy,
       openlibrary: fakeProvider("openlibrary", []),
@@ -223,7 +220,6 @@ describe("runChain", () => {
 
   it("walks the whole chain when nothing clears the threshold", async () => {
     const providers = {
-      audnexus: fakeProvider("audnexus", []),
       librivox: fakeProvider("librivox", []),
       googlebooks: fakeProvider("googlebooks", []),
       openlibrary: fakeProvider("openlibrary", []),
@@ -238,7 +234,6 @@ describe("runChain", () => {
 
   it("collects every provider's candidates for the review queue", async () => {
     const providers = {
-      audnexus: fakeProvider("audnexus", []),
       librivox: fakeProvider("librivox", [{ source: "librivox", title: "B", confidence: 0.1 }]),
       googlebooks: fakeProvider("googlebooks", [{ source: "googlebooks", title: "A", confidence: 0.2 }]),
       openlibrary: fakeProvider("openlibrary", []),
@@ -252,14 +247,13 @@ describe("runChain", () => {
 
   it("returns nothing rather than throwing when every provider is down", async () => {
     const down: MetadataProvider = {
-      id: "audnexus",
+      id: "librivox",
       supportsRichFields: true,
       search: vi.fn(async () => {
         throw new Error("offline");
       }),
     };
     const providers = {
-      audnexus: down,
       librivox: down,
       googlebooks: down,
       openlibrary: down,
@@ -521,26 +515,25 @@ describe("provider HTTP clients (mocked fetch)", () => {
     global.fetch = realFetch;
   });
 
-  it("Audnexus returns [] on a non-OK response rather than throwing", async () => {
+  it("Audnexus returns null on a non-OK response rather than throwing", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
-    const { AudnexusProvider } = await import("./audnexus");
-    expect(await new AudnexusProvider().search({ title: "Dune" })).toEqual([]);
+    const { AudnexusAsin } = await import("./audnexus");
+    expect(await new AudnexusAsin().bookByAsin("B0024LZ1P6")).toBeNull();
   });
 
-  it("Audnexus returns [] when the network throws", async () => {
+  it("Audnexus returns null when the network throws", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
         throw new Error("ECONNREFUSED");
       }),
     );
-    const { AudnexusProvider } = await import("./audnexus");
-    expect(await new AudnexusProvider().search({ title: "Dune" })).toEqual([]);
+    const { AudnexusAsin } = await import("./audnexus");
+    expect(await new AudnexusAsin().bookByAsin("B0024LZ1P6")).toBeNull();
   });
 
-  it("Audnexus maps a well-formed response", async () => {
-    // Audnexus has no title search; /books/{ASIN} is the real entry point, so
-    // the query must carry an ASIN.
+  it("Audnexus returns the raw book for a well-formed ASIN response", async () => {
+    // Audnexus has no title search; /books/{ASIN} is the real entry point.
     const book = {
       asin: "B0024LZ1P6",
       title: "Dune",
@@ -551,22 +544,17 @@ describe("provider HTTP clients (mocked fetch)", () => {
       releaseDate: "2007-02-01",
     };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(book), { status: 200 })));
-    const { AudnexusProvider } = await import("./audnexus");
-    const [candidate] = await new AudnexusProvider().search({ title: "Dune", author: "Frank Herbert", asin: "B0024LZ1P6" });
-    expect(candidate.title).toBe("Dune");
-    expect(candidate.narrators).toEqual(["Simon Vance"]);
-    expect(candidate.publishedYear).toBe(2007);
-    expect(candidate.confidence).toBe(1);
+    const { AudnexusAsin } = await import("./audnexus");
+    const fetched = await new AudnexusAsin().bookByAsin("B0024LZ1P6");
+    expect(fetched?.title).toBe("Dune");
+    expect(fetched?.authors?.[0]?.name).toBe("Frank Herbert");
   });
 
-  it("Audnexus makes no request at all without an ASIN", async () => {
-    // Guards against regressing to a title search that 404s: with no ASIN the
-    // provider must not touch the network.
-    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-    const { AudnexusProvider } = await import("./audnexus");
-    expect(await new AudnexusProvider().search({ title: "Dune" })).toEqual([]);
-    expect(fetchMock).not.toHaveBeenCalled();
+  it("Audnexus exposes no title search at all (ADR 011/030)", async () => {
+    // The provider interface used to advertise a search the chain would never
+    // walk. There is no `search` to call now — the ASIN is the only door in.
+    const { AudnexusAsin } = await import("./audnexus");
+    expect(typeof (AudnexusAsin.prototype as unknown as Record<string, unknown>).search).toBe("undefined");
   });
 
   it("Audnexus maps official chapter titles from the free chapters endpoint", async () => {
@@ -579,8 +567,8 @@ describe("provider HTTP clients (mocked fetch)", () => {
       ],
     };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(chapters), { status: 200 })));
-    const { AudnexusProvider } = await import("./audnexus");
-    const result = await new AudnexusProvider().chaptersByAsin("B08G9PRS1K");
+    const { AudnexusAsin } = await import("./audnexus");
+    const result = await new AudnexusAsin().chaptersByAsin("B08G9PRS1K");
     expect(result.isAccurate).toBe(true);
     expect(result.chapters.map((c) => c.title)).toEqual(["Opening Credits", "Chapter 1"]);
     expect(result.chapters[1].startOffsetSec).toBe(19);
@@ -588,8 +576,8 @@ describe("provider HTTP clients (mocked fetch)", () => {
 
   it("Audnexus chapters degrade to empty when unavailable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 404 })));
-    const { AudnexusProvider } = await import("./audnexus");
-    expect(await new AudnexusProvider().chaptersByAsin("B000000000")).toEqual({ chapters: [], isAccurate: false });
+    const { AudnexusAsin } = await import("./audnexus");
+    expect(await new AudnexusAsin().chaptersByAsin("B000000000")).toEqual({ chapters: [], isAccurate: false });
   });
 
   it("Audnexus uses the corrected api host, not audnex.us", async () => {
@@ -599,8 +587,8 @@ describe("provider HTTP clients (mocked fetch)", () => {
       return new Response("{}", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-    const { AudnexusProvider } = await import("./audnexus");
-    await new AudnexusProvider().chaptersByAsin("B08G9PRS1K");
+    const { AudnexusAsin } = await import("./audnexus");
+    await new AudnexusAsin().chaptersByAsin("B08G9PRS1K");
     // The original implementation used audnex.us/books?title=, which 404s on
     // every path and silently disabled the whole provider.
     expect(seen[0]).toContain("https://api.audnex.us/");
@@ -692,8 +680,8 @@ describe("dedupeCandidates", () => {
 
   it("respects an explicit provider key", () => {
     const result = dedupeCandidates([
-      cand("audnexus", "A", "B", 0.9, "B00X"),
-      cand("audnexus", "C", "D", 0.8, "B00Y"),
+      cand("googlebooks", "A", "B", 0.9, "B00X"),
+      cand("librivox", "C", "D", 0.8, "B00Y"),
     ]);
     expect(result).toHaveLength(2);
   });

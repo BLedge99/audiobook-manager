@@ -43,15 +43,14 @@ async function makeBook(title: string, enrichmentStatus?: string | null) {
   });
 }
 
-/** Stub every provider as returning nothing so a run is fast and offline. */
+/** Stub the walked providers as returning nothing so a run is fast and offline. */
 function offlineProviders() {
-  const make = (id: "audnexus" | "librivox" | "googlebooks" | "openlibrary") => ({
+  const make = (id: "librivox" | "googlebooks" | "openlibrary") => ({
     id,
     supportsRichFields: true,
     search: async (_query: { title: string }) => [] as never[],
   });
   return {
-    audnexus: make("audnexus"),
     librivox: make("librivox"),
     googlebooks: make("googlebooks"),
     openlibrary: make("openlibrary"),
@@ -192,7 +191,6 @@ describe("EnrichmentManager status", () => {
 describe("offlineProviders helper", () => {
   it("returns empty candidate lists for every provider", async () => {
     const providers = offlineProviders();
-    expect(await providers.audnexus.search({ title: "x" })).toEqual([]);
     expect(await providers.librivox.search({ title: "x" })).toEqual([]);
   });
 });

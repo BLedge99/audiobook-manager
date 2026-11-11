@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { applyCandidate, storeCandidates } from "./apply";
-import { AudnexusProvider, extractAsin } from "./audnexus";
+import { AudnexusAsin, extractAsin } from "./audnexus";
 import { applyChapterTitles } from "./chapters";
 import { DEFAULT_CONFIDENCE_THRESHOLD, runChain, selectCoverSource, UNKNOWN_AUTHOR } from "./chain";
 import { fetchOpenLibraryDescription } from "./openlibrary";
@@ -373,7 +373,7 @@ export class EnrichmentManager {
       // whether the metadata chain matched anything.
       if (query.asin) {
         try {
-          const { chapters } = await new AudnexusProvider().chaptersByAsin(query.asin);
+          const { chapters } = await new AudnexusAsin().chaptersByAsin(query.asin);
           if (chapters.length > 0) await applyChapterTitles(this.prisma, mediaItemId, chapters);
         } catch {
           // Chapter data is an improvement, never a requirement.

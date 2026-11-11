@@ -6,9 +6,14 @@
  */
 
 /** Provider identity. `chain.ts` orders these; nothing else should. */
-export type ProviderId = "librivox" | "audnexus" | "googlebooks" | "openlibrary";
+/**
+ * The title-driven chain's provider ids. Audnexus is deliberately absent: it
+ * cannot search by title (ADR 008/011), so it is never walked — it exists as
+ * the ASIN-keyed chapter capability instead (ADR 030).
+ */
+export type ProviderId = "librivox" | "googlebooks" | "openlibrary";
 
-export const PROVIDER_IDS: ProviderId[] = ["librivox", "audnexus", "googlebooks", "openlibrary"];
+export const PROVIDER_IDS: ProviderId[] = ["librivox", "googlebooks", "openlibrary"];
 
 /**
  * An official chapter title from a provider.

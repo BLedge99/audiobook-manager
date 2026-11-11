@@ -2,10 +2,18 @@ import {
   scoreMatch,
   trimDescription,
   type EnrichmentQuery,
-  type MetadataProvider,
   type ProviderCandidate,
   type ProviderChapter,
 } from "./types";
+
+/**
+ * A candidate produced by the ASIN-keyed lookup. Deliberately outside the
+ * chain's `ProviderId` universe (ADR 030) — this is the named ASIN capability,
+ * not a title-driven provider.
+ */
+export interface AudnexusCandidate extends Omit<ProviderCandidate, "source"> {
+  source: "audnexus";
+}
 
 /**
  * Spec 16 / 21 — Audnexus provider.
@@ -119,7 +127,7 @@ export function mapAudnexusGenres(book: AudnexusBook): string[] {
   return [...parents, ...subs, ...untyped];
 }
 
-export function mapAudnexusBook(book: AudnexusBook, query: EnrichmentQuery): ProviderCandidate | null {
+export function mapAudnexusBook(book: AudnexusBook, query: EnrichmentQuery): AudnexusCandidate | null {
   const baseTitle = book.title?.trim();
   if (!baseTitle) return null;
   // Audnexus splits subtitle out; the scanner derives one title string, so
@@ -148,27 +156,17 @@ export function mapAudnexusBook(book: AudnexusBook, query: EnrichmentQuery): Pro
   };
 }
 
-export class AudnexusProvider implements MetadataProvider {
-  id = "audnexus" as const;
-  supportsRichFields = true;
-
+/**
+ * Audnexus is the ASIN-keyed capability: it looks a book up by its Audible
+ * ASIN and reports official chapter titles. It is NOT title-searchable, so it
+ * is deliberately not a `MetadataProvider` and not in `PROVIDER_IDS` — the
+ * title-driven chain never walks it (ADR 008/011/030).
+ */
+export class AudnexusAsin {
   constructor(
     private region = process.env.AUDEXUS_REGION || "us",
     private timeoutMs = 10_000,
   ) {}
-
-  async search(query: EnrichmentQuery): Promise<ProviderCandidate[]> {
-    // Audnexus has no title search, so this only ever returns a book we already
-    // hold an ASIN for. Kept in the provider interface so the chain can consume
-    // it uniformly, but it is a local no-op rather than an HTTP call against an
-    // endpoint that does not exist.
-    const asin = query.asin ?? extractAsin(query.filePath) ?? extractAsin(query.title);
-    if (!asin) return [];
-    const book = await this.bookByAsin(asin);
-    if (!book) return [];
-    const mapped = mapAudnexusBook(book, query);
-    return mapped ? [mapped] : [];
-  }
 
   /** GET /books/{ASIN} — full audiobook metadata for a known ASIN. */
   async bookByAsin(asin: string): Promise<AudnexusBook | null> {
