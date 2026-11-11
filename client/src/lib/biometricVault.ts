@@ -1,5 +1,6 @@
 import { isNativeShell } from "./platform";
 import { copy } from "../copy";
+import { shouldRetryBiometricSave } from "./biometricFailure";
 
 interface BiometricVaultPlugin {
   isAvailable(): Promise<{ available: boolean }>;
@@ -146,12 +147,10 @@ export const biometricVault = {
         );
         return;
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-        const isTransient = errorMsg.includes('vault_unavailable') ||
-                           errorMsg.includes('transient') ||
-                           errorMsg.includes('timeout');
-
-        if (attempt === 0 && isTransient) {
+        // The taxonomy code decides, never the message. A cancellation must
+        // not re-open the prompt, and only BIOMETRIC_TRANSIENT /
+        // VAULT_UNAVAILABLE (Keystore warming up) are worth one retry.
+        if (attempt === 0 && shouldRetryBiometricSave(error)) {
           console.log(`[BiometricVault] Transient error on save attempt ${attempt + 1}, retrying...`);
           continue;
         }

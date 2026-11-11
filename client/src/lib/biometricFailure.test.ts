@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  BIOMETRIC_CANCELLED,
+  BIOMETRIC_ERROR,
+  BIOMETRIC_LOCKOUT,
+  BIOMETRIC_TRANSIENT,
+  BIOMETRIC_UNAVAILABLE,
+  VAULT_KEY_INVALID,
+  VAULT_UNAVAILABLE,
   biometricFailureMessage,
   classifyBiometricFailure,
   shouldClearSavedKey,
+  shouldRetryBiometricSave,
   shouldRetryBiometricUnlock,
 } from "./biometricFailure";
 
@@ -13,7 +21,19 @@ import {
  * be retried, so the prompt re-opened after the listener had declined it, and a
  * Keystore key invalidated by a new fingerprint enrolment was reported as a
  * generic failure with no way forward.
+ *
+ * The native side delivers a stable `code` on the rejection (PluginCall's
+ * code slot, copied onto the Error by Capacitor's bridge). The client
+ * classifies on that contract only -- the message is for humans, and no
+ * English sentence may decide whether a phone clears its saved key.
  */
+
+/** An error shaped like Capacitor's rejection: code = the contract, message = prose. */
+function nativeError(code: string | null | undefined, message = "human-readable failure") {
+  const error = new Error(message) as Error & { code?: string | null };
+  error.code = code;
+  return error;
+}
 
 const copy = {
   failed: "Fingerprint or face unlock didn't work. Use your password.",
@@ -23,73 +43,57 @@ const copy = {
 };
 
 describe("classifying a biometric failure", () => {
-  it("treats every cancellation code as a choice, not a failure", () => {
-    for (const code of [5, 10, 13]) {
-      expect(classifyBiometricFailure(new Error(`Biometric prompt error code ${code}: cancelled`))).toBe(
-        "cancelled",
-      );
-    }
+  it("reads the native taxonomy code", () => {
+    expect(classifyBiometricFailure(nativeError(VAULT_KEY_INVALID))).toBe("key-invalid");
+    expect(classifyBiometricFailure(nativeError(BIOMETRIC_CANCELLED))).toBe("cancelled");
+    expect(classifyBiometricFailure(nativeError(BIOMETRIC_LOCKOUT))).toBe("lockout");
+    expect(classifyBiometricFailure(nativeError(BIOMETRIC_UNAVAILABLE))).toBe("unavailable");
+    expect(classifyBiometricFailure(nativeError(BIOMETRIC_TRANSIENT))).toBe("transient");
   });
 
-  it("treats a lockout as a wait, not a broken key", () => {
-    for (const code of [7, 9]) {
-      expect(classifyBiometricFailure(new Error(`Biometric prompt error code ${code}: too many`))).toBe(
-        "lockout",
-      );
-    }
+  it("treats prompt-infrastructure and unrecognised codes as unknown", () => {
+    expect(classifyBiometricFailure(nativeError(VAULT_UNAVAILABLE))).toBe("unknown");
+    expect(classifyBiometricFailure(nativeError(BIOMETRIC_ERROR))).toBe("unknown");
+    expect(classifyBiometricFailure(nativeError("SOMETHING_ELSE"))).toBe("unknown");
   });
 
-  it("treats missing hardware or no enrolment as unavailable", () => {
-    for (const code of [1, 11, 12]) {
-      expect(
-        classifyBiometricFailure(new Error(`Biometric prompt error code ${code}: none`)),
-      ).toBe("unavailable");
-    }
+  it("never classifies on the message", () => {
+    // A message that names a code in prose is not a code. Only the bridge's
+    // `code` slot is trusted.
+    expect(classifyBiometricFailure(new Error("BIOMETRIC_LOCKOUT: too many"))).toBe("unknown");
+    expect(classifyBiometricFailure(new Error("Biometric prompt error code 13: use password"))).toBe("unknown");
+    // And a code wins over whatever the message says.
+    expect(classifyBiometricFailure(nativeError(BIOMETRIC_CANCELLED, "BIOMETRIC_LOCKOUT: x"))).toBe("cancelled");
   });
 
-  it("retries only a transient OS failure", () => {
-    for (const code of [2, 3, 8]) {
-      expect(classifyBiometricFailure(new Error(`Biometric prompt error code ${code}: try again`))).toBe(
-        "transient",
-      );
-    }
-  });
-
-  it("reads the stable codes the plugin now sends", () => {
-    expect(classifyBiometricFailure(new Error("VAULT_KEY_INVALID: key invalidated"))).toBe(
-      "key-invalid",
-    );
-    expect(classifyBiometricFailure(new Error("BIOMETRIC_NEGATIVE"))).toBe("unknown");
-    expect(classifyBiometricFailure(new Error("BIOMETRIC_CANCELLED: dismissed"))).toBe("cancelled");
-    expect(classifyBiometricFailure(new Error("BIOMETRIC_LOCKOUT: too many"))).toBe("lockout");
-    expect(classifyBiometricFailure(new Error("BIOMETRIC_UNAVAILABLE: none"))).toBe("unavailable");
-    expect(classifyBiometricFailure(new Error("BIOMETRIC_TRANSIENT: vendor"))).toBe("transient");
-  });
-
-  it("reads the older plugin's Keystore failure as an unusable key", () => {
-    // The shipped APK before this change reports an invalidated Keystore key
-    // this way, and it is the case that must clear the saved value.
-    expect(classifyBiometricFailure(new Error("Biometric vault unavailable"))).toBe("key-invalid");
-    expect(classifyBiometricFailure(new Error("Biometric check failed"))).toBe("key-invalid");
-  });
-
-  it("does not guess at an unknown error", () => {
-    expect(classifyBiometricFailure(new Error("something else"))).toBe("unknown");
+  it("treats a missing code as unknown", () => {
+    expect(classifyBiometricFailure(nativeError(null))).toBe("unknown");
+    expect(classifyBiometricFailure(nativeError(undefined))).toBe("unknown");
+    expect(classifyBiometricFailure(new Error("no code attached"))).toBe("unknown");
     expect(classifyBiometricFailure(undefined)).toBe("unknown");
+    expect(classifyBiometricFailure("a bare string, not an Error")).toBe("unknown");
+    expect(classifyBiometricFailure(null)).toBe("unknown");
   });
 
   it("never retries a decision the listener already made", () => {
-    expect(shouldRetryBiometricUnlock(new Error("Biometric prompt error code 13: use password"))).toBe(
-      false,
-    );
-    expect(shouldRetryBiometricUnlock(new Error("Biometric prompt error code 10: cancelled"))).toBe(
-      false,
-    );
-    expect(shouldRetryBiometricUnlock(new Error("Biometric prompt error code 7: lockout"))).toBe(false);
-    expect(shouldRetryBiometricUnlock(new Error("Biometric prompt error code 12: no hardware"))).toBe(
-      false,
-    );
-    expect(shouldRetryBiometricUnlock(new Error("Biometric prompt error code 3: timeout"))).toBe(true);
+    expect(shouldRetryBiometricUnlock(nativeError(BIOMETRIC_CANCELLED))).toBe(false);
+    expect(shouldRetryBiometricUnlock(nativeError(BIOMETRIC_LOCKOUT))).toBe(false);
+    expect(shouldRetryBiometricUnlock(nativeError(BIOMETRIC_UNAVAILABLE))).toBe(false);
+    expect(shouldRetryBiometricUnlock(nativeError(VAULT_KEY_INVALID))).toBe(false);
+    expect(shouldRetryBiometricUnlock(nativeError(BIOMETRIC_TRANSIENT))).toBe(true);
+    expect(shouldRetryBiometricUnlock(nativeError(null))).toBe(true);
+  });
+
+  it("save retries only the Keystore warm-up failures", () => {
+    expect(shouldRetryBiometricSave(nativeError(BIOMETRIC_TRANSIENT))).toBe(true);
+    expect(shouldRetryBiometricSave(nativeError(VAULT_UNAVAILABLE))).toBe(true);
+    expect(shouldRetryBiometricSave(nativeError(BIOMETRIC_CANCELLED))).toBe(false);
+    expect(shouldRetryBiometricSave(nativeError(BIOMETRIC_LOCKOUT))).toBe(false);
+    expect(shouldRetryBiometricSave(nativeError(VAULT_KEY_INVALID))).toBe(false);
+    // Prose decides nothing: a message mentioning "timeout" is not a code.
+    expect(shouldRetryBiometricSave(new Error("vault_unavailable: timeout"))).toBe(false);
+    expect(shouldRetryBiometricSave(nativeError(null))).toBe(false);
+    expect(shouldRetryBiometricSave(undefined)).toBe(false);
   });
 
   it("only discards a key that can never work again", () => {

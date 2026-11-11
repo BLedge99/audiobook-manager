@@ -28,6 +28,17 @@ public class BiometricVaultPlugin extends Plugin {
   private static final String PREFS = "bookle_biometric_vault";
   private static final String VALUE_PREFIX = "encrypted_payload_profile_";
 
+  // Stable error codes, shared verbatim with client/src/lib/biometricFailure.ts.
+  // The client classifies on the PluginCall code slot, never on the message.
+  // Change both sides together.
+  private static final String CODE_KEY_INVALID = "VAULT_KEY_INVALID";
+  private static final String CODE_VAULT_UNAVAILABLE = "VAULT_UNAVAILABLE";
+  private static final String CODE_CANCELLED = "BIOMETRIC_CANCELLED";
+  private static final String CODE_LOCKOUT = "BIOMETRIC_LOCKOUT";
+  private static final String CODE_UNAVAILABLE = "BIOMETRIC_UNAVAILABLE";
+  private static final String CODE_TRANSIENT = "BIOMETRIC_TRANSIENT";
+  private static final String CODE_ERROR = "BIOMETRIC_ERROR";
+
   @PluginMethod public void isAvailable(PluginCall call) {
     int result = BiometricManager.from(getContext()).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG);
     JSObject response = new JSObject();
@@ -37,7 +48,7 @@ public class BiometricVaultPlugin extends Plugin {
 
   @PluginMethod public void hasSavedValue(PluginCall call) {
     Integer profileId = call.getInt("profileId");
-    if (profileId == null) { call.reject("profileId required"); return; }
+    if (profileId == null) { call.reject("profileId required", CODE_ERROR); return; }
     String valueKey = VALUE_PREFIX + profileId;
     boolean saved = getContext().getSharedPreferences(PREFS, 0).contains(valueKey);
     JSObject response = new JSObject();
@@ -48,8 +59,8 @@ public class BiometricVaultPlugin extends Plugin {
   @PluginMethod public void save(PluginCall call) {
     String payload = call.getString("payload");
     Integer profileId = call.getInt("profileId");
-    if (payload == null || payload.length() > 12000) { call.reject("Invalid vault value"); return; }
-    if (profileId == null) { call.reject("profileId required"); return; }
+    if (payload == null || payload.length() > 12000) { call.reject("Invalid vault value", CODE_ERROR); return; }
+    if (profileId == null) { call.reject("profileId required", CODE_ERROR); return; }
     String keyAlias = KEY_ALIAS_PREFIX + profileId;
     String valueKey = VALUE_PREFIX + profileId;
     
@@ -74,14 +85,14 @@ public class BiometricVaultPlugin extends Plugin {
       
       android.util.Log.d("BiometricVault", "Showing biometric prompt for profile " + profileId);
       prompt(call, cipher, true, payload, valueKey);
-    } catch (Exception error) { 
+    } catch (Exception error) {
       android.util.Log.e("BiometricVault", "save() failed for profile " + profileId, error);
-      call.reject("VAULT_UNAVAILABLE: Biometric vault unavailable", error); 
+      call.reject("Biometric vault is unavailable", CODE_VAULT_UNAVAILABLE, error);
     }
   }
   @PluginMethod public void unlock(PluginCall call) {
     Integer profileId = call.getInt("profileId");
-    if (profileId == null) { call.reject("profileId required"); return; }
+    if (profileId == null) { call.reject("profileId required", CODE_ERROR); return; }
     String keyAlias = KEY_ALIAS_PREFIX + profileId;
     String valueKey = VALUE_PREFIX + profileId;
     
@@ -89,10 +100,10 @@ public class BiometricVaultPlugin extends Plugin {
     
     try {
       String stored = getContext().getSharedPreferences(PREFS, 0).getString(valueKey, null);
-      if (stored == null) { 
+      if (stored == null) {
         android.util.Log.e("BiometricVault", "No saved value found for profile " + profileId);
-        call.reject("No biometric unlock is set up"); 
-        return; 
+        call.reject("No biometric unlock is set up", CODE_ERROR);
+        return;
       }
       
       android.util.Log.d("BiometricVault", "Found saved value for profile " + profileId);
@@ -117,13 +128,13 @@ public class BiometricVaultPlugin extends Plugin {
       // this code the failure looked identical to a transient one, which is
       // how a phone ended up with a permanently unusable device sign-in.
       android.util.Log.e("BiometricVault", "unlock() failed for profile " + profileId + " - key likely invalidated", error);
-      call.reject("VAULT_KEY_INVALID: Biometric vault unavailable", error);
+      call.reject("Biometric vault could not be opened", CODE_KEY_INVALID, error);
     }
   }
 
   @PluginMethod public void clear(PluginCall call) {
     Integer profileId = call.getInt("profileId");
-    if (profileId == null) { call.reject("profileId required"); return; }
+    if (profileId == null) { call.reject("profileId required", CODE_ERROR); return; }
     String keyAlias = KEY_ALIAS_PREFIX + profileId;
     String valueKey = VALUE_PREFIX + profileId;
     
@@ -136,7 +147,7 @@ public class BiometricVaultPlugin extends Plugin {
       call.resolve();
     } catch (Exception error) {
       android.util.Log.e("BiometricVault", "Clear failed for profile " + profileId, error);
-      call.reject("Failed to clear keystore", error);
+      call.reject("Failed to clear keystore", CODE_VAULT_UNAVAILABLE, error);
     }
   }
   private SecretKey createKey(String keyAlias) throws Exception {
@@ -184,10 +195,10 @@ public class BiometricVaultPlugin extends Plugin {
 
   private void prompt(PluginCall call, Cipher cipher, boolean encrypt, String payload, String valueKey) {
     Activity activity = getActivity();
-    if (!(activity instanceof FragmentActivity)) { 
+    if (!(activity instanceof FragmentActivity)) {
       android.util.Log.e("BiometricVault", "Activity is not FragmentActivity: " + activity);
-      call.reject("VAULT_UNAVAILABLE: Biometric prompt unavailable"); 
-      return; 
+      call.reject("Biometric prompt is unavailable", CODE_VAULT_UNAVAILABLE);
+      return;
     }
     FragmentActivity fragmentActivity = (FragmentActivity) activity;
     
@@ -214,13 +225,14 @@ public class BiometricVaultPlugin extends Plugin {
             call.resolve(response);
           }
         } catch (Exception error) {
-          call.reject(encrypt ? "VAULT_UNAVAILABLE: Biometric check failed" : "VAULT_KEY_INVALID: Biometric check failed", error);
+          call.reject(encrypt ? "Biometric save failed" : "Biometric check failed",
+            encrypt ? CODE_VAULT_UNAVAILABLE : CODE_KEY_INVALID, error);
         }
       }
       @Override public void onAuthenticationError(int code, CharSequence message) {
-        // Keep the numeric code in the message: an older client classifies on
-        // it, and the stable prefix is what the current one reads first.
-        call.reject(biometricErrorCode(code) + ": Biometric prompt error code " + code + ": " + message);
+        // The taxonomy code is what the client classifies on; the message stays
+        // for humans. See biometricErrorCode below and biometricFailure.ts.
+        call.reject("Biometric prompt error " + code + ": " + message, biometricErrorCode(code));
       }
       @Override public void onAuthenticationFailed() { /* Allow the OS to retry. */ }
     });
@@ -242,29 +254,31 @@ public class BiometricVaultPlugin extends Plugin {
    * Stable code for an androidx.biometric error, so the client can tell a
    * cancellation from a lockout from a broken key without parsing prose.
    *
-   * These groupings match `client/src/lib/biometricFailure.ts`. A cancellation
-   * must never be retried: that is what made pressing "Use password" open the
-   * prompt again.
+   * These codes are delivered in PluginCall's code slot, which Capacitor
+   * copies onto the Error as `error.code`. They match the constant names in
+   * `client/src/lib/biometricFailure.ts`; change both sides together. A
+   * cancellation must never be retried: that is what made pressing "Use
+   * password" open the prompt again.
    */
   private static String biometricErrorCode(int code) {
     switch (code) {
       case 5:  // ERROR_CANCELED
       case 10: // ERROR_NEGATIVE_BUTTON
       case 13: // ERROR_USER_CANCELED
-        return "BIOMETRIC_CANCELLED";
+        return CODE_CANCELLED;
       case 7:  // ERROR_LOCKOUT
       case 9:  // ERROR_LOCKOUT_PERMANENT
-        return "BIOMETRIC_LOCKOUT";
+        return CODE_LOCKOUT;
       case 1:  // ERROR_HW_UNAVAILABLE
       case 11: // ERROR_NO_BIOMETRICS
       case 12: // ERROR_HW_NOT_PRESENT
-        return "BIOMETRIC_UNAVAILABLE";
+        return CODE_UNAVAILABLE;
       case 2:  // ERROR_UNABLE_TO_PROCESS
       case 3:  // ERROR_TIMEOUT
       case 8:  // ERROR_VENDOR
-        return "BIOMETRIC_TRANSIENT";
+        return CODE_TRANSIENT;
       default:
-        return "BIOMETRIC_ERROR";
+        return CODE_ERROR;
     }
   }
 }

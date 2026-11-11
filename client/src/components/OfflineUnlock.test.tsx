@@ -10,6 +10,11 @@ import {
   toBase64,
 } from "../local/privateCache";
 
+/** A rejection shaped like Capacitor delivers it: the code is the contract. */
+function nativeError(code: string, message = "biometry"): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
+}
+
 const vaultMocks = vi.hoisted(() => ({
   hasSavedValue: vi.fn(),
   unlock: vi.fn(),
@@ -142,7 +147,7 @@ describe("OfflineUnlock", () => {
     lockOfflineCache();
     vaultMocks.hasSavedValue.mockResolvedValue(true);
     vaultMocks.unlock
-      .mockRejectedValueOnce(new Error("Biometric prompt error code 3: sensor timed out"))
+      .mockRejectedValueOnce(nativeError("BIOMETRIC_TRANSIENT", "sensor timed out"))
       .mockResolvedValueOnce({ profileId: 7, key: toBase64(key!) });
 
     const { onUnlocked } = renderScreen();
@@ -155,7 +160,7 @@ describe("OfflineUnlock", () => {
   it("does not retry a cancellation", async () => {
     window.localStorage.setItem("profileId", "7");
     vaultMocks.hasSavedValue.mockResolvedValue(true);
-    vaultMocks.unlock.mockRejectedValue(new Error("Biometric prompt error code 10: User canceled"));
+    vaultMocks.unlock.mockRejectedValue(nativeError("BIOMETRIC_CANCELLED", "User canceled"));
 
     const { onUnlocked } = renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));

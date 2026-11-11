@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+// A rejection shaped like Capacitor delivers it: the stable taxonomy code is
+// on `.code`; the message is for humans and must not decide behaviour.
+function nativeError(code: string, message = "biometry"): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
+}
+
 // The Vault lives on the bridge's own registry, not on a module import —
 // which is the whole point of the fix. Mock the bridge, not a plugin module.
 const mockVault = {
@@ -84,9 +90,9 @@ describe("biometricVault", () => {
       });
     });
 
-    it("should retry on transient VAULT_UNAVAILABLE error", async () => {
+    it("should retry on VAULT_UNAVAILABLE, the Keystore warm-up failure", async () => {
       mockVault.save
-        .mockRejectedValueOnce(new Error("VAULT_UNAVAILABLE: Biometric vault unavailable"))
+        .mockRejectedValueOnce(nativeError("VAULT_UNAVAILABLE", "Biometric vault is unavailable"))
         .mockResolvedValueOnce(undefined);
       
       await biometricVault.save(4, { profileId: 4, key: "test" });
@@ -97,9 +103,9 @@ describe("biometricVault", () => {
       );
     });
 
-    it("should retry on transient timeout error", async () => {
+    it("should retry on a transient OS failure", async () => {
       mockVault.save
-        .mockRejectedValueOnce(new Error("timeout occurred"))
+        .mockRejectedValueOnce(nativeError("BIOMETRIC_TRANSIENT", "sensor timed out"))
         .mockResolvedValueOnce(undefined);
       
       await biometricVault.save(4, { profileId: 4, key: "test" });
@@ -108,7 +114,17 @@ describe("biometricVault", () => {
     });
 
     it("should not retry on non-transient errors", async () => {
-      mockVault.save.mockRejectedValue(new Error("BIOMETRIC_CANCELLED"));
+      mockVault.save.mockRejectedValue(nativeError("BIOMETRIC_CANCELLED", "cancelled"));
+      
+      await expect(biometricVault.save(4, { profileId: 4, key: "test" })).rejects.toThrow();
+      
+      expect(mockVault.save).toHaveBeenCalledTimes(1);
+    });
+
+    it("should not retry a plain error with no code at all", async () => {
+      // Prose is not a contract: a message that merely mentions
+      // "vault_unavailable" or "timeout" decides nothing.
+      mockVault.save.mockRejectedValue(new Error("VAULT_UNAVAILABLE: timeout occurred"));
       
       await expect(biometricVault.save(4, { profileId: 4, key: "test" })).rejects.toThrow();
       
@@ -116,7 +132,7 @@ describe("biometricVault", () => {
     });
 
     it("should fail after 2 attempts with transient error", async () => {
-      mockVault.save.mockRejectedValue(new Error("VAULT_UNAVAILABLE: transient error"));
+      mockVault.save.mockRejectedValue(nativeError("VAULT_UNAVAILABLE", "Keystore warming up"));
       
       await expect(biometricVault.save(4, { profileId: 4, key: "test" })).rejects.toThrow();
       
@@ -160,9 +176,9 @@ describe("biometricVault", () => {
     });
 
     it("should throw on unlock error", async () => {
-      mockVault.unlock.mockRejectedValue(new Error("VAULT_KEY_INVALID"));
+      mockVault.unlock.mockRejectedValue(nativeError("VAULT_KEY_INVALID", "Biometric vault could not be opened"));
       
-      await expect(biometricVault.unlock(4)).rejects.toThrow("VAULT_KEY_INVALID");
+      await expect(biometricVault.unlock(4)).rejects.toThrow("Biometric vault could not be opened");
       
       expect(console.error).toHaveBeenCalledWith(
         "[BiometricVault] Unlock failed for profile 4:",

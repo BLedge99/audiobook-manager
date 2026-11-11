@@ -47,6 +47,12 @@ vi.mock("../local/privateCache", () => ({
   fromBase64: () => new Uint8Array(32),
 }));
 
+// A rejection shaped like Capacitor delivers it: the stable taxonomy code is
+// on `.code`, the message is for humans. The client classifies on the code.
+function nativeError(code: string, message = "biometry"): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
+}
+
 import { AccountGate } from "./AccountGate";
 
 function response(status: number, body: unknown) {
@@ -103,7 +109,7 @@ describe("AccountGate biometric sign-in", () => {
   });
 
   it("falls back to the password form when the prompt is cancelled", async () => {
-    mocks.unlock.mockRejectedValue(new Error("cancelled"));
+    mocks.unlock.mockRejectedValue(nativeError("BIOMETRIC_CANCELLED", "cancelled"));
     const onSuccess = vi.fn();
     render(<AccountGate onSuccess={onSuccess} />);
     fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
@@ -121,7 +127,7 @@ describe("AccountGate biometric sign-in", () => {
   });
 
   it("does not retry a native prompt the listener explicitly cancelled", async () => {
-    mocks.unlock.mockRejectedValue(new Error("Biometric prompt error code 10: User canceled"));
+    mocks.unlock.mockRejectedValue(nativeError("BIOMETRIC_CANCELLED", "User canceled"));
     render(<AccountGate onSuccess={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
     fireEvent.click(await screen.findByRole("button", { name: copy.security.deviceSignIn }));

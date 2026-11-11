@@ -15,8 +15,19 @@
  * unlock screen that had no way out, that is a permanent dead end -- neither
  * fingerprint nor password can succeed, and nothing on the screen is clickable.
  *
- * The table below is the fix: cancellation is not a failure, a lockout is not a
- * broken key, and only an unusable key gets thrown away.
+ * ## The contract with the native side
+ *
+ * `BiometricVaultPlugin.java` rejects every call with a stable `code` in
+ * PluginCall's code slot; Capacitor's bridge copies it onto the rejected
+ * Error as `error.code`. The constants below are that contract, shared
+ * verbatim with the Java plugin -- change both sides together.
+ *
+ * The client classifies on the code and never on the message. The message is
+ * for humans (logs, diagnostics); matching on it -- including a former regex
+ * over the sentence "biometric prompt error code N" -- is how a translated or
+ * reworded string once decided whether a phone could discard a saved key.
+ * A rejection without a code, or with a code neither side knows, classifies
+ * as "unknown" and destroys nothing.
  */
 
 export type BiometricFailure =
@@ -33,51 +44,39 @@ export type BiometricFailure =
   /** Unrecognised. Fall back to the password without destroying anything. */
   | "unknown";
 
-/**
- * androidx.biometric error codes, which the plugin passes through verbatim.
- *
- * Grouped by what the listener should experience, not by Android's naming:
- * three of these ("cancelled", "negative button", "user cancelled") are all
- * "the listener chose the password", and treating them as failures is how the
- * prompt reappeared after someone had already declined it.
- */
-const CANCELLED_CODES = [5, 10, 13];
-const LOCKOUT_CODES = [7, 9];
-const UNAVAILABLE_CODES = [1, 11, 12];
-const TRANSIENT_CODES = [2, 3, 8];
+/** Stable codes, shared verbatim with `BiometricVaultPlugin.java`. */
+export const VAULT_KEY_INVALID = "VAULT_KEY_INVALID";
+export const VAULT_UNAVAILABLE = "VAULT_UNAVAILABLE";
+export const BIOMETRIC_CANCELLED = "BIOMETRIC_CANCELLED";
+export const BIOMETRIC_LOCKOUT = "BIOMETRIC_LOCKOUT";
+export const BIOMETRIC_UNAVAILABLE = "BIOMETRIC_UNAVAILABLE";
+export const BIOMETRIC_TRANSIENT = "BIOMETRIC_TRANSIENT";
+export const BIOMETRIC_ERROR = "BIOMETRIC_ERROR";
 
-const NATIVE_CODE = /biometric prompt error code\s+(\d+)/i;
+/** The code the native side rejected with, or null when there is none. */
+function codeOf(error: unknown): string | null {
+  if (typeof error !== "object" || error === null) return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && code.length > 0 ? code : null;
+}
 
 export function classifyBiometricFailure(error: unknown): BiometricFailure {
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  const lower = message.toLowerCase();
-
-  // Stable codes from the native side. These survive message rewrites.
-  if (lower.includes("vault_key_invalid")) return "key-invalid";
-  if (lower.includes("vault_unavailable")) return "unknown";
-  if (lower.includes("biometric_cancelled")) return "cancelled";
-  if (lower.includes("biometric_lockout")) return "lockout";
-  if (lower.includes("biometric_unavailable")) return "unavailable";
-  if (lower.includes("biometric_transient")) return "transient";
-
-  const nativeCode = message.match(NATIVE_CODE);
-  if (nativeCode) {
-    const code = Number(nativeCode[1]);
-    if (CANCELLED_CODES.includes(code)) return "cancelled";
-    if (LOCKOUT_CODES.includes(code)) return "lockout";
-    if (UNAVAILABLE_CODES.includes(code)) return "unavailable";
-    if (TRANSIENT_CODES.includes(code)) return "transient";
-    return "unknown";
+  switch (codeOf(error)) {
+    case VAULT_KEY_INVALID:
+      return "key-invalid";
+    case BIOMETRIC_CANCELLED:
+      return "cancelled";
+    case BIOMETRIC_LOCKOUT:
+      return "lockout";
+    case BIOMETRIC_UNAVAILABLE:
+      return "unavailable";
+    case BIOMETRIC_TRANSIENT:
+      return "transient";
+    default:
+      // VAULT_UNAVAILABLE (save-time / prompt-infrastructure), BIOMETRIC_ERROR,
+      // an unknown code, or no code: ambiguous, so act like "unknown".
+      return "unknown";
   }
-
-  // Builds before the stable codes: `unlock` reports a Keystore failure as
-  // "Biometric vault unavailable" -- the key is gone, not the sensor.
-  if (lower.includes("biometric vault unavailable")) return "key-invalid";
-  if (lower.includes("biometric check failed")) return "key-invalid";
-  if (lower.includes("no biometric unlock is set up")) return "unknown";
-  if (/cancel/i.test(message)) return "cancelled";
-
-  return "unknown";
 }
 
 /**
@@ -92,6 +91,19 @@ export function shouldRetryBiometricUnlock(error: unknown): boolean {
   return kind === "transient" || kind === "unknown";
 }
 
+/**
+ * Whether a save is worth one retry.
+ *
+ * The first Keystore write after boot can fail while the sensor warms up,
+ * which is the only failure the save path retries. A cancellation is never
+ * retried either way: pressing "Use password" must not re-open the prompt
+ * (spec 29), and only the taxonomy code may decide that here.
+ */
+export function shouldRetryBiometricSave(error: unknown): boolean {
+  const code = codeOf(error);
+  return code === BIOMETRIC_TRANSIENT || code === VAULT_UNAVAILABLE;
+}
+
 /** Whether the saved value must be discarded so the device can be set up again. */
 export function shouldClearSavedKey(failure: BiometricFailure): boolean {
   return failure === "key-invalid";
@@ -100,9 +112,9 @@ export function shouldClearSavedKey(failure: BiometricFailure): boolean {
 /** The listener-facing sentence for a failure, or undefined when it is silent. */
 export function biometricFailureMessage(
   failure: BiometricFailure,
-  messages: { 
-    failed: string; 
-    locked: string; 
+  messages: {
+    failed: string;
+    locked: string;
     needsSetup: string;
     unavailable?: string;
     transient?: string;
