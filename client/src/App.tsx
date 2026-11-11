@@ -49,6 +49,12 @@ import {
 } from "./lib/browse";
 import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { isNativeShell } from "./lib/platform";
+import {
+  BACKGROUND_LOCK_CHECK_MS,
+  BACKGROUND_LOCK_IDLE_MS,
+  isAudioPlaying,
+  shouldLock,
+} from "./lib/backgroundLock";
 import { getServerUrl } from "./lib/api";
 import { probeServer as probeServerRequest } from "./lib/reachability";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
@@ -311,28 +317,51 @@ function App() {
   // not revoke the server session or sign the listener out of the app -- the
   // listening position lives in the local state and syncs on the next connect,
   // so a backgrounded player should never be logged out by a timer.
+  //
+  // Spec 36: the lock used to clear the token and then carry on looking
+  // signed in, so every request failed with a 401 and the app was unusable
+  // until it was restarted. It now returns the app to the account gate, where
+  // the fingerprint prompt lives.
+  //
+  // It waits for playback to finish, because the gate replaces the app and the
+  // app holds the audio element. See lib/backgroundLock.ts.
   useEffect(() => {
     if (!isNativeShell()) return;
     let hiddenAt: number | null = null;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: ReturnType<typeof setInterval> | undefined;
     const lock = () => {
       void lockLocal();
       setOfflineUnlocked(false);
+      // The token is gone, so the app is no longer signed in. Saying otherwise
+      // is what left every request failing with a 401.
+      setAuthed(false);
+      setSession(null);
+    };
+    const consider = () => {
+      if (hiddenAt === null) return;
+      const hiddenForMs = Date.now() - hiddenAt;
+      if (!shouldLock({ hiddenForMs, idleMs: BACKGROUND_LOCK_IDLE_MS, audioPlaying: isAudioPlaying() })) return;
+      if (timer) clearInterval(timer);
+      timer = undefined;
+      hiddenAt = null;
+      lock();
     };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         hiddenAt = Date.now();
-        timer = setTimeout(lock, 5 * 60 * 1000);
+        if (timer) clearInterval(timer);
+        timer = setInterval(consider, BACKGROUND_LOCK_CHECK_MS);
       } else if (hiddenAt !== null) {
-        if (Date.now() - hiddenAt >= 5 * 60 * 1000) lock();
-        else if (timer) clearTimeout(timer);
+        consider();
+        if (timer) clearInterval(timer);
+        timer = undefined;
         hiddenAt = null;
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      if (timer) clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
-      if (timer) clearTimeout(timer);
     };
   }, []);
 
