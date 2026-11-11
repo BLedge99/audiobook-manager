@@ -339,23 +339,6 @@ export function resolveApiRequest(input: RequestInfo | URL): RequestInfo | URL {
   return input;
 }
 
-function isApiRequest(input: RequestInfo | URL): boolean {
-  const rawUrl =
-    typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.href
-        : input.url;
-  try {
-    const url = new URL(rawUrl, window.location.href);
-    return url.pathname === "/api" || url.pathname.startsWith("/api/");
-  } catch {
-    return false;
-  }
-}
-
-const INSTALL_FLAG = "__audiobookApiBaseInstalled";
-
 /**
  * Did this failure mean the server could not be reached?
  *
@@ -449,82 +432,6 @@ function reportServerUnreachable() {
   }
 }
 
-/**
- * Make every `fetch` in the app resolve `/api/...` against the configured
- * server, and notice when the server stops answering.
- *
- * A deliberate alternative to editing all fourteen modules that call `fetch`.
- * Those call sites are correct as written -- they say what they want, not where
- * the server lives -- and centralising the base here is the same idea as
- * axios's `baseURL`, without adding axios.
- *
- * Idempotent: installing twice would double-wrap and call the shim from the
- * shim, so it is guarded. Call once at startup, before anything fetches.
- *
- * ## What it used to do, and what it does now
- *
- * This shim used to be what made a request **work**. It resolved the base
- * URL, attached the session token and set the credentials, and the app's own
- * request helpers relied on it: `apiFetch` had its own `credentials` and a
- * passing test, yet the eight near-identical private helpers around it did
- * not route through it, so the cookie never travelled and the Android app
- * 401'd on everything. The test passed and proved nothing.
- *
- * The request interface (`lib/request.ts`) and `boundedFetch` now own those
- * guarantees, so a request is correct whether or not anything has been
- * installed. What is left here is the part only a global patch can do:
- *
- *  - the call sites that still make a raw `fetch` -- the cover fetcher and
- *    the reachability probe -- still get their URL resolved, their
- *    credentials set and, in the native shell, their session header attached;
- *  - and the "the server stopped answering" report, which has to see *every*
- *    request, including ones this module knows nothing about.
- */
-export function installApiBaseUrl(): void {
-  if (typeof window === "undefined") return;
-  const scope = window as unknown as Record<string, unknown>;
-  if (scope[INSTALL_FLAG]) return;
-
-  const original = window.fetch.bind(window);
-  window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    if (isOfflineMode() && isApiRequest(input)) {
-      return Promise.reject(new Error(OFFLINE_MODE_ERROR));
-    }
-
-    // Attach the session token for the raw call sites that have not moved
-    // onto the request interface. `boundedFetch` attaches it too, and checks
-    // first, so nothing is duplicated.
-    //
-    // The reachability probe is the one that genuinely needs it: it reads
-    // "401" as "the server is there and wants a password", so without the
-    // token the native shell would decide it was signed out when it was not.
-    const token = isNativeShell() ? readSessionToken() : "";
-    const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) };
-    if (token && !hasHeader(headers, SESSION_HEADER)) headers[SESSION_HEADER] = token;
-
-    return original(resolveApiRequest(input) as RequestInfo, {
-      ...init,
-      headers: token ? headers : init?.headers,
-      // The session cookie only crosses origins when the client opts in with
-      // `credentials: "include"`. Without it every cross-origin call -- which is
-      // every call from the Android shell's https://localhost WebView -- gets no
-      // cookie and so 401s even though the user "logged in".
-      //
-      // The request interface sets this too, and so does `boundedFetch`. It is
-      // still here for the two call sites that make a raw `fetch` -- the cover
-      // fetcher and the reachability probe.
-      credentials: "include",
-    }).catch((requestError: unknown) => {
-      // The one place every request in the app passes through, and therefore
-      // the one place that can notice the server has stopped answering.
-      if (isNetworkFailure(requestError)) reportServerUnreachable();
-      throw requestError;
-    });
-  }) as typeof window.fetch;
-
-  scope[INSTALL_FLAG] = true;
-}
-
 /** The profile header the server scopes progress and favourites by. */
 export function profileHeaders(): Record<string, string> {
   const profileId = getActiveProfileId();
@@ -560,9 +467,10 @@ export function profileHeaders(): Record<string, string> {
  * that used `boundedFetch` was right by accident.
  *
  * So the guarantees live here, and the request is correct whether or not
- * anything has been installed. The global patch still exists, for the two
- * call sites that make a raw `fetch` and for the "the server stopped
- * answering" report; it is on its way out.
+ * anything has been installed. There is no global patch: the two call sites
+ * that cannot use this -- the signed-URL upload in the admin client and the
+ * local cover cache, which must not carry the session header to a media URL --
+ * make their raw `fetch` on their own terms.
  */
 export { REQUEST_TIMEOUT_MS } from "./bounded";
 
@@ -581,19 +489,28 @@ export async function boundedFetch(
   const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) };
   if (token && !hasHeader(headers, SESSION_HEADER)) headers[SESSION_HEADER] = token;
 
-  return fetchWithDeadline(
-    resolveApiRequest(input),
-    {
-      ...init,
-      headers: token ? headers : init.headers,
-      // The session cookie only crosses origins when the client opts in with
-      // `credentials: "include"`. Without it every cross-origin call -- which is
-      // every call from the Android shell's https://localhost WebView -- gets no
-      // cookie and so 401s even though the user "logged in".
-      credentials: "include",
-    },
-    timeoutMs,
-  );
+  try {
+    return await fetchWithDeadline(
+      resolveApiRequest(input),
+      {
+        ...init,
+        headers: token ? headers : init.headers,
+        // The session cookie only crosses origins when the client opts in with
+        // `credentials: "include"`. Without it every cross-origin call -- which is
+        // every call from the Android shell's https://localhost WebView -- gets no
+        // cookie and so 401s even though the user "logged in".
+        credentials: "include",
+      },
+      timeoutMs,
+    );
+  } catch (requestError) {
+    // Every request the app makes flows through here, which makes it the one
+    // place that can notice the server has stopped answering -- and the
+    // probe authoritative on whether that is a blip or the end of the
+    // connection.
+    if (isNetworkFailure(requestError)) reportServerUnreachable();
+    throw requestError;
+  }
 }
 
 /**

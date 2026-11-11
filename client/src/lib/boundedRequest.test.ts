@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { boundedFetch, SESSION_HEADER, setServerUrl } from "./api";
+import { boundedFetch, onServerUnreachable, SESSION_HEADER, setServerUrl } from "./api";
 import { TEST_SERVER_URL } from "../test/constants";
 
 /**
@@ -72,5 +72,43 @@ describe("a bounded request owns its guarantees", () => {
     const patched = globalThis.fetch;
     expect(patched).not.toBe(original);
     expect(await boundedFetch("/api/audiobooks").then((res) => res.status)).toBe(200);
+  });
+
+  it("reports the server as unreachable when a request cannot be answered", async () => {
+    // A phone that lost the server used to keep showing the shelf it had
+    // loaded, with buttons that looked alive and silently did nothing -- the
+    // unreachable report exists so the app can re-probe and go honestly
+    // offline. Every request the app makes passes through here, so the
+    // report lives here now that the global patch is gone.
+    globalThis.fetch = (() => Promise.reject(new TypeError("Failed to fetch"))) as typeof fetch;
+    let reported = 0;
+    const stop = onServerUnreachable(() => {
+      reported += 1;
+    });
+
+    try {
+      await expect(boundedFetch("/api/audiobooks")).rejects.toThrow();
+      expect(reported).toBe(1);
+    } finally {
+      stop();
+    }
+  });
+
+  it("does not report the server as unreachable when it answered with an error", async () => {
+    // A 500 is the server talking. It is a different problem with a different
+    // fix, and the app must not go offline because of it.
+    globalThis.fetch = (() =>
+      Promise.resolve(new Response("{}", { status: 500 }))) as typeof fetch;
+    let reported = 0;
+    const stop = onServerUnreachable(() => {
+      reported += 1;
+    });
+
+    try {
+      await boundedFetch("/api/audiobooks");
+      expect(reported).toBe(0);
+    } finally {
+      stop();
+    }
   });
 });

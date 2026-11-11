@@ -135,7 +135,7 @@ stuck; say so rather than leaving it ambiguous.
 | 1.3 the components | done | opencode | 79473e6 |
 | 1.4 the admin client | done | opencode | 287e256 |
 | 1.5 retire the fetch shim's leftovers | done | opencode | b2b3df3 |
-| 1.6 delete the fetch shim | not started | | |
+| 1.6 delete the fetch shim | done | opencode | 8ce5409 |
 | 2.1 prove the key collision | done | opencode | cee4ba2 |
 | 2.2 server-scoped private keys | done | opencode | cee4ba2 |
 | 3.1 the library source interface | done | opencode | 70a7972 |
@@ -756,7 +756,7 @@ cd client && npx tsc -b
       report, and the two raw call sites.
 - [x] The native shell is unaffected — `npm run build:android` succeeds, and
       the reachability probe still tells "signed out" from "server gone".
-- [ ] The shim is deleted. **That is step 1.6**, and it is not done yet.
+- [x] The shim is deleted. **That is step 1.6**, and it is done.
 
 ### Step 1.6 — Delete the fetch shim
 
@@ -785,10 +785,10 @@ cd client && npx tsc -b
 > `apiFetchShim.test.ts`'s shim block, keeping the `resolveApiRequest` tests.
 
 **Definition of done**
-- [ ] `window.fetch` is not monkey-patched.
-- [ ] Every app request still carries credentials and the session header.
-- [ ] The unreachable report still fires, and the app still re-probes.
-- [ ] `npm run build:android` succeeds.
+- [x] `window.fetch` is not monkey-patched.
+- [x] Every app request still carries credentials and the session header.
+- [x] The unreachable report still fires, and the app still re-probes.
+- [x] `npm run build:android` succeeds.
 
 ---
 
