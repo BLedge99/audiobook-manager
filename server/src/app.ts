@@ -13,13 +13,12 @@ import { libraryEntriesFor } from "./library-membership";
 import { LMStudioAdapter } from "./ai/llm";
 import { COVER_DIR } from "./enrichment";
 import { resolveInsideRoot } from "./safePath";
-import { applyCandidate, rowToCandidate, storeCandidates } from "./metadata/apply";
+import { applyCandidate, rowToCandidate } from "./metadata/apply";
 import { coverFilename, fetchCover } from "./metadata/cover";
 import { decideOverrideAction } from "./metadata/precedence";
 import { eraseProfilePersonalData, exportProfilePersonalData } from "./gdpr/personal-data";
-import { runChain } from "./metadata/chain";
 import { trackTitleOverrideField } from "./metadata/chapters";
-import { buildQuery, EnrichmentManager } from "./metadata/run";
+import { EnrichmentManager } from "./metadata/run";
 import { seedGenreMappings, seedGenres, upsertSeries } from "./metadata/taxonomy-service";
 import { setBookTags } from "./metadata/tags";
 import { RecommendationService } from "./metadata/recommend-service";
@@ -33,6 +32,7 @@ import { issueMediaToken, mediaResourceFromPath, verifyMediaToken } from "./auth
 import { oauthConfigFromEnv, type OAuthConfig, buildAuthorizeUrl, createPkcePair, oauthProviderById } from "./auth/oauth";
 import { registerDiscoverRoutes } from "./routes/discover";
 import { registerLibraryRoutes } from "./routes/library";
+import { registerEnrichmentRoutes } from "./routes/enrichment";
 import { publicBookPayload, publicMediaItem } from "./book-payload";
 
 export { SESSION_HEADER };
@@ -801,56 +801,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     contributors: undefined,
   };
 
-  // Wishlist and discover routes are registered in routes/discover.ts.
-
-  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/enrich", {
-    schema: {
-      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
-    },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    const item = await prisma.mediaItem.findUnique({ where: { id } });
-    if (!item) return fail(reply, 404, "audiobook_not_found");
-
-    // Manual single-book path: run the chain now rather than enqueueing, so
-    // the spec 07 "candidates appear" behaviour still holds synchronously.
-    const result = await runChain(buildQuery(item), { collectAll: true });
-    await storeCandidates(prisma, id, result.candidates);
-
-    // `raw` is large and belongs in the DB for debugging, not in a response.
-    return result.candidates.map(({ raw: _raw, ...candidate }) => candidate);
-  });
-
-  app.post("/api/enrichment/run", {
-    schema: {
-      body: {
-        type: "object",
-        properties: {
-          mediaItemId: { type: "integer", minimum: 1 },
-          force: { type: "boolean", default: false },
-        },
-        additionalProperties: false,
-      },
-    },
-  }, async (request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const body = (request.body ?? {}) as { mediaItemId?: number; force?: boolean };
-    return enrichment.enqueue({ mediaItemId: body.mediaItemId, force: body.force });
-  });
-
-  app.get("/api/enrichment/status", async (_request, reply) => accountExperience === "demo" ? fail(reply, 404, "not_found") : enrichment.status());
-
-  /** The spec 16 review queue: everything below the auto-apply threshold. */
-  app.get("/api/enrichment/review-queue", async (_request, reply) => {
-    if (accountExperience === "demo") return fail(reply, 404, "not_found");
-    const items = await prisma.mediaItem.findMany({
-      where: { enrichmentStatus: "review" },
-      orderBy: { updatedAt: "desc" },
-    });
-    return items.map(publicMediaItem);
-  });
+  // Enrichment routes are registered in routes/enrichment.ts.
+  await registerEnrichmentRoutes(app, { prisma, accountExperience, enrichment, parseIdParam });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/candidates", {
     schema: {

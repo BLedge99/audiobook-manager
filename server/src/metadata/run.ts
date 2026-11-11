@@ -130,6 +130,46 @@ export class EnrichmentManager {
 
   constructor(private prisma: PrismaClient) {}
 
+  /**
+   * Synchronous single-book enrichment for the manual "look up metadata" path.
+   *
+   * The background pass is fire-and-forget; a user clicking a button in the UI
+   * needs the candidates to exist when the response lands. This writes the run
+   * row and its queue entry like any other pass — so the run shows up in
+   * `GET /api/enrichment/status`, lands as `applied`/`review` on the book, and
+   * honours `FieldOverride`s (ADR 009) — then returns the stored candidates
+   * without provider internals.
+   *
+   * Returns null when the book does not exist.
+   */
+  async enrichOneNow(mediaItemId: number): Promise<Array<Record<string, unknown>> | null> {
+    const item = await this.prisma.mediaItem.findUnique({ where: { id: mediaItemId } });
+    if (!item) return null;
+
+    const run = await this.prisma.enrichmentRun.create({
+      data: { status: "running", queued: 1, startedAt: new Date() },
+    });
+    const entry = await this.prisma.enrichmentItem.create({
+      data: { runId: run.id, mediaItemId, status: "pending" },
+    });
+    await this.prisma.mediaItem.update({ where: { id: mediaItemId }, data: { enrichmentStatus: "pending" } });
+
+    await this.processOne(run.id, entry.id, mediaItemId, AUTO_APPLY_CONFIDENCE, false);
+
+    await this.prisma.enrichmentRun.update({
+      where: { id: run.id },
+      data: { status: "complete", processed: 1, finishedAt: new Date() },
+    });
+
+    const candidates = await this.prisma.metadataCandidate.findMany({
+      where: { mediaItemId },
+      orderBy: { confidence: "desc" },
+    });
+    // `raw` is provider payload and `providerKey` is an internal identifier;
+    // neither belongs in an API response.
+    return candidates.map(({ raw: _raw, providerKey: _key, ...rest }) => rest);
+  }
+
   /** Current status of the most recent run, for `GET /api/enrichment/status`. */
   async status(): Promise<RunStatus> {
     const run = await this.prisma.enrichmentRun.findFirst({ orderBy: { id: "desc" } });
