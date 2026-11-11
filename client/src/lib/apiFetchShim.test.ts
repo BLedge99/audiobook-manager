@@ -4,22 +4,22 @@ import {
   installApiBaseUrl,
   onServerUnreachable,
   resolveApiRequest,
-  setExplicitOfflineMode,
   setServerUrl,
   setSessionToken,
 } from "./api";
+import { setOfflineMode } from "./offlineMode";
 import { TEST_SERVER_URL } from "../test/constants";
 
 beforeEach(() => {
   window.localStorage.clear();
-  setExplicitOfflineMode(false);
+  setOfflineMode(false);
 });
 
 afterEach(() => {
   // The installer replaces window.fetch for the whole jsdom instance, so it has
   // to be undone or it leaks into every later test file.
   (window as unknown as Record<string, unknown>).__audiobookApiBaseInstalled = false;
-  setExplicitOfflineMode(false);
+  setOfflineMode(false);
   vi.restoreAllMocks();
 });
 
@@ -118,7 +118,7 @@ describe("installApiBaseUrl", () => {
 
     try {
       setServerUrl(TEST_SERVER_URL);
-      setExplicitOfflineMode(true);
+      setOfflineMode(true);
       installApiBaseUrl();
 
       await expect(fetch("/api/profiles")).rejects.toThrow("The app is in offline mode.");
@@ -126,7 +126,7 @@ describe("installApiBaseUrl", () => {
       expect(fetchServer).not.toHaveBeenCalled();
     } finally {
       window.fetch = original;
-      setExplicitOfflineMode(false);
+      setOfflineMode(false);
     }
   });
 
@@ -136,13 +136,13 @@ describe("installApiBaseUrl", () => {
     window.fetch = fetchMedia as typeof fetch;
 
     try {
-      setExplicitOfflineMode(true);
+      setOfflineMode(true);
       installApiBaseUrl();
       await expect(fetch("capacitor-file://_capacitor_file_/books/7/70.mp3")).resolves.toBeInstanceOf(Response);
       expect(fetchMedia).toHaveBeenCalledOnce();
     } finally {
       window.fetch = original;
-      setExplicitOfflineMode(false);
+      setOfflineMode(false);
     }
   });
 

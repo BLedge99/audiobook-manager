@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { copy } from "../copy";
 import { fakeResponse, stubFetch, type FetchStub } from "../test/requests";
 import { request, requestConditional, requestRaw } from "./request";
-import { setActiveProfileId, setExplicitOfflineMode, setSessionToken } from "./api";
+import { setActiveProfileId, setSessionToken } from "./api";
+import { setOfflineMode } from "./offlineMode";
 
 /**
  * The request interface.
@@ -39,7 +40,7 @@ beforeEach(() => {
   window.localStorage.clear();
   setActiveProfileId(null);
   setSessionToken(null);
-  setExplicitOfflineMode(false);
+  setOfflineMode(false);
   setNativeShell(false);
 });
 
@@ -131,7 +132,7 @@ describe("request", () => {
   });
 
   it("refuses in explicit offline mode", async () => {
-    setExplicitOfflineMode(true);
+    setOfflineMode(true);
     stub = stubFetch(() => fakeResponse([]));
 
     await expect(request("/api/audiobooks")).rejects.toThrow();

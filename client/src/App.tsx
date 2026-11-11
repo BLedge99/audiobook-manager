@@ -11,10 +11,10 @@ import {
   getActiveProfileId,
   setActiveProfileId,
   setSessionToken,
-  setExplicitOfflineMode,
   lockLocal,
   type SessionInfo,
 } from "./lib/api";
+import { isOfflineMode, setOfflineMode as persistOfflineMode } from "./lib/offlineMode";
 import { AccountGate } from "./components/AccountGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
 import { OfflineUnlock } from "./components/OfflineUnlock";
@@ -117,13 +117,7 @@ function App() {
   const [authed, setAuthed] = useState<boolean>();
   const [showServerSetup, setShowServerSetup] = useState(false);
   const [bypassServerSetup, setBypassServerSetup] = useState(false);
-  const [offlineMode, setOfflineMode] = useState<boolean>(() => {
-    try {
-      return window.localStorage.getItem("offlineMode") === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [offlineMode, setOfflineMode] = useState<boolean>(() => isOfflineMode());
   const offlineModeRef = useRef(offlineMode);
   /**
    * Whether the server answered at all, as distinct from whether it said 401.
@@ -563,20 +557,15 @@ function App() {
 
   const handleContinueOffline = useCallback((preserveUnlockedCache = false) => {
     offlineModeRef.current = true;
-    setExplicitOfflineMode(true);
+    persistOfflineMode(true);
+    setOfflineMode(true);
     setShowServerSetup(false);
     setBypassServerSetup(true);
     setServerReachable(false);
-    setOfflineMode(true);
     setAuthed(false);
     setSession(null);
     setOfflineUnlocked(preserveUnlockedCache);
     if (!preserveUnlockedCache) void lockLocal();
-    try {
-      window.localStorage.setItem("offlineMode", "true");
-    } catch {
-      // Private mode / storage disabled
-    }
   }, []);
 
   /** Leave for the server-address screen; shared by every offline exit. */
@@ -1103,14 +1092,9 @@ function App() {
           offlineMode={offlineMode}
           onReconnect={() => {
             offlineModeRef.current = false;
-            setExplicitOfflineMode(false);
+            persistOfflineMode(false);
             setOfflineMode(false);
             setServerReachable(undefined);
-            try {
-              window.localStorage.removeItem("offlineMode");
-            } catch {
-              // Private mode / storage disabled
-            }
             void probeServer(true);
           }}
           onClearCovers={async () => { await clearCoverCache(); }}

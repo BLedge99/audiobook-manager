@@ -11,8 +11,8 @@ import {
   normaliseServerUrl,
   SERVER_URL_KEY,
   setServerUrl,
-  setExplicitOfflineMode,
 } from "./api";
+import { setOfflineMode } from "./offlineMode";
 import { lockOfflineCache } from "../local/privateCache";
 import { TEST_SERVER_URL, TEST_SERVER_HOST } from "../test/constants";
 
@@ -171,15 +171,15 @@ describe("lockLocal", () => {
       const fetchMock = vi.fn(() => Promise.resolve(new Response("{}", { status: 200 })));
       const original = globalThis.fetch;
       globalThis.fetch = fetchMock as typeof fetch;
-      setExplicitOfflineMode(true);
+      setOfflineMode(true);
       try {
         await expect(boundedFetch("/api/auth/accounts")).rejects.toThrow("The app is in offline mode.");
         expect(fetchMock).not.toHaveBeenCalled();
-        setExplicitOfflineMode(false);
+        setOfflineMode(false);
         await expect(boundedFetch("/api/auth/accounts")).resolves.toBeInstanceOf(Response);
         expect(fetchMock).toHaveBeenCalledOnce();
       } finally {
-        setExplicitOfflineMode(false);
+        setOfflineMode(false);
         globalThis.fetch = original;
       }
     });

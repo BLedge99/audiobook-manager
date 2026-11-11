@@ -35,6 +35,7 @@ import { isNativeShell } from "./platform";
 import { copy } from "../copy";
 import { responseErrorText } from "./apiError";
 import { fetchWithDeadline, REQUEST_TIMEOUT_MS } from "./bounded";
+import { isOfflineMode } from "./offlineMode";
 
 export const SERVER_URL_KEY = "serverUrl";
 
@@ -53,15 +54,6 @@ if (typeof window !== "undefined") {
 /** Storage key for the profile chosen in the break-glass flow. */
 export const PROFILE_ID_KEY = "profileId";
 let nativeSessionToken = "";
-let explicitOfflineMode = (() => {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem("offlineMode") === "true";
-  } catch {
-    return false;
-  }
-})();
-
 /** The header the server accepts the session token in (see server `app.ts`). */
 export const SESSION_HEADER = "x-house-session";
 let accountExperience: "household" | "demo" = "household";
@@ -94,10 +86,6 @@ export interface AppConfig {
 
 export function setAccountExperience(experience: "household" | "demo"): void {
   accountExperience = experience;
-}
-
-export function setExplicitOfflineMode(enabled: boolean): void {
-  explicitOfflineMode = enabled;
 }
 
 export async function fetchAppConfig(): Promise<AppConfig> {
@@ -499,7 +487,7 @@ export function installApiBaseUrl(): void {
 
   const original = window.fetch.bind(window);
   window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    if (explicitOfflineMode && isApiRequest(input)) {
+    if (isOfflineMode() && isApiRequest(input)) {
       return Promise.reject(new Error(OFFLINE_MODE_ERROR));
     }
 
@@ -583,7 +571,7 @@ export async function boundedFetch(
   init: RequestInit = {},
   timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
-  if (explicitOfflineMode) {
+  if (isOfflineMode()) {
     throw new Error(OFFLINE_MODE_ERROR);
   }
 
