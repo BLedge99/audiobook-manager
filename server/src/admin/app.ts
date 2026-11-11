@@ -8,6 +8,8 @@ import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
 import { EnrichmentManager } from "../metadata/run";
 import type { ScanManager } from "../scanner";
+import { upsertLibraryRoot, deleteLibraryRoot } from "../library-roots";
+import { startScanWithEnrichment } from "../scanning";
 import { ADMIN_DB_TABLES, executeReadOnlyQuery, validateReadOnlySql, type AdminDbTable } from "./read-only-sql";
 import { fileURLToPath } from "node:url";
 import {
@@ -37,6 +39,7 @@ export async function buildAdminApp(options: {
   storageSync?: StorageSync;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false, trustProxy: ["127.0.0.1", "::1"] });
+  const enrichmentManager = new EnrichmentManager(options.prisma);
   const apiDocs: { method: string | string[]; url: string; schema: unknown }[] = [];
   app.decorate("apiDocs", apiDocs);
   app.addHook("onRoute", (route) => {
@@ -53,7 +56,7 @@ export async function buildAdminApp(options: {
       options.prisma.profile.count(),
       options.prisma.profileLibraryEntry.findFirst({ orderBy: { id: "desc" }, select: { createdAt: true } }),
       options.prisma.scanState.findFirst({ orderBy: { lastScanAt: "desc" }, select: { lastScanAt: true } }),
-      new EnrichmentManager(options.prisma).status(),
+      enrichmentManager.status(),
     ]);
     const rootStatus = await Promise.all(roots.map(async (root) => {
       let accessible = false;
@@ -144,43 +147,32 @@ export async function buildAdminApp(options: {
     preHandler: requireAdminSession(options.auth),
     schema: { body: { type: "object", properties: { path: { type: "string", maxLength: 4096 }, label: { type: "string", maxLength: 200 } }, additionalProperties: false } },
   }, async (request, reply) => {
-    const rootPath = request.body.path?.trim();
-    if (!rootPath) return fail(reply, 400, "library_path_required");
-    try { await access(rootPath); } catch { return fail(reply, 400, "library_path_inaccessible"); }
-    const resolved = path.resolve(rootPath);
-    const root = await options.prisma.libraryRoot.upsert({
-      where: { path: resolved },
-      create: { path: resolved, label: request.body.label?.trim() || path.basename(resolved) },
-      update: { label: request.body.label?.trim() || path.basename(resolved) },
-    });
-    return reply.code(201).send(root);
+    const result = await upsertLibraryRoot(options.prisma, request.body);
+    if (!result.ok) {
+      return fail(reply, 400, result.reason === "path-required" ? "library_path_required" : "library_path_inaccessible");
+    }
+    return reply.code(201).send(result.root);
   });
   app.delete<{ Params: { id: string } }>("/api/admin/library-roots/:id", {
     preHandler: requireAdminSession(options.auth),
     schema: { params: { type: "object", properties: { id: { type: "string", pattern: "^[1-9][0-9]*$", maxLength: 10 } }, required: ["id"], additionalProperties: false } },
   }, async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isSafeInteger(id)) return fail(reply, 400, "invalid_id");
-    const exists = await options.prisma.libraryRoot.findUnique({ where: { id }, select: { id: true } });
-    if (!exists) return fail(reply, 404, "library_root_required");
-    await options.prisma.libraryRoot.delete({ where: { id } });
+    const result = await deleteLibraryRoot(options.prisma, request.params.id);
+    if (!result.ok) {
+      return fail(reply, result.reason === "invalid-id" ? 400 : 404, result.reason === "invalid-id" ? "invalid_id" : "not_found");
+    }
     return reply.code(204).send();
   });
   app.post<{ Body: { rootId?: number } }>("/api/admin/scan", {
     preHandler: requireAdminSession(options.auth),
     schema: { body: { type: "object", properties: { rootId: { type: "integer", minimum: 1 } }, additionalProperties: false } },
   }, async (request, reply) => {
-    const roots = request.body.rootId
-      ? await options.prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
-      : await options.prisma.libraryRoot.findMany();
-    if (!roots.length) return fail(reply, 400, "library_root_required");
-    for (const root of roots) {
-      void options.scanner.scanRoot(root.id).then(async () => {
-        try { await new EnrichmentManager(options.prisma).enqueue(); }
-        catch (error) { app.log.error({ error }, "admin scan enrichment enqueue failed"); }
-      }).catch((error) => app.log.error({ error }, "admin scan failed"));
-    }
-    return reply.code(202).send({ status: "started", rootIds: roots.map(({ id }) => id) });
+    const result = await startScanWithEnrichment(
+      { prisma: options.prisma, scanner: options.scanner, enrichment: enrichmentManager, logger: app.log },
+      { rootId: request.body.rootId },
+    );
+    if (!result.started) return fail(reply, 400, "library_root_required");
+    return reply.code(202).send({ status: "started", rootIds: result.rootIds });
   });
   app.get("/api/admin/scan/status", { preHandler: requireAdminSession(options.auth) }, async () => {
     const roots = await options.prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { id: "asc" } });

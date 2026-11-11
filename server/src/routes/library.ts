@@ -1,10 +1,10 @@
-import { access } from "node:fs/promises";
-import path from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
 import { publicBookPayload } from "../book-payload";
 import { addBookToProfile, libraryEntriesFor, removeBookFromProfile } from "../library-membership";
+import { upsertLibraryRoot, deleteLibraryRoot } from "../library-roots";
+import { startScanWithEnrichment } from "../scanning";
 import { isDemoMode } from "../auth/demo-policy";
 import type { ScanManager } from "../scanner";
 import type { EnrichmentManager } from "../metadata/run";
@@ -215,26 +215,12 @@ export async function registerLibraryRoutes(
     },
   }, async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
-    const roots = request.body?.rootId
-      ? await prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
-      : await prisma.libraryRoot.findMany();
-    if (roots.length === 0) return fail(reply, 400, "library_root_required");
-    for (const root of roots) {
-      void scanner
-        .scanRoot(root.id)
-        .then(async () => {
-          // Spec 16: completing a scan automatically kicks off a background
-          // enrichment pass. Failures here must never affect the scan result.
-          try {
-            const status = await enrichment.enqueue();
-            logger.info({ enrichment: status }, "scan finished, enrichment enqueued");
-          } catch (error) {
-            logger.error({ error }, "failed to enqueue enrichment after scan");
-          }
-        })
-        .catch((error) => logger.error(error));
-    }
-    return reply.code(202).send({ status: "started", rootIds: roots.map((root) => root.id) });
+    const result = await startScanWithEnrichment(
+      { prisma, scanner, enrichment, logger },
+      { rootId: request.body?.rootId },
+    );
+    if (!result.started) return fail(reply, 400, "library_root_required");
+    return reply.code(202).send({ status: "started", rootIds: result.rootIds });
   });
 
   app.get("/api/scan/status", async (_request, reply) => {
@@ -268,19 +254,11 @@ export async function registerLibraryRoutes(
     },
   }, async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
-    const rootPath = request.body.path?.trim();
-    if (!rootPath) return fail(reply, 400, "library_path_required");
-    try {
-      await access(rootPath);
-    } catch {
-      return fail(reply, 400, "library_path_inaccessible");
+    const result = await upsertLibraryRoot(prisma, request.body);
+    if (!result.ok) {
+      return fail(reply, 400, result.reason === "path-required" ? "library_path_required" : "library_path_inaccessible");
     }
-    const root = await prisma.libraryRoot.upsert({
-      where: { path: path.resolve(rootPath) },
-      create: { path: path.resolve(rootPath), label: request.body.label?.trim() || path.basename(rootPath) },
-      update: { label: request.body.label?.trim() || path.basename(rootPath) },
-    });
-    return reply.code(201).send(root);
+    return reply.code(201).send(result.root);
   });
 
   app.delete<{ Params: { id: string } }>("/api/library-roots/:id", {
@@ -293,9 +271,10 @@ export async function registerLibraryRoutes(
     },
   }, async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
-    const id = parseIdParam(request.params.id);
-    if (id === null) return fail(reply, 400, "invalid_id");
-    await prisma.libraryRoot.delete({ where: { id } });
+    const result = await deleteLibraryRoot(prisma, request.params.id);
+    if (!result.ok) {
+      return fail(reply, result.reason === "invalid-id" ? 400 : 404, result.reason === "invalid-id" ? "invalid_id" : "not_found");
+    }
     return reply.code(204).send();
   });
 }
