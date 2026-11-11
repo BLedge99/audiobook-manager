@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Plus, UserRound } from "lucide-react";
 import { copy } from "../copy";
-import { boundedFetch } from "../lib/api";
+import { boundedFetch, setActiveProfileId } from "../lib/api";
 import { ProfileRegistration } from "./ProfileRegistration";
 import { Btn, Field, FullScreen, Wordmark, cn } from "../ui/primitives";
 
@@ -56,7 +56,7 @@ export function ProfileGate({
   useEffect(() => { void load(); }, []);
 
   const select = (id: number) => {
-    window.localStorage.setItem("profileId", String(id));
+    setActiveProfileId(id);
     onSuccess();
   };
 

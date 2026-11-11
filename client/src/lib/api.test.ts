@@ -3,13 +3,17 @@ import {
   apiUrl,
   boundedFetch,
   clearServerUrl,
+  clearPendingProfileId,
   describeFailure,
+  getActiveProfileIdNumber,
+  getPendingProfileId,
   getServerUrl,
   isNetworkFailure,
   lockLocal,
   needsServerUrl,
   normaliseServerUrl,
   SERVER_URL_KEY,
+  setPendingProfileId,
   setServerUrl,
 } from "./api";
 import { setOfflineMode } from "./offlineMode";
@@ -93,6 +97,35 @@ describe("apiUrl", () => {
     setServerUrl(TEST_SERVER_URL);
     clearServerUrl();
     expect(apiUrl("/api/audiobooks")).toBe("/api/audiobooks");
+  });
+});
+
+describe("profile id accessors", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("getActiveProfileIdNumber parses a stored positive integer", () => {
+    window.localStorage.setItem("profileId", "7");
+    expect(getActiveProfileIdNumber()).toBe(7);
+  });
+
+  it("getActiveProfileIdNumber rejects unset, zero, negative and non-numeric values", () => {
+    expect(getActiveProfileIdNumber()).toBeNull();
+    for (const bad of ["", "0", "-3", "abc", "2.5"]) {
+      window.localStorage.setItem("profileId", bad);
+      expect(getActiveProfileIdNumber()).toBeNull();
+    }
+  });
+
+  it("the pending profile round-trips through the accessors", () => {
+    expect(getPendingProfileId()).toBeNull();
+    setPendingProfileId(42);
+    expect(getPendingProfileId()).toBe("42");
+    expect(window.localStorage.getItem("pendingProfileId")).toBe("42");
+    clearPendingProfileId();
+    expect(getPendingProfileId()).toBeNull();
+    expect(window.localStorage.getItem("pendingProfileId")).toBeNull();
   });
 });
 

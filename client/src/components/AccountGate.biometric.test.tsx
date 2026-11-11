@@ -20,6 +20,8 @@ vi.mock("../lib/api", () => ({
   boundedFetch: mocks.fetch,
   setSessionToken: mocks.setToken,
   setActiveProfileId: mocks.setProfile,
+  getPendingProfileId: () => window.localStorage.getItem("pendingProfileId"),
+  clearPendingProfileId: () => window.localStorage.removeItem("pendingProfileId"),
 }));
 vi.mock("../lib/apiError", () => ({ responseErrorText: async () => "Sign in failed." }));
 vi.mock("../lib/platform", () => ({ isNativeShell: () => true }));

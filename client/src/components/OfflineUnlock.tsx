@@ -9,6 +9,7 @@ import {
   fromBase64,
 } from "../local/privateCache";
 import { biometricVault } from "../lib/biometricVault";
+import { getActiveProfileIdNumber } from "../lib/api";
 import {
   biometricFailureMessage,
   classifyBiometricFailure,
@@ -57,9 +58,9 @@ export function OfflineUnlock({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [hasBiometric, setHasBiometric] = useState(false);
-  useEffect(() => { 
-    const profileId = Number(window.localStorage.getItem("profileId"));
-    if (Number.isInteger(profileId) && profileId > 0) {
+  useEffect(() => {
+    const profileId = getActiveProfileIdNumber();
+    if (profileId !== null) {
       void biometricVault.hasSavedValue(profileId).then(setHasBiometric);
     }
   }, []);
@@ -67,7 +68,11 @@ export function OfflineUnlock({
   const unlockBiometric = async () => {
     setBusy(true); setError(undefined);
     try {
-      const profileId = Number(window.localStorage.getItem("profileId"));
+      const profileId = getActiveProfileIdNumber();
+      if (profileId === null) {
+        setError(copy.offline.noCache);
+        return;
+      }
       /*
        * Same rule as the sign-in screen: a first prompt can fail transiently
        * while the sensor or Keystore warms up, and that is the only kind of
@@ -98,8 +103,8 @@ export function OfflineUnlock({
       if (kind === "key-invalid") {
         // The Keystore key is gone for good. Drop the ciphertext so the device
         // can be set up again, and fall back to the password.
-        const profileId = Number(window.localStorage.getItem("profileId"));
-        await biometricVault.clear(profileId).catch(() => undefined);
+        const profileId = getActiveProfileIdNumber();
+        if (profileId !== null) await biometricVault.clear(profileId).catch(() => undefined);
         setHasBiometric(false);
       }
       setError(biometricFailureMessage(kind, {
@@ -114,8 +119,8 @@ export function OfflineUnlock({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const profileId = Number(window.localStorage.getItem("profileId"));
-    if (!Number.isInteger(profileId) || profileId < 1) {
+    const profileId = getActiveProfileIdNumber();
+    if (profileId === null) {
       setError(copy.offline.noCache);
       return;
     }

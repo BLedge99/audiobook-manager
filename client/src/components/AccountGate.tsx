@@ -3,7 +3,9 @@ import { ArrowLeft, Fingerprint, KeyRound, LoaderCircle, UserRound } from "lucid
 import { copy } from "../copy";
 import {
   boundedFetch,
+  clearPendingProfileId,
   fetchAppConfig,
+  getPendingProfileId,
   setActiveProfileId,
   setSessionToken,
 } from "../lib/api";
@@ -43,7 +45,6 @@ type Mode =
   | { kind: "email" };
 
 const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
-const PENDING_PROFILE_KEY = "pendingProfileId";
 
 function errorSentence(error: unknown): string {
   return error instanceof Error ? error.message : copy.login.unreachable;
@@ -123,7 +124,7 @@ export function AccountGate({
         if (!alive) return;
         setAccounts(list);
         setAccountsLoadFailed(false);
-        const pending = window.localStorage.getItem(PENDING_PROFILE_KEY);
+        const pending = getPendingProfileId();
         if (pending) {
           const match = list.find((account) => String(account.id) === pending);
           if (match) {
@@ -150,7 +151,7 @@ export function AccountGate({
     setSessionToken(token);
     setActiveProfileId(accountExperience === "demo" ? null : profileId);
     if (profileId === null || accountExperience === "demo") lockOfflineCache();
-    window.localStorage.removeItem(PENDING_PROFILE_KEY);
+    clearPendingProfileId();
     await onSuccess({ offline });
   };
 
@@ -471,7 +472,7 @@ export function AccountGate({
   };
 
   const back = () => {
-    window.localStorage.removeItem(PENDING_PROFILE_KEY);
+    clearPendingProfileId();
     setMode({ kind: "list" });
     setPassword("");
     setEmail("");

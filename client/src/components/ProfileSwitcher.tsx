@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { LockKeyhole, Trash2 } from "lucide-react";
 import { copy } from "../copy";
-import { describeFailure, getActiveProfileId, lockSession, setActiveProfileId } from "../lib/api";
+import { clearPendingProfileId, describeFailure, getActiveProfileId, lockSession, setActiveProfileId, setPendingProfileId } from "../lib/api";
 import { request } from "../lib/request";
 import { Btn, Field, cn } from "../ui/primitives";
 
@@ -10,8 +10,6 @@ interface Profile {
   name: string;
   color?: string | null;
 }
-
-const PENDING_PROFILE_KEY = "pendingProfileId";
 
 export function ProfileSwitcher() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -54,7 +52,7 @@ export function ProfileSwitcher() {
     if (via === "household") {
       // Break-glass migration path: the household key is the authority, so
       // choosing a profile from it does not need that profile's password.
-      window.localStorage.setItem("profileId", String(id));
+      setActiveProfileId(id);
       setCurrentId(String(id));
       window.location.reload();
       return;
@@ -64,7 +62,7 @@ export function ProfileSwitcher() {
     void (async () => {
       await lockSession();
       setActiveProfileId(null);
-      window.localStorage.setItem(PENDING_PROFILE_KEY, String(id));
+      setPendingProfileId(id);
       window.location.reload();
     })();
   };
@@ -73,7 +71,7 @@ export function ProfileSwitcher() {
     void (async () => {
       await lockSession();
       setActiveProfileId(null);
-      window.localStorage.removeItem(PENDING_PROFILE_KEY);
+      clearPendingProfileId();
       window.location.reload();
     })();
   };

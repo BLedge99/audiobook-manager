@@ -9,6 +9,7 @@ import {
   onServerUnreachable,
   setAccountExperience as setApiAccountExperience,
   getActiveProfileId,
+  getActiveProfileIdNumber,
   setActiveProfileId,
   setSessionToken,
   lockLocal,
@@ -161,8 +162,8 @@ function App() {
    */
   const [skippedUnlock, setSkippedUnlock] = useState(false);
   const [offlineUnlocked, setOfflineUnlocked] = useState<boolean>(() => {
-    const id = Number(window.localStorage.getItem("profileId"));
-    return Number.isInteger(id) && id > 0 && activeCacheProfileId() === id;
+    const id = getActiveProfileIdNumber();
+    return id !== null && activeCacheProfileId() === id;
   });
   // Spec 20: both the tab and the filters live in the URL, so a shared or
   // bookmarked link restores the whole view. Persisting filters alone was not

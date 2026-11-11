@@ -141,11 +141,58 @@ export function getActiveProfileId(): string | null {
   }
 }
 
+/**
+ * The active profile id as a positive integer, or null when unset or
+ * unparseable. Numeric call sites used to repeat `Number(...)` plus the
+ * `Number.isInteger(...) && > 0` guard at each read.
+ */
+export function getActiveProfileIdNumber(): number | null {
+  const raw = getActiveProfileId();
+  if (!raw) return null;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export function setActiveProfileId(id: string | number | null): void {
   if (typeof window === "undefined") return;
   try {
     if (id === null) window.localStorage.removeItem(PROFILE_ID_KEY);
     else window.localStorage.setItem(PROFILE_ID_KEY, String(id));
+  } catch {
+    // Private mode / storage disabled.
+  }
+}
+
+/**
+ * The pending-profile marker: the profile the switcher wants after a reload
+ * drops the session. The picker consumes it to open the right password form.
+ * One accessor set, one key -- every caller used to carry its own copy of
+ * the constant.
+ */
+const PENDING_PROFILE_KEY = "pendingProfileId";
+
+export function getPendingProfileId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(PENDING_PROFILE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setPendingProfileId(id: string | number): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PENDING_PROFILE_KEY, String(id));
+  } catch {
+    // Private mode / storage disabled.
+  }
+}
+
+export function clearPendingProfileId(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PENDING_PROFILE_KEY);
   } catch {
     // Private mode / storage disabled.
   }
