@@ -6,14 +6,20 @@ import { fail } from "../http-errors";
 import { publicBookPayload } from "../book-payload";
 import { addBookToProfile, libraryEntriesFor, removeBookFromProfile } from "../library-membership";
 import { isDemoMode } from "../auth/demo-policy";
+import type { ScanManager } from "../scanner";
+import type { EnrichmentManager } from "../metadata/run";
 
 export interface LibraryRouteDeps {
   prisma: PrismaClient;
   accountExperience: "household" | "demo";
+  scanner: ScanManager;
+  enrichment: EnrichmentManager;
+  logger: { info: (obj: unknown, msg?: string) => void; error: (obj: unknown, msg?: string) => void };
   parseIdParam: (raw: string | undefined) => number | null;
   optionalProfileId: (request: FastifyRequest) => number | null;
   requireProfileId: (request: FastifyRequest) => number | null;
   requireAccountProfileId: (request: FastifyRequest, reply: FastifyReply) => number | null;
+  canReadMediaItem: (request: FastifyRequest, mediaItemId: number) => Promise<boolean>;
   sendConditional: <T>(
     request: { headers: Record<string, unknown> },
     reply: { header: (name: string, value: string) => unknown; code: (status: number) => { send: () => unknown } },
@@ -29,10 +35,14 @@ export async function registerLibraryRoutes(
   const {
     prisma,
     accountExperience,
+    scanner,
+    enrichment,
+    logger,
     parseIdParam,
     optionalProfileId,
     requireProfileId,
     requireAccountProfileId,
+    canReadMediaItem,
     sendConditional,
   } = deps;
 
@@ -170,6 +180,71 @@ export async function registerLibraryRoutes(
     if (id === null) return fail(reply, 400, "invalid_id");
     const removed = await removeBookFromProfile(prisma, profileId, id);
     return { removed, inLibrary: false };
+  });
+
+  app.get<{ Params: { id: string } }>("/api/audiobooks/:id", async (request, reply) => {
+    // Number("abc") is NaN, which Prisma turns into a 500. Validate like the
+    // other id routes so a bad id is a 400/404, not a server error.
+    const id = parseIdParam((request.params as { id: string }).id);
+    if (id === null) return fail(reply, 400, "invalid_id");
+    const item = await prisma.mediaItem.findUnique({
+      where: { id },
+      include: {
+        tracks: true,
+        series: true,
+        genres: { include: { genre: true } },
+        customTags: { include: { tag: true } },
+        contributors: { include: { contributor: true } },
+      },
+    });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
+    if (isDemoMode(accountExperience) && !(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
+    // Spec 11: strip filePath / coverImagePath (and track paths) from the payload.
+    // One book shape everywhere: same contributors/genres/tags mapping as the lists.
+    return publicBookPayload(item);
+  });
+
+  app.post<{ Body: { rootId?: number } }>("/api/scan", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          rootId: { type: "integer" },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
+    const roots = request.body?.rootId
+      ? await prisma.libraryRoot.findMany({ where: { id: request.body.rootId } })
+      : await prisma.libraryRoot.findMany();
+    if (roots.length === 0) return fail(reply, 400, "library_root_required");
+    for (const root of roots) {
+      void scanner
+        .scanRoot(root.id)
+        .then(async () => {
+          // Spec 16: completing a scan automatically kicks off a background
+          // enrichment pass. Failures here must never affect the scan result.
+          try {
+            const status = await enrichment.enqueue();
+            logger.info({ enrichment: status }, "scan finished, enrichment enqueued");
+          } catch (error) {
+            logger.error({ error }, "failed to enqueue enrichment after scan");
+          }
+        })
+        .catch((error) => logger.error(error));
+    }
+    return reply.code(202).send({ status: "started", rootIds: roots.map((root) => root.id) });
+  });
+
+  app.get("/api/scan/status", async (_request, reply) => {
+    if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
+    const roots = await prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { id: "asc" } });
+    return roots.map((root) => ({
+      rootId: root.id,
+      path: root.path,
+      status: scanner.getProgress(root.id) || root.scanState || { status: "idle", filesFound: 0 },
+    }));
   });
 
   app.get("/api/library-roots", async (request, reply) => {
