@@ -141,7 +141,7 @@ stuck; say so rather than leaving it ambiguous.
 | 3.1 the library source interface | done | opencode | 70a7972 |
 | 3.2 both hooks satisfy it | done | opencode | 70a7972 |
 | 3.3 collapse the merge | done | opencode | 70a7972 |
-| 4.1 profile-resolution rules | not started | | |
+| 4.1 profile-resolution rules | done | opencode | f254368 |
 | 4.2 refresh-trigger rules | not started | | |
 | 4.3 the background lock | not started | | |
 | 4.4 the offline gate | not started | | |

@@ -49,6 +49,7 @@ import {
 } from "./lib/browse";
 import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { isNativeShell } from "./lib/platform";
+import { resolveProfileContext } from "./lib/profiles";
 import {
   BACKGROUND_LOCK_CHECK_MS,
   BACKGROUND_LOCK_IDLE_MS,
@@ -140,13 +141,17 @@ function App() {
    */
   const [serverReachable, setServerReachable] = useState<boolean | undefined>(() => offlineMode ? false : undefined);
   const [profileId, setProfileId] = useState<string | null>(() => getActiveProfileId());
-  /** The session profile is authoritative; localStorage is the break-glass hint. */
-  const activeProfileId = accountExperience === "demo"
-    ? (session?.profile?.id ? String(session.profile.id) : null)
-    : session?.profile?.id ? String(session.profile.id) : profileId;
-  const playerProfileId = accountExperience === "demo"
-    ? (session?.profile ? "demo-account" : null)
-    : activeProfileId;
+  /**
+   * The session profile is authoritative; localStorage is the break-glass hint.
+   *
+   * The shelf and the player answer different questions, so they resolve through
+   * the same rules rather than through two ternaries that shared no code.
+   */
+  const { activeProfileId, playerProfileId } = resolveProfileContext({
+    accountExperience,
+    sessionProfile: session?.profile ?? null,
+    storedProfileId: profileId,
+  });
   // Browse is mounted here rather than with the other data hooks, because it
   // needs to know who is listening: the profile id is what tells it to
   // refetch. It used to read that id out of localStorage during render, which
