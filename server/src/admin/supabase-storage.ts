@@ -4,7 +4,7 @@ import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
 import type { ScanManager } from "../scanner";
 import { EnrichmentManager } from "../metadata/run";
-import { AUDIO_EXTENSIONS } from "../scanner";
+import { AUDIO_EXTENSIONS } from "../scan-utils";
 
 export const MAX_STORAGE_FILE_BYTES = 50 * 1024 * 1024;
 const STORAGE_PREFIX = "books";

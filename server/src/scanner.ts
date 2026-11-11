@@ -12,8 +12,6 @@ import { addBookToFollowingProfiles } from "./library-membership";
 import { stripTrackNumberPrefix, parseTrackTitleOverrides, resolveTrackTitle } from "./metadata/chapters";
 import { resolveLocalNarrator } from "./narrator";
 
-export const AUDIO_EXTENSIONS = new Set([".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".wav", ".aac"]);
-
 type AudioFile = {
   filePath: string;
   format: string;
