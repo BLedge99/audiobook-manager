@@ -10,6 +10,7 @@ import {
 import { errorSentenceForCode, responseErrorText } from "../lib/apiError";
 import { isNativeShell } from "../lib/platform";
 import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
+import { deviceName, getInstallationId } from "../lib/deviceIdentity";
 import { deleteProfileCache, fromBase64, lockOfflineCache, rememberProfileKey, unlockProfileCacheWithKey } from "../local/privateCache";
 import { biometricVault } from "../lib/biometricVault";
 import { toBase64, exportActiveProfileKey } from "../local/privateCache";
@@ -175,7 +176,12 @@ export function AccountGate({
       const response = await boundedFetch("/api/auth/devices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: copy.security.thisDevice }),
+        // The phone names itself (spec 36): "Pixel 4a" rather than "Android
+        // device", so the signed-in devices panel can tell two phones apart.
+        body: JSON.stringify({
+          label: deviceName(copy.security.thisDevice),
+          deviceId: getInstallationId(),
+        }),
       });
       if (!response.ok) return;
       const created = (await response.json()) as { id: string; secret: string };

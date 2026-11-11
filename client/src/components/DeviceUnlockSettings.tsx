@@ -3,6 +3,7 @@ import { Fingerprint } from "lucide-react";
 import { copy } from "../copy";
 import { boundedFetch, getActiveProfileId } from "../lib/api";
 import { biometricVault } from "../lib/biometricVault";
+import { deviceName, getInstallationId } from "../lib/deviceIdentity";
 import { activeCacheKey, exportActiveProfileKey, toBase64 } from "../local/privateCache";
 import { Btn, Notice } from "../ui/primitives";
 
@@ -81,7 +82,12 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
       // Online mode: register device with server and save both secret and key
       const response = await boundedFetch("/api/auth/devices", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: copy.security.thisDevice }),
+        // The phone names itself (spec 36), so the signed-in devices panel can
+        // tell two phones apart.
+        body: JSON.stringify({
+          label: deviceName(copy.security.thisDevice),
+          deviceId: getInstallationId(),
+        }),
       });
       if (!response.ok) throw new Error(copy.login.deviceFailed);
       const created = (await response.json()) as { id: string; secret: string };

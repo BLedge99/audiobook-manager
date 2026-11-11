@@ -194,6 +194,7 @@ const ICU_PENDING = [
   "copy.search.matches",
   "copy.security.lastActive",
   "copy.security.lastUsed",
+  "copy.security.deviceSignedInTimes",
   "copy.discover.showing",
   "copy.discover.removeFromWishlist",
   "copy.discover.markOwned",

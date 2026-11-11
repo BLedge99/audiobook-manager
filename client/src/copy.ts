@@ -594,12 +594,23 @@ export const copy = {
     vaultPromptSubtitle: "Use your fingerprint or face to continue.",
     vaultPromptCancel: "Use password",
     sessionsHeading: "Signed-in devices",
-    sessionsIntro: "Review where this profile is signed in, and sign out a device you no longer use.",
+    sessionsIntro:
+      "Review the devices this profile is signed in on, and sign out one you no longer use.",
     otherDevice: "Another device",
     lastActive: (when: string) => `Last active ${when}`,
     signOutDevice: "Sign out",
     sessionRevoked: "That device has been signed out.",
+    deviceSignOutFailed: "Could not sign that device out. Try again in a moment.",
     sessionsFailed: "Could not load signed-in devices. Try again in a moment.",
+    /**
+     * A device that holds more than one live sign-in. The number is shown
+     * because it is the truth: it says this device has been used more than
+     * once, and it is why the panel lists it once rather than many times.
+     */
+    deviceSignedInTimes: (count: number) =>
+      `Signed in ${plural(count, "time")}`,
+    signOutOtherDevices: "Sign out other devices",
+    otherDevicesSignedOut: "Every other device has been signed out.",
   },
 
   profile: {
