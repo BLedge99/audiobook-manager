@@ -23,6 +23,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Spec 32 / ADR 030: the Android OAuth round trip lands here, not
+                 in the WebView. The server redirects Chrome Custom Tabs to this
+                 scheme; singleTask means the running instance receives it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.technative.audiobookmanager" android:host="oauth" />
+            </intent-filter>
+
         </activity>
 
         <provider
