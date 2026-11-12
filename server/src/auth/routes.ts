@@ -11,6 +11,8 @@ import {
 } from "./session";
 import { AuthFailure, AuthService, type LoginResult } from "./service";
 import {
+  NATIVE_OAUTH_CALLBACK,
+  OAUTH_APP_STATE_COOKIE,
   OAUTH_STATE_COOKIE,
   buildAuthorizeUrl,
   createPkcePair,
@@ -581,16 +583,29 @@ export async function registerAuthRoutes(
    * keeps both in HttpOnly cookies so the callback can validate without ever
    * touching browser-accessible storage.
    */
-  app.get<{ Params: { provider: string } }>("/api/auth/:provider/authorize", async (request, reply) => {
+  app.get<{ Params: { provider: string }; Querystring: { client?: string; state?: string } }>("/api/auth/:provider/authorize", async (request, reply) => {
     const provider = auth.oauth.enabled ? oauthProviderById(auth.oauth, request.params.provider) : null;
     if (!provider) return fail(reply, 404, "not_found");
+    const clientMode = typeof request.query.client === "string" ? request.query.client : "web";
+    if (clientMode !== "web" && clientMode !== "native") return fail(reply, 400, "request_invalid");
+    let appState: string | null = null;
+    if (clientMode === "native") {
+      const candidate = request.query.state;
+      if (typeof candidate !== "string" || !/^[\x20-\x7e]{1,128}$/.test(candidate)) {
+        return fail(reply, 400, "request_invalid");
+      }
+      appState = candidate;
+    }
     const { codeVerifier, codeChallenge } = createPkcePair();
     const state = randomBytes(16).toString("hex");
     const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
-    return reply
+    let chain = reply
       .setCookie(OAUTH_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/", maxAge: 600 })
-      .setCookie("oauth_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/", maxAge: 600 })
-      .redirect(buildAuthorizeUrl(provider, { redirectUri, state, codeChallenge }));
+      .setCookie("oauth_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/", maxAge: 600 });
+    if (appState !== null) {
+      chain = chain.setCookie(OAUTH_APP_STATE_COOKIE, appState, { httpOnly: true, sameSite: "lax", secure: options.secureCookie, path: "/", maxAge: 600 });
+    }
+    return chain.redirect(buildAuthorizeUrl(provider, { redirectUri, state, codeChallenge }));
   });
 
   /**
@@ -607,11 +622,20 @@ export async function registerAuthRoutes(
     const state = typeof request.query.state === "string" ? request.query.state : null;
     const stateCookieValue = request.cookies?.[OAUTH_STATE_COOKIE] ?? null;
     const codeVerifier = request.cookies?.["oauth_code_verifier"] ?? null;
+    // Spec 32 / ADR 030: the native flow is recognisable by the app-state cookie
+    // the authorize leg wrote; the browser flow never sets it.
+    const appState = typeof request.cookies?.[OAUTH_APP_STATE_COOKIE] === "string"
+      ? request.cookies[OAUTH_APP_STATE_COOKIE]
+      : null;
+    const failureRedirect = (code: string) => appState !== null
+      ? `${NATIVE_OAUTH_CALLBACK}?auth_error=${encodeURIComponent(code)}`
+      : `/?auth_error=${encodeURIComponent(code)}`;
+    if (appState !== null) reply.clearCookie(OAUTH_APP_STATE_COOKIE, { path: "/" });
 
     if (!provider || !code || !state || !codeVerifier) {
       reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
       reply.clearCookie("oauth_code_verifier", { path: "/" });
-      return reply.redirect("/?auth_error=oauth_state_mismatch");
+      return reply.redirect(failureRedirect("oauth_state_mismatch"));
     }
 
     const redirectUri = provider.redirectUri ?? `${request.protocol}://${request.hostname}/api/auth/${provider.id}/callback`;
@@ -628,14 +652,24 @@ export async function registerAuthRoutes(
       });
       reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
       reply.clearCookie("oauth_code_verifier", { path: "/" });
-      setSessionCookie(reply, result.token, options);
       await cleanupAfterLogin(auth);
+      if (appState !== null) {
+        // Spec 32 / ADR 030: the Custom Tab cannot keep a session cookie for
+        // the app, so spend a handoff code instead of the cookie. The app
+        // verifies the state on the deep link, swaps the code at
+        // /api/auth/oauth/handoff, and gets the password-login-shaped body.
+        if (!result.profile) throw new AuthFailure(403, "account_disabled");
+        const handoff = await auth.createOAuthHandoff({ profileId: result.profile.id, state: appState });
+        const target = `${NATIVE_OAUTH_CALLBACK}?code=${encodeURIComponent(handoff.code)}&state=${encodeURIComponent(appState)}`;
+        return reply.redirect(target);
+      }
+      setSessionCookie(reply, result.token, options);
       return reply.redirect("/");
     } catch (error) {
       reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
       reply.clearCookie("oauth_code_verifier", { path: "/" });
       if (error instanceof AuthFailure) {
-        return reply.redirect(`/?auth_error=${error.code}`);
+        return reply.redirect(failureRedirect(error.code));
       }
       throw error;
     }

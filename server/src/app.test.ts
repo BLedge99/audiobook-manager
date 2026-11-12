@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -761,6 +761,171 @@ describe("oauth flow routes", () => {
     });
     expect(throttled.statusCode).toBe(302);
     expect(throttled.headers.location).toBe("/?auth_error=oauth_rate_limited");
+  });
+});
+
+describe("native oauth flow", () => {
+  let nativeApp: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeAll(async () => {
+    nativeApp = await buildApp({
+      logger: false,
+      appPassword: "household",
+      prisma,
+      oauth: {
+        enabled: true,
+        providers: [
+          {
+            id: "google",
+            clientId: "google-client-id",
+            clientSecret: "google-client-secret",
+            authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+            tokenUrl: "https://oauth2.googleapis.com/token",
+            userInfoUrl: "https://openidconnect.googleapis.com/v1/userinfo",
+            scope: "openid profile email",
+            issuer: "https://accounts.google.com",
+          },
+        ],
+      },
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await nativeApp.close();
+    vi.unstubAllGlobals();
+  });
+
+  beforeEach(async () => {
+    // Handoff rows persist until the 60-second sweep; wipe them so a leftover
+    // row from the round-trip test cannot satisfy the count in another test.
+    await prisma.oAuthHandoff.deleteMany();
+  });
+
+  const state = "ab".repeat(64);
+
+  function googleOkFetch() {
+    return vi.fn<typeof fetch>(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "google-access-token", token_type: "Bearer" }), { status: 200 });
+      }
+      if (url.includes("userinfo")) {
+        return new Response(
+          JSON.stringify({ sub: "google-sub-native", email: "native@example.com", email_verified: true, name: "Native User" }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+  }
+
+  it("authorize with client=native keeps the provider leg and memorises the app state", async () => {
+    const res = await nativeApp.inject({
+      method: "GET",
+      url: `/api/auth/google/authorize?client=native&state=${state}`,
+    });
+    expect(res.statusCode).toBe(302);
+    const location = res.headers.location as string;
+    expect(location).toContain("https://accounts.google.com/o/oauth2/v2/auth");
+    expect(location).toContain("response_type=code");
+    expect(location).toContain("code_challenge=");
+    const cookies = ([] as string[]).concat((res.headers["set-cookie"] as string | string[]) ?? []);
+    expect(cookies.some((c) => c.startsWith(`oauth_app_state=${state}`))).toBe(true);
+    expect(cookies.some((c) => c.startsWith("oauth_state="))).toBe(true);
+    expect(cookies.some((c) => c.startsWith("oauth_code_verifier="))).toBe(true);
+    expect(await prisma.oAuthHandoff.count()).toBe(0);
+  });
+
+  it("authorize rejects a bogus client value with 400", async () => {
+    const res = await nativeApp.inject({ method: "GET", url: "/api/auth/google/authorize?client=bogus&state=abc" });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("authorize rejects a native state that is missing, empty or oversized with 400", async () => {
+    for (const url of [
+      "/api/auth/google/authorize?client=native",
+      "/api/auth/google/authorize?client=native&state=",
+      `/api/auth/google/authorize?client=native&state=${"x".repeat(129)}`,
+    ]) {
+      const res = await nativeApp.inject({ method: "GET", url });
+      expect(res.statusCode).toBe(400);
+    }
+  });
+
+  it("full native round trip: deep-links, creates the handoff, no session cookie, then exchanges", async () => {
+    vi.stubGlobal("fetch", googleOkFetch());
+
+    const authorize = await nativeApp.inject({
+      method: "GET",
+      url: `/api/auth/google/authorize?client=native&state=${state}`,
+    });
+    const authorizeCookies = ([] as string[]).concat((authorize.headers["set-cookie"] as string | string[]) ?? []);
+    const cookieHeader = authorizeCookies.map((c) => c.split(";")[0]).join("; ");
+    const providerState = /oauth_state=([^;]+)/.exec(cookieHeader)?.[1];
+    expect(providerState).toBeTruthy();
+
+    const callback = await nativeApp.inject({
+      method: "GET",
+      url: `/api/auth/google/callback?code=fake-code&state=${providerState}`,
+      headers: { cookie: cookieHeader },
+    });
+    expect(callback.statusCode).toBe(302);
+    const location = callback.headers.location as string;
+    expect(location.startsWith("com.technative.audiobookmanager://oauth/callback?")).toBe(true);
+    const params = new URLSearchParams(location.split("?")[1]);
+    expect(params.get("state")).toBe(state);
+    expect(params.get("code")).toBeTruthy();
+    const callbackCookies = ([] as string[]).concat((callback.headers["set-cookie"] as string | string[]) ?? []);
+    expect(callbackCookies.some((c) => c.startsWith("house_session="))).toBe(false);
+
+    // The callback must create exactly one handoff, hashed, tied to the app state.
+    const rows = await prisma.oAuthHandoff.findMany();
+    expect(rows).toHaveLength(1);
+
+    // And the app can exchange it for a working session (spec 32, criterion A5).
+    const exchange = await nativeApp.inject({
+      method: "POST",
+      url: "/api/auth/oauth/handoff",
+      payload: { code: params.get("code")!, state },
+    });
+    expect(exchange.statusCode).toBe(200);
+    expect(exchange.json().token).toBeTruthy();
+    expect((await prisma.oAuthHandoff.findMany())[0].consumedAt).not.toBeNull();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("callback in native mode with a failed provider exchange deep-links with auth_error and creates no handoff", async () => {
+    const res = await nativeApp.inject({
+      method: "GET",
+      url: "/api/auth/google/callback?code=abc&state=xyz",
+      headers: { cookie: `oauth_app_state=${state}; oauth_state=wrong; oauth_code_verifier=verifier` },
+    });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe("com.technative.audiobookmanager://oauth/callback?auth_error=oauth_state_mismatch");
+    expect(await prisma.oAuthHandoff.count()).toBe(0);
+  });
+
+  it("web flow is unchanged: session cookie set and redirect to /, no handoff created", async () => {
+    vi.stubGlobal("fetch", googleOkFetch());
+
+    const authorize = await nativeApp.inject({ method: "GET", url: "/api/auth/google/authorize" });
+    const authorizeCookies = ([] as string[]).concat((authorize.headers["set-cookie"] as string | string[]) ?? []);
+    const cookieHeader = authorizeCookies.map((c) => c.split(";")[0]).join("; ");
+    const providerState = /oauth_state=([^;]+)/.exec(cookieHeader)?.[1];
+
+    const callback = await nativeApp.inject({
+      method: "GET",
+      url: `/api/auth/google/callback?code=fake-code&state=${providerState}`,
+      headers: { cookie: cookieHeader },
+    });
+    expect(callback.statusCode).toBe(302);
+    expect(callback.headers.location).toBe("/");
+    const callbackCookies = ([] as string[]).concat((callback.headers["set-cookie"] as string | string[]) ?? []);
+    expect(callbackCookies.some((c) => c.startsWith("house_session="))).toBe(true);
+    expect(await prisma.oAuthHandoff.count()).toBe(0);
+
+    vi.unstubAllGlobals();
   });
 });
 

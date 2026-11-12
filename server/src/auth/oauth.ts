@@ -14,6 +14,11 @@ export const OAUTH_STATE_COOKIE = "oauth_state";
 
 export type OAuthProviderId = "google" | "github";
 
+/** Spec 32 / ADR 030: private-use scheme the Android app registers (AndroidManifest intent-filter). */
+export const NATIVE_OAUTH_CALLBACK = "com.technative.audiobookmanager://oauth/callback";
+/** Short-lived cookie remembering the app-generated native state between authorize and callback. */
+export const OAUTH_APP_STATE_COOKIE = "oauth_app_state";
+
 export interface OAuthProvider {
   id: OAuthProviderId;
   clientId: string;
