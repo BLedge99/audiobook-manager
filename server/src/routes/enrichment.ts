@@ -70,8 +70,10 @@ export async function registerEnrichmentRoutes(
     isDemoMode(accountExperience) ? fail(reply, 404, "not_found") : enrichment.status());
 
   /** The spec 16 review queue: everything below the auto-apply threshold. */
-  app.get("/api/enrichment/review-queue", async (_request, reply) => {
+  app.get("/api/enrichment/review-queue", async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
+    // Spec 38: the queue is household-wide catalogue curation — children get no peek.
+    if (request.auth?.role === "child") return fail(reply, 403, "forbidden");
     const items = await prisma.mediaItem.findMany({
       where: { enrichmentStatus: "review" },
       orderBy: { updatedAt: "desc" },

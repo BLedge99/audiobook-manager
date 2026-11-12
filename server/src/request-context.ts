@@ -6,6 +6,7 @@
 import { fail } from "./http-errors";
 import { isDemoMode, type AccountExperience } from "./auth/demo-policy";
 import { mediaResourceFromPath, verifyMediaToken } from "./auth/media-token";
+import { visibleForAge } from "./age/facts";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
@@ -90,9 +91,12 @@ export function createCanReadMediaItem(deps: {
     // needed for recovery. Profile sessions, including admins, are scoped to
     // the library actually assigned to that profile.
     if (profileId === null) return request.auth?.role === "admin";
-    return Boolean(await prisma.profileLibraryEntry.findUnique({
+    const inShelf = Boolean(await prisma.profileLibraryEntry.findUnique({
       where: { profileId_mediaItemId: { profileId, mediaItemId } },
       select: { id: true },
     }));
+    if (!inShelf) return false;
+    // Spec 38: an age-blocked book is as invisible as an unshelved one.
+    return visibleForAge(prisma, request.auth?.role, profileId, mediaItemId);
   };
 }

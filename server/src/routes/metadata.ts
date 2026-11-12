@@ -200,7 +200,10 @@ export async function registerMetadataRoutes(
       },
     });
     if (!item) return fail(reply, 404, "audiobook_not_found");
-    if (isDemoMode(accountExperience) && !(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
+    if (
+      (isDemoMode(accountExperience) || request.auth?.role === "child")
+      && !(await canReadMediaItem(request, item.id))
+    ) return fail(reply, 404, "audiobook_not_found");
 
     const overridden = new Set(item.overrides.map((row) => row.field));
     return {

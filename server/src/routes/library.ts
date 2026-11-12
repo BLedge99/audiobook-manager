@@ -6,6 +6,9 @@ import { addBookToProfile, libraryEntriesFor, removeBookFromProfile } from "../l
 import { upsertLibraryRoot, deleteLibraryRoot } from "../library-roots";
 import { startScanWithEnrichment } from "../scanning";
 import { isDemoMode } from "../auth/demo-policy";
+import { ageContextFor, visibleForAge } from "../age/facts";
+import { blockedGenreIds } from "../age/blocklist";
+import { andVisibility, visibilityWhere } from "../age/visibility";
 import type { ScanManager } from "../scanner";
 import type { EnrichmentManager } from "../metadata/run";
 
@@ -54,13 +57,18 @@ export async function registerLibraryRoutes(
       : optionalProfileId(request);
     if (isDemoMode(accountExperience) && profileId === null) return;
     // Spec 27: a profile sees its own library, not the whole server's.
+    // Spec 38: and a child sees only the age-appropriate part of its shelf.
     //
     // With no profile there is no caller to scope to, so the whole server
     // library is returned -- the same answer the endpoint gave before spec 27,
     // which keeps tooling and the unscoped API working. The client always
     // sends the header once a profile is chosen.
+    const ctx = await ageContextFor(prisma, request.auth?.role, profileId);
+    const blocked = ctx.role === "child" ? await blockedGenreIds(prisma) : new Set<number>();
+    const visibility = visibilityWhere(ctx, blocked);
+    const membership = profileId === null ? undefined : libraryEntriesFor(profileId);
     const items = await prisma.mediaItem.findMany({
-      where: profileId === null ? undefined : libraryEntriesFor(profileId),
+      where: membership ? andVisibility(membership, visibility) : visibility ?? undefined,
       include: {
         tracks: true,
         series: true,
@@ -115,7 +123,11 @@ export async function registerLibraryRoutes(
       ? requireAccountProfileId(request, reply)
       : optionalProfileId(request);
     if (isDemoMode(accountExperience) && profileId === null) return;
+    const ctx = await ageContextFor(prisma, request.auth?.role, profileId);
+    const blocked = ctx.role === "child" ? await blockedGenreIds(prisma) : new Set<number>();
+    const visibility = visibilityWhere(ctx, blocked);
     const items = await prisma.mediaItem.findMany({
+      where: visibility ?? undefined,
       orderBy: { title: "asc" },
       include: {
         tracks: true,
@@ -160,6 +172,10 @@ export async function registerLibraryRoutes(
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
+    // Spec 38: a child may not shelve a book hidden by the age gate.
+    if (!(await visibleForAge(prisma, request.auth?.role, profileId, id))) {
+      return fail(reply, 403, "age_restricted");
+    }
     const added = await addBookToProfile(prisma, profileId, id);
     return { added, inLibrary: true };
   });
@@ -198,7 +214,11 @@ export async function registerLibraryRoutes(
       },
     });
     if (!item) return fail(reply, 404, "audiobook_not_found");
-    if (isDemoMode(accountExperience) && !(await canReadMediaItem(request, item.id))) return fail(reply, 404, "audiobook_not_found");
+    // Spec 38: a child treats a hidden book as nonexistent — same as demo mode.
+    if (
+      (isDemoMode(accountExperience) || request.auth?.role === "child")
+      && !(await canReadMediaItem(request, item.id))
+    ) return fail(reply, 404, "audiobook_not_found");
     // Spec 11: strip filePath / coverImagePath (and track paths) from the payload.
     // One book shape everywhere: same contributors/genres/tags mapping as the lists.
     return publicBookPayload(item);

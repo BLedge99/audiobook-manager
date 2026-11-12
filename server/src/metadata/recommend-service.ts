@@ -8,6 +8,8 @@ import {
   type Taggable,
 } from "./recommend";
 import { trimDescription, type ProviderCandidate } from "./types";
+import { inferMinimumAgeFromSubjects } from "../age/suggestion";
+import { bookVisibleForCeiling } from "../age/policy";
 
 /**
  * Spec 19 — the recommendation service.
@@ -79,6 +81,17 @@ export interface DiscoverResult {
 
 /** Suggestions shown at once, per the spec 15b acceptance criteria. */
 export const DEFAULT_PAGE_SIZE = 5;
+
+/**
+ * Spec 38: when the caller is a child, candidates are filtered to what the
+ * ladder can confirm is at or under the child's band — anything else is
+ * excluded, never shown. Applied to the pool BEFORE ranking/paging so the
+ * page math stays honest.
+ */
+export interface ChildDiscoverFilter {
+  maxAge: number;
+  blockedGenreIds: number[];
+}
 
 /**
  * How much of Open Library a seed pulls in before ranking.
@@ -207,6 +220,15 @@ export class RecommendationService {
     return [...byKey.values()];
   }
 
+  /** Spec 38: keep only candidates the ladder can confirm are suitable. */
+  private childSafe(pool: ProviderCandidate[], child: ChildDiscoverFilter | undefined): ProviderCandidate[] {
+    if (!child) return pool;
+    return pool.filter((candidate) => {
+      const age = inferMinimumAgeFromSubjects(candidate.genres ?? []);
+      return age !== null && age <= child.maxAge;
+    });
+  }
+
   private shape(
     pool: ProviderCandidate[],
     seed: ReturnType<typeof buildSeed>,
@@ -240,7 +262,7 @@ export class RecommendationService {
   }
 
   /** "Find more like this" for one owned book. */
-  async similarTo(mediaItemId: number, options: { page?: number; pageSize?: number } = {}): Promise<DiscoverResult> {
+  async similarTo(mediaItemId: number, options: { page?: number; pageSize?: number; child?: ChildDiscoverFilter } = {}): Promise<DiscoverResult> {
     const page = Math.max(1, options.page ?? 1);
     const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
 
@@ -287,7 +309,7 @@ export class RecommendationService {
     }
 
     const owned = await this.ownedIdentities();
-    const all = this.shape(await this.expand(seed), seed, owned, RANK_LIMIT);
+    const all = this.shape(this.childSafe(await this.expand(seed), options.child), seed, owned, RANK_LIMIT);
     const recommendations = all.slice((page - 1) * pageSize, page * pageSize);
 
     return {
@@ -304,11 +326,11 @@ export class RecommendationService {
   }
 
   /** Seeded by the union of a profile's favourites. */
-  async forProfile(profileId: number, options: { page?: number; pageSize?: number } = {}): Promise<DiscoverResult> {
+  async forProfile(profileId: number, options: { page?: number; pageSize?: number; child?: ChildDiscoverFilter } = {}): Promise<DiscoverResult> {
     const page = Math.max(1, options.page ?? 1);
     const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
 
-    const favourites = await this.prisma.favourite.findMany({
+    let favourites = await this.prisma.favourite.findMany({
       where: { profileId },
       include: {
         mediaItem: {
@@ -321,6 +343,31 @@ export class RecommendationService {
         },
       },
     });
+
+    // Spec 38: favourites a child may not see must not seed their
+    // suggestions — otherwise Discover leaks what was hidden from the grid.
+    if (options.child) {
+      const blocked = new Set(options.child.blockedGenreIds);
+      favourites = favourites.filter((row) => bookVisibleForCeiling(
+        row.mediaItem.minimumAge,
+        row.mediaItem.genres.map((genre) => genre.genreId),
+        options.child!.maxAge,
+        blocked,
+      ));
+      if (favourites.length === 0) {
+        // They have favourites — they are just all age-blocked. Say that
+        // plainly rather than "you need more details".
+        return {
+          status: "no-results",
+          recommendations: [],
+          message: { code: "no-new-books" },
+          page,
+          pageSize,
+          hasMore: false,
+          total: 0,
+        };
+      }
+    }
 
     if (favourites.length === 0) {
       return {
@@ -365,7 +412,7 @@ export class RecommendationService {
     }
 
     const owned = await this.ownedIdentities();
-    const all = this.shape(await this.expand(seed), seed, owned, RANK_LIMIT);
+    const all = this.shape(this.childSafe(await this.expand(seed), options.child), seed, owned, RANK_LIMIT);
     const recommendations = all.slice((page - 1) * pageSize, page * pageSize);
 
     return {

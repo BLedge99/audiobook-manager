@@ -82,6 +82,7 @@ export type ApiErrorCode =
   | "tag_merge_failed"
   | "tag_not_found"
   | "wishlist_item_not_found"
+  | "age_restricted"
   | "positions_required"
   | "request_invalid"
   | "internal_error";

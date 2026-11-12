@@ -23,7 +23,7 @@ import {
 import type { OAuthConfig, OAuthIdentity, OAuthProvider } from "./oauth";
 import { exchangeAuthorizationCode, fetchOAuthIdentity, safeEqualStrings } from "./oauth";
 
-export type AuthRole = "admin" | "member";
+export type AuthRole = "admin" | "member" | "child";
 export type AuthVia = "profile" | "household" | "device" | "oauth";
 
 export interface AuthContext {
@@ -874,7 +874,7 @@ export class AuthService {
       session.expiresAt = expiresAt;
     }
 
-    const role: AuthRole = session.profile?.role === "admin" ? "admin" : session.profile ? "member" : "admin";
+    const role: AuthRole = session.profile?.role === "admin" ? "admin" : session.profile?.role === "child" ? "child" : session.profile ? "member" : "admin";
     return {
       token,
       session,

@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
 import { createTag, mergeTags, renameTag } from "../metadata/tags";
 import { isDemoMode } from "../auth/demo-policy";
+import { visibleItemScope } from "../age/facts";
 
 export interface TaxonomyRouteDeps {
   prisma: PrismaClient;
@@ -20,19 +21,32 @@ export async function registerTaxonomyRoutes(
   // Spec 17 — taxonomy, tag suite, per-field overrides
   // ---------------------------------------------------------------------
 
-  app.get("/api/genres", async () => {
+  app.get("/api/genres", async (request) => {
     const genres = await prisma.genre.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { _count: { select: { items: true } } },
     });
+    // Spec 38: for a child, counts are computed over their shelf ∩ the age
+    // gate, so a count can reveal nothing beyond what they can open.
+    const scope = await visibleItemScope(prisma, request.auth?.role, optionalProfileId(request));
+    let scopedCounts: Map<number, number> | null = null;
+    if (scope) {
+      const rows = await prisma.mediaItemGenre.groupBy({
+        by: ["genreId"],
+        where: { mediaItem: scope as never },
+        _count: { mediaItemId: true },
+      });
+      scopedCounts = new Map(rows.map((row) => [row.genreId, row._count.mediaItemId]));
+    }
+    const countFor = (id: number, fallback: number) => (scopedCounts ? scopedCounts.get(id) ?? 0 : fallback);
     // Build the two-level tree in one pass so the client does not have to.
     const roots = genres.filter((genre) => genre.parentId === null);
     return roots.map((root) => ({
       ...root,
       children: genres
         .filter((genre) => genre.parentId === root.id)
-        .map((child) => ({ ...child, count: child._count.items, parent: undefined, _count: undefined })),
-      count: root._count.items,
+        .map((child) => ({ ...child, count: countFor(child.id, child._count.items), parent: undefined, _count: undefined })),
+      count: countFor(root.id, root._count.items),
     }));
   });
 
@@ -99,14 +113,25 @@ export async function registerTaxonomyRoutes(
     return { deleted: true };
   });
 
-  app.get("/api/tags", async (_request, _reply) => {
+  app.get("/api/tags", async (request, _reply) => {
     const tags = await prisma.tag.findMany({
       orderBy: { name: "asc" },
       include: { _count: { select: { items: true } } },
     });
+    // Spec 38: for a child, counts cover their shelf ∩ the age gate only.
+    const scope = await visibleItemScope(prisma, request.auth?.role, optionalProfileId(request));
+    let scopedCounts: Map<number, number> | null = null;
+    if (scope) {
+      const rows = await prisma.mediaItemTag.groupBy({
+        by: ["tagId"],
+        where: { mediaItem: scope as never },
+        _count: { mediaItemId: true },
+      });
+      scopedCounts = new Map(rows.map((row) => [row.tagId, row._count.mediaItemId]));
+    }
     // Counts come from the same rows the UI lists, so a count can never
     // disagree with the number of books behind it.
-    return tags.map((tag) => ({ id: tag.id, name: tag.name, count: tag._count.items }));
+    return tags.map((tag) => ({ id: tag.id, name: tag.name, count: scopedCounts ? scopedCounts.get(tag.id) ?? 0 : tag._count.items }));
   });
 
   app.post("/api/tags", {

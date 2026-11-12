@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
 import { isDemoMode } from "../auth/demo-policy";
 import { RecommendationService, DEFAULT_PAGE_SIZE } from "../metadata/recommend-service";
+import { childDiscoverFilter, visibleForAge } from "../age/facts";
 
 const MAX_PAGE_SIZE = 20;
 
@@ -116,9 +117,14 @@ export async function registerDiscoverRoutes(
     if (id === null) return fail(reply, 400, "invalid_id");
     const exists = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
     if (!exists) return fail(reply, 404, "audiobook_not_found");
+    // Spec 38: a child may not seed Discover from a book they were not shown.
+    const child = await childDiscoverFilter(prisma, request.auth?.role, request.auth?.session.profileId ?? null);
+    if (child && !(await visibleForAge(prisma, request.auth?.role, request.auth?.session.profileId ?? null, id))) {
+      return fail(reply, 404, "audiobook_not_found");
+    }
 
     const { page, pageSize } = readPaging(request.query);
-    const result = await recommendations.similarTo(id, { page, pageSize });
+    const result = await recommendations.similarTo(id, { page, pageSize, child });
     return publicRecommendations(result);
   });
 
@@ -139,7 +145,9 @@ export async function registerDiscoverRoutes(
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const { page, pageSize } = readPaging(request.query);
-    const result = await recommendations.forProfile(profileId, { page, pageSize });
+    // Spec 38: a child gets only suggestions the ladder can confirm suitable.
+    const child = await childDiscoverFilter(prisma, request.auth?.role, profileId);
+    const result = await recommendations.forProfile(profileId, { page, pageSize, child });
     return publicRecommendations(result);
   });
 

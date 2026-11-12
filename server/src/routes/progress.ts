@@ -5,6 +5,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
+import { ageContextFor, visibleForAge } from "../age/facts";
+import { blockedGenreIds } from "../age/blocklist";
+import { canProfileSeeBook } from "../age/policy";
 
 export interface ProgressRouteDeps {
   prisma: PrismaClient;
@@ -32,6 +35,9 @@ export async function registerProgressRoutes(
     if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
+    if (request.auth?.role === "child" && !(await visibleForAge(prisma, request.auth.role, profileId, item.id))) {
+      return fail(reply, 404, "audiobook_not_found");
+    }
     const row = await prisma.listeningHistory.findFirst({
       where: { mediaItemId: item.id, profileId },
       orderBy: { lastPlayed: "desc" },
@@ -59,6 +65,9 @@ export async function registerProgressRoutes(
     if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
+    if (request.auth?.role === "child" && !(await visibleForAge(prisma, request.auth.role, profileId, item.id))) {
+      return fail(reply, 404, "audiobook_not_found");
+    }
 
     const rawPosition = typeof request.body?.position === "number" && Number.isFinite(request.body.position) ? request.body.position : 0;
     // Clamp into the book's real bounds when the duration is known. A
@@ -104,6 +113,9 @@ export async function registerProgressRoutes(
     if (profileId === null) return fail(reply, 400, "profile_required");
     const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
+    if (request.auth?.role === "child" && !(await visibleForAge(prisma, request.auth.role, profileId, item.id))) {
+      return fail(reply, 404, "audiobook_not_found");
+    }
     const toPosition = Number(request.body?.toPosition);
     const fromPosition = Number(request.body?.fromPosition);
     if (!Number.isFinite(toPosition) || !Number.isFinite(fromPosition)) {
@@ -134,6 +146,28 @@ export async function registerProgressRoutes(
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const sessions = await prisma.playSession.findMany({ where: { profileId }, orderBy: { startedAt: "desc" }, take: 100 });
+    // Spec 38: entries for age-hidden books never surface to a child.
+    const ctx = await ageContextFor(prisma, request.auth?.role, profileId);
+    if (ctx.role === "child" && sessions.length > 0) {
+      const ids = [...new Set(sessions.map((row) => row.mediaItemId))];
+      const items = await prisma.mediaItem.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, minimumAge: true, genres: { select: { genreId: true } } },
+      });
+      const blocked = await blockedGenreIds(prisma);
+      const allowed = new Set(
+        items
+          .filter((item) => canProfileSeeBook(
+            ctx,
+            { minimumAge: item.minimumAge, genreIds: item.genres.map((genre) => genre.genreId) },
+            blocked,
+          ))
+          .map((item) => item.id),
+      );
+      return sessions
+        .filter((row) => allowed.has(row.mediaItemId))
+        .map(({ profileId: _profileId, ...session }) => session);
+    }
     return sessions.map(({ profileId: _profileId, ...session }) => session);
   });
 }

@@ -28,15 +28,25 @@ export interface BookAgeFacts {
   genreIds: number[];
 }
 
+/** The raw ladder check, shared by the book predicate and the Discover filter. */
+export function bookVisibleForCeiling(
+  minimumAge: number | null,
+  genreIds: readonly number[],
+  maxAge: number,
+  blockedGenreIds: ReadonlySet<number>,
+): boolean {
+  for (const id of genreIds) {
+    if (blockedGenreIds.has(id)) return false;
+  }
+  if (minimumAge == null) return true;
+  return minimumAge <= maxAge;
+}
+
 export function canProfileSeeBook(
   caller: AgeContext,
   book: BookAgeFacts,
   blockedGenreIds: ReadonlySet<number>,
 ): boolean {
   if (caller.role !== "child") return true;
-  for (const id of book.genreIds) {
-    if (blockedGenreIds.has(id)) return false;
-  }
-  if (book.minimumAge == null) return true;
-  return book.minimumAge <= maxAgeForBand(caller.ageBand);
+  return bookVisibleForCeiling(book.minimumAge, book.genreIds, maxAgeForBand(caller.ageBand), blockedGenreIds);
 }

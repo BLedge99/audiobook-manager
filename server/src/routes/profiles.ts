@@ -6,6 +6,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
+import { ageContextFor, visibleForAge } from "../age/facts";
+import { blockedGenreIds } from "../age/blocklist";
+import { canProfileSeeBook } from "../age/policy";
 import { isDemoMode, type AccountExperience } from "../auth/demo-policy";
 import { publicBookPayload } from "../book-payload";
 
@@ -94,6 +97,10 @@ export async function registerProfilesRoutes(
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
+    // Spec 38: a child may not favourite a book hidden by the age gate.
+    if (!(await visibleForAge(prisma, request.auth?.role, profileId, id))) {
+      return fail(reply, 404, "audiobook_not_found");
+    }
 
     // Idempotent: favouriting twice is a no-op, not an error.
     const existing = await prisma.favourite.findUnique({
@@ -137,7 +144,20 @@ export async function registerProfilesRoutes(
       },
     });
 
-    return favourites.map((row) => ({
+    const ctx = await ageContextFor(prisma, request.auth?.role, profileId);
+    // Spec 38: favourites of age-hidden books never surface to a child.
+    const visible = ctx.role === "child"
+      ? await (async () => {
+          const blocked = await blockedGenreIds(prisma);
+          return favourites.filter((row) => canProfileSeeBook(
+            ctx,
+            { minimumAge: row.mediaItem.minimumAge, genreIds: row.mediaItem.genres.map((g) => g.genreId) },
+            blocked,
+          ));
+        })()
+      : favourites;
+
+    return visible.map((row) => ({
       favouritedAt: row.createdAt,
       // One book shape everywhere, same contributors/genres/tags mapping.
       book: publicBookPayload({ ...row.mediaItem, tracks: [] }),
@@ -148,7 +168,19 @@ export async function registerProfilesRoutes(
   app.get("/api/favourites/ids", async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
-    const rows = await prisma.favourite.findMany({ where: { profileId }, select: { mediaItemId: true } });
-    return rows.map((row) => row.mediaItemId);
+    const rows = await prisma.favourite.findMany({
+      where: { profileId },
+      select: { mediaItemId: true, mediaItem: { select: { minimumAge: true, genres: { select: { genreId: true } } } } },
+    });
+    const ctx = await ageContextFor(prisma, request.auth?.role, profileId);
+    if (ctx.role !== "child") return rows.map((row) => row.mediaItemId);
+    const blocked = await blockedGenreIds(prisma);
+    return rows
+      .filter((row) => canProfileSeeBook(
+        ctx,
+        { minimumAge: row.mediaItem.minimumAge, genreIds: row.mediaItem.genres.map((g) => g.genreId) },
+        blocked,
+      ))
+      .map((row) => row.mediaItemId);
   });
 }

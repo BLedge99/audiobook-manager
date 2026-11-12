@@ -13,6 +13,7 @@ import { fail } from "../http-errors";
 import { isDemoMode, type AccountExperience } from "../auth/demo-policy";
 import { issueMediaToken } from "../auth/media-token";
 import { libraryEntriesFor } from "../library-membership";
+import { visibleForAge } from "../age/facts";
 import { resolveInsideRoot } from "../safePath";
 import { sendConditional } from "../conditional";
 import type { OptionalProfileId } from "../request-context";
@@ -70,16 +71,25 @@ export async function registerMediaRoutes(
     }
 
     const { kind, id } = request.body;
-    const allowed = kind === "track-stream"
+    const track = kind === "track-stream"
       ? await prisma.track.findFirst({
           where: { id, mediaItem: libraryEntriesFor(profileId) },
-          select: { id: true },
+          select: { id: true, mediaItemId: true },
         })
+      : null;
+    const item = kind === "track-stream"
+      ? null
       : await prisma.mediaItem.findFirst({
           where: { id, ...libraryEntriesFor(profileId) },
           select: { id: true },
         });
+    const allowed = kind === "track-stream" ? track !== null : item !== null;
     if (!allowed) return fail(reply, 404, kind === "track-stream" ? "track_not_found" : "audiobook_not_found");
+    // Spec 38: membership is necessary, not sufficient — the age gate applies too.
+    const mediaItemId = track ? track.mediaItemId : id;
+    if (!(await visibleForAge(prisma, request.auth?.role, profileId, mediaItemId))) {
+      return fail(reply, 404, kind === "track-stream" ? "track_not_found" : "audiobook_not_found");
+    }
 
     const token = issueMediaToken(mediaTokenSecret, { profileId, kind, resourceId: id });
     reply.header("cache-control", "no-store");
