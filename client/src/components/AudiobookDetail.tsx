@@ -20,29 +20,24 @@ interface Candidate {
   confidence?: number;
 }
 
-/**
- * A candidate as the lookup returns it.
- *
- * The lookup answers with the provider's candidates, which have no row id of
- * their own -- the id belongs to the stored row, and the stored rows are
- * fetched separately. So the placeholder id here is the list index.
- */
-type EnrichCandidate = Omit<Candidate, "id">;
-
 function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () => void }) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
 
   const enrich = async () => {
     setState("loading");
+    setError(null);
     try {
-      const list = await request<EnrichCandidate[]>(`/api/audiobooks/${book.id}/enrich`, { method: "POST" });
-      const rows: Candidate[] = list.map((candidate, index) => ({ ...candidate, id: index }));
-      // Re-fetch stored candidates so we have real ids
-      const stored = await request<Candidate[]>(`/api/audiobooks/${book.id}/candidates`);
-      setCandidates(stored.length ? stored : rows);
+      // The lookup runs the full enrichment pass and returns the stored
+      // candidates, each with the row id the apply endpoint needs. An earlier
+      // version fetched them again, which cost a round trip and failed the
+      // whole lookup when that second request failed.
+      const list = await request<Candidate[]>(`/api/audiobooks/${book.id}/enrich`, { method: "POST" });
+      setCandidates(list);
       setState("ready");
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : null);
       setState("error");
     }
   };
@@ -66,7 +61,7 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
         <Sparkles size={15} aria-hidden="true" /> {state === "loading" ? copy.operator.metadata.lookingUp : copy.operator.metadata.lookup}
       </Btn>
       {state === "error" && (
-        <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">{copy.operator.metadata.failed}</p>
+        <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">{error || copy.operator.metadata.failed}</p>
       )}
       {state === "ready" && (
         <ul className="mt-3 grid gap-2">
