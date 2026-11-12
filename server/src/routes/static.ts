@@ -45,7 +45,7 @@ export async function registerStaticRoutes(
 </head>
 <body>
   <h1>Privacy notice — Audiobook Manager</h1>
-  <p class="small">Last updated: 5 November 2026 &nbsp;|&nbsp; Applies to both household and production-demo deployments.</p>
+  <p class="small">Last updated: 12 November 2026 &nbsp;|&nbsp; Applies to both household and production-demo deployments.</p>
 
   <h2 id="who-we-are">Who we are</h2>
   <p>Audiobook Manager is a local-first audiobook manager. The controller is whoever operates the server you connect to — in a household deployment, that is the household admin; in the production demo (<code>https://books.home.arpa</code>), the operator of that demo service. Contact details are at the end of this notice.</p>
@@ -77,6 +77,16 @@ export async function registerStaticRoutes(
     <li>Favourites, wishlist items, library entries — all per profile.</li>
     <li>WebAuthn/passkey credential public keys (no biometric data leaves your device).</li>
     <li>In production demo mode: your email address (via OAuth provider or email sign-up).</li>
+    <li>Age band for kids accounts (children managed by a household adult): one of under 6 / 6-9 / 10-13 / 14-17. No date of birth is stored — see "Children's accounts".</li>
+  </ul>
+
+  <h2 id="children">Children's accounts</h2>
+  <p>Audiobook Manager can run accounts for children managed by a household adult. Children's accounts:</p>
+  <ul>
+    <li>See only books rated age-appropriate for their band (or unrated), unless the admin has blocklisted the genre; hidden books are invisible on every list and every direct link.</li>
+    <li>Use the same rights as any account: they can export, delete and correct their own data; their listening is profile-scoped and isolated.</li>
+    <li>Are not profiled, advertised to, or shared with third parties; recommendations draw only from age-suitable suggestions.</li>
+    <li>Are created and managed only by the household adult in the admin panel — never in the family app.</li>
   </ul>
 
   <h2 id="who-receives">Who receives your data</h2>

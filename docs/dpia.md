@@ -1,7 +1,7 @@
 # Data Protection Impact Assessment (DPIA) — Production Demo — GDPR Art. 35
 
-**Last updated:** 5 November 2026  
-**Status:** Draft — implements Phase 8 of `docs/GDPR-REMEDIATION-PLAN.md`  
+**Last updated:** 12 November 2026  
+**Status:** Draft — implements Phase 8 of `docs/GDPR-REMEDIATION-PLAN.md`; extended 2026-11-12 for kids accounts (spec 38)  
 **Owner:** Data-protection lead  
 **Processing covered:** Production demo surface — external sign-in (OAuth + email/password), tag-similarity recommendations, public exposure of the demo server
 
@@ -92,14 +92,75 @@ The Android LAN HTTP transport (mixed content) remains a medium residual risk bu
 
 The production demo may go live with this DPIA on file. The DPIA is reviewed before any new external integration or material change to the processing.
 
+Extended 2026-11-12 with §8 (kids accounts in the household). The demo processing assessed here is unchanged; if the kids-account feature is ever promoted to the demo, §8 must be re-derived with an Art. 8 analysis and an AADC review before launch.
+
+---
+
+## 8. Children's data (kids accounts) — spec 38, ADR 033
+
+**Trigger assessment.** Children's personal data, and services likely to be
+accessed by children, are widely treated as high-risk indicators under
+Art. 35(4) criteria and the ICO Children's Code. A service aimed at or
+knowingly accessible by children would require a full DPIA under Arts. 35(1)
+and (3)(b) and an Age Appropriate Design Code review before launch.
+
+**The current state is two deployments, and only one of them has children.**
+
+- **Household deployment:** children's data is processed under the parental
+  responsibility model — the admin (parent/guardian) creates the child's
+  account, chooses the age band and exercises the child's rights. Processing
+  by a natural person in the course of a purely personal or household
+  activity is outside the Regulation's scope (Art. 2(2)(c)). The records are
+  nevertheless written to demo-ready standard (Art. 6(1)(b) in the
+  parent/guardian capacity, refreshed Art. 6(1)(f) balancing, retention and
+  rights analyses — see `docs/roa.md` activity 12, `docs/retention.md`
+  #14–16, `docs/gdpr-governance.md` §2). **No Art. 36 prior consultation
+  applies to this processing.**
+- **Production demo:** general-audience and unchanged. No children's
+  processing takes place; P1-5 in `GDPR-AUDIT.md` remains open for the demo
+  and is tracked against spec 33. **An Art. 8 analysis and an AADC assessment
+  are required before the demo admits children** — this DPIA does not
+  substitute for that work and must be re-derived, not assumed.
+
+**What the household processing is (for the record).**
+
+| Element | Detail |
+|---------|--------|
+| Data subjects | Household children whose accounts are created by the admin |
+| Data collected | `Profile` account record as per activity 1 (name, colour, password hash, role, session biometric-free credentials) plus `ageBand` (one of four bands; never a date of birth) |
+| Data not collected | Date of birth, age verification state, biometric templates, geolocation, marketing identifiers |
+| Purpose | Let an adult curate age-appropriate reading; isolate the child's shelf and history from other profiles |
+| Lawful basis | Art. 2(2)(c) household exemption; Art. 6(1)(b) parent/guardian contract |
+| Retention | `ageBand` deleted with the profile (erasure, admin deletion, or 24-month inactivity purge) |
+| Rights | Self-service export/erasure/rectification identical to any member; `ageBand` included in the export |
+
+**Risks specific to children's data.**
+
+| Risk | Likelihood | Impact | Overall | Mitigation in place | Residual risk |
+|------|-----------|--------|---------|---------------------|---------------|
+| Child sees age-inappropriate content via an unrated catalogue or mis-set rating | Medium | Medium | Medium | Unrated = visible by decision; genre blocklist hides flagged genres regardless of rating; provider-derived ratings land as **suggestions** the admin confirms; admin rating UI; server-side enforcement everywhere including media URLs (404) | Low-Medium |
+| Child infers hidden books exist via counts, Discover or direct ids | Low | Low | Low | Hidden books answer 404 on every route incl. media; genre/tag counts computed over the visible set; review queue is 403 for children; Discover excludes unverifiable suggestions | Low |
+| Child's listening habits used for profiling | Low | Medium | Low | Tag-similarity ranking only, no profiling under Art. 22; a child's Discover pool is pre-filtered by the age ladder; no advertising, no third-party sharing | Low |
+| Offline device shows previously downloaded book that was later re-rated | Medium | Low | Low | Replica carries `minimumAge` and filters with the same ladder; documented caveat: downloads outrun re-ratings until the next refresh; `LIMITATIONS.md` §2.0 | Low |
+| Misconfigured genre blocklist lets through clearly unsuitable content | Low | High | Medium | Blocklist is managed by the admin in the panel, cascades with genres, and is visible in one place; ladder is the second independent control | Low-Medium |
+
+**Conclusion (children's processing).** The household children's processing is
+not likely to result in a high risk to rights and freedoms after the
+mitigations above. If the feature is promoted to the production demo, this
+conclusion must be re-derived with an Art. 8 analysis and an AADC review
+before any child is let in; Art. 36 prior consultation applies only if a high
+residual risk remains after those measures.
+
 ---
 
 ## Cross-reference
 
-- `docs/roa.md` — Activities 1–2 (profiles/auth), 9–11 (enrichment, AI, Supabase)
+- `docs/roa.md` — Activities 1–2 (profiles/auth), 9–11 (enrichment, AI, Supabase), 12 (kids accounts)
 - `docs/gdpr-governance.md` — lawful-basis register, data-protection lead
-- `docs/retention.md` — retention schedule
+- `docs/retention.md` — retention schedule (#14–16 kids accounts)
 - `docs/processors.md` — processor inventory
 - `docs/breach-procedure.md` — Art. 33–34 procedure
+- `decisions/033-kids-accounts-age-ladder.md` — kids accounts decision
+- `specs/38-child-accounts.md` — kids accounts spec
 - `decisions/014-webview-http-scheme.md` — Android transport decision
-- `LIMITATIONS.md` §4 — Android TLS security debt
+- `LIMITATIONS.md` §2.0, §4 — offline gap; Android TLS security debt

@@ -1,6 +1,6 @@
 # Retention & Storage Limitation Schedule — GDPR Art. 5(1)(e)
 
-**Last updated:** 11 November 2026  
+**Last updated:** 12 November 2026  
 **Status:** Draft — implements Phase 6 of `docs/GDPR-REMEDIATION-PLAN.md`  
 **Automated cleanup:** `server/src/gdpr/personal-data.ts` is the enforcement point for the personal-data table list and the 24-month inactive-profile retention rule. `AuthService.cleanupExpired()` in `server/src/auth/service.ts` runs at server startup and after every login (best effort) and delegates the personal-data cleanup/purge to that module; `validate` already rejects expired rows.
 
@@ -25,6 +25,9 @@ This schedule maps each personal-data table in `server/prisma/schema.prisma` to 
 | 11 | `AdminSession` | token hash, expires at, revoked at | TTL-based (same as `Session`); revoked sessions deleted on cleanup | `cleanupExpired()` deletes expired admin sessions |
 | 12 | `AdminCredential` | password hash | Until rotated; no automatic expiry | Admin rotation only |
 | 13 | `OAuthHandoff` | sha256 code + state, pseudonymous profile id, expiry (native OAuth handoff, ADR 030) | Single-use + 60 s TTL; consumed at exchange, otherwise swept | Exchange consumes atomically; expired rows deleted at startup sweep |
+| 14 | `Profile.ageBand` (column on `Profile`, kids accounts, spec 38) | the child's age band (`under-6`…`14-17`); never a date of birth | Deleted with the profile row (erasure or 24-month inactivity purge) | Same enforcement as `Profile` (#1); erased cascade covers it; included in the GDPR export |
+| 15 | `MediaItem.minimumAge` / `suggestedMinimumAge` / `suggestedMinimumAgeSource` | catalogue data (not personal data) | Deleted with the book; suggestions cleared on admin confirm/dismiss | `MediaItem` lifecycle; admin actions clear suggestions |
+| 16 | `BlocklistGenre` (household genre blocklist, spec 38) | household configuration (not personal data) | Until the admin removes the genre from the blocklist | `DELETE /api/admin/genre-blocklist/:genreId`; cascades on `Genre` deletion |
 
 ---
 
@@ -47,7 +50,7 @@ Profiles with no `lastActiveAt` at all (created but never used) are evaluated ag
 | Store | Data | Retention | Enforcement |
 |-------|------|-----------|-------------|
 | IndexedDB `privateRows` | Encrypted per-profile progress/favourites/wishlist | Until profile deletion or explicit clear | `DELETE /api/me` response triggers client to wipe `privateRows`/`keyEnvelopes` and `localStorage.profileId` |
-| IndexedDB `books` / `covers` | Book replica + cover images | Until source removed or cache expiry | Scanner/cache eviction, not personal data |
+| IndexedDB `books` / `covers` | Book replica + cover images (carries `minimumAge` for the offline kids-account ladder, spec 38) | Until source removed or cache expiry | Scanner/cache eviction, not personal data |
 | `localStorage` | Active profile id, server URL, explicit offline-mode boolean | Profile id until sign-out/profile deletion; server URL and mode preference until changed | `lockSession()` clears token; `DELETE /api/me` clears profile id; reconnect clears offline preference |
 | Session token | Browser memory / HttpOnly cookie (web) | Session TTL | Cookie expires with session; Android holds in memory |
 | Registration form values | Name and household/profile passwords | Request lifetime only | Component state is discarded after submission; household password is never persisted; only the server-side profile password hash is retained |

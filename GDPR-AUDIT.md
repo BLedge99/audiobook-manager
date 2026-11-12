@@ -102,7 +102,7 @@ None identified. No health, biometric template, or genetic data is stored. WebAu
 
 ### 3.4 Children's data
 
-The production demo is a general-audience audiobook service. No age-gating or parental-consent flow exists. If children use the service, their data (listening history, favourites) would be processed without a specific children's-lawful-basis analysis. **Gap to address.**
+Kids accounts (spec 38 / ADR 033, 2026-11-12) now exist for the household deployment: a child profile (`role = "child"`) with a stored age band, an age ladder on books (admin-set `minimumAge`, never auto-applied provider suggestions), a genre blocklist, and server-side filtering of every catalogue surface. The household exemption analysis and the demo-ready documentation are recorded in `docs/roa.md` (activity 12), `docs/retention.md` (#14–16), `docs/gdpr-governance.md` §2 and `docs/GDPR-REMEDIATION-PLAN.md` (2026-11-12 Implementation Note). The **production demo remains general-audience and unchanged** — P1-5 is only closed for the household deployment; the demo still lacks an Art. 8 analysis and an AADC assessment, which are required before children are invited to the hosted service.
 
 ---
 
@@ -266,7 +266,7 @@ The production demo exposes OAuth + email/password sign-up to the public web. Sp
 | P1-2 | No DPIA for production demo | Art. 35 | Conduct DPIA covering external sign-in, recommendations, public exposure | `decisions/` ADR |
 | P1-3 | No cookie disclosure | ePrivacy / Art. 13 | Add cookie section to privacy notice; inventory cookies | `client/src/copy.ts` |
 | P1-4 | No breach procedure | Art. 33–34 | Document detection, assessment, supervisory-authority notification (72h), data-subject communication | `docs/` |
-| P1-5 | Children's data not addressed | Art. 8 | Add age check / parental consent flow or state service is not for children | spec 33 |
+| P1-5 | Children's data — household closed by spec 38 (2026-11-12); production demo still open | Art. 8 | Household: done via spec 38 (`role = "child"`, age bands, server-side filtering, parental-responsibility model). Demo: still requires an Art. 8 analysis and an AADC review, tracked against spec 33 | spec 33 / spec 38 |
 
 ### P2 — Good practice / continuous improvement
 

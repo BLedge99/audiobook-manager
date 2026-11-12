@@ -272,6 +272,52 @@ introduced:
   device can now be signed out in a single action, which is a strengthening of
   Art. 17 rather than a new obligation.
 
+### Kids accounts and age-appropriate visibility (2026-11-12)
+
+[`specs/38-child-accounts.md`](../specs/38-child-accounts.md) and
+[`decisions/033-kids-accounts-age-ladder.md`](../decisions/033-kids-accounts-age-ladder.md)
+add a **child account** (`role = "child"` with an age band) whose shelves,
+search, Discover, downloads and catalogue surfaces are filtered server-side by
+an age ladder on books. New personal-data category: `Profile.ageBand` — one
+of `under-6`/`6-9`/`10-13`/`14-17`, chosen by the admin at creation, never a
+date of birth. New catalogue fields (`MediaItem.minimumAge`,
+`suggestedMinimumAge`, `suggestedMinimumAgeSource`) and a household genre
+blocklist (`BlocklistGenre`) are not personal data. Two personal-data
+consequences follow:
+
+- **Lawful basis:** Art. 2(2)(c) household/domestic exemption is the primary
+  household basis — the admin (parent/guardian) creates the account, chooses
+  the band and exercises parental responsibility; the household deployment
+  does not depend on consent. The records are nevertheless written to
+  demo-ready standard (Art. 6(1)(b) in the parent/guardian capacity with a
+  refreshed Art. 6(1)(f) balancing in `docs/gdpr-governance.md` §2). If the
+  feature is ever promoted to the production demo, an Art. 8 analysis and an
+  AADC review become mandatory and are tracked against P1-5 (spec 33). No
+  profiling or Art. 22 processing is involved.
+- **Retention:** `Profile.ageBand` is deleted with the profile row —
+  self-service erasure (Phase 4), admin deletion, or the 24-month inactivity
+  purge; it carries no separate TTL. `MediaItem.minimumAge`/suggestions live
+  and die with the book; suggestions are cleared on admin confirm/dismiss.
+  `BlocklistGenre` is household configuration deleted on admin removal.
+- **Rights impact:** access and export are unchanged in shape — the export
+  (`/api/me/export`) now includes the caller's own `ageBand`, and the child
+  exercises Art. 15–17 rights exactly like a member. Erasure is unchanged
+  (no new profile-owned tables — `BlocklistGenre` carries no profileId and
+  needs no personal-data-list entry); `ageBand` rides the existing `Profile`
+  cascade. Rectification
+  is unchanged; the band is edited by the admin in the kids-accounts page.
+  The child cannot manage, verify or delete anything about the *selection* of
+  age-appropriate books — the admin does, in the admin panel (ADR 033/022),
+  which is the intended parental-responsibility model.
+- **Offline/Android:** the replica now carries `minimumAge`; the offline
+  surface filters with the same ladder (rating only; the genre blocklist is
+  not evaluated offline) — see `LIMITATIONS.md` §2.0. This is a
+  best-interests-of-the-child engineering choice, not a relaxation of the
+  gate: online remains the authority.
+- **Children's Code:** the records do not yet constitute an AADC assessment;
+  the household exemption analysis above stands. The DPIA records the
+  children's-data risk register and the demo-promotion condition.
+
 The biometric gate is deliberately unchanged (ADR 027): no credential is stored
 on the device that would let anyone holding an unlocked phone read the
 profile's progress without the fingerprint.

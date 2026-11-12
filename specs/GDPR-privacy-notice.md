@@ -20,7 +20,7 @@ Publish a privacy notice so users (household members and production-demo visitor
 - **Who we are** — controller identity (household admin or demo operator), contact point
 - **Why we collect your data** — purposes (identity/sign-in, listening history, favourites, wishlist, library membership, device credentials)
 - **Legal basis** — contract (Art. 6(1)(b)), legitimate interest (Art. 6(1)(f)), consent (Art. 6(1)(a))
-- **What data we collect** — profile data, session metadata, listening history, favourites, wishlist, library entries, WebAuthn credentials, email (demo mode)
+- **What data we collect** — profile data, session metadata, listening history, favourites, wishlist, library entries, WebAuthn credentials, email (demo mode), age band (kids accounts, spec 38)
 - **Who receives your data** — no third parties receive personal data; enrichment queries send book identifiers only
 - **How long we keep it** — per `docs/retention.md`
 - **Your rights** — export, erasure, rectification, objection, restriction, complaint
@@ -28,6 +28,7 @@ Publish a privacy notice so users (household members and production-demo visitor
 - **No profiling** — tag-similarity recommendations are not automated decisions under Art. 22
 - **International transfers** — no personal data transferred
 - **Complaints** — supervisory authority (Art. 77(d))
+- **Children's accounts** (spec 38) — children are managed by a household adult; they see only age-appropriate books, keep the same Art. 15–17 rights, and are not profiled
 
 **Errors:** None — always returns `200` with `text/html; charset=utf-8`.
 

@@ -14,7 +14,7 @@ Give every authenticated profile self-service control over their personal data:
 - **Rectification** (Art. 16): correct their profile name and colour
 - **Entry deletion** (Art. 17): remove individual listening-history rows and favourites
 
-No admin intervention is required for any of these. Admin break-glass deletion (`DELETE /api/profiles/:id`) is preserved separately and is not the GDPR path.
+No admin intervention is required for any of these. Admin break-glass deletion (`DELETE /api/profiles/:id`) is preserved separately and is not the GDPR path. Kids accounts (spec 38) exercise the same self-service paths — a child can export, erase and correct their own data exactly like a member; the export includes the child's own `ageBand`.
 
 ---
 
@@ -27,7 +27,7 @@ No admin intervention is required for any of these. Admin break-glass deletion (
 
 **Response:** JSON object with:
 - `exportedAt` — ISO-8601 timestamp
-- `profile` — `id`, `name`, `color`, `role`, `createdAt`, `followsServerLibrary`
+- `profile` - `id`, `name`, `color`, `role`, `createdAt`, `followsServerLibrary`, `ageBand` (kids accounts, spec 38)
 - `sessions` — `id`, `expiresAt`, `userAgent`, `deviceLabel`, `createdAt` (no token hashes)
 - `listeningHistory` — `id`, `mediaItemId`, `position`, `completed`, `lastPlayed`, `playedAt`
 - `playSessions` — `id`, `mediaItemId`, `startedAt`, `endedAt`, `fromPosition`, `toPosition`, `speed`

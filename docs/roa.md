@@ -2,7 +2,7 @@
 
 **Controller:** audiobook-manager (household / production demo)  
 **Contact:** See `docs/gdpr-governance.md`  
-**Last updated:** 2026-11-11  
+**Last updated:** 2026-11-12  
 **Status:** Draft — aligns with `server/prisma/schema.prisma` and `server/prisma/sqlite/schema.prisma`
 
 This RoPA maps every processing activity that involves personal data, its purpose, the personal-data categories, the lawful basis, retention, and recipients. It is the authoritative record referenced by `docs/gdpr-governance.md` and the GDPR audit (`GDPR-AUDIT.md`).
@@ -32,7 +32,7 @@ with `profileId`-bearing models in the schema.
 |-------|-------|
 | **Activity** | Household-password-authorized profile registration, update, sign-in identity, and deletion |
 | **Purpose** | Identity for household members / production-demo users; isolates progress, history, favourites, wishlist, library per person |
-| **Personal data** | `Profile.id`, `Profile.name` (display name), `Profile.color`, `Profile.avatar`, `Profile.createdAt`, `Profile.role` (admin/member), hashed profile password (spec 28), OAuth provider ID + email (spec 32, production demo only). The household password is checked transiently and is not retained by this registration flow. |
+| **Personal data** | `Profile.id`, `Profile.name` (display name), `Profile.color`, `Profile.avatar`, `Profile.createdAt`, `Profile.role` (admin/member/child), `Profile.ageBand` (kids accounts, spec 38), hashed profile password (spec 28), OAuth provider ID + email (spec 32, production demo only). The household password is checked transiently and is not retained by this registration flow. |
 | **Lawful basis** | Art. 6(1)(b) contract — necessary to provide the service; Art. 6(1)(a) consent for OAuth/email sign-up in production demo |
 | **Retention** | Indefinite while account active; deleted on self-service erasure (Phase 4) or admin deletion; inactive-profile purge per retention schedule (Phase 6) |
 | **Recipients** | Server only; client receives profile id/name/color for the authenticated profile |
@@ -191,6 +191,21 @@ with `profileId`-bearing models in the schema.
 
 ---
 
+## 12. Age-appropriate content controls (kids accounts)
+
+| Field | Value |
+|-------|-------|
+| **Activity** | Kids-account creation and management by the admin; storing a child's **age band**; per-book age ratings (admin-set or admin-confirmed); household genre blocklist; server-side and offline filtering of catalogue surfaces |
+| **Personal data** | `Profile.ageBand` (one of `under-6`/`6-9`/`10-13`/`14-17`; only on `role = "child"` profiles; never a date of birth); `Profile.role` value `"child"` (an attribute of the account); `MediaItem.minimumAge` / `suggestedMinimumAge` / `suggestedMinimumAgeSource` (catalogue data, not personal data); `BlocklistGenre` rows (household configuration, not personal data) |
+| **Lawful basis** | **Household deployment (primary):** Art. 2(2)(c) — processing by a natural person in the course of a purely personal or household activity is outside the Regulation's scope; the admin (parent/guardian) creates the account, chooses the band and exercises parental responsibility for the child's data. **Demo-ready documentation (kept in place deliberately):** Art. 6(1)(b) contract in the parent/guardian capacity — processing necessary to provide the service the parent contracted for; legitimate-interest balancing (Art. 6(1)(f)) is refreshed for it in `docs/gdpr-governance.md` §2; the processing is not profiling and involves no Art. 22 decision-making. If the feature is ever promoted to the production demo, an Art. 8 analysis and an Age Appropriate Design Code (AADC / Children's Code) review become mandatory — see `docs/dpia.md` |
+| **Retention** | `Profile.ageBand`: deleted on self-service erasure (Phase 4) or admin deletion; 24-month inactivity purge otherwise. `MediaItem.minimumAge`/suggestions: catalogue data, deleted with the book; suggestions cleared on admin confirm/dismiss. `BlocklistGenre`: household configuration, deleted when the admin removes the genre from the blocklist. No new TTL machinery |
+| **Recipients** | Server only; the child's own session payload carries their own `ageBand` (used to render the Kids-account label and the offline ladder); the admin panel shows it to the admin |
+| **Cross-border transfer** | None |
+| **Automated decision-making** | None — the age gate is a filtering rule under parental control, not profiling or evaluation; a child's Discover shelf draws only from age-suitable suggestions and excludes unverifiable ones |
+| **System** | `server/src/age/` (`bands`, `policy`, `visibility`, `suggestion`, `blocklist`, `facts`); schema `Profile.ageBand`, `MediaItem.minimumAge`/`suggestedMinimumAge`/`suggestedMinimumAgeSource`, `BlocklistGenre`; admin routes `server/src/admin/child-accounts.ts`, `server/src/admin/age-ratings.ts`; enforcement in `routes/library.ts`, `routes/media.ts`, `routes/discover.ts`, `routes/taxonomy.ts`, `routes/progress.ts`, `routes/profiles.ts`, `routes/enrichment.ts`, `request-context.ts`; offline mirror `client/src/local/ageFilter.ts` + `local/librarySource.ts`; GDPR export selects `ageBand`; spec 38, ADR 033 |
+
+---
+
 ## Client-side processing (device-local, not on server)
 
 | Activity | Store | Protection | Notes |
@@ -211,7 +226,35 @@ None processed. WebAuthn/passkeys use cryptographic credentials only; biometric 
 
 ## Children's data
 
-No age-gating exists. The production demo is general-audience; if children use the service, an age check / parental-consent flow is required (Phase 5, P1-5).
+Kids accounts (spec 38, ADR 033) are the children's-data mechanism the audit
+was missing. A child account is a profile with `role = "child"` and a stored
+**age band** (`under-6` | `6-9` | `10-13` | `14-17`) — never a date of birth
+(data minimisation, Art. 5(1)(c)). The admin (parent/guardian) creates the
+account, chooses the band and exercises parental responsibility for the
+child's data; the household deployment is covered by Art. 2(2)(c), and the
+full documentation set (this file, retention, governance register, DPIA,
+remediation plan) is kept to demo-ready standard anyway.
+
+What the system does:
+
+- **Age ladder on books.** `MediaItem.minimumAge` (admin-set, null = unrated =
+  visible) and provider-derived **suggestions** (`suggestedMinimumAge`, never
+  auto-applied); a household **genre blocklist** (`BlocklistGenre`) hides
+  blocklisted genres from every kids account regardless of rating.
+- **Server-side filtering everywhere** for children: library grid, server
+  library, single-book routes, covers/streams/media tokens, favourites,
+  history, taxonomy counts, review queue (403) and Discover (unverifiable
+  suggestions excluded). Hidden books answer **404**.
+- **Self-service rights are unchanged**: a child exercises export, erasure and
+  rectification exactly like a member (Art. 15–17). The account is deleted by
+  the admin in the kids-accounts page or self-service via `/api/me`.
+- **Offline/Android**: the replica filters with the same ladder (rating only;
+  the genre blocklist is not evaluated offline). See `LIMITATIONS.md` §2.0.
+
+If children use the **production demo**, an Art. 8 analysis and an
+Age Appropriate Design Code review become mandatory and are tracked against
+`GDPR-AUDIT.md` P1-5 and spec 33; the current demo remains general-audience.
+The household analysis above does not extend to the hosted demo.
 
 ---
 

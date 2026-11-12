@@ -27,6 +27,10 @@ Define how long each category of personal data is kept and how expiry is enforce
 | `WebAuthnChallenge` | challenge, type, expires at | 5 minutes; single-use | `cleanupExpired()` deletes expired; consumed rows deleted after use |
 | `AdminSession` | token hash, expires at, revoked at | Same TTL rules as `Session` | `cleanupExpired()` deletes expired/revoked |
 | `AdminCredential` | password hash | Until rotated | Admin rotation only |
+| `OAuthHandoff` | sha256 code/state, pseudonymous profile id, expiry | Single-use + 60 s TTL | Consumed at exchange; expired rows swept at startup |
+| `Profile.ageBand` | the child's age band (kids accounts, spec 38) | Deleted with the profile row | Same enforcement as `Profile` (inactivity purge/erasure); included in GDPR export |
+| `MediaItem.minimumAge` / `suggestedMinimumAge` / `suggestedMinimumAgeSource` | catalogue data (not personal data) | Deleted with the book | Cleared suggestions on admin confirm/dismiss |
+| `BlocklistGenre` | household genre blocklist (not personal data) | Until admin removes it | Admin panel management; cascades with genre deletion |
 
 ---
 

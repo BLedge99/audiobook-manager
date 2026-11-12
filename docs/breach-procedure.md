@@ -1,6 +1,6 @@
 # Breach Response Procedure — GDPR Art. 33–34
 
-**Last updated:** 5 November 2026  
+**Last updated:** 12 November 2026  
 **Status:** Draft — implements Phase 8 of `docs/GDPR-REMEDIATION-PLAN.md`  
 **Owner:** Data-protection lead (see `docs/gdpr-governance.md`)  
 **Applies to:** All deployments — household and production demo
@@ -52,7 +52,7 @@ The data-protection lead assesses, without undue delay:
 |----------|-------------------|
 | What happened? | Access, alteration, deletion, disclosure, or loss of personal data |
 | Which data? | Categories (profile, session, listening history, favourites, email, etc.) and approximate number of records |
-| Which people? | Which profiles/subjects are affected; is cross-profile leakage involved? |
+| Which people? | Which profiles/subjects are affected; is cross-profile leakage involved? **Are any affected accounts kids accounts (`role = "child"`, spec 38)?** Children are higher-risk data subjects: exposure of their listening history, favourites or age band is likelier to harm a child, and the supervisory authority treats children's data as a material factor in the Art. 33 risk assessment. Any incident touching a kids account is presumptively at least a risk that must be assessed expressly against Art. 34 |
 | Likely consequences? | Identity theft, fraud, reputational harm, exposure of reading habits |
 | Is it high risk? | Art. 34 threshold — likely to result in a high risk to rights and freedoms |
 

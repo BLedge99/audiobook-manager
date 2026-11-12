@@ -48,5 +48,6 @@ No personal data is transferred outside the server's jurisdiction. Catalogue enr
 - RoPA Activity 9: `docs/roa.md` — external catalogue enrichment (no personal data sent).
 - RoPA Activity 10: `docs/roa.md` — optional AI via LM Studio (local, no personal data).
 - RoPA Activity 11: `docs/roa.md` — optional Supabase Storage sync (no personal data).
+- RoPA Activity 12: `docs/roa.md` — kids accounts (2026-11-12). Age suggestions use the same identifiers-only provider calls; no new processor, recipient or data category was introduced. Kids-account age band is processed only by the household server.
 - Governance: `docs/gdpr-governance.md` — data-protection lead owns the processor inventory.
 - Audit: `GDPR-AUDIT.md` §5 — third-party processor findings.

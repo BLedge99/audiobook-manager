@@ -1,6 +1,6 @@
 # GDPR Governance & Lawful-Basis Register
 
-**Last updated:** 2026-11-05  
+**Last updated:** 2026-11-12  
 **Status:** Draft  
 **References:** `docs/roa.md`, `GDPR-AUDIT.md`, `server/prisma/schema.prisma`
 
@@ -35,14 +35,15 @@ Each processing activity from `docs/roa.md` is mapped to its Art. 6 basis below.
 | 9 | External catalogue enrichment | N/A | No personal data is sent to third parties. |
 | 10 | Optional AI via LM Studio | N/A by default | No user personal data sent; consent only if scope changes. |
 | 11 | Optional Supabase Storage sync | N/A | No personal data processed; Supabase DPA applies if enabled. |
+| 12 | Age-appropriate content controls (kids accounts) | Art. 2(2)(c) household exemption (primary, household deployment); Art. 6(1)(b) contract in the parent/guardian capacity (demo-ready documentation) | The admin (parent/guardian) creates the account, chooses the age band and exercises parental responsibility. Not profiling or Art. 22 processing — a household filtering rule. If ever promoted to the production demo, Art. 8 + an AADC review are mandatory (tracked in `GDPR-AUDIT.md` P1-5 / spec 33). See `docs/roa.md` activity 12. |
 
 ### Legitimate-interest balancing (Art. 6(1)(f))
 
-Where legitimate interest is relied upon (activities 3, 4, 5, 7, 8):
+Where legitimate interest is relied upon (activities 3, 4, 5, 7, 8, 12):
 
-- **Purpose test:** The processing is needed for core service functionality (progress persistence, user-curated lists, security, recommendations) that users reasonably expect.
-- **Necessity test:** There is no less intrusive way to provide the service; data is profile-scoped and not shared.
-- **Balancing test:** The data is minimal, household-scoped or demo-scoped, encrypted at rest client-side, and users can erase it via self-service (Phase 4). Users can object (Art. 21) and processing will stop unless compelling legitimate grounds override.
+- **Purpose test:** The processing is needed for core service functionality (progress persistence, user-curated lists, security, recommendations) that users reasonably expect — and, for activity 12, for the safety layer the parent asked for (age-appropriate catalogue filtering for children).
+- **Necessity test:** There is no less intrusive way to provide the service; data is profile-scoped and not shared. For children, the processing stores an **age band, never a date of birth** — the least data that answers the parental question.
+- **Balancing test:** The data is minimal, household-scoped or demo-scoped, encrypted at rest client-side, and users can erase it via self-service (Phase 4). Users can object (Art. 21) and processing will stop unless compelling legitimate grounds override. For children the balancing is heightened: the band is the only age data held, the feature **reduces** exposure to unsuitable content, and no profiling, advertising or behavioural tracking is introduced.
 
 ---
 
@@ -53,6 +54,7 @@ Where legitimate interest is relied upon (activities 3, 4, 5, 7, 8):
 | Lawfulness, fairness, transparency | Lawful basis documented per activity; privacy notice pending (Phase 2) | P0-1 privacy notice |
 | Purpose limitation | Data collected for service functionality only; no secondary use | None |
 | Data minimisation | Only fields needed for the service are stored; no biometric templates; no analytics | None |
+| Data minimisation (children) | Kids accounts store an age band only — never a date of birth (spec 38) | None |
 | Accuracy | Profile name/color editable (Phase 5); history entries deletable individually | P0-5 rectification |
 | Storage limitation | No retention schedule yet | P0-6 retention (Phase 6) |
 | Integrity & confidentiality | scrypt password hashing, encrypted client cache, HttpOnly/Secure/SameSite cookies, path confinement, error hygiene | Android LAN HTTP gap (P0-5, Phase 8) |
@@ -74,6 +76,8 @@ Where legitimate interest is relied upon (activities 3, 4, 5, 7, 8):
 | Complain to supervisory authority | 77(d) | To be published in privacy notice | Phase 2 |
 
 All data-subject-rights requests go to the data-protection lead contact and must be answered within one month.
+
+Children's rights requests (spec 38): the household admin (parent/guardian) may exercise them on the child's behalf, or the child self-serves identically to a member. The export (`/api/me/export`) includes the caller's own `ageBand`; erasure cascades exactly as for any member; the band can be rectified by the admin in the kids-accounts page.
 
 ---
 
