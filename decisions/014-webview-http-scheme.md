@@ -2,9 +2,12 @@
 
 ## Status
 
-Accepted. This supersedes the earlier decision to serve the WebView over
-`http://localhost`. The app must reach a plain-HTTP home server over Wi-Fi
-without changing the origin that owns the device's localStorage and IndexedDB.
+Superseded by [ADR 031](031-native-media-proxy.md) for the media path
+(2026-11-12): `allowMixedContent` was never sufficient for media elements —
+Chrome auto-upgrades passive mixed content (audio/video/img) and blocks http
+targets with no TLS. The WebView-origin decision (`https://localhost`) stands
+unchanged; remote media now loads from the app origin via the native `_media`
+proxy. The mixed-content analysis below remains accurate for `fetch()`.
 
 ## Context
 

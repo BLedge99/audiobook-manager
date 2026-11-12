@@ -1,6 +1,18 @@
 # Plan — Android remote playback over plain-HTTP LAN via a native WebView media proxy
 
-**Date:** 2026-11-12 · **Status:** proposed (not started) · **Owner:** household
+**Date:** 2026-11-12 · **Status:** implemented and verified on-device (2026-11-12, Pixel 4a) · **Owner:** household
+
+**Result.** All phases complete. Phase 0 confirmed the diagnosis (Mixed Content:
+the media element was hard-blocked; API fetches only warned). Implemented:
+client proxy routing (9ab2af3), native interceptor + JUnit tests (ad842d5),
+e2e routing guard (874d00b), media-token profile-header fix (2188b3f),
+covers through the proxy (38029cd). Verified on a Pixel 4a over Wi-Fi:
+streamed playback, seek, chapter advance, per-track books, lock-screen
+controls, production https, downloaded fallback, fresh-profile covers;
+zero "This request has been blocked" entries post-fix. Docs: ADR 031
+(supersedes ADR 014's media-path assumption), spec 26 remote-streaming
+criteria, LIMITATIONS §1.4/§1.6. One residual item: mid-book token-expiry
+recovery is designed and unit-tested but not device-verified.
 
 ## Diagnosis evidence (Phase 0, completed 2026-11-12, Pixel 4a over WiFi)
 

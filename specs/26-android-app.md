@@ -268,6 +268,32 @@ specified in [`specs/29-offline-resilience.md`](29-offline-resilience.md):
 being unreachable never dead-ends, and the app never reports an unreadable
 library as an empty one.
 
+### Remote streaming over plain-HTTP LAN (media proxy, ADR 031 — added 2026-11-12)
+
+The household's primary setup is a phone and a server on the same Wi-Fi, with
+the server plain HTTP (`http://<lan-ip>:3001` or `:3000`). Remote playback —
+a book that is **not** downloaded — must work there. It did not: Chrome
+auto-upgrades passive mixed content (audio/video/img) from http to https from
+a secure (`https://localhost`) origin, and the LAN server has no TLS, so the
+`<audio>` element was hard-blocked before any packet left the device. The
+WebView's `allowMixedContent` covers `fetch()` only — which is why the app
+otherwise worked over the same link.
+
+Remote media now loads from the app's own origin. The shell rewrites media
+URLs to `https://localhost/_media?url=<encodeURIComponent(target)>`, answered
+by a native `MediaProxyWebViewClient` (`client/android/.../MediaProxy*.java`).
+The proxy relays **only** the media surface (`/api/audiobooks/<id>/stream`,
+`/api/audiobooks/<id>/cover`, `/api/tracks/<id>/stream`), forwards only
+`Range`/`Accept`, requires no userinfo and an IPv4/DNS host, passes
+`Content-Type`, `Content-Length`, `Content-Range`, `Accept-Ranges` through
+(200/206/416 semantics preserved), and never logs the query string. Covers go
+through the same proxy. See [`decisions/031-native-media-proxy.md`](../decisions/031-native-media-proxy.md).
+
+`/api/auth/media-token` also scopes the token to the active profile, which it
+can only read from `x-profile-id`; the client never sent it, so the mint
+returned 400 on every platform (production never noticed — https works fine
+with plain stream URLs). Fixed by `mediaAssetUrl()` sending the profile header.
+
 ## Acceptance criteria
 
 - [ ] An installable APK sideloads onto an Android device.
@@ -284,6 +310,29 @@ library as an empty one.
 - [ ] Backward progress beyond 5 minutes prompts with both positions named, and
       neither button silently overwrites.
 - [ ] The prompt is suppressed when the sync is not a regression.
+
+### Remote streaming over HTTP LAN (verified 2026-11-12, Pixel 4a, Wi-Fi, VPN off)
+
+- [x] A streamed (not downloaded) book against a plain-HTTP LAN instance plays
+      in the Android app.
+- [x] Seeking inside an undownloaded book works (Range passthrough, server 200/206/416).
+- [x] Chapter navigation and track-boundary advance work on streamed books
+      (one-file M4B and per-track books).
+- [x] Lock-screen play/pause works for streamed media.
+- [x] The https production instance still streams (uniform proxy path).
+- [x] Downloaded playback (`capacitor-file://`) is unaffected by the proxy.
+- [x] Covers render over plain http, including on a fresh profile (IndexedDB
+      cover cache previously masked the first-load breakage).
+- [x] The web/PWA build emits no `_media` URL and no other proxy code path
+      (unit tests + `e2e/native-media-proxy.spec.ts`).
+- [x] The media-token mint scopes the token to the active profile
+      (`x-profile-id`); regression test `client/src/lib/mediaAssetUrl.test.ts`.
+- [ ] Mid-book media-token expiry (>5 minutes of streaming) recovers
+      automatically via the player's error ladder (one forced reload at the
+      stored position). Designed and unit-tested (token-retry), not verified
+      on a device.
+- [ ] The proxy rejects IPv6-literal LAN hosts (documented limitation of the
+      allowlist; plain DNS/IPv4 only).
 
 ## Phases
 

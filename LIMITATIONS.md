@@ -168,6 +168,25 @@ only part of the audio, so seeking past its real end stops playback permanently
 and Play cannot recover. This looked like an app bug during the spike and was
 not. Use complete files from `test/`.
 
+**Remote streaming over plain-HTTP LAN — fixed 2026-11-12 (ADR 031).** A streamed
+(not downloaded) book against the local instance now plays in the Android app.
+Two defects were fixed: (1) the media element was pointed at an absolute
+plain-HTTP URL, which Chrome hard-blocks as auto-upgraded passive mixed content
+— the element now loads `https://localhost/_media?url=…`, a same-origin URL the
+native shell fulfils itself (Range requests pass through, so seek works); and
+(2) `mediaAssetUrl` never sent `x-profile-id`, so `/api/auth/media-token`
+answered 400 `profile_required` on every platform and scoped media tokens had
+never actually minted — production never noticed because https works with plain
+URLs. Covers go through the same proxy now, so a fresh install renders images
+over plain http too. Verified on a Pixel 4a over Wi-Fi (2026-11-12): streamed
+M4B, seek, chapter advance, lock-screen controls, per-track book, downloaded
+fallback, production https instance, fresh-profile covers. See
+[`decisions/031-native-media-proxy.md`](decisions/031-native-media-proxy.md).
+Remaining caveats: the 5-minute media token expires mid-book — the player's
+error ladder retries once with a fresh token (a single forced reload and
+position restore); IPv6-literal LAN hosts are rejected by the proxy allowlist
+(plain IPv4/DNS only); and offline downloaded playback is unchanged.
+
 ### 1.5 Listening progress is last-write-wins and can silently regress
 **Status: BROKEN — data loss.**
 
@@ -185,7 +204,7 @@ correctness problem.
 ---
 
 ### 1.6 The Android WebView would not reach a home server by LAN address
-**Status: mixed-content policy addressed in config; device verification required.**
+**Status: fetch path verified on-device (2026-11-12); media elements were a separate, invisible failure — fixed 2026-11-12 via the native media proxy (ADR 031).**
 
 A Pixel 4a with `com.google.android.webview` **154.0.8037.106** refused every
 `fetch` from the app to a LAN address. Measured, from inside the app's own
@@ -249,10 +268,32 @@ were encrypted under the previous origin's key. Recovery therefore restores
 "the book is on this phone and plays", not "where you were". Nothing is deleted
 by recovery; a folder the server does not recognise is reported and left alone.
 
+**Update (2026-11-12).** The mixed-content theory above was incomplete in a way
+that mattered. `allowMixedContent` does cover `fetch()` — which is why login,
+the library, covers (via IndexedDB) and settings worked over Wi-Fi on the
+Pixel 4a — but Chrome **auto-upgrades passive mixed content** (media elements)
+from http to https and hard-blocks it when the upgrade fails. The LAN server
+has no TLS, so the `<audio>` element pointed at the plain-HTTP stream URL was
+blocked before any packet left the device (`Mixed Content: … requested an
+insecure audio file '…/api/tracks/1/stream?media=…'. This request has been
+blocked; the content must be served over HTTPS.`), while the same URL through
+`fetch()` only logged a warning. The symptom was "spinner starts, immediately
+stops" — remote playback never happened, on any book, against any plain-HTTP
+local instance, while https production (no mixed content) and the web client
+(same-origin) worked. The fix routes native-shell media through the app origin
+(`https://localhost/_media`) fulfilled by a native `WebViewClient` interceptor;
+see [`decisions/031-native-media-proxy.md`](decisions/031-native-media-proxy.md).
+The plain-HTTP media path is now verified end to end on a Pixel 4a over Wi-Fi
+(2026-11-12): streamed M4B playback, seek, chapter advance, lock-screen
+controls, per-track books, downloaded-book fallback, production https instance,
+and covers on a fresh profile (covers also go through the proxy now).
+
 The HTTP-origin approach was previously verified on a **Motorola Defy,
 Android 11, WebView 155**, over Wi-Fi. The storage-preserving mixed-content
-configuration has **not** yet been verified on a physical device. Wi-Fi client
-isolation is a separate network-level failure; see the current device finding
+configuration is now also verified on a **Pixel 4a over Wi-Fi, 2026-11-12** —
+but the fetch-warning noise in the console is expected and permanent (see
+above): the mixed-content exemption is what allows API calls, not media loads.
+Wi-Fi client isolation is a separate network-level failure; see the current device finding
 in [`handoff.md`](./handoff.md).
 
 ### 1.7 The library is fetched before a profile exists, so progress is stale on arrival
