@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl, mediaAssetUrl, type MediaResourceKind } from "./api";
+import { isNativeShell } from "./platform";
+import { mediaProxyUrl } from "./mediaProxy";
 import type { PlaybackSource } from "./playback";
 
 /**
@@ -114,6 +116,12 @@ async function within<T>(promise: Promise<T>, ms: number): Promise<T> {
  * `mediaAssetUrl` needs the session token to mint one, which the Android shell
  * keeps in memory rather than in a cookie. A browser gets the plain URL back
  * immediately, so this costs nothing outside the shell.
+ *
+ * In the native shell the resolved URL is additionally rewritten to load from
+ * the app origin (`https://localhost/_media?url=…`) — Chrome blocks an absolute
+ * http(s) URL on the media element as mixed content or its upgrade-failure,
+ * while the same-origin proxy URL is served by the native interceptor. The web
+ * build keeps the plain URL: it is same-origin there and needs no proxy.
  */
 async function resolveRemote(source: PlaybackSource): Promise<string> {
   const plain = apiUrl(source.path);
@@ -123,11 +131,13 @@ async function resolveRemote(source: PlaybackSource): Promise<string> {
       mediaAssetUrl(source.path, remoteKind(source.kind), source.id),
       TOKEN_TIMEOUT_MS,
     );
-    return tokenUrl || plain;
+    // Either branch may be empty/relative (no server configured); mediaProxyUrl
+    // passes those through untouched.
+    return isNativeShell() ? mediaProxyUrl(tokenUrl || plain) : tokenUrl || plain;
   } catch {
     // The token is an optimisation for the shell, not a requirement of the
     // player. Fall back rather than refusing to play.
-    return plain;
+    return isNativeShell() ? mediaProxyUrl(plain) : plain;
   }
 }
 

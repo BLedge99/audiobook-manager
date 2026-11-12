@@ -10,6 +10,13 @@ import type { PlaybackSource } from "./playback";
  * fails, hangs or is not needed, which is exactly what cannot be reproduced by
  * standing up a Fastify instance.
  */
+/**
+ * The platform mock is mutable per test: the suite defaults to web behaviour
+ * (the assertions below expect plain same-origin URLs), and the native cases
+ * flip `shell.isNative` to exercise the media proxy routing.
+ */
+const shell = vi.hoisted(() => ({ isNative: false }));
+vi.mock("./platform", () => ({ isNativeShell: () => shell.isNative }));
 vi.mock("./api", () => ({
   apiUrl: (path: string) => `http://server${path}`,
   mediaAssetUrl: vi.fn(),
@@ -38,6 +45,7 @@ const trackSource: PlaybackSource = {
 
 describe("usePlayerSource", () => {
   beforeEach(() => {
+    shell.isNative = false;
     vi.mocked(mediaAssetUrl).mockReset();
     vi.mocked(mediaAssetUrl).mockImplementation(async (path: string) => `http://server${path}?media=TOKEN`);
   });
@@ -199,6 +207,72 @@ describe("usePlayerSource", () => {
     rerender({ source: trackSource });
     await waitFor(() => expect(result.current.resolved?.sourceKey).toBe("track:12"));
     expect(result.current.resolved?.local).toBe(true);
+  });
+
+  /**
+   * The Android shell must never hand the media element an absolute plain-HTTP
+   * URL: Chrome auto-upgrades it to https and blocks it, which is why remote
+   * playback died with "spinner starts then stops". The element always loads
+   * from the app origin instead (`https://localhost/_media`), which the native
+   * side fulfils. Web must keep receiving plain same-origin URLs.
+   */
+  it("routes the native-shell stream URL through the media proxy", async () => {
+    shell.isNative = true;
+    const { result } = renderHook(() => usePlayerSource({ bookId: 1, source: trackSource }));
+
+    await waitFor(() => expect(result.current.resolved).not.toBeNull());
+    const url = result.current.resolved!.url;
+    expect(url.startsWith("https://localhost/_media?url=")).toBe(true);
+    const inner = decodeURIComponent(url.slice("https://localhost/_media?url=".length));
+    expect(inner).toBe(trackStreamFor(12));
+  });
+
+  it("proxies the plain fallback URL when the token cannot be minted", async () => {
+    shell.isNative = true;
+    vi.mocked(mediaAssetUrl).mockRejectedValue(new Error("401"));
+    const { result } = renderHook(() => usePlayerSource({ bookId: 1, source: chapterBookSource }));
+
+    await waitFor(() => expect(result.current.resolved).not.toBeNull());
+    const url = result.current.resolved!.url;
+    expect(url.startsWith("https://localhost/_media?url=")).toBe(true);
+    const inner = decodeURIComponent(url.slice("https://localhost/_media?url=".length));
+    // Degraded but playable: same path, no token. The element still never sees
+    // an absolute mixed-content URL.
+    expect(inner).toBe("http://server/api/audiobooks/1/stream");
+  });
+
+  it("proxies https targets the same way (production instance)", async () => {
+    shell.isNative = true;
+    vi.mocked(mediaAssetUrl).mockImplementation(async (path: string) => `https://prod${path}?media=TOKEN`);
+    const { result } = renderHook(() => usePlayerSource({ bookId: 1, source: chapterBookSource }));
+
+    await waitFor(() => expect(result.current.resolved).not.toBeNull());
+    const url = result.current.resolved!.url;
+    expect(url.startsWith("https://localhost/_media?url=")).toBe(true);
+    const inner = decodeURIComponent(url.slice("https://localhost/_media?url=".length));
+    expect(inner).toBe("https://prod/api/audiobooks/1/stream?media=TOKEN");
+  });
+
+  it("keeps the web path untouchable: plain URL, no proxy", async () => {
+    shell.isNative = false;
+    const { result } = renderHook(() => usePlayerSource({ bookId: 1, source: trackSource }));
+
+    await waitFor(() => expect(result.current.resolved).not.toBeNull());
+    expect(result.current.resolved?.url).toBe(trackStreamFor(12));
+    expect(result.current.resolved?.url).not.toContain("_media");
+  });
+
+  it("never proxies the downloaded-file path", async () => {
+    shell.isNative = true;
+    const { result } = renderHook(() =>
+      usePlayerSource({
+        bookId: 1,
+        source: trackSource,
+        localUrlForTrack: async () => "capacitor-file://book/12.mp3",
+      }));
+
+    await waitFor(() => expect(result.current.resolved?.local).toBe(true));
+    expect(result.current.resolved?.url).toBe("capacitor-file://book/12.mp3");
   });
 
   it("mints a fresh token when asked to retry", async () => {
