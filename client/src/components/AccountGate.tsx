@@ -88,6 +88,11 @@ export function AccountGate({
   const [passkeysAvailable, setPasskeysAvailable] = useState(() => passkeysSupported());
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [oauthProviders, setOAuthProviders] = useState<string[]>([]);
+  // True from a native deep-link result until the app's probe lands and this
+  // gate unmounts. The OAuth round trip completes server-side well before the
+  // listener sees any change; without this, the screen looks dead and people
+  // tap again (spec 32 / ADR 030).
+  const [finishing, setFinishing] = useState(false);
 
   useEffect(() => { void biometricVault.available().then(setBiometricsAvailable); }, []);
 
@@ -167,12 +172,28 @@ export function AccountGate({
     if (!isNativeShell()) return;
     return subscribeNativeOAuth((result: NativeOAuthResult) => {
       if (result.kind === "ok") {
+        // Keep the gate honest for the seconds the app takes to settle:
+        // the token is already in hand and the probe is what flips this
+        // screen away. If it never resolves, an 8-second timeout returns
+        // the buttons with the reviewed failure sentence.
+        setError(undefined);
+        setFinishing(true);
         void finishRef.current(accountExperience === "demo" ? null : result.profileId, result.token);
         return;
       }
+      setFinishing(false);
       setError(errorSentenceForCode(result.code));
     });
   }, [accountExperience]);
+
+  useEffect(() => {
+    if (!finishing) return undefined;
+    const timer = window.setTimeout(() => {
+      setFinishing(false);
+      setError(copy.login.oauthFailed);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [finishing]);
 
   /**
    * Unwrap or create the offline key while the password is still in hand. A
@@ -549,7 +570,14 @@ export function AccountGate({
             </p>
           )}
 
-          {!loading && mode.kind === "list" && accountExperience === "demo" && (
+          {finishing && (
+            <p className="mt-5 flex items-center gap-2 text-sm font-bold text-ink2" role="status">
+              <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
+              {copy.login.signingIn}
+            </p>
+          )}
+
+          {!loading && !finishing && mode.kind === "list" && accountExperience === "demo" && (
             <>
               <div className="mt-5 grid min-w-0 gap-3">
                 <button type="button" onClick={() => startOAuth("google")} className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
@@ -568,7 +596,7 @@ export function AccountGate({
             </>
           )}
 
-          {!loading && mode.kind === "list" && accountExperience === "household" && (
+          {!loading && !finishing && mode.kind === "list" && accountExperience === "household" && (
             <>
               <div className="mt-5 grid min-w-0 gap-3">
                 {accounts.map((account, index) => (

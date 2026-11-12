@@ -466,6 +466,7 @@ export const copy = {
     passwordPlaceholder: "Household password",
     submit: "Sign in",
     checking: "Checking…",
+    signingIn: "Signing you in…",
     wrongPassword: "That password doesn't match. Try again.",
     unreachable: "Could not reach the server.",
     locked: (seconds: number) =>

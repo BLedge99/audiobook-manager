@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { copy } from "../copy";
 
 /**
@@ -69,7 +69,9 @@ function response(status: number, body: unknown) {
 function emit(result: NativeOAuthResult) {
   const [listener] = mocks.subscribe.mock.calls.at(-1) ?? [];
   expect(typeof listener).toBe("function");
-  (listener as (result: NativeOAuthResult) => void)(result);
+  act(() => {
+    (listener as (result: NativeOAuthResult) => void)(result);
+  });
 }
 
 beforeEach(() => {
@@ -110,6 +112,41 @@ describe("AccountGate native OAuth", () => {
     await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith("/api/auth/accounts"));
     expect(screen.queryByRole("button", { name: copy.login.oauthGoogleAction })).toBeNull();
     expect(screen.queryByRole("button", { name: copy.login.oauthGithubAction })).toBeNull();
+  });
+
+  it("shows a signing-in state and hides the controls once a native result lands", async () => {
+    render(<AccountGate accountExperience="demo" onSuccess={vi.fn()} />);
+
+    await screen.findByRole("button", { name: copy.login.oauthGoogleAction });
+    emit({ kind: "ok", token: "native-token", profileId: 42 });
+
+    expect(screen.getByText(copy.login.signingIn)).toBeInTheDocument();
+    expect(mocks.setToken).toHaveBeenCalledWith("native-token");
+    expect(screen.queryByRole("button", { name: copy.login.oauthGoogleAction })).toBeNull();
+    expect(screen.queryByRole("button", { name: copy.login.oauthGithubAction })).toBeNull();
+  });
+
+  it("returns the controls with the failure sentence if the flow never lands", async () => {
+    render(<AccountGate accountExperience="demo" onSuccess={vi.fn()} />);
+    await screen.findByRole("button", { name: copy.login.oauthGoogleAction });
+
+    // Freeze time only after the async config load has settled, so the
+    // eight-second escape hatch can be advanced without real waiting.
+    vi.useFakeTimers();
+    try {
+      const listener = mocks.subscribe.mock.calls.at(-1)![0] as (result: NativeOAuthResult) => void;
+      act(() => listener({ kind: "ok", token: "native-token", profileId: 42 }));
+      expect(screen.getByText(copy.login.signingIn)).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(8001);
+      });
+      expect(screen.queryByText(copy.login.signingIn)).toBeNull();
+      expect(screen.getByText(copy.login.oauthFailed)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: copy.login.oauthGoogleAction })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("finishes sign-in when the deep link flow resolves with a token", async () => {
