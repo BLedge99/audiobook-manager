@@ -2,6 +2,23 @@
 
 **Date:** 2026-11-12 · **Status:** proposed (not started) · **Owner:** household
 
+## Diagnosis evidence (Phase 0, completed 2026-11-12, Pixel 4a over WiFi)
+
+Confirmed on the affected phone (VPN not a factor — reachability works; local
+instance observed at `http://10.10.9.19:3001`):
+
+- Every API `fetch()` logs a *warning*: `Mixed Content: … requested an insecure
+  resource 'http://10.10.9.19:3001/api/auth/media-token'. This content should also
+  be served over HTTPS.` — fetch still succeeds (covered by `allowMixedContent`).
+- The media element logs an **error**, repeated per retry: `Mixed Content: The
+  page at 'https://localhost/' was loaded over HTTPS, but requested an insecure
+  audio file 'http://10.10.9.19:3001/api/tracks/1/stream?media=…'. **This request
+  has been blocked; the content must be served over HTTPS.**`
+- Root cause verified: Chrome auto-upgrades passive mixed content; the LAN server
+  has no TLS → audio blocked. Not a reachability/VPN/server problem.
+
+The mixed-content-media theory is confirmed; the plan proceeds as written.
+
 ## Problem
 
 Streaming books from the local instance (`http://<lan-ip>:3000`) fails in the Android
