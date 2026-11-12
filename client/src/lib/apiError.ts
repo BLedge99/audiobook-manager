@@ -71,6 +71,10 @@ export function apiErrorText(status: number, body: unknown): string {
       return copy.login.oauthFailed;
     case "oauth_rate_limited":
       return copy.login.oauthRateLimited;
+    case "oauth_handoff_invalid":
+      // Spec 32 / ADR 030: the one-time handoff code was rejected (replayed,
+      // expired, forged). Same sentence as any other failed provider attempt.
+      return copy.login.oauthFailed;
   }
 
   const key = catalogKey(code);

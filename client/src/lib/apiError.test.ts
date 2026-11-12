@@ -86,6 +86,7 @@ describe("apiErrorText", () => {
     expect(apiErrorText(400, { code: "oauth_code_exchange_failed" })).toBe(copy.login.oauthFailed);
     expect(apiErrorText(403, { code: "oauth_email_not_verified" })).toBe(copy.login.oauthEmailNotVerified);
     expect(apiErrorText(429, { code: "oauth_rate_limited" })).toBe(copy.login.oauthRateLimited);
+    expect(apiErrorText(401, { code: "oauth_handoff_invalid" })).toBe(copy.login.oauthFailed);
   });
 
   it("falls back to the generic sentence for an unknown code", () => {

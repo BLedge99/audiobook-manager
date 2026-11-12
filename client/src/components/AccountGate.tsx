@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Fingerprint, KeyRound, LoaderCircle, UserRound } from "lucide-react";
 import { copy } from "../copy";
 import {
@@ -8,7 +8,9 @@ import {
   getPendingProfileId,
   setActiveProfileId,
   setSessionToken,
+  apiUrl,
 } from "../lib/api";
+import { beginNativeOAuth, subscribeNativeOAuth, type NativeOAuthResult } from "../lib/oauthNative";
 import { errorSentenceForCode, responseErrorText } from "../lib/apiError";
 import { isNativeShell } from "../lib/platform";
 import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
@@ -154,6 +156,23 @@ export function AccountGate({
     clearPendingProfileId();
     await onSuccess({ offline });
   };
+
+  // Spec 32 / ADR 030: the native flow resolves out of process (Custom Tab →
+  // deep link). The ref keeps the latest `finish` so the subscription doesn't
+  // re-register or re-fire on every render; a cold-start result is parked in
+  // the module and delivered here once the gate mounts.
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  useEffect(() => {
+    if (!isNativeShell()) return;
+    return subscribeNativeOAuth((result: NativeOAuthResult) => {
+      if (result.kind === "ok") {
+        void finishRef.current(accountExperience === "demo" ? null : result.profileId, result.token);
+        return;
+      }
+      setError(errorSentenceForCode(result.code));
+    });
+  }, [accountExperience]);
 
   /**
    * Unwrap or create the offline key while the password is still in hand. A
@@ -443,9 +462,18 @@ export function AccountGate({
     }
   };
 
-  /** Spec 32 / ADR 023: hand off to the provider authorize endpoint. */
+  /** Spec 32 / ADR 030: native shells hand the consent page to Chrome Custom
+      Tabs and resume on a deep link; the browser navigates the WebView origin
+      (`https://localhost`), which cannot serve /api/auth/... — hence the absolute
+      `apiUrl`. The native branch never touches window.location. */
   const startOAuth = (provider: "google" | "github") => {
-    window.location.href = `/api/auth/${provider}/authorize`;
+    if (isNativeShell()) {
+      beginNativeOAuth(provider).catch(() => {
+        setError(copy.login.oauthFailed);
+      });
+      return;
+    }
+    window.location.href = apiUrl(`/api/auth/${provider}/authorize`);
   };
 
   const household = async (event: FormEvent) => {
@@ -524,12 +552,12 @@ export function AccountGate({
           {!loading && mode.kind === "list" && accountExperience === "demo" && (
             <>
               <div className="mt-5 grid min-w-0 gap-3">
-                <a href="/api/auth/google/authorize" className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                <button type="button" onClick={() => startOAuth("google")} className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
                   {copy.login.oauthGoogleAction}
-                </a>
-                <a href="/api/auth/github/authorize" className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                </button>
+                <button type="button" onClick={() => startOAuth("github")} className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
                   {copy.login.oauthGithubAction}
-                </a>
+                </button>
                 <button type="button" onClick={() => { setError(undefined); setMode({ kind: "email" }); }} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
                   {copy.login.emailAction}
                 </button>
