@@ -399,6 +399,7 @@ model Profile {
   deviceCredentials   DeviceCredential[]
   webauthnCredentials WebAuthnCredential[]
   webauthnChallenges  WebAuthnChallenge[]
+  oauthHandoffs       OAuthHandoff[]
 }
 
 // Spec 28: a database-backed sign-in, not an in-memory Set.
@@ -504,6 +505,26 @@ model WebAuthnChallenge {
   expiresAt DateTime
 
   profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+// Spec 32 / ADR 030: the Android native OAuth handoff. A Google/GitHub sign-in
+// that happens inside a Chrome Custom Tab cannot set the session cookie the
+// browser keeps, so the callback mints this instead and deep-links back to the
+// app. The app redeems the code once — 60 seconds, single-use, code and state
+// hashed at rest — and the session is created at redemption time. No token
+// ever exists at rest. Rows die on consume or in the startup sweep.
+model OAuthHandoff {
+  id         String    @id @default(uuid())
+  codeHash   String    @unique
+  stateHash  String
+  profileId  Int
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
 }

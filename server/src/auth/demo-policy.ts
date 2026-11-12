@@ -62,6 +62,7 @@ export const DEMO_POLICY_TABLE: readonly DemoPolicyEntry[] = [
   { label: "providers", method: "GET", path: pattern("/api/auth/providers"), example: "/api/auth/providers", publicApi: true, hiddenInDemo: false },
   { label: "logout", method: "POST", path: pattern("/api/auth/logout"), example: "/api/auth/logout", publicApi: true, hiddenInDemo: false },
   { label: "oauth flow", method: "*", path: /^\/api\/auth\/[^/]+\/(authorize|callback)$/, example: "/api/auth/google/authorize", publicApi: true, hiddenInDemo: false },
+  { label: "oauth handoff", method: "POST", path: pattern("/api/auth/oauth/handoff"), example: "/api/auth/oauth/handoff", payload: { code: "example", state: "example" }, publicApi: true, hiddenInDemo: false },
 
   // Public, but hidden in the demo: callable without a session, answers 404 there.
   { label: "register-profile", method: "POST", path: pattern("/api/auth/register-profile"), example: "/api/auth/register-profile", payload: { name: "Hidden", householdPassword: "hh", password: "pp" }, publicApi: true, hiddenInDemo: true },

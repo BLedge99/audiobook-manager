@@ -32,6 +32,7 @@ describe("the personal-data tables (spec 37 step 6.1)", () => {
     // The one list the export, erasure and retention purge all read. Ordered
     // children-before-profile so a delete can run without FK violations.
     expect(PROFILE_PERSONAL_DATA_MODELS).toEqual([
+      "oAuthHandoff",
       "webAuthnChallenge",
       "webAuthnCredential",
       "deviceCredential",

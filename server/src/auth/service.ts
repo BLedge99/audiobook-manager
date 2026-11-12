@@ -343,6 +343,64 @@ export class AuthService {
   }
 
   /**
+   * Native OAuth handoff (spec 32 / ADR 030): mint the single-use,
+   * 60-second, state-bound handle the Custom Tab deep-links back to the
+   * app with. Code and state are hashed at rest; neither appears anywhere
+   * else, and no token does either.
+   */
+  async createOAuthHandoff(input: { profileId: number; state: string }): Promise<{ code: string }> {
+    const code = randomBytes(32).toString("base64url");
+    await this.prisma.oAuthHandoff.create({
+      data: {
+        codeHash: hashSessionToken(code),
+        stateHash: hashSessionToken(input.state),
+        profileId: input.profileId,
+        expiresAt: new Date(this.now().getTime() + 60_000),
+      },
+    });
+    return { code };
+  }
+
+  /**
+   * Native OAuth handoff exchange. A replayed, unknown, expired or
+   * half-correct request produces no session; the session is minted here,
+   * at consumption time, so none exists anywhere before this call.
+   */
+  async consumeOAuthHandoff(input: {
+    code: string;
+    state: string;
+    meta: SessionMetadata;
+    ip: string;
+  }): Promise<LoginResult> {
+    this.checkOAuthRate(input.ip);
+    try {
+      const now = this.now();
+      const codeHash = hashSessionToken(input.code);
+      const row = await this.prisma.oAuthHandoff.findUnique({ where: { codeHash } });
+      if (!row || row.consumedAt || row.expiresAt <= now) {
+        throw new AuthFailure(401, "oauth_handoff_invalid");
+      }
+      if (!safeEqualStrings(row.stateHash, hashSessionToken(input.state))) {
+        throw new AuthFailure(400, "oauth_state_mismatch");
+      }
+      const consumed = await this.prisma.oAuthHandoff.updateMany({
+        where: { codeHash, consumedAt: null, expiresAt: { gt: now } },
+        data: { consumedAt: now },
+      });
+      if (consumed.count !== 1) {
+        throw new AuthFailure(401, "oauth_handoff_invalid");
+      }
+      const profile = await this.prisma.profile.findUnique({ where: { id: row.profileId } });
+      if (!profile || profile.disabled) throw new AuthFailure(403, "account_disabled");
+      this.clearOAuthRate(input.ip);
+      return this.createSession(profile.id, "oauth", input.meta);
+    } catch (error) {
+      this.recordOAuthFailure(input.ip);
+      throw error;
+    }
+  }
+
+  /**
    * Email + password sign-in (spec 32): the same password posture as a profile
    * sign-in, resolved by email instead of profile id. Unknown email answers the
    * same `incorrect_password` as a wrong password, so the endpoint does not

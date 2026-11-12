@@ -231,6 +231,43 @@ export async function registerAuthRoutes(
     }
   });
 
+  /**
+   * Spec 32 / ADR 030: the native handoff exchange. The Android app receives
+   * a one-time, 60-second, state-bound code in a deep link after the provider
+   * round trip inside a Chrome Custom Tab; it trades it here for the same
+   * payload the password sign-in returns. `house_session` is set as well so a
+   * plain browser context that lands on the handoff URL gets a usable session,
+   * but the app reads the body.
+   */
+  app.post<{ Body: { code: string; state: string } }>("/api/auth/oauth/handoff", {
+    schema: {
+      body: {
+        type: "object",
+        properties: {
+          code: { type: "string", minLength: 1, maxLength: 512 },
+          state: { type: "string", minLength: 1, maxLength: 128 },
+        },
+        required: ["code", "state"],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!auth.oauth.enabled) return fail(reply, 503, "oauth_not_configured");
+    try {
+      const result = await auth.consumeOAuthHandoff({
+        code: request.body.code,
+        state: request.body.state,
+        meta: metadata(request),
+        ip: request.ip,
+      });
+      setSessionCookie(reply, result.token, options);
+      await cleanupAfterLogin(auth);
+      return loginPayload(result, demoMode());
+    } catch (error) {
+      return sendAuthFailure(reply, error);
+    }
+  });
+
   app.get("/api/auth/accounts", async (_request, reply) => {
     if (demoMode()) return fail(reply, 404, "not_found");
     return auth.listAccounts();

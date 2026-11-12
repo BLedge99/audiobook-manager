@@ -9,6 +9,7 @@ import type { PrismaClient } from "@prisma/client";
  * violations.
  */
 export const PROFILE_PERSONAL_DATA_MODELS = [
+  "oAuthHandoff",
   "webAuthnChallenge",
   "webAuthnCredential",
   "deviceCredential",
@@ -33,7 +34,7 @@ export function inactiveProfileCutoff(now: Date): Date {
  * (token hashes, password hashes) are never included.
  */
 export async function exportProfilePersonalData(prisma: PrismaClient, profileId: number) {
-  const [profile, sessions, listeningHistory, playSessions, favourites, wishlistItems, libraryEntries, deviceCredentials, webAuthnCredentials, webAuthnChallenges] = await Promise.all([
+  const [profile, sessions, listeningHistory, playSessions, favourites, wishlistItems, libraryEntries, deviceCredentials, webAuthnCredentials, webAuthnChallenges, oAuthHandoffs] = await Promise.all([
     prisma.profile.findUnique({
       where: { id: profileId },
       select: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true },
@@ -83,6 +84,13 @@ export async function exportProfilePersonalData(prisma: PrismaClient, profileId:
       select: { id: true, type: true, expiresAt: true, createdAt: true },
       orderBy: { createdAt: "desc" },
     }),
+    // No code/state hashes: like token hashes, they are artefacts of a live
+    // flow, not data worth surfacing to the listener.
+    prisma.oAuthHandoff.findMany({
+      where: { profileId },
+      select: { id: true, createdAt: true, expiresAt: true, consumedAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   if (!profile) return null;
@@ -99,12 +107,14 @@ export async function exportProfilePersonalData(prisma: PrismaClient, profileId:
     deviceCredentials,
     webAuthnCredentials,
     webAuthnChallenges,
+    oAuthHandoffs,
   };
 }
 
 /** Erase every personal-data row owned by one profile (GDPR Art. 17). */
 export async function eraseProfilePersonalData(prisma: PrismaClient, profileId: number): Promise<void> {
   await prisma.$transaction([
+    prisma.oAuthHandoff.deleteMany({ where: { profileId } }),
     prisma.webAuthnChallenge.deleteMany({ where: { profileId } }),
     prisma.webAuthnCredential.deleteMany({ where: { profileId } }),
     prisma.deviceCredential.deleteMany({ where: { profileId } }),
@@ -126,6 +136,11 @@ export async function cleanupExpiredPersonalDataArtifacts(prisma: PrismaClient, 
     },
   });
   await prisma.webAuthnChallenge.deleteMany({
+    where: { expiresAt: { lt: now } },
+  });
+  // Spec 32 / ADR 030: native OAuth handoffs. Single-use and 60-second TTL;
+  // expired rows are worthless and hold only hashes and a profile id.
+  await prisma.oAuthHandoff.deleteMany({
     where: { expiresAt: { lt: now } },
   });
   await prisma.deviceCredential.deleteMany({

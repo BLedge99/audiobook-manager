@@ -970,6 +970,7 @@ describe("the route table", () => {
       "POST /api/auth/login",
       "POST /api/auth/logout",
       "POST /api/auth/media-token",
+      "POST /api/auth/oauth/handoff",
       "POST /api/auth/passkeys/login/options",
       "POST /api/auth/passkeys/login/verify",
       "POST /api/auth/passkeys/register/options",
