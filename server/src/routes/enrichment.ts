@@ -1,22 +1,24 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { fail } from "../http-errors";
 import { publicMediaItem } from "../book-payload";
 import type { EnrichmentManager } from "../metadata/run";
 import { isDemoMode } from "../auth/demo-policy";
+import { canTriggerMemberEnrich } from "../metadata/eligibility";
 
 export interface EnrichmentRouteDeps {
   prisma: PrismaClient;
   accountExperience: "household" | "demo";
   enrichment: EnrichmentManager;
   parseIdParam: (raw: string | undefined) => number | null;
+  canReadMediaItem: (request: FastifyRequest, mediaItemId: number) => Promise<boolean>;
 }
 
 export async function registerEnrichmentRoutes(
   app: FastifyInstance,
   deps: EnrichmentRouteDeps,
 ): Promise<void> {
-  const { prisma, accountExperience, enrichment, parseIdParam } = deps;
+  const { prisma, accountExperience, enrichment, parseIdParam, canReadMediaItem } = deps;
 
   // ---------------------------------------------------------------------
   // Spec 16 — metadata enrichment
@@ -35,6 +37,13 @@ export async function registerEnrichmentRoutes(
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
+    const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true, enrichmentStatus: true } });
+    if (!item) return fail(reply, 404, "audiobook_not_found");
+    const role = request.auth?.role ?? null;
+    if (!canTriggerMemberEnrich(role, item.enrichmentStatus)) {
+      return fail(reply, 403, "forbidden");
+    }
+    if (!(await canReadMediaItem(request, id))) return fail(reply, 403, "forbidden");
     const candidates = await enrichment.enrichOneNow(id);
     if (candidates === null) return fail(reply, 404, "audiobook_not_found");
     return candidates;

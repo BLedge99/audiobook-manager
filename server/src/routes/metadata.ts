@@ -9,6 +9,7 @@ import { fail } from "../http-errors";
 import { isDemoMode, type AccountExperience } from "../auth/demo-policy";
 import { LMStudioAdapter, type LLMAdapter } from "../ai/llm";
 import { applyCandidate, rowToCandidate } from "../metadata/apply";
+import { canTriggerMemberEnrich } from "../metadata/eligibility";
 import { decideOverrideAction } from "../metadata/precedence";
 import { coverFilename, fetchCover } from "../metadata/cover";
 import { trackTitleOverrideField } from "../metadata/chapters";
@@ -63,8 +64,11 @@ export async function registerMetadataRoutes(
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
-    const item = await prisma.mediaItem.findUnique({ where: { id } });
+    const item = await prisma.mediaItem.findUnique({ where: { id }, select: { id: true, enrichmentStatus: true } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
+    const role = request.auth?.role ?? null;
+    if (!canTriggerMemberEnrich(role, item.enrichmentStatus)) return fail(reply, 403, "forbidden");
+    if (!(await canReadMediaItem(request, id))) return fail(reply, 403, "forbidden");
     const rows = await prisma.metadataCandidate.findMany({
       where: { mediaItemId: id },
       orderBy: { confidence: "desc" },
@@ -105,6 +109,22 @@ export async function registerMetadataRoutes(
       description?: string;
       coverUrl?: string;
     };
+
+    const role = request.auth?.role ?? null;
+    const isMemberApply = body.candidateId !== undefined;
+    // Members may apply a stored candidate for a book that is not yet
+    // enrichment-applied (spec 28 / ADR 032). Manual edits and cover-URL
+    // overrides remain admin-only.
+    if (role !== "admin") {
+      if (isMemberApply) {
+        if (!canTriggerMemberEnrich(role, item.enrichmentStatus)) {
+          return fail(reply, 403, "forbidden");
+        }
+        if (!(await canReadMediaItem(request, id))) return fail(reply, 403, "forbidden");
+      } else {
+        return fail(reply, 403, "forbidden");
+      }
+    }
 
     const data: Record<string, unknown> = {};
 

@@ -338,7 +338,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerStaticRoutes(app, { accountExperience, oauthProviders });
   await registerMediaRoutes(app, { prisma, authEnabled, accountExperience, mediaTokenSecret, parseIdParam, optionalProfileId, requireAccountProfileId, canReadMediaItem });
   await registerLibraryRoutes(app, { prisma, accountExperience, scanner, enrichment, logger: app.log, parseIdParam, optionalProfileId, requireProfileId, requireAccountProfileId, canReadMediaItem, sendConditional });
-  await registerEnrichmentRoutes(app, { prisma, accountExperience, enrichment, parseIdParam });
+  await registerEnrichmentRoutes(app, { prisma, accountExperience, enrichment, parseIdParam, canReadMediaItem });
   await registerTaxonomyRoutes(app, { prisma, accountExperience, parseIdParam, optionalProfileId });
   await registerMetadataRoutes(app, { prisma, accountExperience, parseIdParam, canReadMediaItem, llm: options.llm });
   await registerDiscoverRoutes(app, { prisma, accountExperience, recommendations, parseIdParam, requireProfileId });
