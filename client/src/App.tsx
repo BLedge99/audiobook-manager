@@ -1082,6 +1082,7 @@ function App() {
         }
         localUrlForTrack={isNativeShell() ? device.localUrlForTrack : undefined}
         profileId={playerProfileId}
+        role={session?.role}
       />}
 
       {showSettings && (

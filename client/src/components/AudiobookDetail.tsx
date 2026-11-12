@@ -20,7 +20,17 @@ interface Candidate {
   confidence?: number;
 }
 
-function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () => void }) {
+type EligibleRole = "admin" | "member";
+
+function canLookupMetadata(book: Audiobook, role: EligibleRole): boolean {
+  // Members may look up metadata for a book that is not yet enrichment-applied
+  // (spec 28 / ADR 032); admins always may. The server enforces the same rule
+  // for the actual calls.
+  if (role === "admin") return true;
+  return (book.enrichmentStatus ?? null) !== "applied";
+}
+
+function MetadataEditor({ book, canLookup, onUpdated }: { book: Audiobook; canLookup: boolean; onUpdated: () => void }) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -57,29 +67,33 @@ function MetadataEditor({ book, onUpdated }: { book: Audiobook; onUpdated: () =>
 
   return (
     <div className="mt-6 border-t-2 border-dashed border-ink/20 pt-4">
-      <Btn size="sm" onClick={() => void enrich()} disabled={state === "loading"}>
-        <Sparkles size={15} aria-hidden="true" /> {state === "loading" ? copy.operator.metadata.lookingUp : copy.operator.metadata.lookup}
-      </Btn>
-      {state === "error" && (
-        <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">{error || copy.operator.metadata.failed}</p>
-      )}
-      {state === "ready" && (
-        <ul className="mt-3 grid gap-2">
-          {candidates.length === 0 && <li className="text-[13.5px] text-ink3">{copy.operator.metadata.noMatches}</li>}
-          {candidates.map((candidate) => (
-            <li
-              key={candidate.id}
-              className="flex items-center justify-between gap-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/20 bg-sunk px-3 py-2 text-[13.5px]"
-            >
-              <span className="min-w-0 truncate text-ink2">
-                {candidate.title} {candidate.author && <span className="text-ink3">— {candidate.author}</span>}
-                <span className="ml-2 text-[11px] font-bold uppercase text-ink3">{candidate.source}</span>
-              </span>
-              <Btn size="sm" variant="quiet" onClick={() => void apply(candidate.id)} className="shrink-0">{copy.use}</Btn>
-            </li>
-          ))}
-        </ul>
-      )}
+      {canLookup ? (
+        <>
+          <Btn size="sm" onClick={() => void enrich()} disabled={state === "loading"}>
+            <Sparkles size={15} aria-hidden="true" /> {state === "loading" ? copy.operator.metadata.lookingUp : copy.operator.metadata.lookup}
+          </Btn>
+          {state === "error" && (
+            <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">{error || copy.operator.metadata.failed}</p>
+          )}
+          {state === "ready" && (
+            <ul className="mt-3 grid gap-2">
+              {candidates.length === 0 && <li className="text-[13.5px] text-ink3">{copy.operator.metadata.noMatches}</li>}
+              {candidates.map((candidate) => (
+                <li
+                  key={candidate.id}
+                  className="flex items-center justify-between gap-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/20 bg-sunk px-3 py-2 text-[13.5px]"
+                >
+                  <span className="min-w-0 truncate text-ink2">
+                    {candidate.title} {candidate.author && <span className="text-ink3">— {candidate.author}</span>}
+                    <span className="ml-2 text-[11px] font-bold uppercase text-ink3">{candidate.source}</span>
+                  </span>
+                  <Btn size="sm" variant="quiet" onClick={() => void apply(candidate.id)} className="shrink-0">{copy.use}</Btn>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -105,11 +119,13 @@ function BookDetails({
   genres,
   tags,
   onBookUpdated,
+  canLookup,
 }: {
   book: Audiobook;
   genres: GenreNode[];
   tags: TagSummary[];
   onBookUpdated?: () => void;
+  canLookup: boolean;
 }) {
   const suite = useTagSuite(book.id);
 
@@ -119,7 +135,7 @@ function BookDetails({
           including series, description, genres, tags and narrators. */}
       <TagSuiteEditor book={book} genres={genres ?? []} tags={tags ?? []} suite={suite} onSaved={() => onBookUpdated?.()} />
 
-      <MetadataEditor book={book} onUpdated={() => onBookUpdated?.()} />
+      <MetadataEditor book={book} canLookup={canLookup} onUpdated={() => onBookUpdated?.()} />
     </>
   );
 }
@@ -140,6 +156,7 @@ export function AudiobookDetail({
   deviceAction,
   localUrlForTrack,
   profileId,
+  role,
 }: {
   book: Audiobook;
   onClose: () => void;
@@ -186,8 +203,12 @@ export function AudiobookDetail({
    * server restored from a cookie.
    */
   profileId?: string | number | null;
+  /** Session role; used only to decide whether the metadata lookup is offered. */
+  role?: EligibleRole | null;
 }) {
   const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
+  const lookupRole: EligibleRole = role === "admin" ? "admin" : "member";
+  const canLookup = canLookupMetadata(book, lookupRole);
   /**
    * Spec 15b feature 5 — the metadata lives behind a disclosure, and is not
    * rendered at all until it is opened.
@@ -375,7 +396,7 @@ export function AudiobookDetail({
 
             {detailsOpen && (
               <div id="book-details" className="mt-4 grid gap-5">
-                <BookDetails book={book} genres={genres ?? []} tags={tags ?? []} onBookUpdated={onBookUpdated} />
+                <BookDetails book={book} genres={genres ?? []} tags={tags ?? []} onBookUpdated={onBookUpdated} canLookup={canLookup} />
               </div>
             )}
           </div>

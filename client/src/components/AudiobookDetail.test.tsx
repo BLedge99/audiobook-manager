@@ -110,6 +110,22 @@ describe("AudiobookDetail", () => {
     expect(above.join(" ")).not.toMatch(/description|series|find metadata/i);
   });
 
+  it("hides Find metadata online from members once a book is enrichment-applied, but not from admins", async () => {
+    const user = userEvent.setup();
+    const applied = book({ enrichmentStatus: "applied" });
+
+    // Member session, applied book: the lookup is not offered.
+    const { rerender } = render(
+      <AudiobookDetail book={applied} onClose={() => {}} genres={[]} tags={[]} role="member" />,
+    );
+    await user.click(screen.getByRole("button", { name: /book details/i }));
+    expect(screen.queryByRole("button", { name: /find metadata online/i })).not.toBeInTheDocument();
+
+    // Admin session, applied book: the lookup is still offered.
+    rerender(<AudiobookDetail book={applied} onClose={() => {}} genres={[]} tags={[]} role="admin" />);
+    expect(screen.getByRole("button", { name: /find metadata online/i })).toBeInTheDocument();
+  });
+
   it("hides the metadata, tags and lookup until the fold is opened", async () => {
     const user = userEvent.setup();
     render(<AudiobookDetail book={book()} onClose={() => {}} genres={[]} tags={[]} />);
