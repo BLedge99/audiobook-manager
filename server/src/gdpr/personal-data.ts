@@ -37,7 +37,7 @@ export async function exportProfilePersonalData(prisma: PrismaClient, profileId:
   const [profile, sessions, listeningHistory, playSessions, favourites, wishlistItems, libraryEntries, deviceCredentials, webAuthnCredentials, webAuthnChallenges, oAuthHandoffs] = await Promise.all([
     prisma.profile.findUnique({
       where: { id: profileId },
-      select: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true },
+      select: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true, ageBand: true },
     }),
     prisma.session.findMany({
       where: { profileId },

@@ -124,6 +124,42 @@ describe("GET /api/me/export", () => {
     expect(body.wishlistItems[0].title).toBe("Wishlisted Book");
   });
 
+  it("includes the child's age band (spec 38) and nothing else new", async () => {
+    const mediaIds = await createMediaItems("child-export");
+    const profile = await prisma.profile.create({
+      data: {
+        name: "child-export",
+        role: "child",
+        ageBand: "6-9",
+        passwordHash: await hashPassword("pw-child-export"),
+        passwordUpdatedAt: new Date(),
+      },
+    });
+    const token = newSessionToken();
+    await prisma.session.create({
+      data: {
+        id: newSessionId(),
+        tokenHash: hashSessionToken(token),
+        profileId: profile.id,
+        via: "profile",
+        userAgent: "test-agent",
+        deviceLabel: "test-device",
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+      },
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/me/export",
+      headers: { [SESSION_HEADER]: token },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ profile: { ageBand?: string; role: string } }>();
+    expect(body.profile.role).toBe("child");
+    expect(body.profile.ageBand).toBe("6-9");
+  });
+
   it("never returns token hashes or password hashes", async () => {
     const mediaIds = await createMediaItems("secret");
     const owner = await createProfile("secret-owner");

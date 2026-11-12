@@ -44,6 +44,15 @@ model MediaItem {
   publishedYear     Int?     // spec 17
   language          String?  // spec 17
   unabridged        Boolean  @default(false) // spec 17
+
+  // Spec 38: age appropriateness. `minimumAge` is the confirmed, admin-set
+  // ceiling (0/4/7/9/12/16; null = unrated = visible to everyone). The
+  // `suggested*` pair carries provider-derived guesses and NEVER gates; the
+  // admin confirms (sets minimumAge) or dismisses it.
+  minimumAge              Int?
+  suggestedMinimumAge     Int?
+  suggestedMinimumAgeSource String?
+
   libraryRootId     Int
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -160,8 +169,22 @@ model Genre {
   children Genre[]         @relation("GenreTree")
   items    MediaItemGenre[]
   mappings GenreMapping[]
+  blocklistEntries BlocklistGenre[] // spec 38: hidden from every child band
 
   @@index([parentId])
+}
+
+// Spec 38: the household's genre blocklist. A book whose genre is here is
+// hidden from EVERY child account, whatever its confirmed rating. Managed
+// in the admin panel; household configuration, not personal data.
+model BlocklistGenre {
+  id        Int      @id @default(autoincrement())
+  genreId   Int      @unique
+  createdAt DateTime @default(now())
+
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@index([genreId])
 }
 
 // Correctable without a code change: maps a provider's raw string to a genre.
@@ -360,7 +383,7 @@ model Profile {
   // Spec 28 / ADR 016: a profile is an account.
   passwordHash      String?
   passwordUpdatedAt DateTime?
-  role              String    @default("member") // admin | member
+  role              String    @default("member") // admin | member | child
   disabled          Boolean   @default(false)
   failedLoginCount  Int       @default(0)
   lockedUntil       DateTime?
@@ -377,6 +400,13 @@ model Profile {
   oauthProviderId String?
   email          String?   @unique
 
+  // Spec 38 / ADR 033: a child is a profile whose role is "child".
+  // `ageBand` stores one of: under-6 (maxAge 5) | 6-9 (9) | 10-13 (13) |
+  // 14-17 (17). It exists only on child accounts (null otherwise, for
+  // members and admins). It is personal data (Art. 4(1)) -- see docs/roa.md.
+  // No date of birth is ever stored.
+  ageBand String?
+
   // Spec 27: does this profile receive newly scanned books automatically?
   //
   // The existing-vs-new distinction from the spec, made explicit. Profiles
@@ -387,6 +417,9 @@ model Profile {
   //
   // Removing a book does NOT clear this. "Archie should not have that one
   // book" is not "Archie should stop getting new books".
+  //
+  // Kids accounts (spec 38) are always created with this false; the admin
+  // "Add all age-appropriate books" action is the explicit one-shot exception.
   followsServerLibrary Boolean @default(false)
 
   listeningHistory ListeningHistory[]
