@@ -32,6 +32,7 @@
  */
 
 import { isNativeShell } from "./platform";
+import { mediaProxyUrl } from "./mediaProxy";
 import { copy } from "../copy";
 import { responseErrorText } from "./apiError";
 import { fetchWithDeadline, REQUEST_TIMEOUT_MS } from "./bounded";
@@ -612,14 +613,18 @@ export async function mediaAssetUrl(path: string, kind: MediaResourceKind, id: n
  *    `/api/audiobooks/N/cover` resolves against the WebView's `https://localhost`
  *    origin and returns the bundled `index.html`, which is not an image.
  * 2. A native request gets a short-lived resource token; the web uses its
- *    same-origin HttpOnly cookie.
+ *    same-origin HttpOnly cookie. In the shell the resolved URL is rewritten
+ *    to the app-origin media proxy (see lib/mediaProxy.ts): an absolute
+ *    http(s) `<img>` src is auto-upgraded to https by Chrome and blocked,
+ *    and the proxy keeps the image on the app origin like the media element.
  *
  * Verified against the server: 11 of 12 books have a cover file on disk and the
  * endpoint returns 200 with image bytes, so a missing cover in the UI is a
  * client-side URL bug, not missing data.
  */
-export function coverUrl(bookId: number): Promise<string> {
-  return mediaAssetUrl(`/api/audiobooks/${bookId}/cover`, "cover", bookId);
+export async function coverUrl(bookId: number): Promise<string> {
+  const url = await mediaAssetUrl(`/api/audiobooks/${bookId}/cover`, "cover", bookId);
+  return isNativeShell() ? mediaProxyUrl(url) : url;
 }
 
 

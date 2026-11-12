@@ -45,7 +45,8 @@ describe("coverUrl", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ token: "scoped-token" }) });
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(await coverUrl(7)).toBe(`${TEST_SERVER_URL}/api/audiobooks/7/cover?media=scoped-token`);
+    const coverTokenUrl = `${TEST_SERVER_URL}/api/audiobooks/7/cover?media=scoped-token`;
+    expect(await coverUrl(7)).toBe(`https://localhost/_media?url=${encodeURIComponent(coverTokenUrl)}`);
     expect(fetchMock).toHaveBeenCalledWith(`${TEST_SERVER_URL}/api/auth/media-token`, expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ kind: "cover", id: 7 }),
@@ -53,6 +54,21 @@ describe("coverUrl", () => {
 
     vi.unstubAllGlobals();
     setSessionToken(undefined);
+    delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+  });
+
+  it("serves native covers from the app origin even without a media token", async () => {
+    Object.defineProperty(window, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
+    setServerUrl(TEST_SERVER_URL);
+    setSessionToken(undefined); // shell but no in-memory token: mint is skipped
+
+    // Absolute http URLs are hard-blocked on the WebView (Chrome auto-upgrade).
+    // The proxy keeps the cover on the app origin; the native interceptor
+    // fetches it (plain response, no token — the endpoint is same-origin auth).
+    expect(await coverUrl(7)).toBe(
+      `https://localhost/_media?url=${encodeURIComponent(`${TEST_SERVER_URL}/api/audiobooks/7/cover`)}`,
+    );
+
     delete (window as unknown as { Capacitor?: unknown }).Capacitor;
   });
 });
