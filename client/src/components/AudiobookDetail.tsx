@@ -20,7 +20,8 @@ interface Candidate {
   confidence?: number;
 }
 
-type EligibleRole = "admin" | "member";
+// A kids account may look up metadata exactly like a member (spec 38 / ADR 032).
+type EligibleRole = "admin" | "member" | "child";
 
 function canLookupMetadata(book: Audiobook, role: EligibleRole): boolean {
   // Members may look up metadata for a book that is not yet enrichment-applied
@@ -207,7 +208,7 @@ export function AudiobookDetail({
   role?: EligibleRole | null;
 }) {
   const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
-  const lookupRole: EligibleRole = role === "admin" ? "admin" : "member";
+  const lookupRole: EligibleRole = role === "admin" ? "admin" : role ?? "member";
   const canLookup = canLookupMetadata(book, lookupRole);
   /**
    * Spec 15b feature 5 — the metadata lives behind a disclosure, and is not

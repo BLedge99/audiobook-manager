@@ -530,6 +530,7 @@ export const copy = {
   account: {
     demoAccount: "Demo account",
     accountMenu: "Account menu",
+    kidsAccount: "Kids account",
     signOut: "Sign out",
     intro: "Choose your profile, then enter its password.",
     passwordLabel: (name: string) => `${name}'s password`,

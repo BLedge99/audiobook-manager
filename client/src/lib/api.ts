@@ -65,13 +65,13 @@ export interface SessionProfile {
   name?: string;
   email?: string | null;
   color?: string | null;
-  role?: "admin" | "member";
+  role?: "admin" | "member" | "child";
 }
 
 export interface SessionInfo {
   authDisabled: boolean;
   profile: SessionProfile | null;
-  role: "admin" | "member";
+  role: "admin" | "member" | "child";
   via: "profile" | "household" | "device" | "oauth";
   expiresAt: string | null;
   capabilities: {
