@@ -66,6 +66,7 @@ export interface SessionProfile {
   email?: string | null;
   color?: string | null;
   role?: "admin" | "member" | "child";
+  ageBand?: string | null;
 }
 
 export interface SessionInfo {

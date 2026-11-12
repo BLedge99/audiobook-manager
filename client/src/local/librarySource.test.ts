@@ -20,6 +20,16 @@ function book(id: number, extra: Partial<Audiobook> = {}): Audiobook {
 const SERVER = "https://home.example";
 
 describe("mergeShelves", () => {
+  it("filters device-side books for a child with the offline ladder (spec 38)", () => {
+    const merged = mergeShelves(
+      null,
+      { books: [book(1, { minimumAge: 4 }), book(2, { minimumAge: 9 }), book(3, { minimumAge: null })] },
+      SERVER,
+      { role: "child", ageBand: "under-6" },
+    );
+    expect(merged.map((item) => item.id)).toEqual([1, 3]);
+  });
+
   it("prefers the server book when both shelves hold the same key", () => {
     // The server has just confirmed the shelf, so its copy is the truer one.
     const merged = mergeShelves(

@@ -28,6 +28,8 @@ in "Signed-in devices" — the panel was listing sign-ins, not devices. A sessio
 now belongs to a device. See §3 and
 [`specs/36-device-identity-and-sessions.md`](specs/36-device-identity-and-sessions.md).
 
+**Updated 2026-11-12** with the kids-accounts work (spec 38) — see §2.0.
+
 Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
 than intended · **DEFERRED** = deliberately not built.
 
@@ -379,6 +381,21 @@ is left behind.
 ---
 
 ## 2. Limited
+
+### 2.0 Kids accounts — the offline path is not the full gate
+**Status: LIMITED — rating ladder applies offline; the genre blocklist does not.**
+
+Kids accounts (spec 38) filter everything server-side, including covers,
+streams and every list. Offline (Android, server unreachable), the device
+replica filters what it renders with the same age-band ladder — a book whose
+`minimumAge` above the child's band disappears from the offline shelf. The
+household **genre blocklist is not evaluated offline**: the device does not
+carry the blocklist, so a blocklisted-but-unrated book remains visible until
+the next online refresh. Two further gaps are deliberate and documented: a
+download made **before** a book was re-rated persists until the next refresh,
+and the replica's age data is only as fresh as the last sync. The online gate
+is the authority; it is not a data seal against a determined child — it is a
+household setting, not a DRM system.
 
 ### 2.1 There is no way to obtain an Audible ASIN
 **Status: BLOCKED — verified, no free route.**

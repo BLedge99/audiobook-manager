@@ -70,6 +70,8 @@ export interface Audiobook {
   metadataSource?: string | null;
   /** null | pending | applied | review | skipped | failed (spec 16). */
   enrichmentStatus?: string | null;
+  /** Confirmed age ceiling (spec 38); null/absent = unrated = visible. */
+  minimumAge?: number | null;
   /** True when the current profile has favourited this book (spec 18). */
   favourited?: boolean;
   /**

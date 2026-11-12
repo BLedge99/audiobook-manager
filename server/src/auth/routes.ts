@@ -29,11 +29,14 @@ export interface RegisterAuthOptions {
 }
 
 function publicProfile(profile: Profile) {
+  // Spec 38: role passes through so the client can label a kids account;
+  // ageBand is the caller's own data and travels only for children.
   return {
     id: profile.id,
     name: profile.name,
     color: profile.color,
-    role: profile.role === "admin" ? "admin" : "member",
+    role: profile.role === "admin" ? "admin" : profile.role === "child" ? "child" : "member",
+    ageBand: profile.role === "child" ? profile.ageBand : null,
   };
 }
 

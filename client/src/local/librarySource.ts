@@ -13,6 +13,7 @@
  */
 import type { Audiobook } from "../types";
 import { replicaBookKey } from "./replica";
+import { filterBooksForKids } from "./ageFilter";
 
 /**
  * One shelf of books.
@@ -52,6 +53,7 @@ export function mergeShelves(
   serverShelf: LibrarySource | null,
   deviceShelf: LibrarySource,
   currentServerId: string,
+  childFilter?: { role?: string | null; ageBand?: string | null },
 ): Audiobook[] {
   const merged = new Map<string, Audiobook>();
 
@@ -66,5 +68,8 @@ export function mergeShelves(
   if (serverShelf) add(serverShelf);
   add(deviceShelf);
 
-  return [...merged.values()];
+  const books = [...merged.values()];
+  // Spec 38: the offline device shelf is filtered with the same ladder. The
+  // server shelf is already filtered server-side; this is a no-op for it.
+  return childFilter ? filterBooksForKids(books, childFilter.role, childFilter.ageBand) : books;
 }

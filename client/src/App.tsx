@@ -329,8 +329,9 @@ function App() {
         offline ? null : { books, serverId: getServerUrl() },
         { books: device.books },
         getServerUrl(),
+        session?.role === "child" ? { role: "child", ageBand: session?.profile?.ageBand ?? null } : undefined,
       ),
-    [offline, books, device.books],
+    [offline, books, device.books, session],
   );
 
   const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);

@@ -330,6 +330,16 @@ describe("kids accounts — server-side enforcement (spec 38)", () => {
     ]);
   });
 
+  it("the child's own session payload carries role=child and the band; never another profile's", async () => {
+    const kid = await createAccount("kid-session-payload", "child", "10-13");
+    const res = await app.inject({ method: "GET", url: "/api/auth/session", headers: asUser(kid.token) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ role: string; profile: { role: string; ageBand: string | null } }>()).toMatchObject({
+      role: "child",
+      profile: { role: "child", ageBand: "10-13" },
+    });
+  });
+
   it("an unauthenticated caller still gets 401 (pre-spec-38 behaviour preserved)", async () => {
     const res = await app.inject({ method: "GET", url: "/api/audiobooks" });
     expect(res.statusCode).toBe(401);

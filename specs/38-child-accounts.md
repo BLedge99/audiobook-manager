@@ -164,11 +164,13 @@ required.
 Replica rows carry `minimumAge` (the payload gains the field server-side).
 The offline library path (`local/replica.ts` → `local/librarySource.ts`)
 filters with a mirror of the same ladder in `client/src/local/ageFilter.ts`
-(pure module, unit-tested). Online filtering remains authoritative; offline
-filtering is the same rule applied to the cache. A download made **before**
-a book was re-rated persists on device until the next refresh re-evaluates
-it, and removal of the download is always available. Documented in
-`LIMITATIONS.md`.
+(pure module, unit-tested); `mergeShelves` applies it to the merged shelf
+when the session is a child. Online filtering remains authoritative; offline
+filtering applies the rating ladder only. Two gaps are deliberate: the
+household **genre blocklist is not evaluated offline** (the device does not
+carry the blocklist), and a download made **before** a book was re-rated
+persists until the next refresh re-evaluates it. Both are recorded in
+`LIMITATIONS.md` §2.0.
 
 ### ETag / caching
 
