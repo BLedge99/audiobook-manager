@@ -586,9 +586,13 @@ export type MediaResourceKind = "cover" | "book-stream" | "track-stream";
 export async function mediaAssetUrl(path: string, kind: MediaResourceKind, id: number): Promise<string> {
   const url = apiUrl(path);
   if (!isNativeShell() || !readSessionToken()) return url;
+  // The server scopes the token to the active profile, resolved from
+  // `x-profile-id` — the session token alone does not carry a profile for
+  // household sign-ins, so the mint 400s without it. Production never
+  // noticed: plain stream URLs work over https.
   const response = await boundedFetch(apiUrl("/api/auth/media-token"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...profileHeaders() },
     body: JSON.stringify({ kind, id }),
   });
   if (!response.ok) throw new Error(await responseErrorText(response));
