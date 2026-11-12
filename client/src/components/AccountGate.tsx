@@ -15,6 +15,7 @@ import { errorSentenceForCode, responseErrorText } from "../lib/apiError";
 import { isNativeShell } from "../lib/platform";
 import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
 import { deviceName, getInstallationId } from "../lib/deviceIdentity";
+import { canOpenPrivacyNotice, onPrivacyNoticeClick, privacyNoticeUrl } from "../lib/privacyNotice";
 import { deleteProfileCache, fromBase64, lockOfflineCache, rememberProfileKey, unlockProfileCacheWithKey } from "../local/privateCache";
 import { biometricVault } from "../lib/biometricVault";
 import { toBase64, exportActiveProfileKey } from "../local/privateCache";
@@ -939,12 +940,15 @@ export function AccountGate({
               {copy.operator.serverSetup.continueOffline}
             </Btn>
           )}
-          <a
-            href="/privacy"
-            className="mt-4 block text-center text-xs font-medium text-ink3 underline decoration-1 underline-offset-2 hover:text-ink"
-          >
-            {copy.privacy.link} &nbsp;·&nbsp; {copy.privacy.linkHint}
-          </a>
+          {canOpenPrivacyNotice() && (
+            <a
+              href={privacyNoticeUrl()}
+              onClick={onPrivacyNoticeClick}
+              className="mt-4 block text-center text-xs font-medium text-ink3 underline decoration-1 underline-offset-2 hover:text-ink"
+            >
+              {copy.privacy.link} &nbsp;·&nbsp; {copy.privacy.linkHint}
+            </a>
+          )}
         </div>
       </div>
     </FullScreen>

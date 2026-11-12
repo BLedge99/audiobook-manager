@@ -27,9 +27,11 @@ vi.mock("../lib/api", () => ({
   setSessionToken: mocks.setToken,
   setActiveProfileId: mocks.setProfile,
   apiUrl: (path: string) => path,
+  hasServerUrl: () => true,
   getPendingProfileId: () => window.localStorage.getItem("pendingProfileId"),
   clearPendingProfileId: () => window.localStorage.removeItem("pendingProfileId"),
 }));
+vi.mock("@capacitor/browser", () => ({ Browser: { open: vi.fn() } }));
 vi.mock("../lib/platform", () => ({ isNativeShell: () => true }));
 vi.mock("../lib/passkeys", () => ({
   PasskeyError: class PasskeyError extends Error { code = "passkey_failed"; },

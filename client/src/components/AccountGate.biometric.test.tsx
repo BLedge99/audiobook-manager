@@ -20,9 +20,12 @@ vi.mock("../lib/api", () => ({
   boundedFetch: mocks.fetch,
   setSessionToken: mocks.setToken,
   setActiveProfileId: mocks.setProfile,
+  apiUrl: (path: string) => path,
+  hasServerUrl: () => true,
   getPendingProfileId: () => window.localStorage.getItem("pendingProfileId"),
   clearPendingProfileId: () => window.localStorage.removeItem("pendingProfileId"),
 }));
+vi.mock("@capacitor/browser", () => ({ Browser: { open: vi.fn() } }));
 vi.mock("../lib/apiError", () => ({ responseErrorText: async () => "Sign in failed." }));
 vi.mock("../lib/platform", () => ({ isNativeShell: () => true }));
 vi.mock("../lib/passkeys", () => ({

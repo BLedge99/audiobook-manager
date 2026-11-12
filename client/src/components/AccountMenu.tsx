@@ -2,6 +2,7 @@ import { useState } from "react";
 import { LogOut, UserRound } from "lucide-react";
 import { copy } from "../copy";
 import { boundedFetch, lockSession, setActiveProfileId, setSessionToken, type SessionInfo } from "../lib/api";
+import { canOpenPrivacyNotice, onPrivacyNoticeClick, privacyNoticeUrl } from "../lib/privacyNotice";
 import { Btn } from "../ui/primitives";
 
 export function AccountMenu({ session }: { session: SessionInfo | null }) {
@@ -63,12 +64,15 @@ export function AccountMenu({ session }: { session: SessionInfo | null }) {
             <LogOut size={15} aria-hidden="true" />
             {copy.account.signOut}
           </Btn>
-          <a
-            href="/privacy"
-            className="block w-full text-left text-sm font-bold text-cobalt-ink underline decoration-1 underline-offset-2 px-2 py-2 rounded-xl hover:bg-ink2/10"
-          >
-            {copy.privacy.link}
-          </a>
+          {canOpenPrivacyNotice() && (
+            <a
+              href={privacyNoticeUrl()}
+              onClick={onPrivacyNoticeClick}
+              className="block w-full text-left text-sm font-bold text-cobalt-ink underline decoration-1 underline-offset-2 px-2 py-2 rounded-xl hover:bg-ink2/10"
+            >
+              {copy.privacy.link}
+            </a>
+          )}
           <Btn
             variant="quiet"
             size="sm"

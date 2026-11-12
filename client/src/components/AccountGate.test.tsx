@@ -15,9 +15,12 @@ vi.mock("../lib/api", () => ({
   fetchAppConfig: mocks.fetchAppConfig,
   setSessionToken: mocks.setToken,
   setActiveProfileId: mocks.setProfile,
+  apiUrl: (path: string) => `http://server.example:3000${path}`,
+  hasServerUrl: () => true,
   getPendingProfileId: () => window.localStorage.getItem("pendingProfileId"),
   clearPendingProfileId: () => window.localStorage.removeItem("pendingProfileId"),
 }));
+vi.mock("@capacitor/browser", () => ({ Browser: { open: vi.fn() } }));
 vi.mock("../lib/apiError", () => ({ responseErrorText: async () => "Sign in failed." }));
 vi.mock("../lib/platform", () => ({ isNativeShell: () => false }));
 vi.mock("../lib/passkeys", () => ({
@@ -73,6 +76,12 @@ describe("AccountGate continue offline", () => {
 
     fireEvent.click(continueBtn);
     expect(onContinueOffline).toHaveBeenCalledOnce();
+  });
+
+  it("links the privacy notice instead of a root-relative dead end", async () => {
+    render(<AccountGate onSuccess={vi.fn()} />);
+    const link = await screen.findByRole("link", { name: /privacy notice/i });
+    expect(link).toHaveAttribute("href", "http://server.example:3000/privacy");
   });
 
   it("offers registration instead of treating an empty account list as a dead end", async () => {
