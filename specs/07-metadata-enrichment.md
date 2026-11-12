@@ -23,9 +23,16 @@ in control.
 
 ## API deltas
 
-- `POST /api/audiobooks/:id/enrich` — fetch candidates (async OK)
-- `GET /api/audiobooks/:id/candidates`
-- `POST /api/audiobooks/:id/metadata` — apply chosen/manual override
+- `POST /api/audiobooks/:id/enrich` — fetch candidates (async OK). Member-
+  accessible for a single book not yet enrichment-applied (spec 28, ADR 032);
+  admins only for enrichment-applied books.
+- `GET /api/audiobooks/:id/candidates` — read stored candidates. Same
+  eligibility window for members; admin-only once applied.
+- `POST /api/audiobooks/:id/metadata` — apply a chosen candidate (body
+  `candidateId`) for an unenriched book. Manual field overrides (no
+  `candidateId`) stay admin-only (spec 28).
+- `POST /api/enrichment/run`, `GET /api/enrichment/status`,
+  `GET /api/enrichment/review-queue` — admin-only.
 
 ## Acceptance criteria
 

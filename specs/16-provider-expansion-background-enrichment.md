@@ -49,10 +49,15 @@ Supersedes the provider list in spec 07. Builds on ADR 008.
 
 ## API deltas
 
-- `POST /api/enrichment/run` — enqueue a pass (optionally for one book)
-- `GET /api/enrichment/status` — progress + counters
-- `GET /api/audiobooks/:id/candidates` — now returns the widened shape
-- `POST /api/audiobooks/:id/metadata` — unchanged contract, widened fields
+- `POST /api/enrichment/run` — enqueue a pass (optionally for one book) (admin-only)
+- `GET /api/enrichment/status` — progress + counters (admin-only)
+- `POST /api/audiobooks/:id/enrich` — synchronous single-book lookup; a
+  member may call this for a single book not yet enrichment-applied (spec 28,
+  ADR 032)
+- `GET /api/audiobooks/:id/candidates` — stored candidates; member-accessible
+  for an unenriched book, admin-only once applied
+- `POST /api/audiobooks/:id/metadata` — `candidateId` applies a stored candidate;
+  manual field edits are admin-only (spec 17)
 
 ## Acceptance criteria
 

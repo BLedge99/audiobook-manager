@@ -80,8 +80,9 @@ Confirmed with the household:
 
 An admin can:
 
-- scan the library, add/remove library roots and start enrichment;
+- scan the library, add/remove library roots and start (bulk) enrichment;
 - manage the genre/tag vocabulary and review queue;
+- look up and apply metadata for any book, including enrichment-applied ones;
 - create, rename and remove profiles;
 - reset a member's password and revoke their sessions and devices.
 
@@ -89,7 +90,10 @@ A member can:
 
 - read the shared catalogue and their own library;
 - change their own progress, favourites, wishlist and library membership;
-- change their own password and manage their own passkeys/devices.
+- change their own password and manage their own passkeys/devices;
+- look up and apply a **candidate** for a book that is **not yet
+  enrichment-applied** (`enrichmentStatus !== "applied"`). Manual metadata
+  edits and bulk enrichment remain admin-only.
 
 A member cannot read or write another profile's private rows. A member cannot
 call an admin route; the answer is `403 forbidden`.
@@ -459,8 +463,23 @@ Admin only:
 
 - `POST /api/auth/accounts/:id/reset`
 - `POST /api/auth/accounts/:id/unlock`
-- existing scan, enrichment, taxonomy, library-root and profile-management
-  routes.
+- existing scan, bulk enrichment, taxonomy, library-root and
+  profile-management routes.
+- Manual metadata overrides (`POST /api/audiobooks/:id/metadata` without
+  `candidateId`), metadata resets (`POST …/metadata/reset`,
+  `POST /api/metadata/reset-all`), `PUT /api/audiobooks/:id/tags`, track
+  title overrides, and enrichment runs/review queue (`POST /api/enrichment/run`,
+  `GET /api/enrichment/status`, `GET /api/enrichment/review-queue`).
+
+Member-accessible (not enrichment-applied only):
+
+- `POST /api/audiobooks/:id/enrich` — single-book lookup; rejected with 403
+  when `enrichmentStatus === "applied"`.
+- `GET /api/audiobooks/:id/candidates` — stored candidates for the same
+  eligibility window; 403 otherwise.
+- `POST /api/audiobooks/:id/metadata` with `candidateId` only — apply a known
+  candidate in that eligibility window; 403 otherwise. Without `candidateId`,
+  manual edits are admin-only (spec 16/17).
 
 The auth gate applies to `/api/` only. Static client assets and the SPA fallback
 stay public: the login screen has to load before there is a session. This also
@@ -566,8 +585,13 @@ checked against a copy of the live database before it is applied.
       password on the client.
 - [x] A member session that sends another profile's `x-profile-id` still reads
       and writes only its own progress, favourites, wishlist and library.
-- [x] A member gets 403 on scan, enrichment, taxonomy, library-root and
+- [x] A member gets 403 on scan, bulk enrichment, taxonomy, library-root and
       profile-management routes; an admin gets through.
+- [x] A member may call `POST /api/audiobooks/:id/enrich`, `GET …/candidates`
+      and `POST …/metadata` with `candidateId` only while a book is not yet
+      enrichment-applied (`enrichmentStatus !== "applied"`); they get 403
+      once the book is enrichment-applied, and an admin still can. Manual
+      metadata edits and bulk enrichment remain admin-only (see ADR 032).
 - [x] `APP_PASSWORD` still creates an admin break-glass session and can claim an
       unclaimed profile; normal profile login never asks for it.
 - [x] Five wrong passwords lock the profile; the lock doubles; a correct
