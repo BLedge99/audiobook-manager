@@ -50,6 +50,7 @@ export type ApiErrorCode =
   | "oauth_code_exchange_failed"
   | "oauth_email_not_verified"
   | "oauth_rate_limited"
+  | "oauth_handoff_invalid"
   | "account_creation_unavailable"
   | "oauth_identity_invalid"
   | "oauth_identity_unavailable"

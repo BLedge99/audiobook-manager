@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { AuthService, AuthFailure } from "./service";
 import { hashPassword } from "./password";
+import type { OAuthConfig } from "./oauth";
 import { createTestDatabase } from "../test-support/database";
 import { buildApp } from "../app";
 
@@ -16,7 +17,7 @@ let auth: AuthService;
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-const oauthFixture = {
+const oauthFixture: OAuthConfig = {
   enabled: true,
   providers: [
     {
