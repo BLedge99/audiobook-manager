@@ -30,8 +30,36 @@ function Get-Adb {
   throw "adb not found. Set ANDROID_HOME to the Android SDK, or add platform-tools to PATH."
 }
 
+function Get-NpxMinNodeVersion([int] $minimumMajor) {
+  $candidates = [System.Collections.Generic.List[string]]::new()
+  $localNpx = Join-Path $env:USERPROFILE '.local\node\npx.cmd'
+  if (Test-Path $localNpx) { $candidates.Add($localNpx) }
+  $pathNpx = Get-Command npx.cmd -ErrorAction SilentlyContinue
+  if ($pathNpx) { $candidates.Add($pathNpx.Source) }
+  $pathNpxExe = Get-Command npx -ErrorAction SilentlyContinue
+  if ($pathNpxExe) { $candidates.Add($pathNpxExe.Source) }
+
+  foreach ($candidate in ($candidates | Select-Object -Unique)) {
+    $nodeCmd = $null
+    $npxDir = Split-Path -Parent $candidate
+    $siblingNode = Join-Path $npxDir 'node.exe'
+    if (Test-Path $siblingNode) { $nodeCmd = $siblingNode }
+    if (-not $nodeCmd) {
+      $nodeFromPath = Get-Command node.exe -ErrorAction SilentlyContinue
+      if ($nodeFromPath) { $nodeCmd = $nodeFromPath.Source }
+    }
+    if (-not $nodeCmd) { continue }
+    $versionText = (& $nodeCmd -v 2>$null | Out-String).Trim()
+    if ($versionText -match '^v(\d+)') {
+      if ([int]$Matches[1] -ge $minimumMajor) { return $candidate }
+    }
+  }
+  return $null
+}
+
 $npm = Get-Command npm.cmd -ErrorAction Stop
 $npx = Get-Command npx.cmd -ErrorAction Stop
+$npxCap = Get-NpxMinNodeVersion 22
 $adb = Get-Adb
 $sdkRoot = Split-Path -Parent (Split-Path -Parent $adb)
 $env:ANDROID_HOME = $sdkRoot
@@ -80,7 +108,11 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Android web build failed with exit code $LASTEXITCODE." }
 
   Write-Host 'Syncing Capacitor Android project...'
-  & $npx.Source cap sync android
+  if (-not $npxCap) {
+    throw "Capacitor CLI requires Node.js >= 22.0.0 for 'cap sync'. Install Node 22+ (or place it in ~\.local\node) and re-run."
+  }
+  $capNpx = Get-Command $npxCap -ErrorAction Stop
+  & $capNpx.Source cap sync android
   if ($LASTEXITCODE -ne 0) { throw "Capacitor Android sync failed with exit code $LASTEXITCODE." }
 } finally {
   Pop-Location
