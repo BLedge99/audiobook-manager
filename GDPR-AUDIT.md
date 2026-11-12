@@ -40,7 +40,7 @@ This audit assesses the personal-data processing of the audiobook-manager agains
 ### 2.1 What was examined
 
 - `server/prisma/schema.prisma` and `server/prisma/sqlite/schema.prisma` — full data model
-- `server/src/auth/service.ts`, `routes.ts`, `session.ts`, `oauth.ts`, `password.ts` — auth, sessions, passkeys
+- `server/src/auth/service.ts`, `routes.ts`, `session.ts`, `oauth.ts`, `password.ts` — auth, sessions, passkeys; native OAuth handoff exchange (`POST /api/auth/oauth/handoff`, spec 32 / ADR 030) — one-time 60-second state-bound codes, sha256 at rest, session minted at exchange time, no token at rest (`prisma` model `OAuthHandoff`; retention row 13 in `docs/retention.md`).
 - `server/src/app.ts` — route handling, path confinement, error hygiene, CORS, media tokens
 - `server/src/scanner.ts`, `server/src/enrichment.ts`, `server/src/metadata/chain.ts` — scanning & external provider calls
 - `server/src/admin/supabase-storage.ts` — optional Supabase sync

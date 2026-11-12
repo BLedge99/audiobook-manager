@@ -103,6 +103,15 @@ describe("AccountGate native OAuth", () => {
     expect(mocks.begin).toHaveBeenCalledWith("github");
   });
 
+  it("household experience renders no OAuth buttons without configured providers", async () => {
+    mocks.fetchAppConfig.mockResolvedValue({ accountExperience: "household", oauthProviders: [] });
+    render(<AccountGate accountExperience="household" onSuccess={vi.fn()} />);
+
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith("/api/auth/accounts"));
+    expect(screen.queryByRole("button", { name: copy.login.oauthGoogleAction })).toBeNull();
+    expect(screen.queryByRole("button", { name: copy.login.oauthGithubAction })).toBeNull();
+  });
+
   it("finishes sign-in when the deep link flow resolves with a token", async () => {
     const onSuccess = vi.fn();
     render(<AccountGate accountExperience="demo" onSuccess={onSuccess} />);

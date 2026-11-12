@@ -150,11 +150,11 @@ generic sentence.
 - [ ] A2. Android: Custom-Tab round trip signs in with GitHub (manual device check, Phase 5).
 - [ ] A3. Android: cancelling in the provider returns to sign-in with the reviewed sentence.
 - [ ] A4. Android: deep link with a `state` mismatch — error shown, zero API calls, no token.
-- [ ] A5. Native handoff: re-using a consumed code → `401 oauth_handoff_invalid`; success case signs in via the native token path (unit).
-- [ ] A6. Native handoff: code older than the 60-second TTL → 401 (unit, injected clock).
-- [ ] A7. Native handoff endpoint is rate-limited like the other auth routes (unit).
-- [ ] A8. Web flow unchanged: existing OAuth route tests green with no cookie changes.
-- [ ] A9. Household deployment without `OAUTH_*` env: no OAuth surface, zero behaviour change (unit).
+- [x] A5. Native handoff: re-using a consumed code → `401 oauth_handoff_invalid`; success case signs in via the native token path (unit).
+- [x] A6. Native handoff: code older than the 60-second TTL → 401 (unit, injected clock).
+- [x] A7. Native handoff endpoint is rate-limited like the other auth routes (unit).
+- [x] A8. Web flow unchanged: existing OAuth route tests green with no cookie changes.
+- [x] A9. Household deployment without `OAUTH_*` env: no OAuth surface, zero behaviour change (unit).
 
 ## Testing
 
