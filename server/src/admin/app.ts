@@ -18,6 +18,8 @@ import {
   type StorageSync,
   type SupabaseStorageConfig,
 } from "./supabase-storage";
+import { registerChildAccountRoutes } from "./child-accounts";
+import { registerAgeRatingRoutes } from "./age-ratings";
 
 function routeDocs(app: FastifyInstance): { method: string | string[]; url: string; schema: unknown }[] {
   return ((app as FastifyInstance & { apiDocs?: { method: string | string[]; url: string; schema: unknown }[] }).apiDocs ?? []).map((route) => ({
@@ -71,6 +73,9 @@ export async function buildAdminApp(options: {
   });
   await app.register(cookie);
   await registerAdminAuth(app, options.auth, options.secureCookie ?? false);
+  // Spec 38: kids accounts and age ratings are operator surfaces.
+  registerChildAccountRoutes(app, { prisma: options.prisma, auth: options.auth });
+  registerAgeRatingRoutes(app, { prisma: options.prisma, auth: options.auth });
   app.get("/api/health", async () => ({ ok: true, adminConfigured: await options.auth.isConfigured() }));
   app.get("/api/admin/config", async () => ({ adminConfigured: await options.auth.isConfigured() }));
   app.get("/api/admin/status", { preHandler: requireAdminSession(options.auth) }, async () => {

@@ -13,6 +13,7 @@
 import React from "react";
 import { copyAdmin } from "./copy";
 import { adminRequest, adminRequestRaw, AdminRequestError } from "./request";
+import { KidsAccounts, AgeRatings } from "./kids";
 
 const uploadAudioExtensions = new Set(["mp3", "m4a", "m4b", "flac", "ogg", "wav", "aac"]);
 
@@ -76,7 +77,7 @@ function StatusCard({ title, children }: { title: string; children: React.ReactN
 }
 
 export function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
-  const [section, setSection] = React.useState<"overview" | "database" | "api">("overview");
+  const [section, setSection] = React.useState<"overview" | "database" | "api" | "kids" | "ratings">("overview");
   const [status, setStatus] = React.useState<Status | null>(null);
   const [roots, setRoots] = React.useState<Status["library"]["roots"]>([]);
   const [error, setError] = React.useState("");
@@ -179,9 +180,9 @@ export function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   }, []);
   return <main className="dashboard">
     <header className="topbar"><div><h1>{copyAdmin.shell.title}</h1><p>{copyAdmin.shell.subtitle}</p></div><div className="actions"><button className="secondary" onClick={() => void load()}>{copyAdmin.shell.refresh}</button><button onClick={onSignOut}>{copyAdmin.shell.signOut}</button></div></header>
-    <nav className="admin-nav" aria-label={copyAdmin.nav.label}><button className={section === "overview" ? "selected" : "secondary"} onClick={() => setSection("overview")}>{copyAdmin.nav.overview}</button><button className={section === "database" ? "selected" : "secondary"} onClick={() => setSection("database")}>{copyAdmin.nav.database}</button><button className={section === "api" ? "selected" : "secondary"} onClick={() => setSection("api")}>{copyAdmin.nav.apiDocs}</button></nav>
+    <nav className="admin-nav" aria-label={copyAdmin.nav.label}><button className={section === "overview" ? "selected" : "secondary"} onClick={() => setSection("overview")}>{copyAdmin.nav.overview}</button><button className={section === "kids" ? "selected" : "secondary"} onClick={() => setSection("kids")}>{copyAdmin.nav.kids}</button><button className={section === "ratings" ? "selected" : "secondary"} onClick={() => setSection("ratings")}>{copyAdmin.nav.ratings}</button><button className={section === "database" ? "selected" : "secondary"} onClick={() => setSection("database")}>{copyAdmin.nav.database}</button><button className={section === "api" ? "selected" : "secondary"} onClick={() => setSection("api")}>{copyAdmin.nav.apiDocs}</button></nav>
     {error && <p role="alert" className="error">{error}</p>}
-    {section === "database" ? <DatabaseExplorer /> : section === "api" ? <ApiDocs /> : !status ? <p>{copyAdmin.shell.loading}</p> : <>
+    {section === "kids" ? <KidsAccounts /> : section === "ratings" ? <AgeRatings /> : section === "database" ? <DatabaseExplorer /> : section === "api" ? <ApiDocs /> : !status ? <p>{copyAdmin.shell.loading}</p> : <>
       <div className="grid">
         <StatusCard title={copyAdmin.cards.env}><dl><dt>{copyAdmin.fields.mode}</dt><dd>{status.mode}</dd><dt>{copyAdmin.fields.remoteAccess}</dt><dd>{status.remoteAccess}</dd><dt>{copyAdmin.fields.reported}</dt><dd>{formatDate(status.generatedAt)}</dd></dl></StatusCard>
         <StatusCard title={copyAdmin.cards.server}><dl><dt>{copyAdmin.fields.health}</dt><dd><span className="good">{status.server.health}</span></dd><dt>{copyAdmin.fields.node}</dt><dd>{status.server.nodeVersion}</dd><dt>{copyAdmin.fields.platform}</dt><dd>{status.server.platform}</dd><dt>{copyAdmin.fields.uptime}</dt><dd>{Math.floor(status.server.uptimeSeconds / 3600)}h {Math.floor((status.server.uptimeSeconds % 3600) / 60)}m</dd></dl></StatusCard>

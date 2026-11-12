@@ -22,6 +22,7 @@ import {
 } from "../gdpr/personal-data";
 import type { OAuthConfig, OAuthIdentity, OAuthProvider } from "./oauth";
 import { exchangeAuthorizationCode, fetchOAuthIdentity, safeEqualStrings } from "./oauth";
+import { resetProfilePasswordCore } from "./profile-admin";
 
 export type AuthRole = "admin" | "member" | "child";
 export type AuthVia = "profile" | "household" | "device" | "oauth";
@@ -604,31 +605,7 @@ export class AuthService {
 
   async resetPassword(context: AuthContext | null, targetId: number, newPassword: string) {
     this.assertAdmin(context);
-    const target = await this.prisma.profile.findUnique({ where: { id: targetId } });
-    if (!target) throw new AuthFailure(404, "not_found");
-    this.assertPassword(newPassword, target.name);
-
-    const passwordHash = await hashPassword(newPassword);
-    const updated = await this.prisma.profile.update({
-      where: { id: target.id },
-      data: {
-        passwordHash,
-        passwordUpdatedAt: this.now(),
-        failedLoginCount: 0,
-        lockedUntil: null,
-      },
-    });
-
-    const now = this.now();
-    await this.prisma.session.updateMany({
-      where: { profileId: target.id, revokedAt: null },
-      data: { revokedAt: now },
-    });
-    await this.prisma.deviceCredential.updateMany({
-      where: { profileId: target.id, revokedAt: null },
-      data: { revokedAt: now },
-    });
-    return updated;
+    return resetProfilePasswordCore(this.prisma, targetId, newPassword, this.now());
   }
 
   async unlockProfile(context: AuthContext | null, targetId: number) {
