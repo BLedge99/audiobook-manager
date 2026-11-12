@@ -9,7 +9,6 @@ import type { ProviderCandidate } from "./types";
 
 /** Fields for a candidate, with `title` always required. */
 export type MappedFields = Partial<ProviderCandidate> & { title: string; workKey?: string };
-
 /**
  * Is this subject string obviously not a genre?
  *

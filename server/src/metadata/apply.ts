@@ -3,6 +3,7 @@ import { coverFilename, fetchCover } from "./cover";
 import { applyGenres, reconcileContributors, upsertSeries, type ContributorSpec } from "./taxonomy-service";
 import { applyChapterTitles } from "./chapters";
 import { normalizeText, type ProviderCandidate, type ProviderId } from "./types";
+import { suggestionForCandidate } from "../age/suggestion";
 import { canEnrichmentWrite } from "./precedence";
 
 /**
@@ -139,6 +140,8 @@ export async function applyCandidate(
     author: string;
     description: string | null;
     coverImagePath: string | null;
+    /** Spec 38: confirmed rating; suggestions are never written over it. */
+    minimumAge: number | null;
   },
   candidate: ProviderCandidate,
   options: {
@@ -256,6 +259,18 @@ export async function applyCandidate(
     }
     await reconcileContributors(prisma, item.id, contributors);
     fields.push("contributors");
+  }
+
+  // Spec 38: provider-derived age suggestion. Written only when the book has
+  // NO confirmed rating; confirmed ratings always win and are never touched
+  // by enrichment. Never applied as a gate — the admin confirms or dismisses.
+  if (item.minimumAge == null) {
+    const suggested = suggestionForCandidate(candidate);
+    if (suggested !== null) {
+      data.suggestedMinimumAge = suggested;
+      data.suggestedMinimumAgeSource = candidate.source;
+      fields.push("suggestedMinimumAge");
+    }
   }
 
   data.metadataSource = candidate.source;

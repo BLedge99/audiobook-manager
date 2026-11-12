@@ -224,7 +224,7 @@ export class RecommendationService {
   private childSafe(pool: ProviderCandidate[], child: ChildDiscoverFilter | undefined): ProviderCandidate[] {
     if (!child) return pool;
     return pool.filter((candidate) => {
-      const age = inferMinimumAgeFromSubjects(candidate.genres ?? []);
+      const age = inferMinimumAgeFromSubjects(candidate.subjectStrings ?? candidate.genres ?? []);
       return age !== null && age <= child.maxAge;
     });
   }

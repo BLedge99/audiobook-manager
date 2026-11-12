@@ -29,15 +29,46 @@ const SUBJECT_LADDER: ReadonlyArray<{ subjects: readonly string[]; minimumAge: n
   { subjects: ["young adult fiction", "teen literature"], minimumAge: 13 },
 ];
 
+/** Subject strings and any `--`-qualified segments ("Wizards -- Juvenile fiction"). */
+function ladderSegments(subjects: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const raw of subjects) {
+    for (const part of raw.split("--")) {
+      const normalised = normalizeSubject(part);
+      if (normalised) out.add(normalised);
+    }
+  }
+  return [...out];
+}
+
 export function inferMinimumAgeFromSubjects(subjects: readonly string[] | null | undefined): number | null {
   if (!subjects || subjects.length === 0) return null;
-  const normalised = subjects.map(normalizeSubject);
+  const segments = ladderSegments(subjects);
   for (const rule of SUBJECT_LADDER) {
     for (const subject of rule.subjects) {
-      if (normalised.includes(subject)) return rule.minimumAge;
+      if (segments.includes(subject)) return rule.minimumAge;
     }
   }
   return null;
+}
+
+/**
+ * Spec 38: the provider-derived suggestion for a candidate, or null when the
+ * providers cannot tell us anything. Google Books' MATURE flag outranks the
+ * category ladder; everything else falls back to the subject ladder (Open
+ * Library's verbatim subjects when present, else the mapped genres).
+ */
+export function suggestionForCandidate(candidate: {
+  source?: string;
+  genres?: readonly string[];
+  subjectStrings?: readonly string[];
+  maturityRating?: string;
+}): number | null {
+  if (candidate.source === "googlebooks") {
+    const fromMaturity = minimumAgeFromGoogleBooksMaturity(candidate.maturityRating);
+    if (fromMaturity !== null) return fromMaturity;
+  }
+  return inferMinimumAgeFromSubjects(candidate.subjectStrings ?? candidate.genres ?? null);
 }
 
 export function minimumAgeFromGoogleBooksMaturity(

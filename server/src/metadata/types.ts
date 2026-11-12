@@ -49,6 +49,10 @@ export interface ProviderCandidate {
   isbn?: string;
   /** Raw provider genre strings, before taxonomy mapping (spec 17). */
   genres?: string[];
+  /** Subjects verbatim, before head/qualifier splitting — kept for the age ladder. */
+  subjectStrings?: string[];
+  /** Google Books maturityRating passthrough (MATURE | NOT_MATURE | UNKNOWN). */
+  maturityRating?: string;
   coverUrl?: string;
   description?: string;
   /** Official chapter titles, when the provider has them (spec 21). */

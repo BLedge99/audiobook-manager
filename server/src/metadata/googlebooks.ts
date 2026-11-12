@@ -33,6 +33,10 @@ export function mapGoogleVolume(info: Record<string, unknown>): MappedFields {
     publishedYear: Number.isFinite(published) && published > 1400 && published <= maxYear ? published : undefined,
     // Google Books categories are BISAC-ish strings like "Juvenile Fiction".
     genres: normalizeSubjects(info.categories),
+    subjectStrings: Array.isArray(info.categories)
+      ? info.categories.filter((entry): entry is string => typeof entry === "string")
+      : undefined,
+    maturityRating: typeof info.maturityRating === "string" ? info.maturityRating : undefined,
   };
 }
 

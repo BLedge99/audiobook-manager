@@ -38,6 +38,9 @@ export function mapOpenLibraryDoc(doc: Record<string, unknown>): MappedFields {
     seriesName: firstString(doc.series_name),
     seriesPosition: parseSeriesPosition(doc.series_position),
     genres: normalizeSubjects(doc.subject),
+    subjectStrings: Array.isArray(doc.subject)
+      ? doc.subject.filter((entry): entry is string => typeof entry === "string")
+      : undefined,
     workKey: typeof doc.key === "string" ? doc.key : undefined,
   };
 }
