@@ -1,6 +1,6 @@
 # Spec: GDPR Privacy Notice & Transparency
 
-**Status:** Draft — implements GDPR remediation Phase 2  
+**Status:** Implemented — implements GDPR remediation Phase 2  
 **GDPR basis:** Art. 12–14 (transparent information, communication, modalities)
 
 ---
@@ -65,14 +65,14 @@ No personal data is collected before the notice is linked.
 
 ## 6. Acceptance criteria
 
-- [ ] `GET /privacy` returns `200` with HTML content (no session required)
-- [ ] Notice covers both household and production-demo modes
-- [ ] Notice is linked from the sign-in screen before credential entry
-- [ ] Notice is linked from the account menu
-- [ ] Cookie section discloses the session cookie as strictly necessary
-- [ ] No analytics or tracking cookies are disclosed as present (because none exist)
-- [ ] `copy.privacy` strings exist and are used by client components
-- [ ] Client copy test passes (`make check-copy`)
+- [x] `GET /privacy` returns `200` with HTML content (no session required)
+- [x] Notice covers both household and production-demo modes
+- [x] Notice is linked from the sign-in screen before credential entry
+- [x] Notice is linked from the account menu
+- [x] Cookie section discloses the session cookie as strictly necessary
+- [x] No analytics or tracking cookies are disclosed as present (because none exist)
+- [x] `copy.privacy` strings exist and are used by client components
+- [x] Client copy test passes (`make check-copy`)
 
 ---
 
