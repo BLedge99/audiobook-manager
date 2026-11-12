@@ -15,6 +15,14 @@ public class MainActivity extends BridgeActivity {
     removeStaleServiceWorkerData();
     registerPlugin(BiometricVaultPlugin.class);
     super.onCreate(savedInstanceState);
+    // Install after the WebView exists: the default client delegates asset
+    // loads and everything else to Capacitor's asset loader. Ours answers
+    // /_media itself (native fetch of the configured server) and defers the
+    // rest. Without this, the <audio> is fed an absolute http URL, which
+    // Chrome blocks as mixed content.
+    if (bridge != null) {
+      bridge.setWebViewClient(new MediaProxyWebViewClient(bridge));
+    }
   }
 
   private void removeStaleServiceWorkerData() {
