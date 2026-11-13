@@ -7,6 +7,44 @@
       "skillPath": "skills/design-mobile-apps/SKILL.md",
       "computedHash": "30bfa26c39e384af50d5ca2a9da7c39e239ce822f5e3fd2a31e8e6b55d3679ac"
     },
+    "grilling": {
+      "source": "registry:mattpocock/grilling",
+      "commit_sha": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+      "digest": "sha256:61c73eafe5ff0d4c76e8511bef1bb67f688b942f8fb1998c04510c8c0b9bb2c9",
+      "agents": [
+        "claude-code",
+        "codex",
+        "opencode",
+        "github-copilot",
+        "antigravity-cli"
+      ],
+      "mode": {
+        "claude-code": "junction",
+        "codex": "canonical",
+        "opencode": "junction",
+        "github-copilot": "junction",
+        "antigravity-cli": "canonical"
+      }
+    },
+    "improve-codebase-architecture": {
+      "source": "registry:mattpocock/improve-codebase-architecture",
+      "commit_sha": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+      "digest": "sha256:5e1cf0e387d9a9b0c1180ba7468ac8dd2b1776f6c05cc50e028849509d3c3d19",
+      "agents": [
+        "claude-code",
+        "codex",
+        "opencode",
+        "github-copilot",
+        "antigravity-cli"
+      ],
+      "mode": {
+        "claude-code": "junction",
+        "codex": "canonical",
+        "opencode": "junction",
+        "github-copilot": "junction",
+        "antigravity-cli": "canonical"
+      }
+    },
     "optimize": {
       "source": "registry:kursku/optimize",
       "commit_sha": "c4dcbb2355d898186449bba9df2a0aa311e59e27",
