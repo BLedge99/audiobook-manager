@@ -26,12 +26,16 @@
  *   data (progress, favourites) can be read. It is `false` when the cache is
  *   absent, when no profile is known, or when the listener chose to listen
  *   without unlocking. The shelf still works: the replica is not private.
+ * - `browserNotice` — a browser has no on-device library, so "No books
+ *   downloaded" would be the wrong sentence there. The notice keeps both
+ *   exits (retry, change server) and says the honest thing.
  */
 
 export type OfflineScreen =
   | { kind: "waiting" }
   | { kind: "libraryReadFailed" }
   | { kind: "unlock" }
+  | { kind: "browserNotice" }
   | { kind: "shell"; progressAvailable: boolean };
 
 /** Whether this device can prove it holds the profile's key. */
@@ -50,6 +54,8 @@ export interface OfflineGateInput {
   unlocked: boolean;
   /** The listener chose "listen without progress" from the unlock screen. */
   skippedUnlock: boolean;
+  /** The app runs inside the native shell, so an on-device library exists. */
+  isNativeShell: boolean;
 }
 
 export function offlineScreen(input: OfflineGateInput): OfflineScreen {
@@ -75,7 +81,13 @@ export function offlineScreen(input: OfflineGateInput): OfflineScreen {
     return { kind: "unlock" };
   }
 
-  // 4. Everything else is the app itself. Progress is available exactly when a
+  // 4. A browser has no on-device library, so an empty shelf is not "no
+  //    books downloaded" — it is a browser. The notice keeps both exits.
+  if (input.booksOnDevice === 0 && !input.isNativeShell) {
+    return { kind: "browserNotice" };
+  }
+
+  // 5. Everything else is the app itself. Progress is available exactly when a
   //    key is in memory -- never as a promise the app cannot keep.
   return { kind: "shell", progressAvailable: input.unlocked };
 }

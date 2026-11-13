@@ -1163,6 +1163,41 @@ describe("the route table", () => {
       "PUT /api/wishlist/:id/owned",
     ]);
   });
+
+  it("declares a schema on every mutating route that accepts input", () => {
+    const docs = (app as unknown as {
+      apiDocs: { method: string | string[]; url: string; schema?: Record<string, unknown> }[];
+    }).apiDocs;
+    // No client input: nothing to validate. The admin proxy routes forward
+    // arbitrary bodies to the admin listener, which validates there.
+    const NO_INPUT = new Set([
+      // No input at all: nothing to validate.
+      "POST /api/auth/logout",
+      "POST /api/auth/passkeys/register/options",
+      "DELETE /api/auth/sessions/others",
+      "POST /api/metadata/reset-all",
+      "DELETE /api/me",
+      // The admin proxy forwards arbitrary bodies to the admin listener,
+      // which validates there.
+      "POST /api/admin",
+      "PUT /api/admin",
+      "PATCH /api/admin",
+      "DELETE /api/admin",
+      "POST /api/admin/*",
+      "PUT /api/admin/*",
+      "PATCH /api/admin/*",
+      "DELETE /api/admin/*",
+    ]);
+    const byMethod = (route: { method: string | string[] }) =>
+      (Array.isArray(route.method) ? route.method : [route.method]);
+    const missing = docs
+      .flatMap((route) => byMethod(route).map((method) => ({ method, url: route.url, schema: route.schema })))
+      .filter(({ method }) => ["POST", "PUT", "PATCH", "DELETE"].includes(method))
+      .filter(({ method, url }) => !NO_INPUT.has(`${method} ${url}`))
+      .filter(({ schema }) => !schema || Object.keys(schema).length === 0)
+      .map(({ method, url }) => `${method} ${url}`);
+    expect(missing.sort()).toEqual([]);
+  });
 });
 
 describe("media streaming content types and caching", () => {

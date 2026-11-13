@@ -50,7 +50,7 @@ export async function registerTaxonomyRoutes(
     }));
   });
 
-  app.post("/api/genres", {
+  app.post<{ Body: { slug: string; name: string; parentId?: number; sortOrder?: number } }>("/api/genres", {
     schema: {
       body: {
         type: "object",
@@ -66,7 +66,7 @@ export async function registerTaxonomyRoutes(
     },
   }, async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
-    const body = request.body as { slug: string; name: string; parentId?: number; sortOrder?: number };
+    const body = request.body;
     const existing = await prisma.genre.findUnique({ where: { slug: body.slug } });
     if (existing) return fail(reply, 409, "genre_slug_taken");
     if (body.parentId) {
@@ -76,7 +76,7 @@ export async function registerTaxonomyRoutes(
     return prisma.genre.create({ data: body });
   });
 
-  app.patch<{ Params: { id: string } }>("/api/genres/:id", {
+  app.patch<{ Params: { id: string }; Body: { name?: string; parentId?: number; sortOrder?: number } }>("/api/genres/:id", {
     schema: {
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
       body: {
@@ -95,7 +95,13 @@ export async function registerTaxonomyRoutes(
     if (id === null) return fail(reply, 400, "invalid_id");
     const genre = await prisma.genre.findUnique({ where: { id } });
     if (!genre) return fail(reply, 404, "genre_not_found");
-    return prisma.genre.update({ where: { id }, data: request.body as Record<string, unknown> });
+    // Pick schema-whitelisted fields explicitly; never pass the raw body to Prisma.
+    const { name, parentId, sortOrder } = request.body;
+    const data: { name?: string; parentId?: number; sortOrder?: number } = {};
+    if (name !== undefined) data.name = name;
+    if (parentId !== undefined) data.parentId = parentId;
+    if (sortOrder !== undefined) data.sortOrder = sortOrder;
+    return prisma.genre.update({ where: { id }, data });
   });
 
   app.delete<{ Params: { id: string } }>("/api/genres/:id", {
@@ -134,7 +140,7 @@ export async function registerTaxonomyRoutes(
     return tags.map((tag) => ({ id: tag.id, name: tag.name, count: scopedCounts ? scopedCounts.get(tag.id) ?? 0 : tag._count.items }));
   });
 
-  app.post("/api/tags", {
+  app.post<{ Body: { name: string } }>("/api/tags", {
     schema: {
       body: {
         type: "object",
@@ -145,13 +151,13 @@ export async function registerTaxonomyRoutes(
     },
   }, async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
-    const body = request.body as { name: string };
+    const body = request.body;
     const result = await createTag(prisma, body.name, optionalProfileId(request));
     if ("reason" in result) return fail(reply, 409, "tag_name_rejected", { reason: result.reason });
     return reply.code(result.created ? 201 : 200).send(result.tag);
   });
 
-  app.patch<{ Params: { id: string } }>("/api/tags/:id", {
+  app.patch<{ Params: { id: string }; Body: { name: string } }>("/api/tags/:id", {
     schema: {
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
       body: {
@@ -165,7 +171,7 @@ export async function registerTaxonomyRoutes(
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
-    const result = await renameTag(prisma, id, (request.body as { name: string }).name);
+    const result = await renameTag(prisma, id, request.body.name);
     if ("reason" in result) return fail(reply, 409, "tag_name_rejected", { reason: result.reason });
     return result.tag;
   });
@@ -183,7 +189,7 @@ export async function registerTaxonomyRoutes(
     return { deleted: true };
   });
 
-  app.post<{ Params: { id: string } }>("/api/tags/:id/merge", {
+  app.post<{ Params: { id: string }; Body: { targetTagId: number } }>("/api/tags/:id/merge", {
     schema: {
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
       body: {
@@ -197,7 +203,7 @@ export async function registerTaxonomyRoutes(
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
-    const { targetTagId } = request.body as { targetTagId: number };
+    const { targetTagId } = request.body;
     const result = await mergeTags(prisma, id, targetTagId);
     if ("reason" in result) {
       const status = result.reason === "not-found" ? 404 : 400;

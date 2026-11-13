@@ -78,7 +78,14 @@ export async function registerMetadataRoutes(
     return rows.map(({ raw: _raw, providerKey: _key, ...rest }) => rest);
   });
 
-  app.post<{ Params: { id: string }; Body: unknown }>("/api/audiobooks/:id/metadata", {
+  app.post<{ Params: { id: string }; Body: {
+    candidateId?: number;
+    title?: string;
+    author?: string;
+    narrator?: string;
+    description?: string;
+    coverUrl?: string;
+  } }>("/api/audiobooks/:id/metadata", {
     schema: {
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
       body: {
@@ -101,14 +108,7 @@ export async function registerMetadataRoutes(
     const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
 
-    const body = (request.body ?? {}) as {
-      candidateId?: number;
-      title?: string;
-      author?: string;
-      narrator?: string;
-      description?: string;
-      coverUrl?: string;
-    };
+    const body = request.body ?? {};
 
     const role = request.auth?.role ?? null;
     const isMemberApply = body.candidateId !== undefined;
@@ -245,7 +245,22 @@ export async function registerMetadataRoutes(
    * once, and mixing it with separate per-concern routes made it possible to
    * half-apply an edit.
    */
-  app.put<{ Params: { id: string }; Body: unknown }>("/api/audiobooks/:id/tags", {
+  app.put<{ Params: { id: string }; Body: {
+    title?: string;
+    subtitle?: string;
+    author?: string;
+    narrator?: string;
+    description?: string;
+    publisher?: string;
+    publishedYear?: number;
+    language?: string;
+    unabridged?: boolean;
+    isbn?: string;
+    seriesName?: string;
+    seriesPosition?: number;
+    genreIds?: number[];
+    tagIds?: number[];
+  } }>("/api/audiobooks/:id/tags", {
     schema: {
       params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
       body: {
@@ -277,7 +292,7 @@ export async function registerMetadataRoutes(
     const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
 
-    const body = request.body as Record<string, unknown>;
+    const body = request.body ?? {};
     const data: Record<string, unknown> = {};
     const overrideFields: string[] = [];
 
@@ -291,17 +306,18 @@ export async function registerMetadataRoutes(
       ["language", "language"],
       ["isbn", "isbn"],
     ] as const) {
-      if (body[field] !== undefined) {
-        data[column] = String(body[field]).trim() || null;
+      const value = body[field];
+      if (value !== undefined) {
+        data[column] = value.trim() || null;
         overrideFields.push(field);
       }
     }
     if (body.publishedYear !== undefined) {
-      data.publishedYear = body.publishedYear as number;
+      data.publishedYear = body.publishedYear;
       overrideFields.push("publishedYear");
     }
     if (body.unabridged !== undefined) {
-      data.unabridged = Boolean(body.unabridged);
+      data.unabridged = body.unabridged;
       overrideFields.push("unabridged");
     }
 
@@ -316,23 +332,23 @@ export async function registerMetadataRoutes(
       overrideFields.push("seriesName");
     }
     if (body.seriesPosition !== undefined) {
-      data.seriesPosition = body.seriesPosition as number;
+      data.seriesPosition = body.seriesPosition;
       overrideFields.push("seriesPosition");
     }
 
     if (Array.isArray(body.genreIds)) {
       if (body.genreIds.length > 0) {
-        const found = await prisma.genre.count({ where: { id: { in: body.genreIds as number[] } } });
-        if (found !== (body.genreIds as number[]).length) {
+        const found = await prisma.genre.count({ where: { id: { in: body.genreIds } } });
+        if (found !== body.genreIds.length) {
           return fail(reply, 400, "unknown_genre_id");
         }
       }
       // A user-chosen genre set replaces the provider's entirely, and is
       // recorded with source "user" so enrichment cannot revoke it.
       await prisma.mediaItemGenre.deleteMany({ where: { mediaItemId: id } });
-      if ((body.genreIds as number[]).length > 0) {
+      if (body.genreIds.length > 0) {
         await prisma.mediaItemGenre.createMany({
-          data: (body.genreIds as number[]).map((genreId) => ({ mediaItemId: id, genreId, source: "user" })),
+          data: body.genreIds.map((genreId) => ({ mediaItemId: id, genreId, source: "user" })),
         });
       }
     }
@@ -340,7 +356,7 @@ export async function registerMetadataRoutes(
     // Spec 18: custom tags. User data, so no override row is needed and
     // enrichment never touches these.
     if (Array.isArray(body.tagIds)) {
-      const tagIds = [...new Set(body.tagIds as number[])];
+      const tagIds = [...new Set(body.tagIds)];
       if (tagIds.length > 0) {
         const found = await prisma.tag.count({ where: { id: { in: tagIds } } });
         if (found !== tagIds.length) return fail(reply, 400, "unknown_tag_id");
@@ -442,7 +458,7 @@ export async function registerMetadataRoutes(
       if (!track) return fail(reply, 404, "track_not_found");
 
       const field = trackTitleOverrideField(trackNumber);
-      const raw = (request.body as { title?: unknown } | undefined)?.title;
+      const raw = request.body?.title;
       const title = typeof raw === "string" ? raw.trim() : null;
 
       // Clearing releases the override and restores whatever the file's own tags
@@ -465,7 +481,11 @@ export async function registerMetadataRoutes(
   );
 
   // AI: optional metadata match assistant (works only if LM Studio is up)
-  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/ai-suggest", async (request, reply) => {
+  app.post<{ Params: { id: string } }>("/api/audiobooks/:id/ai-suggest", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");

@@ -201,7 +201,7 @@ export async function registerLibraryRoutes(
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id", async (request, reply) => {
     // Number("abc") is NaN, which Prisma turns into a 500. Validate like the
     // other id routes so a bad id is a 400/404, not a server error.
-    const id = parseIdParam((request.params as { id: string }).id);
+    const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({
       where: { id },

@@ -28,7 +28,7 @@ all but the live IdP verification now landed):
 | Providers (Google + GitHub) | Accepted; shipped (PKCE + server state + token exchange + identity validation) |
 | Email/password sign-in wiring | Accepted (verification and reset deferred); minimal wiring shipped, end-to-end deferred |
 | Offline | Not needed for the online demo; passwordless accounts stay passwordless |
-| Android | Native (Android) flow specified 2026-11-11 (ADR 030; plan: [`docs/android-native-oauth-plan.md`](../docs/android-native-oauth-plan.md)); implementation in progress. Web remains the reference audience |
+| Android | Native (Android) flow specified 2026-11-11 (ADR 036; plan: [`docs/android-native-oauth-plan.md`](../docs/android-native-oauth-plan.md)); implementation in progress. Web remains the reference audience |
 
 The phases landed in order: docs (ADR 023, this spec, roadmap, LIMITATIONS),
 server foundation (schema delta, service, routes, errors, gate, sessions,
@@ -61,7 +61,7 @@ real Google/GitHub IdP verification checklist (see Testing).
 
 ## Native (Android) flow
 
-Spec extension 2026-11-11 (ADR [`decisions/030-android-native-oauth.md`](../decisions/030-android-native-oauth.md); phased plan in [`docs/android-native-oauth-plan.md`](../docs/android-native-oauth-plan.md)). The Android app cannot use the in-WebView redirect flow: Google blocks embedded user-agents outright (`disallowed_useragent`), and the native client never reads the cross-site session cookie by design. RFC 8252 mandates an external user-agent, so the native flow reuses the existing provider leg and adds a one-time, state-bound handoff back into the app:
+Spec extension 2026-11-11 (ADR [`decisions/036-android-native-oauth.md`](../decisions/036-android-native-oauth.md); phased plan in [`docs/android-native-oauth-plan.md`](../docs/android-native-oauth-plan.md)). The Android app cannot use the in-WebView redirect flow: Google blocks embedded user-agents outright (`disallowed_useragent`), and the native client never reads the cross-site session cookie by design. RFC 8252 mandates an external user-agent, so the native flow reuses the existing provider leg and adds a one-time, state-bound handoff back into the app:
 
 1. The app opens **Chrome Custom Tabs** at `{serverUrl}/api/auth/:provider/authorize?client=native&state=<app-generated random state>` via `@capacitor/browser`. (`client=web` is the default; anything else → 400.)
 2. The server keeps today's PKCE + HttpOnly `oauth_state`/`oauth_code_verifier` as-is, plus a short-lived `oauth_app_state` cookie memorising the app-generated `state`. **Nothing else changes for the provider leg.**
@@ -86,7 +86,7 @@ model Profile {
   email          String?
 }
 
-// Native flow (ADR 030), additive:
+// Native flow (ADR 036), additive:
 model OAuthHandoff {
   id          String    @id @default(uuid())
   codeHash    String    @unique  // sha256(handoff code)

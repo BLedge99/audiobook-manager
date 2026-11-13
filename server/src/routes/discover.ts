@@ -161,7 +161,20 @@ export async function registerDiscoverRoutes(
     return items.map(publicWishlistItem);
   });
 
-  app.post("/api/wishlist", {
+  app.post<{ Body: {
+      title: string;
+      author?: string;
+      narrators?: string[];
+      description?: string;
+      coverUrl?: string;
+      genres?: string[];
+      seriesName?: string;
+      publisher?: string;
+      publishedYear?: number;
+      provider: string;
+      providerKey: string;
+      seedMediaItemId?: number;
+    } }>("/api/wishlist", {
     schema: {
       body: {
         type: "object",
@@ -186,20 +199,7 @@ export async function registerDiscoverRoutes(
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
-    const body = request.body as {
-      title: string;
-      author?: string;
-      narrators?: string[];
-      description?: string;
-      coverUrl?: string;
-      genres?: string[];
-      seriesName?: string;
-      publisher?: string;
-      publishedYear?: number;
-      provider: string;
-      providerKey: string;
-      seedMediaItemId?: number;
-    };
+    const body = request.body;
 
     const item = await recommendations.saveToWishlist(
       profileId,
@@ -223,14 +223,21 @@ export async function registerDiscoverRoutes(
     return { deleted: true };
   });
 
-  app.put<{ Params: { id: string } }>("/api/wishlist/:id/owned", {
-    schema: { params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] } },
+  app.put<{ Params: { id: string }; Body: { owned?: boolean } }>("/api/wishlist/:id/owned", {
+    schema: {
+      params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+      body: {
+        type: "object",
+        properties: { owned: { type: "boolean" } },
+        additionalProperties: false,
+      },
+    },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
-    const owned = (request.body as { owned?: boolean } | undefined)?.owned ?? true;
+    const owned = request.body?.owned ?? true;
 
     const result = await prisma.wishlistItem.updateMany({ where: { id, profileId }, data: { owned } });
     if (result.count === 0) return fail(reply, 404, "wishlist_item_not_found");

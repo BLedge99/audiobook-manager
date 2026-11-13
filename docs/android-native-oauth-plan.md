@@ -95,7 +95,7 @@ The provider leg keeps today's server-side PKCE S256 + HttpOnly `oauth_state` /
 `oauth_code_verifier` cookies, untouched. No provider client re-registration:
 `redirect_uri` stays `{origin}/api/auth/{provider}/callback`.
 
-### Rejected alternatives (ADR 030 content)
+### Rejected alternatives (ADR 036 content)
 
 - **Embedded WebView flow** — blocked by Google since 2021
   (`disallowed_useragent`); GitHub proceeds but cannot seed the native session.
@@ -116,7 +116,7 @@ The provider leg keeps today's server-side PKCE S256 + HttpOnly `oauth_state` /
 
 ```prisma
 /// Single-use handle for handing an OAuth identity to the Android shell after
-/// the system-browser round trip (ADR 030 / spec 32 native flow). Carries no
+/// the system-browser round trip (ADR 036 / spec 32 native flow). Carries no
 /// token at rest: the session is minted at exchange time, once the caller
 /// proves it holds the one-time code and the matching app-generated state.
 /// Plaintext exists only inside the deep link and the exchange request;
@@ -137,14 +137,14 @@ The session table stores tokens as `sha256` hashes ([`server/src/auth/session.ts
 ## Phases (strict TDD: red → implement → green → commit/push at each checkpoint)
 
 ### Phase 0 — Specification and decision (no runtime code)
-Files: new ADR (`decisions/030-android-native-oauth.md`), extended
+Files: new ADR (`decisions/036-android-native-oauth.md`), extended
 `specs/32-oauth-email-signin.md` (new "Native flow" section; lift the "Android:
 out of scope" lines), `docs/roa.md`, `docs/retention.md`, `LIMITATIONS.md` row.
 
 1. Extend spec 32 with the native contract: deep-link shape, single-use/TTL/
    state rules, error codes (`auth_error` arrives in the deep link, app renders
    the matching reviewed sentence), and the acceptance criteria below.
-2. Write ADR 030 capturing the decision, rejected alternatives, and threats.
+2. Write ADR 036 capturing the decision, rejected alternatives, and threats.
 3. GDPR delta entries (lawful basis, retention, DSR) in the two docs above.
 4. Verification checklist for spec 32 + this file copied into the spec's own
    checklist. **Commit + push.**
@@ -280,7 +280,7 @@ Tests written first (vitest + Testing Library, plugins mocked with
    `state` deep link → error text, no token; kill app during consent; relaunch →
    handoff consumed exactly once; household server (no `OAUTH_*`) → buttons
    absent.
-3. `LIMITATIONS.md` spec-32 row → native OAuth implemented (refs ADR 030,
+3. `LIMITATIONS.md` spec-32 row → native OAuth implemented (refs ADR 036,
    spec 32); `GDPR-AUDIT.md` auth file list if it enumerates auth files;
    `README_technical.md` Android row; spec 32 checklist ticks. **Commit + push.**
 
@@ -289,7 +289,7 @@ HTTPS App Links for the **production demo host only**: `assetlinks.json` served
 from the prod server's `.well-known`, an `autoVerify` intent filter for
 `https://<demo-host>/oauth/callback`, deep-link delivery without a custom scheme
 (RFC 8252 §7.2). Household LANs never qualify; this changes nothing for them.
-If taken as a follow-up it is its own ADR + spec edit, referencing ADR 030.
+If taken as a follow-up it is its own ADR + spec edit, referencing ADR 036.
 
 ## Testing doctrine (as requested: tests before code, run red first)
 
@@ -338,6 +338,6 @@ spec 02 test infra — are not weakened or re-baselined to make green.
 
 ## Suggested spec/ADR numbering
 
-- `decisions/030-android-native-oauth.md`
+- `decisions/036-android-native-oauth.md`
 - Spec 32 extended in place (not a new spec) — the feature *is* the OAuth spec,
   extended to its last un-shipped platform.

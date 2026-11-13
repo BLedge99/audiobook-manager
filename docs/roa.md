@@ -53,7 +53,7 @@ with `profileId`-bearing models in the schema.
 | **Recipients** | Server only; session token in HttpOnly cookie (browser) or memory (Android) |
 | **Cross-border transfer** | None |
 | **Automated decision-making** | None |
-| **System** | `server/src/auth/service.ts`, `routes.ts`, `session.ts`, `oauth.ts`, `passkeys.ts`; native handoff: `routes.ts` (`POST /api/auth/oauth/handoff`), `server/prisma/schema.prisma` model `OAuthHandoff` (ADR 030) |
+| **System** | `server/src/auth/service.ts`, `routes.ts`, `session.ts`, `oauth.ts`, `passkeys.ts`; native handoff: `routes.ts` (`POST /api/auth/oauth/handoff`), `server/prisma/schema.prisma` model `OAuthHandoff` (ADR 036) |
 
 ---
 

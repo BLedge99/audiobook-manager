@@ -29,10 +29,7 @@ vi.mock("./reachability", () => ({
 function baseOptions(): UseSessionOptions {
   return {
     offlineModeRef: { current: false },
-    accountExperience: "household",
-    session: null,
-    authed: undefined,
-    serverReachable: undefined,
+    getAccountExperience: () => "household",
     setServerReachable: vi.fn(),
     setAuthed: vi.fn(),
     setSession: vi.fn(),
@@ -106,6 +103,18 @@ describe("useSession", () => {
     // The stored hint is the break-glass fallback, not garbage: it survives an
     // unreachable server.
     expect(options.setProfileId).toHaveBeenCalledWith("3");
+    unmount();
+  });
+
+  it("clears the stored profile hint when the server is unreachable in demo mode", async () => {
+    vi.mocked(probeServer).mockResolvedValue({ reachable: false, authed: false });
+    vi.mocked(fetchAppConfig).mockResolvedValue({ accountExperience: "demo", oauthProviders: [] });
+
+    const options = baseOptions();
+    options.getAccountExperience = () => "demo";
+    const { unmount } = renderHook(() => useSession(options));
+
+    await waitFor(() => expect(options.setProfileId).toHaveBeenCalledWith(null));
     unmount();
   });
 });
