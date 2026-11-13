@@ -358,9 +358,36 @@ button:focus {
 
 /* The capsule: a canted acrylic shell. This is the signature move, so it gets
    a real material -- tinted acrylic over the cover, a crown seam, screw
-   dimples, and an inset specular highlight along the top edge. */
+   dimples, and an inset specular highlight along the top edge.
+
+   The cant lives on the SHELL (the ::before), never on the card's layout
+   box. A rotated box paints past its own bounds by roughly
+   (width/2)·sin(3°) -- about 7px on a 330px card -- which is how canted
+   neighbours used to crowd each other's gaps no matter how much room the
+   scroll rails reserved, and why cards "escaped" the .scroll-bleed rule:
+   that rule fixes clipping *inside* a scroller, not overlap *between*
+   siblings. With the shell inset inside its box, the layout box is the
+   truth for snapping, outlines, gaps and clipping, and the overhang is
+   absorbed by the inset instead of by the neighbourhood. */
 .capsule {
   position: relative;
+  isolation: isolate;
+  border: 0;
+  background: transparent;
+  transform: none;
+  border-radius: var(--r-pod);
+  transition: transform var(--t-base) var(--ease-pop);
+  /* Offscreen cards in a 1,500-book grid are skipped for rendering, not
+     hidden from AT or find-in-page. `auto` remembers the last rendered size;
+     ~330px is the pre-measure estimate, close to a phone 2-across capsule. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 330px;
+}
+.capsule::before {
+  content: "";
+  position: absolute;
+  inset: var(--tilt-clear, 6px);
+  z-index: -1;
   border-radius: var(--r-pod);
   border: var(--stroke) solid var(--ink);
   background: var(--surface);
@@ -371,21 +398,24 @@ button:focus {
   box-shadow:
     0 2px 0 -1px color-mix(in srgb, var(--ink) 26%, transparent),
     0 12px 20px -16px color-mix(in srgb, var(--ink) 80%, transparent);
-  /* Offscreen cards in a 1,500-book grid are skipped for rendering, not
-     hidden from AT or find-in-page. `auto` remembers the last rendered size;
-     ~330px is the pre-measure estimate, close to a phone 2-across capsule. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 330px;
 }
 .capsule:hover,
 .capsule:focus-within {
-  transform: rotate(0deg) translateY(-3px);
+  transform: translateY(-3px);
+}
+.capsule:hover::before,
+.capsule:focus-within::before {
+  transform: rotate(0deg);
   box-shadow:
     0 4px 0 -1px color-mix(in srgb, var(--ink) 30%, transparent),
     0 18px 28px -18px color-mix(in srgb, var(--ink) 85%, transparent);
 }
-.capsule--alt {
+.capsule--alt::before {
   transform: rotate(var(--cant-alt));
+}
+.capsule--alt:hover::before,
+.capsule--alt:focus-within::before {
+  transform: rotate(0deg);
 }
 .capsule__gloss {
   position: absolute;
