@@ -46,6 +46,25 @@
         </provider>
     </application>
 
+    <!-- Spec 39 / ADR 034: external books + buy links launch the store apps
+         with an explicit package. Android 11+ needs package visibility for
+         PackageManager queries; launching itself never needs it. No
+         QUERY_ALL_PACKAGES — only the stores this feature can target. -->
+    <queries>
+        <package android:name="com.audible.application" />
+        <package android:name="com.audible.application.samsung" />
+        <package android:name="com.audible.universal" />
+        <package android:name="com.google.android.apps.books" />
+        <package android:name="com.google.android.apps.books.next" />
+        <package android:name="com.kobobooks.android" />
+        <package android:name="fm.libro.librofm" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

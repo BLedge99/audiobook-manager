@@ -353,6 +353,45 @@ export const copy = {
     },
   },
 
+  /** Spec 39: books you own in other stores, shown on the device, never on the server. */
+  external: {
+    heading: "From your other apps",
+    addButton: "Own it elsewhere?",
+    addTitle: "Add a book you own elsewhere",
+    addBody: "Paste the link to the book's page in Audible, Google Play Books, Kobo or Libro.fm. We'll show it on this device and open it in that app when you want to listen — we can't play it here, because the store owns the audio.",
+    pastePlaceholder: "Paste the book's page link",
+    add: "Add to my list",
+    adding: "Adding…",
+    cancel: "Cancel",
+    storeUnknownTitle: "A book from a store",
+    previewLine: (store: string) => `This book lives in ${store}. Tap below to open it there.`,
+    openIn: (store: string) => `Opens in ${store}`,
+    getStore: (store: string) => `Get ${store} on Google Play`,
+    remove: "Remove",
+    removeConfirm: "Remove?",
+    removeConfirmYes: "Remove this book",
+    invalidLink: "We couldn't recognise that link. Paste the book's page link from Audible, Google Play Books, Kobo or Libro.fm.",
+    launchFailed: "We couldn't open that app. The book's page is in your browser instead.",
+    addedNotice: "Added to your list",
+    emptyHeading: "Your other apps",
+    titleField: "Title",
+    authorField: "Author (optional)",
+  },
+
+  /** Spec 39: where to buy or borrow a Discover book. We never show a price. */
+  buyLinks: {
+    getButton: "Get this book",
+    sheetTitle: "Get this book",
+    checkPrice: "Check price →",
+    adCue: "Ad · we may earn a commission",
+    freeLabel: "Free — public domain",
+    freeCopy: "Public-domain recording hosted by LibriVox and the Internet Archive. Legal status of the text varies by country. Source: LibriVox.",
+    disclosure: (networks: string) =>
+      `Purchases made through marked links earn the app a commission (${networks}). Purchases made through other links earn nothing. We never show prices, and nothing about your tap is sent to us.`,
+    disclosureNoNetworks: "We do not earn a commission from any of these links. We never show prices, and nothing about your tap is sent to us.",
+    close: "Close",
+  },
+
   favourites: {
     heading: "Favourites",
     /**
