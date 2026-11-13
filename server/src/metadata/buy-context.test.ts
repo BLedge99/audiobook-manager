@@ -42,7 +42,7 @@ const WILDE_PAGE_RSS_ONLY = {
 };
 
 function stubFetch(body: unknown, status = 200) {
-  const spy = vi.fn(async () =>
+  const spy = vi.fn(async (_url: unknown) =>
     new Response(typeof body === "string" ? body : JSON.stringify(body), { status }),
   );
   vi.stubGlobal("fetch", spy);
