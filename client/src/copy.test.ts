@@ -173,6 +173,8 @@ const ICU_PENDING = [
   "copy.external.getStore",
   "copy.external.openIn",
   "copy.external.previewLine",
+  "copy.external.openNamed",
+  "copy.external.removeNamed",
   "copy.discover.reason.favouriteAuthor",
   "copy.discover.reason.series",
   "copy.discover.reason.sharedGenre",

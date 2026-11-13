@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass, Heart, Library, LayoutGrid, RefreshCw, WifiOff, Server, Settings as GearIcon } from "lucide-react";
+import { Compass, Heart, Library, LayoutGrid, RefreshCw, WifiOff, Server, Settings as GearIcon, Link2 } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
 import { Discover } from "./components/Discover";
@@ -55,6 +55,11 @@ import { useSession } from "./lib/useSession";
 import { getServerUrl } from "./lib/api";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
 import { useDeviceLibrary } from "./local/useDeviceLibrary";
+import { useExternalItems } from "./local/useExternalItems";
+import { ExternalBooks, AddExternalBookDialog } from "./components/ExternalBooks";
+import { EXTERNAL_STORES } from "./lib/externalStores";
+import { launchStoreLink } from "./lib/externalIntent";
+import type { ExternalItem } from "./local/db";
 import { mergeShelves } from "./local/librarySource";
 import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
@@ -105,6 +110,31 @@ function App() {
     refreshForProfile,
   } = library;
   const device = useDeviceLibrary(isNativeShell());
+  const {
+    items: externalItems,
+    add: addExternalRaw,
+    remove: removeExternalRaw,
+  } = useExternalItems();
+  const [addExternalOpen, setAddExternalOpen] = useState(false);
+  /** Set when every launch rung failed — the listener deserves an answer, not silence. */
+  const [externalLaunchFailed, setExternalLaunchFailed] = useState(false);
+  const openExternal = useCallback((item: ExternalItem) => {
+    const def = EXTERNAL_STORES[item.store];
+    void launchStoreLink(item.httpsUrl, { packageName: def.packageName }).then((ok) => {
+      setExternalLaunchFailed(!ok);
+    });
+  }, []);
+  const removeExternal = useCallback(
+    async (id: string) => {
+      await removeExternalRaw(id);
+    },
+    [removeExternalRaw],
+  );
+  const addExternal = useCallback(
+    (url: string, overrides: { title?: string; author?: string | null }) =>
+      addExternalRaw(url, overrides),
+    [addExternalRaw],
+  );
   const discover = useDiscover();
   // Read the device cover cache into memory once, before the grid renders its
   // first card (spec 15b feature 1). Without this a cold start asks IndexedDB
@@ -895,7 +925,17 @@ function App() {
               what they have, not what the operator maintains.
             */}
             <ContinueListening books={inProgressBooks(libraryBooks)} onSelect={setSelectedBook} />
-            <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
+              </div>
+              {/* Spec 39: books the listener owns elsewhere — never the server, never playable */}
+              {session?.role !== "child" && (
+                <Btn variant="quiet" size="sm" className="shrink-0" onClick={() => setAddExternalOpen(true)}>
+                  <Link2 size={15} aria-hidden="true" /> {copy.external.addButton}
+                </Btn>
+              )}
+            </div>
             <section>
               <MachineHead
                 title={copy.library.heading}
@@ -957,6 +997,18 @@ function App() {
                 />
               )}
             </section>
+
+            {/* Spec 39 — the external shelf. Not searchable, not filterable, never on the server. */}
+            {session?.role !== "child" && search.trim().length === 0 && (
+              <>
+                <ExternalBooks role={session?.role} items={externalItems} onLaunch={openExternal} onRemove={removeExternal} />
+                {externalLaunchFailed && (
+                  <Notice tone="warn" className="mt-3">
+                    {copy.external.launchFailed}
+                  </Notice>
+                )}
+              </>
+            )}
 
             {canManageLibrary && browse.enrichment && browse.enrichment.status !== "idle" && (
               <Notice className="mb-4">
@@ -1085,6 +1137,13 @@ function App() {
         profileId={playerProfileId}
         role={session?.role}
       />}
+
+      <AddExternalBookDialog
+        open={addExternalOpen}
+        role={session?.role}
+        onClose={() => setAddExternalOpen(false)}
+        onAdd={addExternal}
+      />
 
       {showSettings && (
         <Settings

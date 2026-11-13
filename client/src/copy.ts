@@ -358,6 +358,8 @@ export const copy = {
     heading: "From your other apps",
     addButton: "Own it elsewhere?",
     addTitle: "Add a book you own elsewhere",
+    openNamed: (title: string, store: string) => `Open ${title} in ${store}`,
+    removeNamed: (title: string) => `Remove ${title} from your list`,
     addBody: "Paste the link to the book's page in Audible, Google Play Books, Kobo or Libro.fm. We'll show it on this device and open it in that app when you want to listen — we can't play it here, because the store owns the audio.",
     pastePlaceholder: "Paste the book's page link",
     add: "Add to my list",
@@ -387,7 +389,7 @@ export const copy = {
     freeLabel: "Free — public domain",
     freeCopy: "Public-domain recording hosted by LibriVox and the Internet Archive. Legal status of the text varies by country. Source: LibriVox.",
     disclosure: (networks: string) =>
-      `Purchases made through marked links earn the app a commission (${networks}). Purchases made through other links earn nothing. We never show prices, and nothing about your tap is sent to us.`,
+      `Some of these links earn us a commission (${networks}). Taps tell us nothing. We never show prices.`,
     disclosureNoNetworks: "We do not earn a commission from any of these links. We never show prices, and nothing about your tap is sent to us.",
     close: "Close",
   },
