@@ -288,12 +288,18 @@ export function AgeRatings() {
         <div>
           <strong>{book.title}</strong>
           <p>{book.author ? copyAdmin.ratings.titleAuthor(book.title, book.author) : book.title}</p>
-          <p>{book.suggestedMinimumAge !== null && book.suggestedMinimumAgeSource ? copyAdmin.ratings.suggestionBadge(book.suggestedMinimumAge, book.suggestedMinimumAgeSource) : copyAdmin.ratings.unrated}</p>
+          <p>
+            {book.minimumAge === null ? copyAdmin.ratings.unrated : copyAdmin.ratings.confirmedRating(book.minimumAge)}
+          </p>
+          {book.suggestedMinimumAge !== null && book.suggestedMinimumAgeSource && (
+            <p>{copyAdmin.ratings.suggestionBadge(book.suggestedMinimumAge, book.suggestedMinimumAgeSource)}</p>
+          )}
         </div>
         <div className="root-buttons" role="group" aria-label={book.title}>
           {LADDER.map((age) => (
             <button
               key={age}
+              aria-pressed={book.minimumAge === age}
               className={book.minimumAge === age ? "" : "secondary"}
               disabled={working}
               onClick={() => void setRating(book, age)}

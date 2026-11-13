@@ -249,6 +249,7 @@ export const copyAdmin = {
     empty: "No books match that search.",
     titleAuthor: (title: string, author: string) => `${title} — ${author}`,
     suggestionBadge: (age: number, source: string) => `Suggested ${age}+ by ${source}`,
+    confirmedRating: (age: number) => `Confirmed ${age}+`,
     unrated: "Unrated",
     ladder: (age: number) => `${age}+`,
     clear: "Clear (unrated)",
