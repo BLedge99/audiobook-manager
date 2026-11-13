@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
+import { isFromThisServer } from "../lib/api";
 import { seriesPosition, type Shelf } from "../lib/browse";
 import { copy, plural } from "../copy";
 import { CapsuleMarks, MachineHead, ShellCover, cn } from "../ui/primitives";
@@ -41,7 +42,7 @@ function ShelfCard({
     <article className={cn("capsule group relative w-[136px] shrink-0 p-2 sm:w-[168px]", index % 2 && "capsule--alt")}>
       <button onClick={() => onSelect(book)} className="block w-full text-left">
         <span className="relative block">
-          <ShellCover bookId={book.id} className="w-full" />
+          <ShellCover bookId={book.id} serverId={book.serverId} className="w-full" />
           <CapsuleMarks />
         </span>
         <h3 className="mt-2 line-clamp-2 min-h-[2.3em] font-display text-[13.5px] font-semibold leading-tight text-ink">
@@ -49,7 +50,7 @@ function ShelfCard({
         </h3>
         <p className="truncate text-[11.5px] text-ink2">{book.author}</p>
       </button>
-      {onToggleFavourite && (
+      {onToggleFavourite && isFromThisServer(book) && (
         <div className="absolute right-3 top-3 max-sm:opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100">
           <FavouriteButton favourited={Boolean(favourited)} onToggle={onToggleFavourite} label={book.title} />
         </div>

@@ -50,6 +50,7 @@ vi.mock("./lib/api", () => ({
   apiUrl: (path: string) => `https://a.example${path}`,
   onServerUnreachable: vi.fn(() => () => {}),
   setAccountExperience: vi.fn(),
+  isFromThisServer: (book: { serverId?: string }) => (book.serverId ?? "https://a.example") === "https://a.example",
   getActiveProfileId: vi.fn(() => "3"),
   getActiveProfileIdNumber: vi.fn(() => 3),
   setActiveProfileId: vi.fn(),

@@ -61,7 +61,11 @@ export function mergeShelves(
     for (const book of source.books) {
       const serverId = source.serverId ?? book.serverId ?? currentServerId;
       const key = replicaBookKey(serverId, book.id);
-      if (!merged.has(key)) merged.set(key, book);
+      // The server matters as much as the id to every consumer downstream of
+      // this list (covers, favourites, progress): unstamped books would look
+      // like this server's books. Same book from two shelves keeps the first
+      // (server) copy; a foreign book carries its own server.
+      if (!merged.has(key)) merged.set(key, { ...book, serverId });
     }
   };
 

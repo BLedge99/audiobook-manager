@@ -100,9 +100,17 @@ export type CoverState =
 const ABSENT: CoverState = Object.freeze({ status: "absent" });
 const LOADING: CoverState = Object.freeze({ status: "loading" });
 
-/** Cache key for a book's own cover, served by the API. */
-export function bookCoverKey(bookId: number): string {
-  return `book:${bookId}`;
+/**
+ * Cache key for a book's own cover, served by the API.
+ *
+ * Scoped by server, the same way replica rows are: two different servers can
+ * both number their books from 1, and a bare id let one server's cover show on
+ * another server's book — cached, so sticky. The default keeps a browser with
+ * no configured base (same-origin) working; callers rendering merged shelves
+ * pass the book's own serverId.
+ */
+export function bookCoverKey(bookId: number, serverId: string = ""): string {
+  return `book:${serverId}#${bookId}`;
 }
 
 /** Cache key for a cover referenced by URL, which is what Discover and the wishlist carry. */
@@ -112,7 +120,15 @@ export function urlCoverKey(href: string): string {
 
 /** The network URL a key refers to, or undefined for a key with none. */
 async function networkUrl(key: string): Promise<string | undefined> {
-  if (key.startsWith("book:")) return coverUrl(Number(key.slice("book:".length)));
+  if (key.startsWith("book:")) {
+    // book:<serverId>#<id> — the server segment may be empty (the same-origin
+    // browser base); the rest is the numeric id.
+    const rest = key.slice("book:".length);
+    const split = rest.lastIndexOf("#");
+    if (split === -1) return undefined;
+    const serverId = rest.slice(0, split);
+    return coverUrl(Number(rest.slice(split + 1)), serverId);
+  }
   if (key.startsWith("url:")) return key.slice("url:".length);
   return undefined;
 }

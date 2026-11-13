@@ -3,6 +3,7 @@ import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Sun, Moon } from "lucide-react";
 import { CoverImage, bookCoverKey } from "../local/CoverImage";
+import { getServerUrl } from "../lib/api";
 import { copy } from "../copy";
 import { useLightEffects, useTheme } from "./theme";
 
@@ -239,10 +240,13 @@ export function shellTint(seed: number) {
  */
 export function ShellCover({
   bookId,
+  serverId,
   className,
   ratio = "2 / 3",
 }: {
   bookId: number;
+  /** Which server the book lives on; defaults to the connected one. */
+  serverId?: string;
   className?: string;
   ratio?: string;
 }) {
@@ -254,7 +258,7 @@ export function ShellCover({
         with `display: contents` has no box at all -- so it never intersects and
         no cover is ever fetched. The shell's own CSS fills this wrapper.
       */}
-      <CoverImage cacheKey={bookCoverKey(bookId)} />
+      <CoverImage cacheKey={bookCoverKey(bookId, serverId ?? getServerUrl())} />
       <span className="shell-art__tint" aria-hidden="true" />
       <span className="capsule__gloss" aria-hidden="true" />
     </span>

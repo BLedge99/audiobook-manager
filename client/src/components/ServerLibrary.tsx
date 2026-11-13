@@ -248,7 +248,7 @@ function OfflineServerLibrary({
                 <li key={book.id} className="min-w-0">
                   <div className="panel flex min-w-0 items-center gap-3 p-2">
                     <span className="w-12 shrink-0">
-                      <ShellCover bookId={book.id} className="w-full" />
+                      <ShellCover bookId={book.id} serverId={book.serverId} className="w-full" />
                     </span>
                     <span className="min-w-0 flex-1">
                       {/* The title opens the book, the way it does everywhere
@@ -341,7 +341,7 @@ function ServerLibraryRow({
         )}
       >
         <span className="w-12 shrink-0">
-          <ShellCover bookId={book.id} className="w-full" />
+          <ShellCover bookId={book.id} serverId={book.serverId} className="w-full" />
         </span>
         <span className="min-w-0 flex-1">
           {/* The title is the button that opens the book, the way every other

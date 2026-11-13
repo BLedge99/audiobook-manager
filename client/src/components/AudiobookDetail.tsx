@@ -2,6 +2,7 @@ import { X, Clock3, Compass, FileAudio, ChevronDown, Heart, Sparkles } from "luc
 import { type ReactNode, useState } from "react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
 import { bookCoverKey, CoverImage } from "../local/CoverImage";
+import { isFromThisServer } from "../lib/api";
 import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
@@ -284,7 +285,7 @@ export function AudiobookDetail({
             book opened on a train shows its cover.
           */}
           <CoverImage
-            cacheKey={bookCoverKey(book.id)}
+            cacheKey={bookCoverKey(book.id, book.serverId)}
             className="mx-auto block aspect-[2/3] w-full max-w-[120px] min-w-0 [&>img]:h-full [&>img]:w-full [&>img]:object-cover sm:max-w-[180px] md:h-full md:max-w-none"
           />
           <span className="capsule__seam" aria-hidden="true" />
@@ -319,7 +320,7 @@ export function AudiobookDetail({
               Above the fold, because both are things a listener does next. */}
           {(onToggleFavourite || onFindSimilar) && (
             <div className="mt-4 flex flex-wrap gap-2">
-              {onToggleFavourite && (
+              {onToggleFavourite && isFromThisServer(book) && (
                 <Btn
                   onClick={() => onToggleFavourite(book.id)}
                   aria-pressed={favourited}

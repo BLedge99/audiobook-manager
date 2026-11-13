@@ -3,6 +3,7 @@ import { Compass, Headphones, Clock3 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
+import { isFromThisServer } from "../lib/api";
 import {
   describePosition,
   hasProgress,
@@ -126,7 +127,7 @@ const LibraryCard = memo(function LibraryCard({
           </span>
         )}
         <span className="relative block">
-          <ShellCover bookId={book.id} className="w-full" />
+          <ShellCover bookId={book.id} serverId={book.serverId} className="w-full" />
           <CapsuleMarks />
           <Stamp book={book} />
         </span>
@@ -172,9 +173,13 @@ const LibraryCard = memo(function LibraryCard({
         Hover reveals them on a pointer device; on touch they are always visible,
         because a hover-only control is one a thumb can never reach.
       */}
+      {/* Favourites are per-server; a book this server does not hold could
+          share its id with one it does, and favouriting would hit the wrong
+          catalogue entry. The heart only appears for books from the
+          connected server. */}
       {(onToggleFavourite || onFindSimilar) && (
         <div className="absolute right-2 top-2 flex items-center gap-1.5 transition-opacity focus-within:opacity-100 max-sm:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
-          {onToggleFavourite && (
+          {onToggleFavourite && isFromThisServer(book) && (
             <FavouriteButton favourited={favourited} onToggle={() => onToggleFavourite(book.id)} label={book.title} />
           )}
           {onFindSimilar && (
@@ -232,7 +237,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
                 isFeatured ? "w-[330px] max-w-[86vw]" : "w-[260px] max-w-[74vw]",
               )}
             >
-              <ShellCover bookId={book.id} className={isFeatured ? "w-[68px] shrink-0" : "w-[54px] shrink-0"} />
+              <ShellCover bookId={book.id} serverId={book.serverId} className={isFeatured ? "w-[68px] shrink-0" : "w-[54px] shrink-0"} />
               <span className="min-w-0 flex-1">
                 <h3 className={cn("truncate font-display font-semibold text-ink", isFeatured ? "text-[17px]" : "text-[15px]")}>
                   {book.title}

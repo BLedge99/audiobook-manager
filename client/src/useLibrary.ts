@@ -96,7 +96,7 @@ export function useLibrary(canManageLibrary = true) {
         // A 304 leaves state alone -- which is the whole point. An error does
         // too: a failed refresh must not empty a library that already loaded.
         if (books.changed) {
-          setAudiobooks(books.data);
+          setAudiobooks(books.data.map((book) => ({ ...book, serverId: getServerUrl() })));
           booksEtagRef.current = books.etag;
           // Keep the encrypted offline copy in step with the last successful
           // online view. No-op until the profile key is unlocked.

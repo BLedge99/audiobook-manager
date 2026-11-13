@@ -343,6 +343,18 @@ export function apiUrl(path: string): string {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/**
+ * True when a book comes from the server this app is talking to.
+ *
+ * Merged shelves (spec 30) can hold books from another server alongside the
+ * connected one; those carry their own `serverId`. Callers that need the
+ * *current* server — favourites, progress, an API that names one book — must
+ * check this, not just the id.
+ */
+export function isFromThisServer(book: { serverId?: string }): boolean {
+  return (book.serverId ?? getServerUrl()) === getServerUrl();
+}
+
 /** True when the app has a server it could talk to. */
 export function hasServerUrl(): boolean {
   return getServerUrl() !== "";
@@ -623,7 +635,16 @@ export async function mediaAssetUrl(path: string, kind: MediaResourceKind, id: n
  * endpoint returns 200 with image bytes, so a missing cover in the UI is a
  * client-side URL bug, not missing data.
  */
-export async function coverUrl(bookId: number): Promise<string> {
+export async function coverUrl(bookId: number, serverId?: string): Promise<string> {
+  const sameServer = serverId === undefined || serverId === getServerUrl();
+  if (!sameServer) {
+    // This server's media token names this server's books; minting one for
+    // a foreign host both leaks the token and yields a 404 there. The usual
+    // relative-path machinery is skipped entirely: the app asks the foreign
+    // server directly, and a missing/broken cover falls to the placeholder
+    // on its own terms.
+    return `${serverId}/api/audiobooks/${bookId}/cover`;
+  }
   const url = await mediaAssetUrl(`/api/audiobooks/${bookId}/cover`, "cover", bookId);
   return isNativeShell() ? mediaProxyUrl(url) : url;
 }

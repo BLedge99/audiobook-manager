@@ -7,6 +7,7 @@ import { FilterBar } from "./components/FilterBar";
 import {
   needsServerUrl,
   onServerUnreachable,
+  isFromThisServer,
   setAccountExperience as setApiAccountExperience,
   getActiveProfileId,
   getActiveProfileIdNumber,
@@ -378,7 +379,9 @@ function App() {
   // books when the user just switched tabs.
   const searchedBooks = useMemo(() => applySearch(libraryBooks, search), [libraryBooks, search]);
   const favouriteBooks = useMemo(
-    () => libraryBooks.filter((book) => favouriteIds.has(book.id)),
+    // Favourites name ids on the server this app is talking to; a merged shelf
+    // can hold the same id belonging to another server's book.
+    () => libraryBooks.filter((book) => isFromThisServer(book) && favouriteIds.has(book.id)),
     [libraryBooks, favouriteIds],
   );
 
@@ -429,8 +432,13 @@ function App() {
   );
 
   const toggleFavourite = useCallback((bookId: number) => {
+    // Favourites live on the connected server; a foreign book with this id is
+    // not the book the listener tapped, and favouriting it would toggle someone
+    // else's catalogue entry. The components hide the heart for these books
+    // already — this is the belt to that braces.
+    if (!libraryBooks.some((book) => book.id === bookId && isFromThisServer(book))) return;
     void browse.toggleFavourite(bookId);
-  }, [browse]);
+  }, [browse, libraryBooks]);
 
   const onFindSimilar = useCallback((book: Audiobook) => findSimilar(book.id), [findSimilar]);
   // Stable identity, so memoized grids/cards bail out on unrelated re-renders.
