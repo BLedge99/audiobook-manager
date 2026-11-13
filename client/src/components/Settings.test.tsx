@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Settings } from "./Settings";
 import { setOfflineMode } from "../lib/offlineMode";
+import { RECENT_SERVERS_KEY } from "../lib/recentServers";
 import { TEST_SERVER_URL } from "../test/constants";
+
+const OTHER_SERVER_URL = "http://other-server:3000";
 
 /**
  * Spec 26 — the save-server button had no test coverage, which is how a
@@ -133,5 +136,73 @@ describe("Settings save server", () => {
     expect(button).toBeEnabled();
     fireEvent.click(button);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("Settings recent servers (spec 40)", () => {
+  it("records the address in the recent list after a successful save", async () => {
+    fetchMock.mockResolvedValue(fakeResponse({ status: "ok" }));
+    renderSettings();
+
+    const input = screen.getByLabelText("Server address");
+    fireEvent.change(input, { target: { value: TEST_SERVER_URL } });
+    fireEvent.click(screen.getByRole("button", { name: /Save and test/ }));
+
+    await waitFor(() => expect(screen.getByText("Connected.")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: TEST_SERVER_URL })).toBeInTheDocument();
+  });
+
+  it("does not record the address when the health check fails", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"));
+    renderSettings();
+
+    const input = screen.getByLabelText("Server address");
+    fireEvent.change(input, { target: { value: TEST_SERVER_URL } });
+    fireEvent.click(screen.getByRole("button", { name: /Save and test/ }));
+
+    await waitFor(() => expect(screen.getByText(/Could not reach/)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: TEST_SERVER_URL })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(RECENT_SERVERS_KEY)).toBeNull();
+  });
+
+  it("switches to a recent address through the same save-and-test flow when tapped", async () => {
+    window.localStorage.setItem(RECENT_SERVERS_KEY, JSON.stringify([OTHER_SERVER_URL]));
+    fetchMock.mockResolvedValue(fakeResponse({ status: "ok" }));
+    const onSaved = vi.fn();
+    renderSettings({ onSaved });
+
+    fireEvent.click(screen.getByRole("button", { name: OTHER_SERVER_URL }));
+
+    await waitFor(() => expect(screen.getByText("Connected.")).toBeInTheDocument());
+    expect(fetchMock.mock.calls[0][0]).toBe(`${OTHER_SERVER_URL}/api/health`);
+    expect(window.localStorage.getItem("serverUrl")).toBe(OTHER_SERVER_URL);
+    expect(onSaved).toHaveBeenCalled();
+    // The field shows the address that was switched to.
+    expect(screen.getByLabelText("Server address")).toHaveValue(OTHER_SERVER_URL);
+  });
+
+  it("marks the configured server as Current", async () => {
+    window.localStorage.setItem("serverUrl", TEST_SERVER_URL);
+    renderSettings();
+
+    await waitFor(() => expect(screen.getByText("Current")).toBeInTheDocument());
+  });
+
+  it("forgets an entry without changing the configured server", async () => {
+    window.localStorage.setItem("serverUrl", TEST_SERVER_URL);
+    window.localStorage.setItem(RECENT_SERVERS_KEY, JSON.stringify([OTHER_SERVER_URL]));
+    renderSettings();
+
+    fireEvent.click(screen.getByRole("button", { name: `Forget ${OTHER_SERVER_URL}` }));
+
+    expect(screen.queryByRole("button", { name: OTHER_SERVER_URL })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("serverUrl")).toBe(TEST_SERVER_URL);
+  });
+
+  it("renders with no list when the stored data is malformed", () => {
+    window.localStorage.setItem(RECENT_SERVERS_KEY, "not json{{{");
+    renderSettings();
+
+    expect(screen.queryByText("Recent servers")).not.toBeInTheDocument();
   });
 });

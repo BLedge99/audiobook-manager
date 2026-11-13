@@ -94,7 +94,7 @@ This audit assesses the personal-data processing of the audiobook-manager agains
 | `privateRows` | Encrypted progress, favourites, wishlist per profile | AES-256-GCM per profile; DEK wrapped by scrypt KEK derived from profile password (spec 28, privateCache.ts) |
 | `keyEnvelopes` | Wrapped DEKs per profile | At rest only; unwrapped in memory during session |
 | `books`, `covers` | Replica book metadata + cover images | Household content, not encrypted |
-| `localStorage` | `serverUrl`, `profileId` | Plaintext; profileId identifies the active profile on the device |
+| `localStorage` | `serverUrl`, `profileId`, `recentServers` | Plaintext; profileId identifies the active profile on the device; recentServers holds up to 5 past server addresses (spec 40) |
 
 ### 3.3 Special category data
 
@@ -322,6 +322,7 @@ These should be preserved and not regressed:
 | `client/src/local/db.ts` | IndexedDB replica (books, covers, keyEnvelopes, privateRows) |
 | `client/src/local/privateCache.ts` | AES-256-GCM per-profile encryption of private rows |
 | `client/src/lib/api.ts` | Session token handling; localStorage only for serverUrl/profileId |
+| `client/src/lib/recentServers.ts` | Recent-servers list; localStorage `recentServers` (max 5 addresses, spec 40) |
 | `client/src/copy.ts` | User-facing strings — privacy notice copy goes here |
 | `client/src/lib/biometricVault.ts` | OS biometric bridge (does not touch biometric templates) |
 | `.env.production.example` | Config: APP_PASSWORD, MEDIA_TOKEN_SECRET, WEBAUTHN_RP_ID, OAuth, SUPABASE_*, GOOGLE_BOOKS_API_KEY |

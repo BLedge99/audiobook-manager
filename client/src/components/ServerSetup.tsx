@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Plug } from "lucide-react";
 import { getServerUrl, setServerUrl } from "../lib/api";
+import { recordRecentServer } from "../lib/recentServers";
 import { probeCandidateUrl } from "../lib/reachability";
 import { copy } from "../copy";
 import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
@@ -63,6 +64,9 @@ export function ServerSetup({
       // screen reports offline mode as a network failure.
       const response = await probeCandidateUrl(saved);
       if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
+      // Spec 40: a connected server joins the recent list so Settings can
+      // offer it without the address being retyped.
+      recordRecentServer(saved);
       onDone();
     } catch (error) {
       setStatus("failed");

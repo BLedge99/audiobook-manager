@@ -246,6 +246,7 @@ const ICU_PENDING = [
   "copy.operator.settings.unreachable",
   "copy.operator.settings.booksDownloaded",
   "copy.operator.settings.coversCached",
+  "copy.operator.settings.forgetServer",
   "copy.operator.serverReplied",
   "copy.operator.serverSetup.unreachable",
   "copy.offline.unclaimed",

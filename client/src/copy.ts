@@ -1033,6 +1033,11 @@ export const copy = {
       saveAndTest: "Save and test",
       checking: "Checking…",
       connected: "Connected.",
+      /** Recent servers (spec 40): the short list of past addresses under the field. */
+      recentHeading: "Recent servers",
+      recentHelp: "Servers you saved before. Tap one to switch.",
+      current: "Current",
+      forgetServer: (address: string) => `Forget ${address}`,
       enterAddress: "Enter a server address.",
       networkError: "network error",
       unreachable: (address: string, detail: string) =>

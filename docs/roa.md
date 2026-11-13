@@ -213,7 +213,7 @@ with `profileId`-bearing models in the schema.
 | Private rows (progress, favourites, wishlist) | IndexedDB `privateRows` | AES-256-GCM per-profile DEK; DEK wrapped by scrypt KEK from profile password | `client/src/local/privateCache.ts` |
 | Key envelopes | IndexedDB `keyEnvelopes` | Wrapped DEKs at rest only | `client/src/local/privateCache.ts` |
 | Book replica + covers | IndexedDB `books`, `covers` | None (household content) | `client/src/local/db.ts` |
-| Active profile + server URL | `localStorage` | Plaintext identifiers only | `client/src/lib/api.ts` |
+| Active profile + server URL + recent servers | `localStorage` | Plaintext identifiers only | `client/src/lib/api.ts`, `client/src/lib/recentServers.ts` |
 | Explicit offline preference | `localStorage` | Boolean preference; contains no credential | `client/src/App.tsx` |
 | Session token | Memory (Android) / HttpOnly cookie (browser) | — | `client/src/lib/api.ts` |
 | Registration credentials | Form/request memory only | Household password is not saved; profile password is used to wrap the local cache key and is not persisted | `client/src/components/ProfileRegistration.tsx` |

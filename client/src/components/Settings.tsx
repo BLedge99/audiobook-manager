@@ -1,6 +1,12 @@
-import { type FormEvent, useState } from "react";
-import { HardDriveDownload, LoaderCircle, Save, Server, WifiOff } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
+import { HardDriveDownload, LoaderCircle, Save, Server, WifiOff, X } from "lucide-react";
 import { getServerUrl, setServerUrl } from "../lib/api";
+import {
+  ensureRecentServer,
+  listRecentServers,
+  recordRecentServer,
+  removeRecentServer,
+} from "../lib/recentServers";
 import { probeCandidateUrl } from "../lib/reachability";
 import { copy } from "../copy";
 import { Btn, Field, MachineMark, Notice, Tube } from "../ui/primitives";
@@ -55,14 +61,30 @@ export function Settings({
   const [status, setStatus] = useState<"idle" | "checking" | "ok" | "failed">("idle");
   const [message, setMessage] = useState("");
   const [coversCleared, setCoversCleared] = useState(false);
+  /** The saved/recent servers list (spec 40), most recently confirmed first. */
+  const [recent, setRecent] = useState<string[]>(() => listRecentServers());
   /** When this build was made, so the phone can say which one it is running. */
   const builtAt = new Date(__BUILD_TIME__).toLocaleString();
 
-  const test = async (event: FormEvent) => {
-    event.preventDefault();
+  /**
+   * Seed the list with the configured server on open, so an address saved
+   * before this feature shipped still shows up. Idempotent, and a write that
+   * fails (private mode) just leaves the list as it is.
+   */
+  useEffect(() => {
+    const configured = getServerUrl();
+    if (configured) setRecent(ensureRecentServer(configured));
+  }, []);
+
+  /**
+   * Save an address and probe it — the one code path behind both the form's
+   * button and a tap on a recent-server entry (spec 40). A probe that passes
+   * records the address in the recent list; a failing one records nothing.
+   */
+  const testAddress = async (address: string) => {
     let saved: string;
     try {
-      setServerUrl(value);
+      setServerUrl(address);
       saved = getServerUrl();
     } catch (error) {
       setStatus("failed");
@@ -81,6 +103,7 @@ export function Settings({
       if (!response.ok) throw new Error(copy.operator.serverReplied(response.status));
       setStatus("ok");
       setMessage(copy.operator.settings.connected);
+      setRecent(recordRecentServer(saved));
       onSaved();
     } catch (error) {
       setStatus("failed");
@@ -91,6 +114,21 @@ export function Settings({
         ),
       );
     }
+  };
+
+  const test = async (event: FormEvent) => {
+    event.preventDefault();
+    await testAddress(value);
+  };
+
+  /** Switch to a past server: fill the field, then run the same save-and-test flow. */
+  const switchTo = (address: string) => {
+    setValue(address);
+    void testAddress(address);
+  };
+
+  const forget = (address: string) => {
+    setRecent(removeRecentServer(address));
   };
 
   return (
@@ -140,6 +178,52 @@ export function Settings({
 
           {message && (
             <Notice tone={status === "ok" ? "info" : "error"} role="status">{message}</Notice>
+          )}
+
+          {/*
+            Recent servers (spec 40): one tap switches back to a server used
+            before. Shown only when there is something to show, and kept
+            inside the panel but after the submit flow's message so the
+            result of a tap lands where the eye already is. Buttons are
+            `type="button"` — inside a form they would submit it.
+          */}
+          {recent.length > 0 && (
+            <div className="border-t-2 border-dashed border-ink/20 pt-3">
+              <p className="text-[12px] font-bold uppercase tracking-wide text-ink3">
+                {copy.operator.settings.recentHeading}
+              </p>
+              <p className="mt-0.5 text-[12px] text-ink3">{copy.operator.settings.recentHelp}</p>
+              <ul className="mt-2 grid gap-1.5">
+                {recent.map((address) => {
+                  const isCurrent = address === getServerUrl();
+                  return (
+                    <li key={address} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => switchTo(address)}
+                        disabled={status === "checking"}
+                        className="min-w-0 flex-1 truncate rounded-[10px] border-2 border-ink/15 bg-sunk px-2.5 py-1.5 text-left font-mono text-[12.5px] text-ink2 transition-colors hover:border-ink hover:text-ink disabled:opacity-60"
+                      >
+                        {address}
+                      </button>
+                      {isCurrent && (
+                        <span className="shrink-0 rounded-full border-2 border-cobalt-ink/40 bg-cobalt/10 px-2 py-0.5 text-[11px] font-bold text-cobalt-ink">
+                          {copy.operator.settings.current}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => forget(address)}
+                        aria-label={copy.operator.settings.forgetServer(address)}
+                        className="shrink-0 rounded-[10px] p-1.5 text-ink3 transition-colors hover:bg-rasp/10 hover:text-rasp-ink"
+                      >
+                        <X size={15} aria-hidden="true" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </form>
 
