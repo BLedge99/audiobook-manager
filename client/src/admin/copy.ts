@@ -257,12 +257,17 @@ export const copyAdmin = {
     saveFailed: "Unable to save the rating.",
     blocklistHeading: "Genre blocklist",
     blocklistExplainer:
-      "Books in a blocklisted genre are hidden from every kids account, whatever their rating. Like tags, this is household configuration.",
-    blocklistLoading: "Loading genres…",
+      "Blocked genres hide from every kids account, whatever their rating. Seeded once with Erotica, Horror and True Crime; add or remove any genre.",
+    blocklistLoading: "Loading the blocklist…",
     blocklistFailed: "Unable to update the blocklist.",
+    blockedListHeading: "Blocked genres",
+    blockedEmpty: "No genres are blocked.",
+    addHeading: "Add a genre",
+    addSearchLabel: "Search genres to add",
+    addSearchPlaceholder: "Name, e.g. True Crime…",
+    addGenre: (name: string) => `Block ${name}`,
+    removeGenre: (name: string) => `Unblock ${name}`,
     shelfCount: (count: number) => `${count} books`,
-    hideGenre: (name: string) => `Hide ${name} from kids accounts`,
-    showGenre: (name: string) => `Show ${name} to kids accounts`,
   },
 
   dates: {

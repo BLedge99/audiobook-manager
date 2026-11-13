@@ -28,6 +28,7 @@ This schedule maps each personal-data table in `server/prisma/schema.prisma` to 
 | 14 | `Profile.ageBand` (column on `Profile`, kids accounts, spec 38) | the child's age band (`under-6`…`14-17`); never a date of birth | Deleted with the profile row (erasure or 24-month inactivity purge) | Same enforcement as `Profile` (#1); erased cascade covers it; included in the GDPR export |
 | 15 | `MediaItem.minimumAge` / `suggestedMinimumAge` / `suggestedMinimumAgeSource` | catalogue data (not personal data) | Deleted with the book; suggestions cleared on admin confirm/dismiss | `MediaItem` lifecycle; admin actions clear suggestions |
 | 16 | `BlocklistGenre` (household genre blocklist, spec 38) | household configuration (not personal data) | Until the admin removes the genre from the blocklist | `DELETE /api/admin/genre-blocklist/:genreId`; cascades on `Genre` deletion |
+| 17 | `GenreBlocklistSeed` (one-row seed marker, spec 38) | household configuration (not personal data) | Forever; it records that the default blocklist was seeded once | Never re-created once written; deleted with a full DB reset |
 
 ---
 

@@ -173,26 +173,65 @@ export function registerAgeRatingRoutes(
     },
   );
 
+  /**
+   * Spec 38: the blocklist as the admin sees it — the blocked genres only,
+   * each with its book count. `options` finds unblocked genres to add.
+   *
+   * Listing every genre and rendering it with a toggle was removed on
+   * 2026-11-13: the taxonomy is large, and the list drowned the handful of
+   * relevant ones.
+   */
   app.get("/api/admin/genre-blocklist", guard, async () => {
-    const [genres, blocked] = await Promise.all([
-      prisma.genre.findMany({
-        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-        include: { _count: { select: { items: true } } },
-      }),
-      prisma.blocklistGenre.findMany({ select: { genreId: true } }),
-    ]);
-    const blockedIds = new Set(blocked.map((row) => row.genreId));
+    const blocked = await prisma.blocklistGenre.findMany({
+      orderBy: [{ genre: { sortOrder: "asc" } }, { genre: { name: "asc" } }],
+      include: { genre: { include: { _count: { select: { items: true } } } } },
+    });
     return {
-      genres: genres.map((genre) => ({
-        id: genre.id,
-        slug: genre.slug,
-        name: genre.name,
-        parentId: genre.parentId,
-        count: genre._count.items,
-        blocked: blockedIds.has(genre.id),
+      genres: blocked.map((row) => ({
+        id: row.genre.id,
+        slug: row.genre.slug,
+        name: row.genre.name,
+        count: row.genre._count.items,
       })),
     };
   });
+
+  app.get<{ Querystring: { q?: string } }>(
+    "/api/admin/genre-blocklist/options",
+    {
+      ...guard,
+      schema: {
+        querystring: {
+          type: "object",
+          properties: { q: { type: "string", maxLength: 120 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request) => {
+      const blockedIds = await prisma.blocklistGenre.findMany({ select: { genreId: true } });
+      const blocked = new Set(blockedIds.map((row) => row.genreId));
+      const all = await prisma.genre.findMany({
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        include: { _count: { select: { items: true } } },
+      });
+      const query = request.query.q?.trim().toLowerCase() ?? "";
+      // Portable substring match (SQLite LIKE is ASCII-only).
+      const matches = all.filter((genre) => {
+        if (blocked.has(genre.id)) return false;
+        if (query === "") return true;
+        return `${genre.name} ${genre.slug}`.toLowerCase().includes(query);
+      });
+      return {
+        genres: matches.slice(0, 20).map((genre) => ({
+          id: genre.id,
+          slug: genre.slug,
+          name: genre.name,
+          count: genre._count.items,
+        })),
+      };
+    },
+  );
 
   app.post<{ Body: { genreId: number } }>(
     "/api/admin/genre-blocklist",

@@ -280,8 +280,10 @@ describe("admin panel — age ratings (spec 38)", () => {
     expect(fallback.json<{ books: unknown[] }>().books.length).toBeGreaterThan(0);
   });
 
-  it("genre blocklist adds, lists, and removes genres", async () => {
+  it("genre blocklist lists only blocked genres and removes them", async () => {
     const genre = await prisma.genre.create({ data: { slug: "spec-38-blocklist-test", name: "Blocklist Genre" } });
+    const other = await prisma.genre.create({ data: { slug: "spec-38-ordinary", name: "Ordinary Genre" } });
+
     const add = await adminApp.inject({
       method: "POST",
       url: "/api/admin/genre-blocklist",
@@ -291,11 +293,23 @@ describe("admin panel — age ratings (spec 38)", () => {
     expect(add.statusCode).toBe(201);
 
     const list = await adminApp.inject({ url: "/api/admin/genre-blocklist", ...asAdmin() });
-    const genres = list.json<{ genres: Array<{ id: number; blocked: boolean; name: string }> }>().genres;
-    expect(genres.find((g) => g.id === genre.id)?.blocked).toBe(true);
+    const blocked = list.json<{ genres: Array<{ id: number; name: string; count: number }> }>().genres;
+    expect(blocked.some((g) => g.id === genre.id)).toBe(true);
+    // The unblocked genre never appears in the blocklist view.
+    expect(blocked.some((g) => g.id === other.id)).toBe(false);
+
+    // The add-view excludes blocked genres and finds the unblocked one.
+    const options = await adminApp.inject({ url: "/api/admin/genre-blocklist/options?q=ordinary", ...asAdmin() });
+    expect(options.statusCode).toBe(200);
+    const optionsGenres = options.json<{ genres: Array<{ id: number; name: string }> }>().genres;
+    expect(optionsGenres.some((g) => g.id === other.id)).toBe(true);
+    expect(optionsGenres.some((g) => g.id === genre.id)).toBe(false);
 
     const remove = await adminApp.inject({ method: "DELETE", url: `/api/admin/genre-blocklist/${genre.id}`, ...asAdmin() });
     expect(remove.statusCode).toBe(200);
     expect(remove.json<{ removed: boolean }>().removed).toBe(true);
+
+    const after = await adminApp.inject({ url: "/api/admin/genre-blocklist", ...asAdmin() });
+    expect(after.json<{ genres: Array<{ id: number }> }>().genres.some((g) => g.id === genre.id)).toBe(false);
   });
 });

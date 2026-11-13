@@ -31,6 +31,7 @@ Define how long each category of personal data is kept and how expiry is enforce
 | `Profile.ageBand` | the child's age band (kids accounts, spec 38) | Deleted with the profile row | Same enforcement as `Profile` (inactivity purge/erasure); included in GDPR export |
 | `MediaItem.minimumAge` / `suggestedMinimumAge` / `suggestedMinimumAgeSource` | catalogue data (not personal data) | Deleted with the book | Cleared suggestions on admin confirm/dismiss |
 | `BlocklistGenre` | household genre blocklist (not personal data) | Until admin removes it | Admin panel management; cascades with genre deletion |
+| `GenreBlocklistSeed` | one-row seed marker (not personal data) | Forever | Written once by the default blocklist seed; deleted with a DB reset |
 
 ---
 

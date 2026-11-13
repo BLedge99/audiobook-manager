@@ -79,6 +79,18 @@ async function main() {
     console.error("[server] taxonomy seed failed:", err);
   }
 
+  // Spec 38: the default blocklist, once per installation, only after the
+  // taxonomy exists (so the slugs resolve). Best effort; logged, never fatal.
+  try {
+    const { seedDefaultBlocklist } = await import("./age/default-blocklist");
+    const blocked = await seedDefaultBlocklist(prisma);
+    if (blocked > 0) {
+      console.log(`[server] seeded the default kids-account blocklist: ${blocked} genres`);
+    }
+  } catch (err) {
+    console.error("[server] default blocklist seed failed:", err);
+  }
+
   // Spec 16: pick up an enrichment run that a previous process left mid-flight
   // rather than leaving the library permanently half-enriched.
   try {

@@ -183,15 +183,15 @@ type AdminGenre = {
   id: number;
   slug: string;
   name: string;
-  parentId: number | null;
   count: number;
-  blocked: boolean;
 };
 
 export function AgeRatings() {
   const [q, setQ] = React.useState("");
   const [books, setBooks] = React.useState<AdminBook[] | null>(null);
-  const [genres, setGenres] = React.useState<AdminGenre[]>([]);
+  const [blocked, setBlocked] = React.useState<AdminGenre[] | null>(null);
+  const [options, setOptions] = React.useState<AdminGenre[]>([]);
+  const [addQuery, setAddQuery] = React.useState("");
   const [error, setError] = React.useState("");
   const [working, setWorking] = React.useState(false);
 
@@ -204,12 +204,21 @@ export function AgeRatings() {
       setError(cause instanceof AdminRequestError ? copyAdmin.ratings.loadFailed : copyAdmin.ratings.loadFailed);
     }
   }, []);
-  const loadGenres = React.useCallback(async () => {
+  const loadBlocked = React.useCallback(async () => {
     try {
       const result = await adminRequest<{ genres: AdminGenre[] }>("/api/admin/genre-blocklist");
-      setGenres(result.genres);
+      setBlocked(result.genres);
     } catch {
       setError(copyAdmin.ratings.blocklistFailed);
+    }
+  }, []);
+  const loadOptions = React.useCallback(async (query: string) => {
+    try {
+      const url = query ? `/api/admin/genre-blocklist/options?q=${encodeURIComponent(query)}` : "/api/admin/genre-blocklist/options";
+      const result = await adminRequest<{ genres: AdminGenre[] }>(url);
+      setOptions(result.genres);
+    } catch {
+      setOptions([]);
     }
   }, []);
 
@@ -217,7 +226,11 @@ export function AgeRatings() {
     const handle = window.setTimeout(() => { void loadBooks(q); }, 250);
     return () => window.clearTimeout(handle);
   }, [q, loadBooks]);
-  React.useEffect(() => { void loadGenres(); }, [loadGenres]);
+  React.useEffect(() => { void loadBlocked(); }, [loadBlocked]);
+  React.useEffect(() => {
+    const handle = window.setTimeout(() => { void loadOptions(addQuery.trim()); }, 250);
+    return () => window.clearTimeout(handle);
+  }, [addQuery, loadOptions]);
 
   async function mutate(task: () => Promise<void>) {
     setWorking(true);
@@ -248,11 +261,17 @@ export function AgeRatings() {
     });
   }
 
-  async function toggleGenre(genre: AdminGenre) {
+  async function addGenre(genre: AdminGenre) {
     await mutate(async () => {
-      if (genre.blocked) await adminRequest(`/api/admin/genre-blocklist/${genre.id}`, { method: "DELETE" });
-      else await adminRequest("/api/admin/genre-blocklist", { method: "POST", body: { genreId: genre.id } });
-      await loadGenres();
+      await adminRequest("/api/admin/genre-blocklist", { method: "POST", body: { genreId: genre.id } });
+      await Promise.all([loadBlocked(), loadOptions(addQuery.trim())]);
+    });
+  }
+
+  async function removeGenre(genre: AdminGenre) {
+    await mutate(async () => {
+      await adminRequest(`/api/admin/genre-blocklist/${genre.id}`, { method: "DELETE" });
+      await Promise.all([loadBlocked(), loadOptions(addQuery.trim())]);
     });
   }
 
@@ -292,17 +311,27 @@ export function AgeRatings() {
     <section className="card">
       <h2>{copyAdmin.ratings.blocklistHeading}</h2>
       <p>{copyAdmin.ratings.blocklistExplainer}</p>
-      <ul>
-        {genres.map((genre) => <li key={genre.id}>
-          <button
-            className={genre.blocked ? "danger" : "secondary"}
-            disabled={working}
-            aria-label={genre.blocked ? copyAdmin.ratings.hideGenre(genre.name) : copyAdmin.ratings.showGenre(genre.name)}
-            onClick={() => void toggleGenre(genre)}
-          >{genre.name}</button>
-          <small>{copyAdmin.ratings.shelfCount(genre.count)}</small>
-        </li>)}
-      </ul>
+
+      <h3>{copyAdmin.ratings.blockedListHeading}</h3>
+      {blocked === null && <p>{copyAdmin.ratings.blocklistLoading}</p>}
+      {blocked !== null && blocked.length === 0 && <p>{copyAdmin.ratings.blockedEmpty}</p>}
+      {blocked?.map((genre) => <article key={genre.id} className="kids-row">
+        <div>
+          <strong>{genre.name}</strong>
+          <p>{copyAdmin.ratings.shelfCount(genre.count)}</p>
+        </div>
+        <button className="danger" disabled={working} aria-label={copyAdmin.ratings.removeGenre(genre.name)} onClick={() => void removeGenre(genre)}>{copyAdmin.ratings.removeGenre(genre.name)}</button>
+      </article>)}
+
+      <h3>{copyAdmin.ratings.addHeading}</h3>
+      <label>{copyAdmin.ratings.addSearchLabel}<input value={addQuery} onChange={(event) => setAddQuery(event.target.value)} placeholder={copyAdmin.ratings.addSearchPlaceholder} /></label>
+      {options.map((genre) => <article key={genre.id} className="kids-row">
+        <div>
+          <strong>{genre.name}</strong>
+          <p>{copyAdmin.ratings.shelfCount(genre.count)}</p>
+        </div>
+        <button className="secondary" disabled={working} aria-label={copyAdmin.ratings.addGenre(genre.name)} onClick={() => void addGenre(genre)}>{copyAdmin.ratings.addGenre(genre.name)}</button>
+      </article>)}
     </section>
   </div>;
 }

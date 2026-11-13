@@ -18,7 +18,10 @@ means hidden from every list, route and media URL, on every client.
    `14-17` → 17. No date of birth is stored.
 3. `MediaItem.minimumAge Int?` — 0/4/7/9/12/16; `null` = unrated = **visible**.
 4. `BlocklistGenre` — admin-managed genre blocklist; blocklisted genres hide
-   the book from **every** child band, whatever its rating.
+   the book from **every** child band, whatever its rating. The blocklist is
+   seeded **once per installation** with a conservative default (`erotica`,
+   `horror`, `true-crime`) tracked by a `GenreBlocklistSeed` marker row; an
+   admin who empties it keeps it empty.
 5. Child visibility = `shelf ∩ not-blocked ∩ (minimumAge IS NULL OR minimumAge ≤ band.maxAge)`.
    The gate never widens the shelf.
 6. Provider-derived ratings are **suggestions** (`suggestedMinimumAge`),
@@ -48,6 +51,11 @@ model BlocklistGenre {
   genreId   Int      @unique
   createdAt DateTime @default(now())
   genre     Genre    @relation(fields: [genreId], references: [id], onDelete: Cascade)
+}
+
+model GenreBlocklistSeed {
+  id        Int      @id @default(1)
+  createdAt DateTime @default(now())
 }
 ```
 
@@ -149,8 +157,11 @@ Admin panel gains an **Age ratings** page:
 - per book: **Confirm** (sets `minimumAge` to the suggested value, clears
   the suggestion), **Set custom rating** (0/4/7/9/12/16 or clear), or
   **Dismiss** (clears suggestion, leaves `minimumAge` unchanged);
-- plus the **Genre blocklist** manager: list genres (with book counts),
-  add/remove from the blocklist.
+- plus the **Genre blocklist** manager: the blocked genres only, each with
+  its book count and an Unblock control; an add-view lists unblocked genres
+  to search and block, excluding already-blocked ones. The blocklist seeds
+  once per installation with `erotica`, `horror` and `true-crime` (marker
+  table `GenreBlocklistSeed`), so an unhinted installation starts sensible.
 
 Google Books mapping: `MATURE` ⇒ 16; `NOT_MATURE`/`UNKNOWN`/absent ⇒ no
 suggestion. Open Library mapping (subject strings, first match wins):

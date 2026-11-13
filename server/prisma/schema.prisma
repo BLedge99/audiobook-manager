@@ -187,6 +187,14 @@ model BlocklistGenre {
   @@index([genreId])
 }
 
+// Spec 38: one row, id = 1, recording that the default blocklist was seeded
+// once per installation. Without it an admin who empties the blocklist would
+// watch the defaults reappear on the next boot. Household configuration.
+model GenreBlocklistSeed {
+  id        Int      @id @default(1)
+  createdAt DateTime @default(now())
+}
+
 // Correctable without a code change: maps a provider's raw string to a genre.
 model GenreMapping {
   id       Int    @id @default(autoincrement())
