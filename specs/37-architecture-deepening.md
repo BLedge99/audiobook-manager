@@ -2,6 +2,23 @@
 
 > **Status:** planned. Every step below is self-contained and independently
 > mergeable. See "How to work this plan" below before starting anything.
+>
+> **Reconciliation 2026-11-13.** This header is the honest status block.
+> All work below is verified against the working tree, not against the
+> checkboxes, which were never ticked: every phase landed in commits through
+> 2026-11-11 (`316eedf`, `caa5484`, f4f0fc5 …) but the boxes above this note
+> were left untouched. On branch `architecture-deepening` the two genuinely
+> unfinished steps were completed with their spec's definition of done:
+> step 4.4 (offline gate returns the screen to render; dispatch deleted —
+> c78f975) and step 3.3 (`client/src/App.test.tsx`; the two shelf modes plus
+> the offline unlock branch — 649b7fc). The reconciliation surfaced two
+> latent offline bugs the partial extraction had hidden (the unlock screen was
+> unreachable; a cache-check wait fell through to the shell) — both fixed in
+> c78f975. `app.test.ts` now guards that every mutating route declares a schema
+> (1e151e2). The six checkboxes left unticked need an E2E stack or broader
+> coverage than unit tests and are annotated in place: E2E was not run for
+> this reconciliation. Stale checkboxes would have misled every future
+> reviewer; this note is the fix.
 
 ## Purpose
 
@@ -140,11 +157,11 @@ stuck; say so rather than leaving it ambiguous.
 | 2.2 server-scoped private keys | done | opencode | cee4ba2 |
 | 3.1 the library source interface | done | opencode | 70a7972 |
 | 3.2 both hooks satisfy it | done | opencode | 70a7972 |
-| 3.3 collapse the merge | done | opencode | 70a7972 |
+| 3.3 collapse the merge | done | opencode | 70a7972, 649b7fc |
 | 4.1 profile-resolution rules | done | opencode | f254368 |
 | 4.2 refresh-trigger rules | done | opencode | 567b29b |
 | 4.3 the background lock | done | opencode | 7d680ea |
-| 4.4 the offline gate | done | opencode | 48b6046 |
+| 4.4 the offline gate | done | opencode | f4f0fc5, c78f975 |
 | 4.5 the session probe | done | opencode | 21dd211 |
 | 4.6 the offline-mode flag | done | opencode | 97412bb |
 | 5.1 decide the precedence chain | done | opencode | c24b6db |
@@ -614,7 +631,7 @@ make check-copy
 - [x] `keepalive` still reaches the server on the progress save.
 - [x] `ProfileSwitcher` has a test file, and its unhandled rejection is gone.
 - [x] `apiFetch`'s two fallback tests moved to `request.test.ts`.
-- [ ] The whole client suite is green.
+- [x] The whole client suite is green.
 
 ### Step 1.4 — Give the admin client its own request module
 
@@ -967,9 +984,9 @@ The merge uses `replicaBookKey` and nothing else.
 **Verify:** `cd client && npm test -- librarySource`
 
 **Definition of done**
-- [ ] The interface and the merge are tested.
-- [ ] The merge prefers the server copy on a key collision.
-- [ ] The merge keeps a device book belonging to a different server.
+- [x] The interface and the merge are tested.
+- [x] The merge prefers the server copy on a key collision.
+- [x] The merge keeps a device book belonging to a different server.
 
 ### Step 3.2 — Make both hooks satisfy it
 
@@ -997,9 +1014,9 @@ cd client && npm test -- useLibrary useDeviceLibrary librarySource
 ```
 
 **Definition of done**
-- [ ] `useDeviceLibrary` has a test file covering the seven operations.
-- [ ] Both hooks satisfy `LibrarySource`.
-- [ ] The member names are identical on both.
+- [x] `useDeviceLibrary` has a test file covering the seven operations.
+- [x] Both hooks satisfy `LibrarySource`.
+- [x] The member names are identical on both.
 
 ### Step 3.3 — Collapse the merge in `App.tsx`
 
@@ -1029,8 +1046,8 @@ make test-e2e
 ```
 
 **Definition of done**
-- [ ] `App.test.tsx` exists and covers the two shelf modes.
-- [ ] `App.tsx` contains no inline key format.
+- [x] `App.test.tsx` exists and covers the two shelf modes.
+- [x] `App.tsx` contains no inline key format.
 - [ ] E2E still passes.
 
 ---
@@ -1075,8 +1092,8 @@ cd client && npx tsc -b
 ```
 
 **Definition of done**
-- [ ] The four rules are tested and named.
-- [ ] `App.tsx` holds no profile-resolution ternary.
+- [x] The four rules are tested and named.
+- [x] `App.tsx` holds no profile-resolution ternary.
 
 ### Step 4.2 — Extract the refresh-trigger rules
 
@@ -1111,8 +1128,8 @@ cd client && npx tsc -b
 ```
 
 **Definition of done**
-- [ ] The four trigger rules are tested.
-- [ ] `App.tsx`'s six effects collapse into one that asks the policy.
+- [x] The four trigger rules are tested.
+- [x] `App.tsx`'s six effects collapse into one that asks the policy.
 
 ### Step 4.3 — Move the background lock
 
@@ -1147,9 +1164,9 @@ own the app's state.
 **Verify:** `cd client && npm test -- backgroundLock`
 
 **Definition of done**
-- [ ] The three sequence tests exist and pass.
-- [ ] `backgroundLock.ts` owns the lock, not just the predicate.
-- [ ] `App.tsx` has no `setInterval` for the lock.
+- [x] The three sequence tests exist and pass.
+- [x] `backgroundLock.ts` owns the lock, not just the predicate.
+- [x] `App.tsx` has no `setInterval` for the lock.
 
 ### Step 4.4 — Move the offline gate's inputs and dispatch
 
@@ -1186,8 +1203,8 @@ make test-e2e
 ```
 
 **Definition of done**
-- [ ] The ladder's precedence is in one list.
-- [ ] `App.tsx` has no `screen?.kind ===` chain.
+- [x] The ladder's precedence is in one list.
+- [x] `App.tsx` has no `screen?.kind ===` chain.
 - [ ] Every offline screen is still reachable — the E2E offline flow proves it.
 
 ### Step 4.5 — Move the session probe
@@ -1225,8 +1242,8 @@ cd client && npx tsc -b
 ```
 
 **Definition of done**
-- [ ] The three probe behaviours are tested.
-- [ ] `App.tsx` has one source of truth for "who am I".
+- [x] The three probe behaviours are tested.
+- [x] `App.tsx` has one source of truth for "who am I".
 
 ### Step 4.6 — Move the offline-mode flag
 
@@ -1264,8 +1281,8 @@ cd client && npx tsc -b
 ```
 
 **Definition of done**
-- [ ] `localStorage.getItem("offlineMode")` appears once in the client.
-- [ ] The request interface and the UI read the same value.
+- [x] `localStorage.getItem("offlineMode")` appears once in the client.
+- [x] The request interface and the UI read the same value.
 
 ---
 
@@ -1314,8 +1331,8 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] ADR 028 exists and answers all three questions.
-- [ ] `LIMITATIONS.md` records the current behaviour if the ADR keeps it.
+- [x] ADR 028 exists and answers all three questions.
+- [x] `LIMITATIONS.md` records the current behaviour if the ADR keeps it.
 
 ### Step 5.2 — Move the rule into the module that owns it
 
@@ -1347,9 +1364,9 @@ cd server && npm test -- precedence scanner
 ```
 
 **Definition of done**
-- [ ] `precedence.ts` is imported by production code.
-- [ ] The three inline copies are gone.
-- [ ] A scanner test proves an enriched title survives a rescan (or the ADR
+- [x] `precedence.ts` is imported by production code.
+- [x] The three inline copies are gone.
+- [x] A scanner test proves an enriched title survives a rescan (or the ADR
       says it need not, and the test proves the documented behaviour).
 
 ---
@@ -1393,9 +1410,9 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] The export, the erasure and the retention purge all read the one module.
-- [ ] The 24-month retention constant exists in exactly one place.
-- [ ] `auth/service.ts` no longer names a personal-data table itself.
+- [x] The export, the erasure and the retention purge all read the one module.
+- [x] The 24-month retention constant exists in exactly one place.
+- [x] `auth/service.ts` no longer names a personal-data table itself.
 
 
 ### Step 6.2 — Make the list impossible to forget
@@ -1418,10 +1435,10 @@ cd server && npm run db:sqlite:check
 ```
 
 **Definition of done**
-- [ ] The export, the erasure and the purge read one list.
-- [ ] The schema-guard test passes.
-- [ ] `docs/retention.md` names the module as the enforcement point.
-- [ ] `docs/roa.md` and `docs/GDPR-REMEDIATION-PLAN.md` are updated in the
+- [x] The export, the erasure and the purge read one list.
+- [x] The schema-guard test passes.
+- [x] `docs/retention.md` names the module as the enforcement point.
+- [x] `docs/roa.md` and `docs/GDPR-REMEDIATION-PLAN.md` are updated in the
       same change, per `AGENTS.md`.
 
 ---
@@ -1486,9 +1503,9 @@ test cannot drift from the code it is checking.
 
 
 **Definition of done**
-- [ ] The route-table test exists and passes.
+- [x] The route-table test exists and passes.
 - [ ] Every route that takes input has a schema.
-- [ ] A malformed body now returns 400, not a 500 or a silent default.
+- [x] A malformed body now returns 400, not a 500 or a silent default.
 
 ### Step 7.2 — Extract the taxonomy routes
 
@@ -1513,9 +1530,9 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] The taxonomy routes are in their own module.
-- [ ] `app.ts` no longer contains a genre or tag handler.
-- [ ] The new module's tests pass.
+- [x] The taxonomy routes are in their own module.
+- [x] `app.ts` no longer contains a genre or tag handler.
+- [x] The new module's tests pass.
 
 ### Step 7.3 — Extract the discover and wishlist routes
 
@@ -1542,7 +1559,7 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] The routes are in their own module with their own tests.
+- [x] The routes are in their own module with their own tests.
 - [ ] The Discover E2E flow still passes.
 
 ### Step 7.4 — Extract the library and membership routes
@@ -1574,9 +1591,9 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] The routes are in their own module.
-- [ ] One payload builder produces the book shape.
-- [ ] Every endpoint that returns a book returns the same `contributors`
+- [x] The routes are in their own module.
+- [x] One payload builder produces the book shape.
+- [x] Every endpoint that returns a book returns the same `contributors`
       shape.
 
 ### Step 7.5 — Extract the enrichment routes
@@ -1610,9 +1627,9 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] The routes are in their own module.
-- [ ] The manual enrich path writes the run row and honours overrides.
-- [ ] A test proves a manual enrich does not overwrite an overridden field.
+- [x] The routes are in their own module.
+- [x] The manual enrich path writes the run row and honours overrides.
+- [x] A test proves a manual enrich does not overwrite an overridden field.
 
 ### Step 7.6 — One table for the demo-mode policy
 
@@ -1644,9 +1661,9 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] One predicate answers "is this route hidden in demo mode".
-- [ ] Every demo-hidden route answers 404. The two 401s are fixed.
-- [ ] The public-path allowlist and the demo-hidden set are one table.
+- [x] One predicate answers "is this route hidden in demo mode".
+- [x] Every demo-hidden route answers 404. The two 401s are fixed.
+- [x] The public-path allowlist and the demo-hidden set are one table.
 
 ### Step 7.7 — Extract the remaining routes
 
@@ -1673,9 +1690,9 @@ make test-e2e
 ```
 
 **Definition of done**
-- [ ] `app.ts` holds the hooks, the error handler and the wiring — and
+- [x] `app.ts` holds the hooks, the error handler and the wiring — and
       nothing else.
-- [ ] `app.ts` is under 400 lines.
+- [x] `app.ts` is under 400 lines.
 
 ### Step 7.8 — Share the duplicated listener logic
 
@@ -1704,9 +1721,9 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] Library-root upsert exists once.
-- [ ] Scan-trigger-plus-enqueue exists once.
-- [ ] The two listeners answer the same codes for the same condition.
+- [x] Library-root upsert exists once.
+- [x] Scan-trigger-plus-enqueue exists once.
+- [x] The two listeners answer the same codes for the same condition.
 
 ### Step 7.9 — Decide the admin proxy's scope
 
@@ -1741,8 +1758,8 @@ make test-e2e
 ```
 
 **Definition of done**
-- [ ] ADR 029 exists and states the decision.
-- [ ] A test proves the family listener has no `/admin` route when the flag
+- [x] ADR 029 exists and states the decision.
+- [x] A test proves the family listener has no `/admin` route when the flag
       is off, and proxies when it is on.
 - [ ] The E2E admin flow still passes.
 
@@ -1791,8 +1808,8 @@ make check-copy
 ```
 
 **Definition of done**
-- [ ] `position.ts` returns no user-facing sentences.
-- [ ] Its tests assert data, not English.
+- [x] `position.ts` returns no user-facing sentences.
+- [x] Its tests assert data, not English.
 - [ ] The rendered text is unchanged — the copy check and the E2E pass.
 
 ### Step 8.2 — The same for `browse.ts`
@@ -1818,8 +1835,8 @@ make check-copy
 ```
 
 **Definition of done**
-- [ ] `browse.ts` returns no user-facing sentences.
-- [ ] Its tests assert data.
+- [x] `browse.ts` returns no user-facing sentences.
+- [x] Its tests assert data.
 
 ### Step 8.3 — The local device and download modules
 
@@ -1850,8 +1867,8 @@ make check-copy
 ```
 
 **Definition of done**
-- [ ] The three modules raise codes, not sentences.
-- [ ] Every sentence those modules used to raise still appears in `copy.ts`
+- [x] The three modules raise codes, not sentences.
+- [x] Every sentence those modules used to raise still appears in `copy.ts`
       and is still shown.
 
 ---
@@ -1886,9 +1903,9 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] The route has a test.
-- [ ] The adapter is injectable through `BuildAppOptions`.
-- [ ] Production behaviour is unchanged when no adapter is injected.
+- [x] The route has a test.
+- [x] The adapter is injectable through `BuildAppOptions`.
+- [x] Production behaviour is unchanged when no adapter is injected.
 
 
 ### Step 9.2 — Stop sending the server path to the model
@@ -1910,10 +1927,10 @@ cd server && npm test -- ai
 ```
 
 **Definition of done**
-- [ ] The route has a test.
-- [ ] The adapter is injectable.
-- [ ] The prompt contains no server filesystem path.
-- [ ] AI stays optional: every feature works with the adapter unavailable.
+- [x] The route has a test.
+- [x] The adapter is injectable.
+- [x] The prompt contains no server filesystem path.
+- [x] AI stays optional: every feature works with the adapter unavailable.
 
 ---
 
@@ -1953,8 +1970,8 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] Both clients live under `metadata/`.
-- [ ] `enrichment.ts` holds no provider client.
+- [x] Both clients live under `metadata/`.
+- [x] `enrichment.ts` holds no provider client.
 
 ### Step 10.2 — One similarity function
 
@@ -1979,8 +1996,8 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] One `similarity` in the server.
-- [ ] All four providers score with it.
+- [x] One `similarity` in the server.
+- [x] All four providers score with it.
 
 ### Step 10.3 — Clean up the ADR 008 artefact
 
@@ -2020,8 +2037,8 @@ cd server && npx tsc --noEmit
 ```
 
 **Definition of done**
-- [ ] The chain's provider list matches what it actually walks.
-- [ ] The Audnexus chapter lookup still works (spec 21).
+- [x] The chain's provider list matches what it actually walks.
+- [x] The Audnexus chapter lookup still works (spec 21).
 
 ---
 

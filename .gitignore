@@ -79,3 +79,6 @@ client/dev-dist/
 .claude/
 .codex/
 .impeccable/
+
+# Generated architecture-review output; kept locally, not project source.
+docs/spec-37-architecture-deepening-report.html

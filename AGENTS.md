@@ -32,6 +32,10 @@ low-power device (Raspberry Pi).
    documented here, not left to be rediscovered; do not "fix" one silently.
 5. Code — implements the above; it never redefines them
 
+`GLOSSARY.md` defines the domain terms used everywhere above (audiobook,
+shelf, profile, library root, enrichment, …). Use its vocabulary — arch and
+product both — rather than inventing synonyms.
+
 If code and spec disagree, fix the code or explicitly update the spec in the
 same change. Never silently diverge.
 
