@@ -32,7 +32,7 @@ export async function registerBuyContextRoutes(
   app: FastifyInstance,
   deps: BuyContextRouteDeps,
 ): Promise<void> {
-  app.get("/api/buy-context", {
+  app.get<{ Querystring: { title: string; author?: string } }>("/api/buy-context", {
     schema: {
       querystring: {
         type: "object",
@@ -57,7 +57,7 @@ export async function registerBuyContextRoutes(
       counters.set(profileId, { count: 1, resetAt: now + RATE_WINDOW_MS });
     }
 
-    const { title, author } = request.query as { title: string; author?: string };
+    const { title, author } = request.query;
     const match = await findLibrivoxMatch({ title: title.trim(), author: author?.trim() || undefined });
     return { librivox: match };
   });

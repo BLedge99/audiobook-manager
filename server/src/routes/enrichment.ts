@@ -49,7 +49,7 @@ export async function registerEnrichmentRoutes(
     return candidates;
   });
 
-  app.post("/api/enrichment/run", {
+  app.post<{ Body: { mediaItemId?: number; force?: boolean } }>("/api/enrichment/run", {
     schema: {
       body: {
         type: "object",
@@ -62,7 +62,7 @@ export async function registerEnrichmentRoutes(
     },
   }, async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
-    const body = (request.body ?? {}) as { mediaItemId?: number; force?: boolean };
+    const body = request.body ?? {};
     return enrichment.enqueue({ mediaItemId: body.mediaItemId, force: body.force });
   });
 

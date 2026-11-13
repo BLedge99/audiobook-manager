@@ -39,9 +39,10 @@ export async function registerGdprRoutes(
       body: {
         type: "object",
         properties: {
-          name: { type: "string" },
-          color: { type: "string" },
+          name: { type: "string", minLength: 1, maxLength: 100 },
+          color: { type: "string", maxLength: 40 },
         },
+        additionalProperties: false,
       },
     },
   }, async (request, reply) => {
@@ -71,7 +72,11 @@ export async function registerGdprRoutes(
   });
 
   // Right to erasure (GDPR Art. 17): delete a single listening-history entry.
-  app.delete<{ Params: { historyId: string } }>("/api/me/listening-history/:historyId", async (request, reply) => {
+  app.delete<{ Params: { historyId: string } }>("/api/me/listening-history/:historyId", {
+    schema: {
+      params: { type: "object", properties: { historyId: { type: "integer" } }, required: ["historyId"] },
+    },
+  }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const historyId = parseIdParam(request.params.historyId);
@@ -83,7 +88,11 @@ export async function registerGdprRoutes(
   });
 
   // Right to erasure (GDPR Art. 17): remove a single favourite.
-  app.delete<{ Params: { mediaItemId: string } }>("/api/me/favourites/:mediaItemId", async (request, reply) => {
+  app.delete<{ Params: { mediaItemId: string } }>("/api/me/favourites/:mediaItemId", {
+    schema: {
+      params: { type: "object", properties: { mediaItemId: { type: "integer" } }, required: ["mediaItemId"] },
+    },
+  }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
     const mediaItemId = parseIdParam(request.params.mediaItemId);
