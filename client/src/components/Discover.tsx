@@ -72,25 +72,40 @@ function RecommendationCard({
         {recommendation.description && (
           <p className="mt-1.5 line-clamp-2 text-[11.5px] text-ink3">{recommendation.description}</p>
         )}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-ink/25 bg-sunk px-2.5 py-0.5 text-[11px] font-bold text-ink2">
             {reasonText(recommendation.reason)}
           </span>
-          <Btn size="sm" variant={saved ? "quiet" : "plain"} onClick={onSave} disabled={saved}>
+          <Btn
+            size="sm"
+            variant={saved ? "quiet" : "plain"}
+            onClick={onSave}
+            disabled={saved}
+            // Sits above the card's stretched buy button, so saving does
+            // not open the buy sheet.
+            className="relative z-10"
+          >
             {saved ? <Check size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
             {saved ? copy.discover.onYourWishlist : copy.discover.saveToWishlist}
           </Btn>
-          {canBuy && (
-            <Btn
-              size="sm"
-              variant="quiet"
-              onClick={() => onBuy({ title: recommendation.title, author: recommendation.author, isbn: recommendation.isbn })}
-            >
-              {copy.buyLinks.getButton}
-            </Btn>
-          )}
         </div>
       </div>
+
+      {/*
+        The whole card is the affordance: tapping anywhere on it opens the
+        buy sheet. Laid out as a stretched, unlabelled-everything sibling
+        button rather than wrapping the card's content — nesting the Save
+        button inside a clickable container would be an interactive element
+        inside an interactive element.
+      */}
+      {canBuy && (
+        <button
+          type="button"
+          onClick={() => onBuy({ title: recommendation.title, author: recommendation.author, isbn: recommendation.isbn })}
+          className="absolute inset-0 rounded-[inherit]"
+          aria-label={`${copy.buyLinks.getButton}: ${recommendation.title}`}
+        />
+      )}
     </article>
   );
 }

@@ -169,13 +169,21 @@ describe("spec 39 — Get this book", () => {
     vi.unstubAllGlobals();
   });
 
-  it("adult session: recommendations carry a Get button that opens the sheet", async () => {
+  it("adult session: tapping a suggestion card opens the sheet", async () => {
     const user = userEvent.setup();
     render(<Discover discover={makeDiscover()} hasFavourites canBuy />);
-    const buttons = screen.getAllByRole("button", { name: "Get this book" });
-    expect(buttons.length).toBeGreaterThanOrEqual(1);
-    await user.click(buttons[0]);
+    // The whole card is the affordance now — there is no separate button.
+    const cards = screen.getAllByRole("button", { name: /Get this book: Suggestion 1/i });
+    expect(cards.length).toBeGreaterThanOrEqual(1);
+    await user.click(cards[0]);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("adult session: saving from a card does not open the sheet", async () => {
+    const user = userEvent.setup();
+    render(<Discover discover={makeDiscover()} hasFavourites canBuy />);
+    await user.click(screen.getAllByRole("button", { name: /Save to wishlist/i })[0]);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("adult session: wishlist rows carry the same affordance", async () => {
