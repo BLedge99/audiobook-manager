@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ExternalLink, X } from "lucide-react";
 import { copy } from "../copy";
 import { EXTERNAL_STORES, type ExternalStoreId } from "../lib/externalStores";
@@ -77,7 +78,11 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
     void launchStoreLink(link.href, { packageName });
   };
 
-  return (
+  // Portals to <body>: the sheet used to render inside the main landmark,
+  // whose stacking context trapped the dialog below the sticky header (.bar,
+  // z-30). The top rows -- the title and the close button -- were painted
+  // behind the header and the header ate the clicks.
+  return createPortal(
     <div role="dialog" aria-modal="true" aria-labelledby="get-this-book" className="fixed inset-0 z-50">
       <button type="button" aria-label={copy.buyLinks.close} className="absolute inset-0 cursor-default bg-ink/45" onClick={onClose} />
       <div className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto rounded-t-[22px] border border-ink/20 bg-surface p-5 shadow-[0_-6px_30px_rgba(0,0,0,0.25)] sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:max-h-none sm:w-[30rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[22px]">
@@ -129,6 +134,7 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
           {hasCommission ? copy.buyLinks.disclosure(networkList) : copy.buyLinks.disclosureNoNetworks}
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
