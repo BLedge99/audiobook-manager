@@ -140,12 +140,6 @@ describe("Discover pagination", () => {
     expect(discover.loadWishlist).toHaveBeenCalledTimes(1);
   });
 
-  it("still labels every card as a print book, since paging changes nothing about that", () => {
-    // LIMITATIONS 1.8: these are Open Library print records with no narrator and
-    // no runtime. A second page of them is still not an audiobook.
-    render(<Discover discover={makeDiscover()} hasFavourites />);
-    expect(screen.getAllByText(/not an audiobook yet/i).length).toBeGreaterThan(0);
-  });
 });
 
 describe("spec 39 — Get this book", () => {

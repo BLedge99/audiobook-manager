@@ -342,9 +342,11 @@ But it draws them from Open Library, which catalogues print editions. Every
 suggestion therefore has **no narrator and no runtime**, and may describe a book
 with no audiobook edition at all.
 
-The UI labels each card `BOOK — NOT AN AUDIOBOOK YET` rather than letting a cover
-imply something playable. This is a real constraint, not a rendering nicety:
-**there is no free, key-less service that returns audiobook-to-audiobook
+The UI used to label each card `BOOK — NOT AN AUDIOBOOK YET` rather than let
+a cover imply something playable. That marker was removed on the owner's call
+(2026-11-13) as noise — the cards carry no play affordance and the wishlist
+remains the load-bearing action; nothing about the constraint has changed.
+**There is no free, key-less service that returns audiobook-to-audiobook
 similarity.** Audnexus resolves audiobooks by ASIN only, with no search; LibriVox
 matches titles exactly, so it cannot answer "what else is like this".
 

@@ -328,13 +328,6 @@ export const copy = {
     owned: "Owned",
     markAsOwned: "Mark as owned",
     notInLibrary: "Not in your library yet",
-    /**
-     * The honesty rule from `LIMITATIONS.md` §1.8, and the single most
-     * important sentence in this file. These are print records from a book
-     * catalogue: no narrator, no runtime, not playable. The card must never
-     * imply otherwise.
-     */
-    notAnAudiobook: "Book — not an audiobook yet",
     offline: "You're offline. Discover needs a connection to suggest new books — your library still works.",
     notEnoughMetadata: "Not enough details about your books yet.",
     seedNeedsDetails: "This book needs a bit more detail before we can suggest similar books.",
