@@ -177,7 +177,9 @@ async function readAudioFile(filePath: string): Promise<AudioFile> {
     // Legacy single-value field kept for the display string and for callers
     // that still read `narrator`.
     narrator: firstTagValue(common.composer),
-    duration: (await probeDuration(filePath)) || metadata.format.duration || 0,
+    // music-metadata already knows the container's duration for virtually
+    // every format; only pay for an ffprobe spawn when it does not.
+    duration: metadata.format.duration || (await probeDuration(filePath)) || 0,
     sizeBytes: fileStats.size,
     releaseDate: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : undefined,
     genre: common.genre?.filter(Boolean).join(", ") || undefined,
@@ -227,18 +229,43 @@ async function syncContributors(
     entries.push({ name, role: "narrator" });
   }
 
-  for (const entry of entries) {
-    const contributor = await prisma.contributor.upsert({
-      where: { name_role: { name: entry.name, role: entry.role } },
-      create: { name: entry.name, role: entry.role },
-      update: {},
-    });
-    const existing = await prisma.contributorMediaItem.findUnique({
-      where: { contributorId_mediaItemId: { contributorId: contributor.id, mediaItemId } },
-    });
-    if (!existing) {
-      await prisma.contributorMediaItem.create({ data: { contributorId: contributor.id, mediaItemId } });
+  const unique = [...new Map(entries.map((entry) => [`${entry.role} ${entry.name}`, entry])).values()];
+  if (unique.length === 0) return;
+
+  const wanted = unique.map((entry) => ({ name: entry.name, role: entry.role }));
+  const findByPair = () =>
+    prisma.contributor.findMany({ where: { OR: wanted } });
+
+  let all = await findByPair();
+  const present = new Set(all.map((c) => `${c.role} ${c.name}`));
+  const missing = unique.filter((entry) => !present.has(`${entry.role} ${entry.name}`));
+  if (missing.length > 0) {
+    try {
+      await prisma.contributor.createMany({ data: missing });
+    } catch {
+      // Two concurrent scans of different roots may insert the same
+      // (name, role) at once; upsert the stragglers instead of failing.
+      for (const entry of missing) {
+        await prisma.contributor.upsert({
+          where: { name_role: { name: entry.name, role: entry.role } },
+          create: { name: entry.name, role: entry.role },
+          update: {},
+        });
+      }
     }
+    all = await findByPair();
+  }
+
+  const linked = await prisma.contributorMediaItem.findMany({
+    where: { mediaItemId, contributorId: { in: all.map((c) => c.id) } },
+    select: { contributorId: true },
+  });
+  const linkedIds = new Set(linked.map((row) => row.contributorId));
+  const newLinks = all
+    .filter((c) => !linkedIds.has(c.id))
+    .map((c) => ({ contributorId: c.id, mediaItemId }));
+  if (newLinks.length > 0) {
+    await prisma.contributorMediaItem.createMany({ data: newLinks });
   }
 }
 

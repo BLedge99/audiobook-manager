@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { hashSessionToken } from "../auth/session";
+import { RateLimiter } from "../rate-limit";
 import { fail } from "../http-errors";
 
 export const ADMIN_SESSION_COOKIE = "admin_panel_session";
@@ -11,7 +12,7 @@ const LIMIT_WINDOW_MS = 5 * 60 * 1000;
 const LIMIT_ATTEMPTS = 10;
 
 export class AdminAuth {
-  private readonly attempts = new Map<string, { count: number; resetAt: number }>();
+  private readonly attempts = new RateLimiter(LIMIT_WINDOW_MS);
   constructor(private readonly prisma: PrismaClient, private readonly now = () => new Date()) {}
 
   async seed(password: string): Promise<void> {
@@ -28,17 +29,14 @@ export class AdminAuth {
   async login(password: string, ip: string): Promise<string | null> {
     if (!(await this.prisma.adminCredential.findUnique({ where: { id: 1 }, select: { id: true } }))) return null;
     const now = this.now().getTime();
-    const rate = this.attempts.get(ip);
-    if (rate && rate.resetAt > now && rate.count >= LIMIT_ATTEMPTS) return null;
+    if (!this.attempts.allow(ip, LIMIT_ATTEMPTS, now).allowed) return null;
     const credential = await this.prisma.adminCredential.findUnique({ where: { id: 1 } });
     const valid = await verifyPassword(password, credential?.passwordHash);
     if (!valid) {
-      const current = rate && rate.resetAt > now ? rate : { count: 0, resetAt: now + LIMIT_WINDOW_MS };
-      current.count++;
-      this.attempts.set(ip, current);
+      this.attempts.record(ip, now);
       return null;
     }
-    this.attempts.delete(ip);
+    this.attempts.clear(ip);
     const token = randomBytes(32).toString("base64url");
     await this.prisma.adminSession.create({
       data: { id: randomBytes(12).toString("hex"), tokenHash: hashSessionToken(token), expiresAt: new Date(now + ADMIN_SESSION_TTL_MS) },

@@ -9,6 +9,7 @@ import { createScanManager } from "./scanner";
 import type { ScanManager } from "./scanner";
 import { parseIdParam, makeOptionalProfileId, makeRequireAccountProfileId, makeRequireProfileId, createCanReadMediaItem } from "./request-context";
 import { sendConditional } from "./conditional";
+import { serializeBigInts } from "./bigint";
 import { registerStaticRoutes } from "./routes/static";
 import { registerMediaRoutes } from "./routes/media";
 import { registerMetadataRoutes } from "./routes/metadata";
@@ -113,12 +114,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     throw new Error("MEDIA_TOKEN_SECRET must be set to at least 32 bytes in production");
   }
   const secureCookie = options.secureCookie ?? process.env.COOKIE_SECURE === "true";
-
-  function serializeBigInts<T>(value: T): T {
-    return JSON.parse(JSON.stringify(value, (_key, nestedValue) => (
-      typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue
-    ))) as T;
-  }
 
   app.addHook("preSerialization", async (_request, _reply, payload) => serializeBigInts(payload));
 

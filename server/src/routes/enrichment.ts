@@ -76,7 +76,9 @@ export async function registerEnrichmentRoutes(
     if (request.auth?.role === "child") return fail(reply, 403, "forbidden");
     const items = await prisma.mediaItem.findMany({
       where: { enrichmentStatus: "review" },
-      orderBy: { updatedAt: "desc" },
+      // Newest first, id as the tiebreaker so the cap is deterministic.
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: 200,
     });
     return items.map(publicMediaItem);
   });

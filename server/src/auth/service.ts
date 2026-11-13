@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import type { DeviceCredential, PrismaClient, Profile, Session } from "@prisma/client";
+import type { DeviceCredential, Prisma, PrismaClient, Profile, Session } from "@prisma/client";
 import type { ApiErrorCode, ApiErrorParams } from "../http-errors";
 import {
   hashPassword,
@@ -23,14 +23,42 @@ import {
 import type { OAuthConfig, OAuthIdentity, OAuthProvider } from "./oauth";
 import { exchangeAuthorizationCode, fetchOAuthIdentity, safeEqualStrings } from "./oauth";
 import { resetProfilePasswordCore } from "./profile-admin";
+import { RateLimiter } from "../rate-limit";
 
 export type AuthRole = "admin" | "member" | "child";
 export type AuthVia = "profile" | "household" | "device" | "oauth";
 
+/** The session-facing profile: the full account row minus the password hash. */
+export type SessionProfile = Omit<Profile, "passwordHash">;
+
+/**
+ * What `validate()` pulls per request. Every Profile column except
+ * `passwordHash`, which no request-path consumer reads — loading it per
+ * authenticated request was pure exposure of the one secret in the row.
+ */
+const SESSION_PROFILE_SELECT = {
+  id: true,
+  name: true,
+  color: true,
+  createdAt: true,
+  passwordUpdatedAt: true,
+  role: true,
+  disabled: true,
+  failedLoginCount: true,
+  lockedUntil: true,
+  lastLoginAt: true,
+  lastActiveAt: true,
+  oauthProvider: true,
+  oauthProviderId: true,
+  email: true,
+  ageBand: true,
+  followsServerLibrary: true,
+} satisfies Prisma.ProfileSelect;
+
 export interface AuthContext {
   token: string;
   session: Session;
-  profile: Profile | null;
+  profile: SessionProfile | null;
   role: AuthRole;
   via: AuthVia;
 }
@@ -114,9 +142,9 @@ export class AuthService {
   private readonly prisma: PrismaClient;
   private readonly appPassword: string | undefined;
   private readonly now: () => Date;
-  private readonly ipFailures = new Map<string, { count: number; resetAt: number }>();
-  private readonly oauthFailures = new Map<string, { count: number; resetAt: number }>();
-  private readonly accountSignups = new Map<string, { count: number; resetAt: number }>();
+  private readonly ipFailures = new RateLimiter(IP_WINDOW_MS);
+  private readonly oauthFailures = new RateLimiter(IP_WINDOW_MS);
+  private readonly accountSignups = new RateLimiter(IP_WINDOW_MS);
 
   constructor(options: AuthServiceOptions) {
     this.prisma = options.prisma;
@@ -477,7 +505,7 @@ export class AuthService {
       this.recordSignupFailure(input.ip);
       throw new AuthFailure(409, "account_creation_unavailable");
     }
-    this.accountSignups.delete(input.ip);
+    this.accountSignups.clear(input.ip);
     return this.createSession(profile.id, "profile", input.meta);
   }
 
@@ -577,7 +605,13 @@ export class AuthService {
   ): Promise<Profile> {
     if (!context.profile) throw new AuthFailure(403, "forbidden");
     const profile = context.profile;
-    if (!(await verifyPassword(currentPassword, profile.passwordHash))) {
+    // The hash never travels in the request context; this rare operation
+    // reads it, compares it, and drops it.
+    const record = await this.prisma.profile.findUnique({
+      where: { id: profile.id },
+      select: { passwordHash: true },
+    });
+    if (!(await verifyPassword(currentPassword, record?.passwordHash))) {
       throw new AuthFailure(400, "incorrect_password");
     }
 
@@ -819,7 +853,7 @@ export class AuthService {
     const tokenHash = hashSessionToken(token);
     const session = await this.prisma.session.findUnique({
       where: { tokenHash },
-      include: { profile: true },
+      include: { profile: { select: SESSION_PROFILE_SELECT } },
     });
     if (!session) return null;
     if (session.revokedAt) return null;
@@ -1059,82 +1093,38 @@ export class AuthService {
 
   /** Per-IP limiter covers unknown profiles and the household key too. */
   private checkIp(ip: string): void {
-    const entry = this.ipFailures.get(ip);
-    if (!entry) return;
-    if (this.now().getTime() >= entry.resetAt) {
-      this.ipFailures.delete(ip);
-      return;
-    }
-    if (entry.count >= IP_MAX_FAILURES) {
-      throw new AuthFailure(429, "account_locked", {
-        retryAfterSeconds: Math.ceil((entry.resetAt - this.now().getTime()) / 1000),
-      });
-    }
+    const { allowed, retryAfterSeconds } = this.ipFailures.allow(ip, IP_MAX_FAILURES, this.now().getTime());
+    if (!allowed) throw new AuthFailure(429, "account_locked", { retryAfterSeconds });
   }
 
   private recordIpFailure(ip: string): void {
-    const now = this.now().getTime();
-    const entry = this.ipFailures.get(ip);
-    if (!entry || now >= entry.resetAt) {
-      this.ipFailures.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
-      return;
-    }
-    entry.count += 1;
+    this.ipFailures.record(ip, this.now().getTime());
   }
 
   private clearIp(ip: string): void {
-    this.ipFailures.delete(ip);
+    this.ipFailures.clear(ip);
   }
 
   /** Per-IP ceiling on failed external sign-in attempts before throttling (spec 32). */
   private checkOAuthRate(ip: string): void {
-    const entry = this.oauthFailures.get(ip);
-    if (!entry) return;
-    const now = this.now().getTime();
-    if (now >= entry.resetAt) {
-      this.oauthFailures.delete(ip);
-      return;
-    }
-    if (entry.count >= OAUTH_MAX_ATTEMPTS) {
-      throw new AuthFailure(429, "oauth_rate_limited", {
-        retryAfterSeconds: Math.ceil((entry.resetAt - now) / 1000),
-      });
-    }
+    const { allowed, retryAfterSeconds } = this.oauthFailures.allow(ip, OAUTH_MAX_ATTEMPTS, this.now().getTime());
+    if (!allowed) throw new AuthFailure(429, "oauth_rate_limited", { retryAfterSeconds });
   }
 
   private recordOAuthFailure(ip: string): void {
-    const now = this.now().getTime();
-    const entry = this.oauthFailures.get(ip);
-    if (!entry || now >= entry.resetAt) {
-      this.oauthFailures.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
-      return;
-    }
-    entry.count += 1;
+    this.oauthFailures.record(ip, this.now().getTime());
   }
 
   private clearOAuthRate(ip: string): void {
-    this.oauthFailures.delete(ip);
+    this.oauthFailures.clear(ip);
   }
 
   private checkSignupRate(ip: string): void {
-    const entry = this.accountSignups.get(ip);
-    if (!entry) return;
-    const now = this.now().getTime();
-    if (now >= entry.resetAt) {
-      this.accountSignups.delete(ip);
-      return;
-    }
-    if (entry.count >= 5) {
-      throw new AuthFailure(429, "oauth_rate_limited", {
-        retryAfterSeconds: Math.ceil((entry.resetAt - now) / 1000),
-      });
-    }
+    const { allowed, retryAfterSeconds } = this.accountSignups.allow(ip, 5, this.now().getTime());
+    if (!allowed) throw new AuthFailure(429, "oauth_rate_limited", { retryAfterSeconds });
   }
 
   private recordSignupFailure(ip: string): void {
-    const now = this.now().getTime();
-    const entry = this.accountSignups.get(ip);
-    if (!entry || now >= entry.resetAt) this.accountSignups.set(ip, { count: 1, resetAt: now + IP_WINDOW_MS });
-    else entry.count += 1;
+    this.accountSignups.record(ip, this.now().getTime());
   }
 }

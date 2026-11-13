@@ -43,6 +43,16 @@ export function validateReadOnlySql(sql: string): string | null {
  * X.10: one driver connection per process, not one per request). The
  * free-form entry point stays available for tests and standalone callers.
  */
+/** The console renders 500 rows; the SQL hands it one more to flag truncation. */
+export const ADMIN_ROW_LIMIT = 500;
+
+const SELECT_LIKE = /^\s*select\b/i;
+
+function capStatement(statement: string): string {
+  if (!SELECT_LIKE.test(statement)) return statement;
+  return `SELECT * FROM (\n${statement}\n) AS capped LIMIT ${ADMIN_ROW_LIMIT + 1}`;
+}
+
 export async function executeReadOnlyQuery(
   provider: "sqlite" | "postgresql",
   sql: string,
@@ -50,7 +60,7 @@ export async function executeReadOnlyQuery(
 ) {
   const invalid = validateReadOnlySql(sql);
   if (invalid) throw new Error(invalid);
-  const statement = sql.trim().replace(/;\s*$/, "");
+  const statement = capStatement(sql.trim().replace(/;\s*$/, ""));
   if (provider === "sqlite") {
     const raw = process.env.DATABASE_URL ?? "";
     if (!raw.startsWith("file:")) throw new Error("SQLite database path is not configured.");

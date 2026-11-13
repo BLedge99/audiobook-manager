@@ -75,6 +75,9 @@ model MediaItem {
   libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id], onDelete: Cascade)
 
   @@unique([libraryRootId, filePath])
+  @@index([enrichmentStatus])
+  @@index([seriesId])
+  @@index([minimumAge])
 }
 
 model Track {
@@ -90,6 +93,8 @@ model Track {
   // migration omitted onDelete, which SQLite applies as RESTRICT, so deleting a
   // book whose files left the disk failed with a foreign-key error.
   mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@index([mediaItemId])
 }
 
 model Contributor {
@@ -111,6 +116,7 @@ model ContributorMediaItem {
   mediaItem   MediaItem   @relation(fields: [mediaItemId], references: [id])
 
   @@id([contributorId, mediaItemId])
+  @@index([mediaItemId])
 }
 
 model MetadataCandidate {
@@ -380,6 +386,7 @@ model ListeningHistory {
   // One resume point per (book, profile). Without this, concurrent saves
   // could each create a row and resume would read an arbitrary one.
   @@unique([mediaItemId, profileId])
+  @@index([profileId])
 }
 
 model Profile {
@@ -584,6 +591,7 @@ model PlaySession {
   mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
 
   @@index([profileId, mediaItemId])
+  @@index([mediaItemId])
 }
 
 model ScanState {

@@ -12,7 +12,7 @@ import { EnrichmentManager } from "../metadata/run";
 import type { ScanManager } from "../scanner";
 import { upsertLibraryRoot, deleteLibraryRoot } from "../library-roots";
 import { startScanWithEnrichment } from "../scanning";
-import { ADMIN_DB_TABLES, executeReadOnlyQuery, validateReadOnlySql, type AdminDbTable, type SqliteConnection } from "./read-only-sql";
+import { ADMIN_DB_TABLES, ADMIN_ROW_LIMIT, executeReadOnlyQuery, validateReadOnlySql, type AdminDbTable, type SqliteConnection } from "./read-only-sql";
 import { fileURLToPath } from "node:url";
 import {
   createSignedStorageUploadUrl,
@@ -263,7 +263,7 @@ export async function buildAdminApp(options: {
     try {
       const provider = (process.env.DATABASE_URL ?? "").startsWith("file:") ? "sqlite" : "postgresql";
       const rows = await executeReadOnlyQuery(provider, sql, readonlySqlite);
-      return { rows: rows.slice(0, 500), truncated: rows.length > 500, rowCount: Math.min(rows.length, 500) };
+      return { rows: rows.slice(0, ADMIN_ROW_LIMIT), truncated: rows.length > ADMIN_ROW_LIMIT, rowCount: Math.min(rows.length, ADMIN_ROW_LIMIT) };
     } catch (error) {
       request.log.warn({ error }, "admin read-only query failed");
       return fail(reply, 400, "admin_query_failed");

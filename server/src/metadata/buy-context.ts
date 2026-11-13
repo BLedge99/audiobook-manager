@@ -23,6 +23,8 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const DEADLINE_MS = 8000;
 /** A match needs most title tokens to overlap and the author's last name present. */
 const TITLE_MATCH_FLOOR = 0.85;
+/** Enough distinct store titles to cover a household's Discover usage; expired entries are dropped on write. */
+const CACHE_MAX_ENTRIES = 200;
 
 export interface LibrivoxMatch {
   id: string;
@@ -116,6 +118,7 @@ export async function findLibrivoxMatch(input: {
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
     return hit.match;
   }
+  if (hit) cache.delete(key);
 
   const params = new URLSearchParams({
     format: "json",
@@ -152,6 +155,19 @@ export async function findLibrivoxMatch(input: {
     match = null;
   }
 
+  // Drop expired entries first, then the oldest-inserted, so a storefront
+  // that scrolls everything cannot grow the map without bound.
+  if (cache.size >= CACHE_MAX_ENTRIES) {
+    const now = Date.now();
+    for (const [k, v] of cache) {
+      if (now - v.at >= CACHE_TTL_MS) cache.delete(k);
+    }
+    while (cache.size >= CACHE_MAX_ENTRIES) {
+      const oldest = cache.keys().next();
+      if (oldest.done) break;
+      cache.delete(oldest.value);
+    }
+  }
   cache.set(key, { at: Date.now(), match });
   return match;
 }

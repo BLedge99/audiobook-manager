@@ -1,6 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { Profile } from "@prisma/client";
 import { fail } from "../http-errors";
 import { isDemoMode } from "./demo-policy";
 import {
@@ -9,7 +8,7 @@ import {
   deviceLabelFromUserAgent,
   sessionTokenFromRequest,
 } from "./session";
-import { AuthFailure, AuthService, type LoginResult } from "./service";
+import { AuthFailure, AuthService, type LoginResult, type SessionProfile } from "./service";
 import {
   NATIVE_OAUTH_CALLBACK,
   OAUTH_APP_STATE_COOKIE,
@@ -28,7 +27,7 @@ export interface RegisterAuthOptions {
   emailSignUpAllowed?: boolean;
 }
 
-function publicProfile(profile: Profile) {
+function publicProfile(profile: SessionProfile) {
   // Spec 38: role passes through so the client can label a kids account;
   // ageBand is the caller's own data and travels only for children.
   return {

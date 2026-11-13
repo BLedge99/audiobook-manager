@@ -79,6 +79,29 @@ describe("enrichment endpoints", () => {
     expect(entry).not.toHaveProperty("coverImagePath");
   });
 
+  it("caps the review queue and returns it newest first", async () => {
+    const root = await prisma.libraryRoot.findFirstOrThrow();
+    // The queue is household curation; a household that imports thousands of
+    // review candidates must not get an unbounded payload.
+    await prisma.mediaItem.createMany({
+      data: Array.from({ length: 205 }, (_, i) => ({
+        title: `Bulk Review ${i}`,
+        author: "Bulk Author",
+        filePath: `/enrichment-test-root/bulk-review-${i}.mp3`,
+        fileFormat: "mp3",
+        libraryRootId: root.id,
+        enrichmentStatus: "review",
+      })),
+    });
+    const response = await app.inject({ method: "GET", url: "/api/enrichment/review-queue" });
+    expect(response.statusCode).toBe(200);
+    const items = response.json() as Array<{ id: number }>;
+    expect(items).toHaveLength(200);
+    const ids = items.map((item) => item.id);
+    const sorted = [...ids].sort((a, b) => b - a);
+    expect(ids).toEqual(sorted);
+  });
+
   it("routes a manual lookup through the run machinery and honours a field override", async () => {
     // Offline provider stub: only LibriVox answers, with an exact title match.
     const originalFetch = global.fetch;
