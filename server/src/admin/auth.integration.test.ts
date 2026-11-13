@@ -1,5 +1,7 @@
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -11,12 +13,23 @@ import { createScanManager } from "../scanner";
 import { executeReadOnlyQuery, validateReadOnlySql } from "./read-only-sql";
 
 const db = createTestDatabase("audiobook-admin-auth-");
+
+// A stand-in admin SPA build, in the temp dir rather than the repo's
+// gitignored client/admin-dist: the suite must be green on a fresh clone,
+// where the generated bundle does not exist until someone runs
+// `npm --prefix client run build:admin` (or `make start`). Same contract as
+// static.test.ts for the main app shell.
+const adminDist = path.join(db.dir, "admin-dist");
+mkdirSync(path.join(adminDist, "assets"), { recursive: true });
+writeFileSync(path.join(adminDist, "index.html"), "<!doctype html><title>Admin shell</title>");
+
 let prisma: PrismaClient;
 let app: FastifyInstance;
 let auth: AdminAuth;
 let adminApp: FastifyInstance;
 
 beforeAll(async () => {
+  process.env.ADMIN_CLIENT_DIST = adminDist;
   prisma = new PrismaClient();
   await prisma.$connect();
   auth = new AdminAuth(prisma);
@@ -30,6 +43,7 @@ afterAll(async () => {
   await app.close();
   await adminApp.close();
   await prisma.$disconnect();
+  delete process.env.ADMIN_CLIENT_DIST;
   db.cleanup();
 });
 
