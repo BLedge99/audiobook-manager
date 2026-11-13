@@ -277,15 +277,17 @@ check-copy:
 # also provisions a Linux Node.
 test-e2e:
 	docker compose up -d
-	@for i in $$(seq 1 90); do \
-		curl -sf http://localhost:3000/api/health > /dev/null 2>&1 && { echo "server healthy after $${i}s"; break; }; \
+	@port=$$(grep -E '^PORT=' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]'); port=$${port:-3000}; \
+	for i in $$(seq 1 90); do \
+		curl -sf http://localhost:$${port}/api/health > /dev/null 2>&1 && { echo "server healthy after $${i}s (port $${port})"; break; }; \
 		sleep 1; \
 	done
 	@for i in $$(seq 1 90); do \
 		curl -sf http://localhost:5173/ > /dev/null 2>&1 && { echo "client reachable after $${i}s"; break; }; \
 		sleep 1; \
 	done
-	npx playwright test $(ARGS)
+	@port=$$(grep -E '^PORT=' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]'); port=$${port:-3000}; \
+	E2E_API_URL=$${E2E_API_URL:-http://localhost:$${port}} npx playwright test $(ARGS)
 
 ## Point the phone at the server over USB.
 # The phone can end up on a WiFi segment that cannot reach the home LAN, and
