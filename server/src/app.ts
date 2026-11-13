@@ -16,6 +16,7 @@ import { registerGdprRoutes } from "./routes/gdpr";
 import { registerEnrichmentRoutes } from "./routes/enrichment";
 import { registerTaxonomyRoutes } from "./routes/taxonomy";
 import { registerDiscoverRoutes } from "./routes/discover";
+import { registerBuyContextRoutes } from "./routes/buy-context";
 import { registerLibraryRoutes } from "./routes/library";
 import { EnrichmentManager } from "./metadata/run";
 import { RecommendationService } from "./metadata/recommend-service";
@@ -342,6 +343,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerTaxonomyRoutes(app, { prisma, accountExperience, parseIdParam, optionalProfileId });
   await registerMetadataRoutes(app, { prisma, accountExperience, parseIdParam, canReadMediaItem, llm: options.llm });
   await registerDiscoverRoutes(app, { prisma, accountExperience, recommendations, parseIdParam, requireProfileId });
+  await registerBuyContextRoutes(app, { accountExperience, requireProfileId });
   await registerProgressRoutes(app, { prisma, parseIdParam, requireProfileId });
   await registerProfilesRoutes(app, { prisma, accountExperience, authEnabled, parseIdParam, requireProfileId });
   await registerGdprRoutes(app, { prisma, parseIdParam, requireProfileId });

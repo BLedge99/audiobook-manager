@@ -170,6 +170,8 @@ export interface Recommendation {
   publishedYear?: number;
   provider: string;
   providerKey?: string;
+  /** Print ISBN when present — used by the buy-link sheet (spec 39). */
+  isbn?: string;
   score: number;
   reason: RecommendationReason;
 }

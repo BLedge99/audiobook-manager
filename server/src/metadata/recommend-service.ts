@@ -51,6 +51,8 @@ export interface Recommendation {
   publishedYear?: number;
   provider: string;
   providerKey?: string;
+  /** Print ISBN when the provider supplied one — used by buy-link rows (spec 39). */
+  isbn?: string;
   score: number;
   reason: RecommendationReason;
 }
@@ -247,6 +249,7 @@ export class RecommendationService {
       publishedYear: candidate.publishedYear,
       provider: candidate.source,
       providerKey: candidate.providerKey,
+      isbn: candidate.isbn,
       score: Number(score.toFixed(3)),
       reason: explain(toTaggable(candidate), seed),
     }));

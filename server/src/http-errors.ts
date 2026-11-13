@@ -85,6 +85,7 @@ export type ApiErrorCode =
   | "age_restricted"
   | "positions_required"
   | "request_invalid"
+  | "rate_limited"
   | "internal_error";
 
 /**

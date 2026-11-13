@@ -151,13 +151,13 @@ with `profileId`-bearing models in the schema.
 
 | Field | Value |
 |-------|-------|
-| **Activity** | Querying Open Library, Google Books (optional API key), LibriVox, Audnexus for book metadata |
+| **Activity** | Querying Open Library, Google Books (optional API key), LibriVox, Audnexus for book metadata; plus the spec-39 sheet-driven LibriVox lookup in `GET /api/buy-context` (title/author only, never logged, never persisted, in-memory 5-minute cache) |
 | **Personal data** | **None** — only ISBN/title/author/ASIN queries; no user identifiers, no reading data |
 | **Lawful basis** | N/A (no personal data processed) |
 | **Retention** | N/A |
-| **Recipients** | Third-party public APIs; responses stored in `MediaItem` (catalogue metadata, not personal data) |
+| **Recipients** | Third-party public APIs; responses stored in `MediaItem` (catalogue metadata, not personal data); the buy-context lookup stores nothing at all |
 | **Cross-border transfer** | Possible (API providers may be outside EEA/UK), but no personal data is transferred |
-| **System** | `server/src/enrichment.ts`, `metadata/chain.ts`, `metadata/audnexus.ts`, `metadata/librivox.ts`; spec 25; ADR 008, 011 |
+| **System** | `server/src/enrichment.ts`, `metadata/chain.ts`, `metadata/audnexus.ts`, `metadata/librivox.ts`, `metadata/buy-context.ts`; spec 25, 39; ADR 008, 011, 034 |
 
 ---
 

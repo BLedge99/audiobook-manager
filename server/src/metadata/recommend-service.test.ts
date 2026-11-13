@@ -96,6 +96,21 @@ describe("discover paging", () => {
     expect(page1.total).toBeGreaterThan(5);
   });
 
+  it("passes the candidate's ISBN through to the Discover payload untouched", async () => {
+    subjectSearch.mockResolvedValue(
+      poolOf(8).map((candidate, index) => ({
+        ...candidate,
+        isbn: `978043902352${index}`,
+      })),
+    );
+    const service = new RecommendationService(fakePrisma({ favourites: [FAVOURITE] }));
+
+    const page = await service.forProfile(1, { page: 1, pageSize: 5 });
+
+    expect(page.recommendations.length).toBeGreaterThan(0);
+    expect(page.recommendations.every((r) => typeof r.isbn === "string")).toBe(true);
+  });
+
   it("page 2 continues page 1 rather than re-rolling the dice", async () => {
     subjectSearch.mockResolvedValue(poolOf(40));
     const service = new RecommendationService(fakePrisma({ favourites: [FAVOURITE] }));
