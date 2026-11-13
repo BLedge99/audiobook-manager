@@ -30,6 +30,8 @@ now belongs to a device. See §3 and
 
 **Updated 2026-11-12** with the kids-accounts work (spec 38) — see §2.0.
 
+**Updated 2026-11-13** with the external-providers feature (spec 39) — see §3.
+
 Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
 than intended · **DEFERRED** = deliberately not built.
 
@@ -583,6 +585,7 @@ current behaviour.
 | **Offline editing / enrichment / scanning** | Deliberately server-only. The device holds a read replica; see ADR 012. |
 | **Download queues / whole-library sync** | Deliberately out of scope for spec 26 — one book at a time over the LAN. |
 | **Play Store publishing** | Sideloaded APK is acceptable for a household. |
+| **Spec 39 — external providers (external library items & Discover buy links)** | Specified 2026-11-13, not built. External items (Audible/Play Books/Kobo/Libro.fm) are **client-side only, deep-link out, no playback, no position**; Discover buy rows show **check-price links only — no displayed prices anywhere**; affiliate participation is self-service config only, Amazon untagged in-app. Reverse-engineered store APIs, price scraping/storage, and Amazon affiliate in the sideloaded app are ruled out by ADR [`decisions/034-external-items-and-check-price-buy-links.md`](decisions/034-external-items-and-check-price-buy-links.md); research in [`docs/external-providers-research-2026-11.md`](docs/external-providers-research-2026-11.md); build plan: [`docs/external-providers-plan.md`](docs/external-providers-plan.md). Child profiles see no buy links or external items (spec 38 gate). |
 
 ---
 
