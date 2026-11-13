@@ -219,9 +219,16 @@ describe("scanner respects enrichment precedence", () => {
   });
 });
 
+/** Resolved at module load, not inside a test: `skipIf` is a collection-time
+ * modifier, so calling it from within a test body throws. The Skellig folder
+ * is a separate download from the other fixtures, so its presence is checked
+ * on its own rather than with `HAS_FIXTURES`. */
+const SKELLIG_FIXTURE = path.join(__dirname, "..", "..", "test", "Skellig");
+const HAS_SKELLIG = existsSync(SKELLIG_FIXTURE);
+
 describe("scanner: a book with corrupt embedded chapter data", () => {
-  it.skipIf(!HAS_FIXTURES)("degrades to a whole-file chapter instead of failing the scan", async () => {
-    const skelligSource = path.join(__dirname, "..", "..", "test", "Skellig");
+  it.skipIf(!HAS_SKELLIG)("degrades to a whole-file chapter instead of failing the scan", async () => {
+    const skelligSource = SKELLIG_FIXTURE;
     const skelligFile = readdirSync(skelligSource).find((entry) => entry.toLowerCase().endsWith(".mp3"));
     if (!skelligFile) throw new Error("The Skellig fixture should hold an mp3");
     const skelligRoot = path.join(db.dir, "skellig-corrupt-toc");

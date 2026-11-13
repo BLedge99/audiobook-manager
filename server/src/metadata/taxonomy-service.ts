@@ -12,54 +12,61 @@ import { normalizeText } from "./types";
  * run updates names/sort order rather than duplicating. Operator edits to
  * `name` are preserved, because a re-seed only fills a name when the row has
  * none -- the slug is the stable identity.
+ *
+ * One transaction: the per-row upserts each used to be their own commit
+ * (~150 fsyncs on every boot), which blew the 10s integration-test timeout on
+ * a loaded machine.
  */
 export async function seedGenres(prisma: PrismaClient): Promise<number> {
   let created = 0;
+  await prisma.$transaction(async (tx) => {
+    const upsert = async (seed: GenreSeed, parentId: number | null, sortOrder: number): Promise<number> => {
+      const existing = await tx.genre.findUnique({ where: { slug: seed.slug } });
+      const row = await tx.genre.upsert({
+        where: { slug: seed.slug },
+        create: {
+          slug: seed.slug,
+          name: seed.name,
+          parentId,
+          sortOrder,
+          isCatchAll: seed.isCatchAll ?? false,
+        },
+        update: { parentId, sortOrder, isCatchAll: seed.isCatchAll ?? false },
+      });
+      if (!existing) created += 1;
+      return row.id;
+    };
 
-  const upsert = async (seed: GenreSeed, parentId: number | null, sortOrder: number): Promise<number> => {
-    const existing = await prisma.genre.findUnique({ where: { slug: seed.slug } });
-    const row = await prisma.genre.upsert({
-      where: { slug: seed.slug },
-      create: {
-        slug: seed.slug,
-        name: seed.name,
-        parentId,
-        sortOrder,
-        isCatchAll: seed.isCatchAll ?? false,
-      },
-      update: { parentId, sortOrder, isCatchAll: seed.isCatchAll ?? false },
-    });
-    if (!existing) created += 1;
-    return row.id;
-  };
-
-  for (const [index, top] of GENRE_TAXONOMY.entries()) {
-    const parentId = await upsert(top, null, index);
-    for (const [childIndex, child] of (top.children ?? []).entries()) {
-      await upsert(child, parentId, childIndex);
+    for (const [index, top] of GENRE_TAXONOMY.entries()) {
+      const parentId = await upsert(top, null, index);
+      for (const [childIndex, child] of (top.children ?? []).entries()) {
+        await upsert(child, parentId, childIndex);
+      }
     }
-  }
+  });
   return created;
 }
 
-/** Idempotent seed of the provider-string mappings. */
+/** Idempotent seed of the provider-string mappings. One transaction, like seedGenres. */
 export async function seedGenreMappings(prisma: PrismaClient): Promise<number> {
   let created = 0;
-  for (const [provider, mapping] of Object.entries(PROVIDER_GENRE_MAPPING)) {
-    for (const [rawValue, slug] of Object.entries(mapping)) {
-      const genre = await prisma.genre.findUnique({ where: { slug } });
-      if (!genre) continue; // mapping points at a genre the seed did not create
-      const existing = await prisma.genreMapping.findUnique({
-        where: { provider_rawValue: { provider, rawValue } },
-      });
-      if (!existing) created += 1;
-      await prisma.genreMapping.upsert({
-        where: { provider_rawValue: { provider, rawValue } },
-        create: { provider, rawValue, genreId: genre.id },
-        update: { genreId: genre.id },
-      });
+  await prisma.$transaction(async (tx) => {
+    for (const [provider, mapping] of Object.entries(PROVIDER_GENRE_MAPPING)) {
+      for (const [rawValue, slug] of Object.entries(mapping)) {
+        const genre = await tx.genre.findUnique({ where: { slug } });
+        if (!genre) continue; // mapping points at a genre the seed did not create
+        const existing = await tx.genreMapping.findUnique({
+          where: { provider_rawValue: { provider, rawValue } },
+        });
+        if (!existing) created += 1;
+        await tx.genreMapping.upsert({
+          where: { provider_rawValue: { provider, rawValue } },
+          create: { provider, rawValue, genreId: genre.id },
+          update: { genreId: genre.id },
+        });
+      }
     }
-  }
+  });
   return created;
 }
 
