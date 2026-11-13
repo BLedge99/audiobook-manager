@@ -31,7 +31,6 @@ import { biometricVault } from "./lib/biometricVault";
 import { ConnectionStatus } from "./components/ConnectionStatus";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
-import { ProfileSwitcher } from "./components/ProfileSwitcher";
 import { AccountMenu } from "./components/AccountMenu";
 import { ReviewQueue } from "./components/ReviewQueue";
 import { SearchBar } from "./components/SearchBar";
@@ -824,7 +823,7 @@ function App() {
             </IconBtn>
             {/* The profile list lives on the server, so offline the switcher has
                 nothing to offer and would open a panel that cannot fill. */}
-            {!offline && (accountExperience === "demo" ? <AccountMenu session={session} /> : <ProfileSwitcher />)}
+            {!offline && <AccountMenu session={session} />}
           </div>
         </div>
 

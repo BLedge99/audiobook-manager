@@ -162,10 +162,6 @@ vi.mock("./lib/platform", () => ({
   isNativeShell: () => false,
 }));
 
-vi.mock("./components/ProfileSwitcher", () => ({
-  ProfileSwitcher: () => null,
-}));
-
 beforeEach(() => {
   window.localStorage.clear();
   deviceBooks = [{ ...DEVICE_BOOK, serverId: "https://a.example" } as Audiobook];

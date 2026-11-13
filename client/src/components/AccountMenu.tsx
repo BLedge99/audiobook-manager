@@ -7,7 +7,7 @@ import { Btn } from "../ui/primitives";
 
 export function AccountMenu({ session }: { session: SessionInfo | null }) {
   const [open, setOpen] = useState(false);
-  const identity = session?.profile?.email || copy.account.demoAccount;
+  const identity = session?.profile?.name ?? session?.profile?.email ?? copy.account.signedInProfile;
 
   const signOut = async () => {
     await lockSession();

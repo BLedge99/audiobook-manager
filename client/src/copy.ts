@@ -564,6 +564,8 @@ export const copy = {
    */
   account: {
     demoAccount: "Demo account",
+    /** Used as the menu label when a household sign-in has no profile identity to show. */
+    signedInProfile: "Signed-in profile",
     accountMenu: "Account menu",
     kidsAccount: "Kids account",
     signOut: "Sign out",
@@ -674,7 +676,6 @@ export const copy = {
      * confirm button is labelled, so "Add" is unambiguous there.
      */
     addProfile: "+ Add profile",
-    addProfileCompact: "+ Profile",
     addShort: "Add",
     duplicate: "A profile with that name already exists.",
     nameRequired: "Enter a name for your profile.",
@@ -688,9 +689,6 @@ export const copy = {
     sessionExpired: "You've been signed out. Reload the app to sign in again.",
     unreachable: (detail: string) => `Cannot reach the server. ${detail}`,
     checkAddress: "Check the server address in Settings.",
-    switcherLabel: "Active profile",
-    selectProfile: "Select profile",
-    deleteActive: "Delete active profile",
   },
 
   offline: {
