@@ -14,6 +14,8 @@ public class MainActivity extends BridgeActivity {
     // cannot intercept the bundled app's first navigation.
     removeStaleServiceWorkerData();
     registerPlugin(BiometricVaultPlugin.class);
+    // Spec 39 / ADR 034: external books + buy links launch the store apps.
+    registerPlugin(ExternalIntentPlugin.class);
     super.onCreate(savedInstanceState);
     // Install after the WebView exists: the default client delegates asset
     // loads and everything else to Capacitor's asset loader. Ours answers

@@ -374,7 +374,7 @@ export const copy = {
     launchFailed: "We couldn't open that app. The book's page is in your browser instead.",
     addedNotice: "Added to your list",
     emptyHeading: "Your other apps",
-    titleField: "Title",
+    titleField: "Book name",
     authorField: "Author (optional)",
   },
 
