@@ -1133,6 +1133,7 @@ describe("the route table", () => {
       "POST /api/auth/accounts/:id/unlock",
       "POST /api/auth/claim",
       "POST /api/auth/devices",
+      "POST /api/auth/devices/link",
       "POST /api/auth/devices/session",
       "POST /api/auth/login",
       "POST /api/auth/logout",

@@ -97,6 +97,7 @@ export const DEMO_POLICY_TABLE: readonly DemoPolicyEntry[] = [
   hidden("profile create", "POST", "/api/profiles", {}),
   hidden("profile delete", "DELETE", "/api/profiles/:id"),
   hidden("device enrol", "POST", "/api/auth/devices", {}),
+  hidden("device link", "POST", "/api/auth/devices/link", {}),
   hidden("device list", "GET", "/api/auth/devices"),
   hidden("device revoke", "DELETE", "/api/auth/devices/:id"),
   hidden("password reset", "POST", "/api/auth/accounts/:id/reset", { newPassword: "pp" }),

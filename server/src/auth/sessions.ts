@@ -62,7 +62,7 @@ export class SessionsService {
   }
 
   /**
-   * Create a device-bound secret. Only its hash is stored by the server.
+   * Mint a device-bound secret (only its hash is stored).
    *
    * Spec 36: a device that reports an id it has already used **rotates** its
    * credential rather than getting a second one. Two credentials for one phone
@@ -74,11 +74,18 @@ export class SessionsService {
    * caller is already signed in as the profile, and it could have revoked the
    * credential outright, so handing the phone a fresh secret for it gives it
    * nothing it did not already have.
+   *
+   * `linkSessionId` is the sign-in that is enrolling. A password sign-in on
+   * the phone would otherwise keep the plain browser-style session it started
+   * with, and that row would list as its own "device" forever -- the panel
+   * would never show the phone as one row. Enrolling on this session adopts it
+   * into the credential instead.
    */
   async createDeviceCredential(
     profileId: number,
     label: string | null,
     deviceId?: string | null,
+    linkSessionId?: string,
   ) {
     const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
     if (!profile) throw new AuthFailure(404, "not_found");
@@ -100,6 +107,14 @@ export class SessionsService {
             lastUsedAt: this.now(),
           },
         });
+        if (linkSessionId) {
+          // Adopt only an un-linked sign-in: a browser session that is already
+          // bound to another device is not this device's.
+          await this.prisma.session.updateMany({
+            where: { id: linkSessionId, deviceCredentialId: null },
+            data: { deviceCredentialId: rotated.id, via: "device" },
+          });
+        }
         return {
           id: rotated.id,
           secret,
@@ -118,6 +133,14 @@ export class SessionsService {
         expiresAt: new Date(this.now().getTime() + 90 * 24 * 60 * 60 * 1000),
       },
     });
+    if (linkSessionId) {
+      // Adopt only an un-linked sign-in: a browser session that is already
+      // bound to another device is not this device's.
+      await this.prisma.session.updateMany({
+        where: { id: linkSessionId, deviceCredentialId: null },
+        data: { deviceCredentialId: created.id, via: "device" },
+      });
+    }
     return {
       id: created.id,
       secret,
@@ -125,6 +148,50 @@ export class SessionsService {
       deviceId: created.deviceId,
       expiresAt: created.expiresAt,
     };
+  }
+
+  /**
+   * Attach the calling session to a device credential owned by the same
+   * profile — no secret, no rotation, just the bookkeeping that makes the
+   * panel one row per device.
+   *
+   * Spec 36: a session that comes from a password sign-in starts unlinked
+   * (it does not know which device it is on until the client tells it), so
+   * on its own it would list as its own "device" forever. The Android client
+   * calls this on every native sign-in with the installation id; the server
+   * only ever links to a credential bearing the same profile and the caller's
+   * own device identifier, so a client cannot point a session at somebody
+   * else's credential.
+   *
+   * Returns the credential id when a link was made (or already held), or
+   * null when nothing was found for this profile/deviceId pair.
+   */
+  async linkSessionToDevice(
+    profileId: number,
+    sessionId: string,
+    deviceId: string | null,
+  ): Promise<string | null> {
+    const now = this.now();
+    const candidates = await this.prisma.deviceCredential.findMany({
+      where: {
+        profileId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+        ...(deviceId ? { deviceId } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 2,
+    });
+    // With no id to narrow on, only unambiguous profiles are linked: exactly
+    // one credential. Guessing between several would attach the session to
+    // an arbitrary phone.
+    const credential = deviceId ? candidates[0] ?? null : candidates.length === 1 ? candidates[0] : null;
+    if (!credential) return null;
+    await this.prisma.session.updateMany({
+      where: { id: sessionId, deviceCredentialId: null },
+      data: { deviceCredentialId: credential.id, via: "device" },
+    });
+    return credential.id;
   }
 
   /**

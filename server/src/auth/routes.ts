@@ -115,6 +115,37 @@ export async function registerAuthRoutes(
   options: RegisterAuthOptions,
 ): Promise<void> {
   const demoMode = () => isDemoMode(options.accountExperienceResolver?.() ?? options.accountExperience);
+  /**
+   * Attach the calling session to one of the profile's device credentials.
+   *
+   * No secret, no rotation: this only makes the panel list the session under
+   * the device it belongs to. With an installation id the client names its
+   * own device; without one, an unambiguous single credential is adopted.
+   */
+  app.post<{ Body: { deviceId?: string } }>("/api/auth/devices/link", {
+    schema: {
+      body: {
+        type: "object",
+        properties: { deviceId: { type: "string", maxLength: 100 } },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (demoMode()) return fail(reply, 404, "not_found");
+    if (!request.auth?.profile) return fail(reply, 403, "forbidden");
+    try {
+      const credentialId = await auth.linkSessionToDevice(
+        request.auth.profile.id,
+        request.auth.session.id,
+        request.body?.deviceId?.trim() || null,
+      );
+      if (!credentialId) return fail(reply, 404, "no_device_credential");
+      return { ok: true, credentialId };
+    } catch (error) {
+      return sendAuthFailure(reply, error);
+    }
+  });
+
   // The device secret is presented only after the OS biometric prompt has
   // released it from the native Vault. It is exchanged for an ordinary,
   // revocable profile session and is never returned again.
@@ -154,11 +185,15 @@ export async function registerAuthRoutes(
     if (demoMode()) return fail(reply, 404, "not_found");
     if (!request.auth?.profile) return fail(reply, 403, "forbidden");
     try {
-      return await auth.createDeviceCredential(
+      // Enrolling adopts the calling sign-in into the credential, so this
+      // session stops listing as its own "device" and the phone appears once.
+      const created = await auth.createDeviceCredential(
         request.auth.profile.id,
         request.body.label ?? null,
         request.body.deviceId ?? null,
+        request.auth.session.id,
       );
+      return created;
     } catch (error) {
       return sendAuthFailure(reply, error);
     }

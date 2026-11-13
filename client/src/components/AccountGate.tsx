@@ -210,23 +210,31 @@ export function AccountGate({
   };
 
   /**
-   * Set the phone up for fingerprint sign-in, if it is not set up already.
+   * Attach this device's bookkeeping to the sign-in, whatever the enrolment state.
    *
-   * Spec 36: this used to be skipped whenever the **server** held a
-   * credential for the profile. That is the wrong test. The Keystore key is
-   * invalidated when a new fingerprint is enrolled, and the saved value is
-   * then cleared while the server's credential survives -- so biometrics could
-   * never be set up again, and every attempt in Settings added another
-   * credential to the list.
+   * Two operations, both cheap:
    *
-   * The test is now the Vault: does this phone hold a value that can sign in
-   * on its own?
+   *  1. **Adopt the session** into the device credential in the server (no
+   *     secret, no rotation). Without this, password sign-ins on a phone that
+   *     is already enrolled each mint a fresh browser-style row in the
+   *     "Signed-in devices" panel.
+   *  2. **Enrol when the Vault has no secret** — first sign-in, or a Keystore
+   *     that was invalidated and re-enrolled the wrong value. With a live
+   *     secret there is nothing to set up; the exchange at launch does it.
    */
   const enrollDeviceUnlock = async (profileId: number) => {
     if (!biometricsAvailable || mode.kind !== "password") return;
-    if (biometricVault.hasSecret(profileId)) return;
     let deviceId: string | undefined;
     try {
+      // Adopt this sign-in into the phone's existing device credential, so
+      // the panel lists the phone once instead of one row per re-sign-in.
+      // No secret, no rotation: this is the bookkeeping only.
+      await boundedFetch("/api/auth/devices/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: getInstallationId() }),
+      }).catch(() => undefined);
+      if (biometricVault.hasSecret(profileId)) return;
       const key = await exportActiveProfileKey(profileId);
       if (!key) return;
       const response = await boundedFetch("/api/auth/devices", {

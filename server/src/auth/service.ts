@@ -611,6 +611,12 @@ export class AuthService {
     return this.sessions.createDeviceCredential(...args);
   }
 
+  async linkSessionToDevice(
+    ...args: Parameters<SessionsService["linkSessionToDevice"]>
+  ): Promise<string | null> {
+    return this.sessions.linkSessionToDevice(...args);
+  }
+
   async exchangeDeviceCredential(
     ...args: Parameters<SessionsService["exchangeDeviceCredential"]>
   ): Promise<LoginResult> {

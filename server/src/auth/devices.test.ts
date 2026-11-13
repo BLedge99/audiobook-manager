@@ -163,6 +163,20 @@ describe("one session per device", () => {
       new Set([phone.id, tablet.id]),
     );
   });
+
+  it("adopts the enrolling browser session into the device credential", async () => {
+    const profile = await createProfile();
+    const token = tokenOf(await login(profile));
+    // Enrollment happens on the sign-in's behalf (it is the browser's own
+    // phone enrolling itself), so the sign-in becomes the device's session.
+    const credential = await enrol(profile, token, "Pixel 4a");
+
+    const session = await prisma.session.findFirstOrThrow({
+      where: { profileId: profile.id },
+    });
+    expect(session.deviceCredentialId).toBe(credential.id);
+    expect(session.via).toBe("device");
+  });
 });
 
 describe("the signed-in devices panel", () => {
@@ -171,11 +185,13 @@ describe("the signed-in devices panel", () => {
     const token = tokenOf(await login(profile));
     const credential = await enrol(profile, token, "Pixel 4a", "installation-abc");
 
-    // Five sign-ins on one phone: one device, not five rows.
-    for (let attempt = 0; attempt < 5; attempt += 1) await exchange(credential.secret);
+    // Five sign-ins on one phone: one device, not five rows. Each exchange
+    // rotates the adopted session, so the latest token is the one that works.
+    let deviceToken = tokenOf(await exchange(credential.secret));
+    for (let attempt = 0; attempt < 4; attempt += 1) deviceToken = tokenOf(await exchange(credential.secret));
 
     const res = await app.inject({
-      method: "GET", url: "/api/auth/sessions", headers: { [SESSION_HEADER]: token },
+      method: "GET", url: "/api/auth/sessions", headers: { [SESSION_HEADER]: deviceToken },
     });
     expect(res.statusCode).toBe(200);
     const devices = res.json<{ devices: DeviceRow[] }>().devices;
@@ -186,12 +202,10 @@ describe("the signed-in devices panel", () => {
     expect(phone?.deviceId).toBe("installation-abc");
     expect(phone?.sessions).toBe(1);
     expect(phone?.via).toBe("device");
-    expect(phone?.current).toBe(false);
-
-    // The browser session that enrolled the phone is its own device.
-    const browser = devices.find((entry) => entry.via === "profile");
-    expect(browser).toBeDefined();
-    expect(browser?.current).toBe(true);
+    // Enrolling adopts the enrolling sign-in into the credential, so it no
+    // longer lists as a separate device of its own.
+    expect(phone?.current).toBe(true);
+    expect(devices.some((entry) => entry.via === "profile")).toBe(false);
   });
 
   it("signs one device out and leaves the others alone", async () => {
@@ -199,13 +213,15 @@ describe("the signed-in devices panel", () => {
     const token = tokenOf(await login(profile));
     const phone = await enrol(profile, token, "Pixel 4a");
     const tablet = await enrol(profile, token, "Tab S9");
-    await exchange(phone.secret);
+    // Enrolling adopted the login session into the phone credential; the
+    // tablet's first exchange mints its own session.
+    const phoneToken = tokenOf(await exchange(phone.secret));
     await exchange(tablet.secret);
 
     const res = await app.inject({
       method: "DELETE",
       url: `/api/auth/sessions/device/${phone.id}`,
-      headers: { [SESSION_HEADER]: token },
+      headers: { [SESSION_HEADER]: phoneToken },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ ok: true, revoked: 1 });
@@ -221,10 +237,15 @@ describe("the signed-in devices panel", () => {
     const profile = await createProfile();
     const token = tokenOf(await login(profile));
     const phone = await enrol(profile, token, "Pixel 4a");
-    await exchange(phone.secret);
+    // Enrolling adopted the login session into the phone credential and
+    // each exchange rotates its token; thread the live one through.
+    const phoneToken = tokenOf(await exchange(phone.secret));
+    // One other device so "others" has something to revoke.
+    const tablet = await enrol(profile, phoneToken, "Tab S9");
+    await exchange(tablet.secret);
 
     const res = await app.inject({
-      method: "DELETE", url: "/api/auth/sessions/others", headers: { [SESSION_HEADER]: token },
+      method: "DELETE", url: "/api/auth/sessions/others", headers: { [SESSION_HEADER]: phoneToken },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ ok: true, revoked: 1 });
@@ -236,7 +257,7 @@ describe("the signed-in devices panel", () => {
     expect(remaining[0].id).not.toBe(phone.id);
     // The caller's own session still works.
     const still = await app.inject({
-      method: "GET", url: "/api/auth/session", headers: { [SESSION_HEADER]: token },
+      method: "GET", url: "/api/auth/session", headers: { [SESSION_HEADER]: phoneToken },
     });
     expect(still.statusCode).toBe(200);
   });
@@ -307,11 +328,12 @@ describe("revoking a device credential", () => {
     const profile = await createProfile();
     const token = tokenOf(await login(profile));
     const credential = await enrol(profile, token, "Pixel 4a");
-    const exchanged = await exchange(credential.secret);
-    const deviceToken = exchanged.json<{ token: string }>().token;
+    // Enrolling adopted the login session into the credential; the exchange
+    // rotates its token, so the original login token no longer validates.
+    const deviceToken = tokenOf(await exchange(credential.secret));
 
     const revoked = await app.inject({
-      method: "DELETE", url: `/api/auth/devices/${credential.id}`, headers: { [SESSION_HEADER]: token },
+      method: "DELETE", url: `/api/auth/devices/${credential.id}`, headers: { [SESSION_HEADER]: deviceToken },
     });
     expect(revoked.statusCode).toBe(200);
 

@@ -241,8 +241,13 @@ describe("Android device credentials", () => {
     });
     expect(sessionInfo.json()).toMatchObject({ via: "device", profile: { id: profile.id } });
 
+    // Enrolling adopted the login session into the credential, so the
+    // exchange rotates the session's token; use its current value, not the
+    // stale login one.
+    const deviceHeaders = { [SESSION_HEADER]: session.token };
+
     const revoked = await app.inject({
-      method: "DELETE", url: `/api/auth/devices/${credential.id}`, headers,
+      method: "DELETE", url: `/api/auth/devices/${credential.id}`, headers: deviceHeaders,
     });
     expect(revoked.statusCode).toBe(200);
     const rejected = await app.inject({
