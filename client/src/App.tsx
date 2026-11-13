@@ -150,6 +150,10 @@ function App() {
   const [bypassServerSetup, setBypassServerSetup] = useState(false);
   const [offlineMode, setOfflineMode] = useState<boolean>(() => isOfflineMode());
   const offlineModeRef = useRef(offlineMode);
+  const accountExperienceRef = useRef(accountExperience);
+  useEffect(() => {
+    accountExperienceRef.current = accountExperience;
+  }, [accountExperience]);
   /**
    * Whether the server answered at all, as distinct from whether it said 401.
    *
@@ -223,10 +227,8 @@ function App() {
    */
   const { probeServer } = useSession({
     offlineModeRef,
-    accountExperience,
-    session,
-    authed,
-    serverReachable,
+    // Read the mode at call time: /api/config may have flipped it since mount.
+    getAccountExperience: () => accountExperienceRef.current,
     setServerReachable,
     setAuthed,
     setSession,

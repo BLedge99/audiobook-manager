@@ -9,7 +9,9 @@
  * triggered a re-probe.
  *
  * The orchestration now lives here; the App supplies the state and the writes,
- * so the module never owns the app's state.
+ * so the module never owns the app's state. The probe reads the account
+ * experience through `getAccountExperience` at call time — a captured value
+ * went stale the moment `/api/config` flipped the mode after mount.
  */
 
 import { useCallback, useEffect, useRef } from "react";
@@ -19,14 +21,8 @@ import { probeServer as probeServerRequest } from "./reachability";
 export interface UseSessionOptions {
   /** The listener's explicit offline choice. */
   offlineModeRef: { current: boolean };
-  /** The account experience in effect. */
-  accountExperience: "household" | "demo";
-  /** The session itself. */
-  session: SessionInfo | null;
-  /** Whether a session is accepted. */
-  authed: boolean | undefined;
-  /** Whether the server answered at all. */
-  serverReachable: boolean | undefined;
+  /** Read the account experience in effect, at call time. */
+  getAccountExperience: () => "household" | "demo";
   /** Write the server-reachable state. */
   setServerReachable: (value: boolean | undefined) => void;
   /** Write the authed state. */
@@ -50,10 +46,7 @@ export interface UseSessionOptions {
 export function useSession(options: UseSessionOptions) {
   const {
     offlineModeRef,
-    accountExperience,
-    session,
-    authed,
-    serverReachable,
+    getAccountExperience,
     setServerReachable,
     setAuthed,
     setSession,
@@ -87,7 +80,7 @@ export function useSession(options: UseSessionOptions) {
       }
       if (!probe.reachable) {
         setAuthed(false);
-        setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
+        setProfileId(getAccountExperience() === "demo" ? null : getActiveProfileId());
         return;
       }
       if (!probe.authed) {
@@ -117,13 +110,13 @@ export function useSession(options: UseSessionOptions) {
         setProfileId(id);
         setActiveProfileId(id);
       } else if (info.via === "household") {
-        setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
+        setProfileId(getAccountExperience() === "demo" ? null : getActiveProfileId());
       }
     } catch (error) {
       console.error("Could not complete server probe.", error);
       setServerReachable(false);
       setAuthed(false);
-      setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
+      setProfileId(getAccountExperience() === "demo" ? null : getActiveProfileId());
     } finally {
       probeInFlight.current = false;
     }
@@ -133,5 +126,5 @@ export function useSession(options: UseSessionOptions) {
     void probeServer();
   }, [probeServer]);
 
-  return { probeServer, serverReachable, authed, session };
+  return { probeServer };
 }
