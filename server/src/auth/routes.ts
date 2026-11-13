@@ -139,7 +139,7 @@ export async function registerAuthRoutes(
         request.auth.session.id,
         request.body?.deviceId?.trim() || null,
       );
-      if (!credentialId) return fail(reply, 404, "no_device_credential");
+      if (!credentialId) return fail(reply, 404, "device_not_found");
       return { ok: true, credentialId };
     } catch (error) {
       return sendAuthFailure(reply, error);
