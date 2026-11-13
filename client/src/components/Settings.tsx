@@ -193,11 +193,11 @@ export function Settings({
                 {copy.operator.settings.recentHeading}
               </p>
               <p className="mt-0.5 text-[12px] text-ink3">{copy.operator.settings.recentHelp}</p>
-              <ul className="mt-2 grid gap-1.5">
+              <ul className="mt-2 grid grid-cols-[minmax(0,1fr)] gap-1.5">
                 {recent.map((address) => {
                   const isCurrent = address === getServerUrl();
                   return (
-                    <li key={address} className="flex items-center gap-2">
+                    <li key={address} className="flex min-w-0 items-center gap-2">
                       <button
                         type="button"
                         onClick={() => switchTo(address)}
