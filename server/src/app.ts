@@ -1,6 +1,8 @@
 import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
+import compress from "@fastify/compress";
+import { cacheControlForPath, isAssetRequest } from "./static-assets";
 import { PrismaClient } from "@prisma/client";
 import path from "node:path";
 import { createScanManager } from "./scanner";
@@ -80,6 +82,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     trustProxy,
   });
+  // The only compression in the stack when the app is reached directly on
+  // :3000 (the Caddy front door adds its own where deployed). Bodies over
+  // 1 KB are gzipped when the client accepts it.
+  await app.register(compress, { threshold: 1024 });
   const apiDocs: { method: string | string[]; url: string; schema: unknown }[] = [];
   app.decorate("apiDocs", apiDocs);
   app.addHook("onRoute", (route) => {
@@ -318,9 +324,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const clientDist = process.env.CLIENT_DIST || path.resolve(__dirname, "../../client/dist");
   if (existsSync(clientDist)) {
     const fastifyStatic = (await import("@fastify/static")).default;
-    await app.register(fastifyStatic, { root: clientDist, prefix: "/", wildcard: false });
+    await app.register(fastifyStatic, {
+      root: clientDist,
+      prefix: "/",
+      wildcard: false,
+      setHeaders: (reply, filePath) => {
+        reply.header("Cache-Control", cacheControlForPath(filePath));
+      },
+    });
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith("/api/")) {
+        return fail(reply, 404, "not_found");
+      }
+      // Spec 38 lesson (2026-11-13): index.html for a missing bundle turns a
+      // stale deploy into a silent blank page. Asset misses fail loudly.
+      if (isAssetRequest(request.url)) {
         return fail(reply, 404, "not_found");
       }
       reply.sendFile("index.html");

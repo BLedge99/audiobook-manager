@@ -20,6 +20,9 @@ const clientDist = path.join(db.dir, "dist");
 mkdirSync(path.join(clientDist, "assets"), { recursive: true });
 writeFileSync(path.join(clientDist, "index.html"), "<!doctype html><title>Bookle shell</title>");
 writeFileSync(path.join(clientDist, "assets", "app.js"), "console.log('bookle');");
+// @fastify/static with wildcard:false registers routes at boot, so the
+ // compressible asset must exist before the app is built.
+writeFileSync(path.join(clientDist, "assets", "big.js"), "x".repeat(4096));
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 let prisma: PrismaClient;
@@ -72,5 +75,37 @@ describe("the production single-origin build", () => {
     });
     expect(missing.statusCode).toBe(404);
     expect(missing.json()).toEqual({ code: "not_found" });
+  });
+});
+
+describe("cache headers and compression", () => {
+  it("serves content-hashed /assets with immutable cache headers", async () => {
+    const asset = await app.inject({ method: "GET", url: "/assets/app.js" });
+    expect(asset.statusCode).toBe(200);
+    expect(asset.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+  });
+
+  it("serves the shell with must-revalidate, never immutable", async () => {
+    const shell = await app.inject({ method: "GET", url: "/" });
+    expect(shell.statusCode).toBe(200);
+    expect(shell.headers["cache-control"]).toBe("public, max-age=0, must-revalidate");
+  });
+
+  it("answers 404 for a missing asset instead of serving the shell", async () => {
+    // Spec 38 lesson (2026-11-13): index.html for a missing bundle turns a
+    // stale deploy into a silent blank page. Asset misses fail loudly.
+    const missing = await app.inject({ method: "GET", url: "/assets/does-not-exist.js" });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.body).not.toContain("Bookle shell");
+  });
+
+  it("compresses responses when the client accepts gzip", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/assets/big.js",
+      headers: { "accept-encoding": "gzip" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-encoding"]).toBe("gzip");
   });
 });

@@ -121,7 +121,12 @@ export async function registerMediaRoutes(
     } catch {
       return fail(reply, 404, "cover_not_found");
     }
-    return sendConditional(request, reply, createReadStream(item.coverImagePath), { match });
+    // Defer opening the file until the 304 decision is known: passing an
+    // open stream here opened an fd that a 304 response never consumed.
+    return sendConditional(request, reply, undefined, {
+      match,
+      produce: () => createReadStream(item.coverImagePath as string),
+    });
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/stream", async (request, reply) => {
@@ -162,9 +167,27 @@ export async function registerMediaRoutes(
   });
 }
 
+const AUDIO_CONTENT_TYPES: Record<string, string> = {
+  ".mp3": "audio/mpeg",
+  ".m4b": "audio/mp4",
+  ".m4a": "audio/mp4",
+  ".mp4": "audio/mp4",
+  ".flac": "audio/flac",
+  ".ogg": "audio/ogg",
+  ".opus": "audio/ogg",
+  ".wav": "audio/wav",
+  ".aac": "audio/aac",
+};
+
+function audioContentType(filePath: string): string {
+  return AUDIO_CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream";
+}
+
 async function streamAudioFile(filePath: string, range: string | undefined, reply: import("fastify").FastifyReply) {
   const details = await stat(filePath);
-  reply.header("Accept-Ranges", "bytes").type("audio/mpeg");
+  // Private, hour-long cache: it is the household's own media, and repeated
+  // range requests (seeking) should not revalidate every hit.
+  reply.header("Accept-Ranges", "bytes").type(audioContentType(filePath)).header("cache-control", "private, max-age=3600");
   if (!range) {
     reply.header("Content-Length", details.size);
     return reply.send(createReadStream(filePath));

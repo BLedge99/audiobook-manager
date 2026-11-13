@@ -1164,3 +1164,63 @@ describe("the route table", () => {
     ]);
   });
 });
+
+describe("media streaming content types and caching", () => {
+  async function authed() {
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    return { cookie: login.cookies.map((c) => `${c.name}=${c.value}`).join("; ") };
+  }
+
+  async function seedBookWithFile(ext: string) {
+    const dir = mkdtempSync(path.join(tmpdir(), `stream-${ext.slice(1)}-`));
+    const filePath = path.join(dir, `book${ext}`);
+    writeFileSync(filePath, Buffer.from("fake audio bytes"));
+    const root = await prisma.libraryRoot.create({ data: { path: dir, label: `Stream ${ext}` } });
+    const item = await prisma.mediaItem.create({
+      data: {
+        libraryRootId: root.id,
+        filePath,
+        title: `Stream ${ext}`,
+        author: "Unknown",
+        fileFormat: ext.slice(1),
+        duration: 10,
+      },
+    });
+    return { item };
+  }
+
+  it.each([
+    [".mp3", "audio/mpeg"],
+    [".m4b", "audio/mp4"],
+    [".m4a", "audio/mp4"],
+    [".flac", "audio/flac"],
+    [".ogg", "audio/ogg"],
+    [".opus", "audio/ogg"],
+  ])("serves a %s file as %s", async (ext, expected) => {
+    const { cookie } = await authed();
+    const { item } = await seedBookWithFile(ext);
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/stream`, headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe(expected);
+  });
+
+  it("answers 206 with the same content type for a range request", async () => {
+    const { cookie } = await authed();
+    const { item } = await seedBookWithFile(".m4b");
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/audiobooks/${item.id}/stream`,
+      headers: { cookie, range: "bytes=0-3" },
+    });
+    expect(res.statusCode).toBe(206);
+    expect(res.headers["content-type"]).toBe("audio/mp4");
+    expect(res.headers["content-range"]).toBe("bytes 0-3/16");
+  });
+
+  it("caches streams privately for an hour instead of revalidating every hit", async () => {
+    const { cookie } = await authed();
+    const { item } = await seedBookWithFile(".mp3");
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/stream`, headers: { cookie } });
+    expect(res.headers["cache-control"]).toBe("private, max-age=3600");
+  });
+});

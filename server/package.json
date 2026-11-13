@@ -29,6 +29,7 @@
     "db:prod:migrate:dev": "prisma migrate dev --schema prisma/schema.prisma"
   },
   "dependencies": {
+    "@fastify/compress": "^8.3.1",
     "@fastify/cookie": "^11.1.3",
     "@fastify/cors": "^11.3.1",
     "@fastify/static": "^10.1.7",

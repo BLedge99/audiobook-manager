@@ -37,6 +37,11 @@ export default defineConfig(({ mode }) => ({
       : [
           VitePWA({
             registerType: 'autoUpdate',
+              // Explicitly emit the registration script into index.html. The
+              // default ('auto') only injects when something imports the
+              // virtual module, and nothing in app code does -- leaving the
+              // deployed build silently without a service worker.
+              injectRegister: 'script',
               // No dev service worker. `devOptions.enabled` registered a SW on
               // every dev load, and it cached the app-shell navigation while
               // the dev server's module graph kept changing underneath it --

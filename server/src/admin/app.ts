@@ -1,5 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
+import compress from "@fastify/compress";
+import { cacheControlForPath, isAssetRequest } from "../static-assets";
 import type { PrismaClient } from "@prisma/client";
 import { AdminAuth, registerAdminAuth, requireAdminSession } from "./auth";
 import { fail } from "../http-errors";
@@ -59,6 +61,7 @@ export async function buildAdminApp(options: {
   storageSync?: StorageSync;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false, trustProxy: ["127.0.0.1", "::1"] });
+  await app.register(compress, { threshold: 1024 });
   const enrichmentManager = new EnrichmentManager(options.prisma);
   const readonlySqlite = await openReadonlySqlite();
   if (readonlySqlite) {
@@ -271,13 +274,20 @@ export async function buildAdminApp(options: {
     : path.resolve(process.cwd(), "../client/admin-dist"));
   if (existsSync(path.join(clientDist, "index.html"))) {
     const fastifyStatic = (await import("@fastify/static")).default;
-    await app.register(fastifyStatic, { root: clientDist, prefix: "/", wildcard: false });
+    await app.register(fastifyStatic, {
+      root: clientDist,
+      prefix: "/",
+      wildcard: false,
+      setHeaders: (reply, filePath) => {
+        reply.header("Cache-Control", cacheControlForPath(filePath));
+      },
+    });
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith("/api/")) return reply.code(404).send({ error: "not_found" });
       // Spec 38 lesson (2026-11-13): serving index.html for a missing JS/CSS
       // asset turns "stale bundle / unreadable file" into a silent blank page
       // and costs an hour of debugging. Asset misses fail loudly.
-      if (/\.(js|mjs|css|map|png|jpe?g|svg|webp|ico|woff2?)$/i.test(request.url.split("?")[0])) {
+      if (isAssetRequest(request.url)) {
         return reply.code(404).send({ error: "not_found" });
       }
       return reply.sendFile("index.html");

@@ -6,8 +6,8 @@ import { createHash } from "node:crypto";
 export function sendConditional<T>(
   request: { headers: Record<string, unknown> },
   reply: { header: (name: string, value: string) => unknown; code: (status: number) => { send: () => unknown } },
-  payload: T,
-  options: { match?: string; vary?: string[] } = {},
+  payload: T | undefined,
+  options: { match?: string; vary?: string[]; produce?: () => T } = {},
 ): T | unknown {
   // For JSON it is the serialised payload, deliberately: the library response
   // mixes MediaItem columns, four join tables and the *caller's own* progress,
@@ -28,6 +28,9 @@ export function sendConditional<T>(
   if (tags.some((value) => value === "*" || value === tag || String(value ?? "").split(",").some((entry) => entry.trim() === tag))) {
     return reply.code(304).send();
   }
+  // The 304 path must not materialise a deferred payload (e.g. an open file
+  // stream); callers with expensive payloads pass `produce` for that reason.
+  if (options.produce) return options.produce();
   return payload;
 }
 
