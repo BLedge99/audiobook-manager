@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { Compass, Headphones, Clock3 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Audiobook } from "../types";
@@ -57,7 +58,7 @@ const cardGrid = "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 
 /** The readout stamped into the shell: how long the book is, in tabular figures. */
 function Stamp({ book }: { book: Audiobook }) {
   return (
-    <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-ink/25 bg-surface/85 px-2 py-0.5 text-[11px] font-bold text-ink2 tnum backdrop-blur-sm">
+    <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-ink/25 bg-surface px-2 py-0.5 text-[11px] font-bold text-ink2 tnum">
       <Clock3 size={11} aria-hidden="true" />
       {durationLabel(book.duration)}
     </span>
@@ -73,11 +74,10 @@ function Stamp({ book }: { book: Audiobook }) {
  * hover/focus, because a hover-only control is a control a touch user cannot
  * reach.
  */
-function LibraryCard({
+const LibraryCard = memo(function LibraryCard({
   book,
   onSelect,
   showProgress,
-  percent,
   favourited,
   needsReview,
   alt,
@@ -87,15 +87,21 @@ function LibraryCard({
   book: Audiobook;
   onSelect: (book: Audiobook) => void;
   showProgress: boolean;
-  percent: number;
   favourited: boolean;
   needsReview: boolean;
   alt: boolean;
   onToggleFavourite?: (bookId: number) => void;
   onFindSimilar?: (book: Audiobook) => void;
 }) {
+  // Progress maths walks every chapter/track of the book; it runs only when
+  // the card actually shows progress, and only when the book identity changes.
+  const progress = useMemo(
+    () => (showProgress ? describeBookProgress(book) : null),
+    [book, showProgress],
+  );
   const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator");
-  const line = showProgress ? describeBookProgress(book).line : "";
+  const line = progress?.line ?? "";
+  const percent = progress?.percent ?? 0;
   const status = statusFor(percent);
 
   return (
@@ -177,7 +183,7 @@ function LibraryCard({
               onClick={() => onFindSimilar(book)}
               title={copy.findMoreLikeThis}
               aria-label={copy.card.findMoreLike(book.title)}
-              className="iconbtn bg-surface/90 backdrop-blur-sm"
+              className="iconbtn bg-surface/90"
             >
               <Compass size={16} aria-hidden="true" />
             </button>
@@ -186,7 +192,7 @@ function LibraryCard({
       )}
     </article>
   );
-}
+});
 
 /**
  * The dock: where a part-finished book waits.
@@ -290,21 +296,20 @@ export function AudiobookGrid({
     );
   }
 
-  const continuingIds = new Set(inProgressBooks(books).map((book) => book.id));
-  const reviewIds = new Set((changedIds ?? new Set<number>()));
+  const continuingBooks = useMemo(() => inProgressBooks(books), [books]);
+  const continuingIds = useMemo(() => new Set(continuingBooks.map((book) => book.id)), [continuingBooks]);
+  const reviewIds = useMemo(() => new Set(changedIds ?? []), [changedIds]);
 
   return (
     <div className={cardGrid}>
       {books.map((book, index) => {
         const showProgress = continuingIds.has(book.id);
-        const percent = showProgress ? describeBookProgress(book).percent : 0;
         return (
           <LibraryCard
             key={`${book.serverId ?? ""}#${book.id}`}
             book={book}
             onSelect={onSelect}
             showProgress={showProgress}
-            percent={percent}
             alt={index % 2 === 1}
             needsReview={reviewIds.has(book.id)}
             favourited={favourites?.has(book.id) ?? false}

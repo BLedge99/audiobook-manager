@@ -1,4 +1,5 @@
 import { SlidersHorizontal, X } from "lucide-react";
+import { memo, useCallback, useMemo } from "react";
 import { copy } from "../copy";
 import {
   activeFilterCount,
@@ -32,7 +33,7 @@ const FACETS: { key: FacetKey; label: string }[] = [
   { key: "tag", label: copy.filters.facets.tag },
 ];
 
-function Chip({
+const Chip = memo(function Chip({
   active,
   onClick,
   children,
@@ -51,9 +52,9 @@ function Chip({
       {children}
     </button>
   );
-}
+});
 
-function FacetGroup({
+const FacetGroup = memo(function FacetGroup({
   facet,
   label,
   books,
@@ -70,7 +71,12 @@ function FacetGroup({
   genreLabels: Map<string, string>;
   onClear: (facet: FacetKey) => void;
 }) {
-  const options = facetOptions(books, facet, facet === "genre" ? genreLabels : undefined);
+  // Facet counts are five O(N) passes with a sort each; they must not
+  // recompute on every render of the bar.
+  const options = useMemo(
+    () => facetOptions(books, facet, facet === "genre" ? genreLabels : undefined),
+    [books, facet, genreLabels],
+  );
   if (options.length === 0) return null;
 
   const selected = filters[facet] ?? [];
@@ -109,7 +115,7 @@ function FacetGroup({
       </div>
     </div>
   );
-}
+});
 
 export function FilterBar({
   books,
@@ -124,15 +130,26 @@ export function FilterBar({
 }) {
   // Flatten the taxonomy so a second-level genre shows its parent as context
   // ("Science Fiction" under "Sci-Fi & Fantasy") rather than a bare slug.
-  const genreLabels = new Map<string, string>();
-  for (const parent of genres) {
-    for (const child of parent.children ?? []) {
-      genreLabels.set(child.slug, child.name);
+  const genreLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const parent of genres) {
+      for (const child of parent.children ?? []) {
+        labels.set(child.slug, child.name);
+      }
+      labels.set(parent.slug, parent.name);
     }
-    genreLabels.set(parent.slug, parent.name);
-  }
+    return labels;
+  }, [genres]);
 
   const active = activeFilterCount(filters);
+  const onToggle = useCallback(
+    (target: FacetKey, value: string) => onChange(toggleFilter(filters, target, value)),
+    [onChange, filters],
+  );
+  const onClear = useCallback(
+    (target: FacetKey) => onChange(clearFacet(filters, target)),
+    [onChange, filters],
+  );
 
   return (
     <section className="panel mb-8 p-4 sm:p-5" aria-labelledby="filter-bar">
@@ -161,8 +178,8 @@ export function FilterBar({
             books={books}
             filters={filters}
             genreLabels={genreLabels}
-            onToggle={(target, value) => onChange(toggleFilter(filters, target, value))}
-            onClear={(target) => onChange(clearFacet(filters, target))}
+            onToggle={onToggle}
+            onClear={onClear}
           />
         ))}
       </div>

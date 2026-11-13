@@ -384,20 +384,12 @@ async function evictIfNeeded(): Promise<void> {
   }
 }
 
-/** Current state for a key, and the side effect of arranging for it to exist. */
+/** Current state for a key. Pure: arms nothing, creates nothing. */
 function peek(key: string | undefined, enabled: boolean): CoverState {
   if (!key || !enabled) return ABSENT;
-  const entry = entryFor(key);
-  // `ensure` is called in both branches, not just the not-ready one: it is what
-  // schedules the once-per-session revalidation for a cover that is already on
-  // screen, and it returns immediately when there is nothing to do. Returning
-  // early on `ready` -- which is what this did at first -- meant a cover was
-  // never checked against the server again for the rest of the session.
-  void ensure(key);
+  const entry = entries.get(key);
+  if (!entry) return LOADING;
   if (entry.state.status === "ready") return entry.state;
-  // Not in memory yet: it may still be in IndexedDB from a previous session.
-  // `ensure` reads the store before deciding to fetch, which is what makes a
-  // cold start offline work at all.
   return LOADING;
 }
 
@@ -419,26 +411,22 @@ export async function clearCoverCache(): Promise<void> {
 }
 
 /**
- * Read the whole cache into memory at startup, and publish what it finds.
+ * Tally the whole cache at startup, for the Settings storage panel.
  *
- * This is what makes a cold start *offline* show covers: `peek` on a cold map
- * would report "not here" and send every card to the network, which is
- * unavailable, which is the original bug. One query brings the shelf back.
+ * This used to also pin every record -- and its blob -- in memory for the
+ * session, which on a full household library was hundreds of MB held forever.
+ * Nothing is retained now: each card reads its own row from IndexedDB on
+ * mount, one small indexed read per cover.
  */
 export async function warmCoverCache(): Promise<void> {
   if (warmPromise) return warmPromise;
   warmPromise = (async () => {
     try {
       requestPersistence();
-      const records = await localDb.covers.toArray();
-      totalBytes = records.reduce((total, record) => total + record.bytes, 0);
-      for (const record of records) {
-        // `state` is left alone. A card that has not asked for this key yet is
-        // still ABSENT, and will read the record when it does -- which keeps
-        // this to one pass over the store instead of minting an object URL for
-        // every cover in the library on every launch.
-        entryFor(record.key).record = record;
-      }
+      totalBytes = 0;
+      await localDb.covers.toCollection().each((record) => {
+        totalBytes += record.bytes;
+      });
       notify();
     } catch {
       // A cache that will not open is an empty cache, not a broken app.
@@ -516,7 +504,11 @@ function useNearViewport<T extends HTMLElement>(): [React.RefObject<T | null>, b
 export function useCover(key: string | undefined, enabled = true): CoverState {
   // The snapshot is a frozen, stable object per state -- `ABSENT`, `LOADING` or
   // the entry's own `ready` object -- so `useSyncExternalStore` compares by
-  // identity and does not re-render in a loop.
+  // identity and does not re-render in a loop. It is pure: arranging for the
+  // cover to exist happens here, in an effect, never during render.
+  useEffect(() => {
+    if (key && enabled) void ensure(key);
+  }, [key, enabled]);
   const getSnapshot = useCallback(() => peek(key, enabled), [key, enabled]);
   return useSyncExternalStore(subscribe, getSnapshot, () => ABSENT);
 }

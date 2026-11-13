@@ -38,7 +38,7 @@ export function FavouriteButton({
       aria-label={favourited ? copy.favourite.remove(label) : copy.favourite.addNamed(label)}
       title={favourited ? copy.favourite.inYours : copy.favourite.add}
       className={cn(
-        "grid shrink-0 place-items-center rounded-full border-2 border-ink bg-surface/90 backdrop-blur-sm transition",
+        "grid shrink-0 place-items-center rounded-full border-2 border-ink bg-surface transition",
         "hover:-translate-y-0.5 hover:bg-rasp hover:text-white",
         dimensions,
         favourited ? "bg-rasp text-white" : "text-ink2",

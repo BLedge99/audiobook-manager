@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook } from "../types";
 import { getActiveProfileId, getServerUrl } from "../lib/api";
@@ -95,6 +95,54 @@ const PENDING_TIMEOUT_MS = 5000;
  *   than from storage means a session restored from a cookie is not refused.
  *   Falls back to the stored id so the component still works standalone.
  */
+/**
+ * One chapter in the list. Memoized with a custom comparer that deliberately
+ * ignores the `onSelect` closure identity: the player re-creates its handlers
+ * every render (every 250 ms while timeupdate fires), and re-rendering 200
+ * chapter rows for a paused book was visible on low-end hardware. The
+ * callback only changes with the book, and `segment` identity changes with
+ * the book too, so a stale row can never hold a stale selection.
+ */
+const ChapterRow = memo(function ChapterRow({
+  index,
+  segment,
+  active,
+  elapsed,
+  onSelect,
+}: {
+  index: number;
+  segment: Segment;
+  active: boolean;
+  elapsed: number;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect(index)}
+        aria-current={active ? "true" : undefined}
+        className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-[13.5px] font-semibold transition ${
+          active ? "bg-rasp text-white" : "text-ink2 hover:bg-ink/5"
+        }`}
+      >
+        <span className="min-w-0 truncate">
+          <span className={`mr-2 tnum ${active ? "text-white/70" : "text-ink3"}`}>{index + 1}.</span>
+          {segment.title || copy.player.trackFallback(index + 1)}
+        </span>
+        <span className="shrink-0 text-[11.5px] tnum opacity-80">
+          {active ? `${timeLabel(elapsed)} / ` : ""}
+          {timeLabel(segment.duration)}
+        </span>
+      </button>
+    </li>
+  );
+}, (prev, next) =>
+  prev.index === next.index
+  && prev.segment === next.segment
+  && prev.active === next.active
+  && prev.elapsed === next.elapsed);
+
 export function ChapterPlayer({
   book,
   onProgressSaved,
@@ -925,25 +973,14 @@ export function ChapterPlayer({
       {segments.length > 1 && (
         <ol className="panel panel--sunk mt-4 max-h-52 divide-y divide-ink/10 overflow-auto">
           {segments.map((segment, index) => (
-            <li key={segment.key}>
-              <button
-                type="button"
-                onClick={() => selectSegment(index)}
-                aria-current={index === currentIndex ? "true" : undefined}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-[13.5px] font-semibold transition ${
-                  index === currentIndex ? "bg-rasp text-white" : "text-ink2 hover:bg-ink/5"
-                }`}
-              >
-                <span className="min-w-0 truncate">
-                  <span className={`mr-2 tnum ${index === currentIndex ? "text-white/70" : "text-ink3"}`}>{index + 1}.</span>
-                  {segment.title || copy.player.trackFallback(index + 1)}
-                </span>
-                <span className="shrink-0 text-[11.5px] tnum opacity-80">
-                  {index === currentIndex ? `${timeLabel(described.segmentElapsed)} / ` : ""}
-                  {timeLabel(segment.duration)}
-                </span>
-              </button>
-            </li>
+            <ChapterRow
+              key={segment.key}
+              index={index}
+              segment={segment}
+              active={index === currentIndex}
+              elapsed={index === currentIndex ? described.segmentElapsed : 0}
+              onSelect={selectSegment}
+            />
           ))}
         </ol>
       )}

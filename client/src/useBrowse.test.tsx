@@ -106,3 +106,24 @@ describe("useBrowse", () => {
     expect(cacheMocks.readFavourites).toHaveBeenCalled();
   });
 });
+
+
+describe("useBrowse refresh coalescing", () => {
+  it("coalesces concurrent refreshes into one trailing batch", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    fetchMock.mockImplementation(async () => {
+      await gate;
+      return fakeResponse([]);
+    });
+    const view = mount("7");
+    // The mount's initial refresh is stuck behind the gate. Two more requests
+    // arrive while it is in flight - they must collapse into ONE trailing run.
+    void view.result.current.refresh();
+    void view.result.current.refresh();
+    release();
+    await waitFor(() => expect(view.result.current.loaded).toBe(true));
+    // Five endpoints per batch; without coalescing this is 15 calls.
+    expect(fetchMock.mock.calls.length).toBe(10);
+  });
+});

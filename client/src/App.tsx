@@ -430,13 +430,18 @@ function App() {
     void browse.toggleFavourite(bookId);
   }, [browse]);
 
-  const gridProps = {
-    onSelect: setSelectedBook,
-    favourites: favouriteIds,
-    onToggleFavourite: toggleFavourite,
-    onFindSimilar: (book: Audiobook) => findSimilar(book.id),
-    changedIds: reviewIds,
-  };
+  const onFindSimilar = useCallback((book: Audiobook) => findSimilar(book.id), [findSimilar]);
+  // Stable identity, so memoized grids/cards bail out on unrelated re-renders.
+  const gridProps = useMemo(
+    () => ({
+      onSelect: setSelectedBook,
+      favourites: favouriteIds,
+      onToggleFavourite: toggleFavourite,
+      onFindSimilar,
+      changedIds: reviewIds,
+    }),
+    [favouriteIds, toggleFavourite, onFindSimilar, reviewIds],
+  );
 
   /**
    * Progress saved while a book was open has to reach the library grid, which
@@ -454,6 +459,11 @@ function App() {
   const [libraryTick, setLibraryTick] = useState(0);
   const wasOffline = useRef(false);
   const lastProfileIdRef = useRef<string | null>(null);
+  const lastBackgroundRefresh = useRef(0);
+  // Window focus and visibilitychange both fire on every alt-tab; the shelf
+  // does not go stale that fast, so collapse them to one refresh per half
+  // minute (the fetch is ETag'd, but two requests beat none).
+  const BACKGROUND_REFRESH_MIN_MS = 30_000;
 
   /**
    * One effect owns the shelf's refresh triggers. It asks the refresh policy
@@ -471,11 +481,14 @@ function App() {
           void refresh();
           return;
         case "window-focus":
-          if (profileId) void refresh();
+        case "visibility-visible": {
+          if (!profileId) return;
+          const now = Date.now();
+          if (now - lastBackgroundRefresh.current < BACKGROUND_REFRESH_MIN_MS) return;
+          lastBackgroundRefresh.current = now;
+          void refresh();
           return;
-        case "visibility-visible":
-          if (profileId) void refresh();
-          return;
+        }
         case "profile-changed":
           if (profileId) void refreshForProfile();
           return;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   Audiobook,
   BookTagSuite,
@@ -44,28 +44,46 @@ export function useBrowse(profileId: string | null = null) {
   const [reviewQueue, setReviewQueue] = useState<Audiobook[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  const inFlight = useRef(false);
+  const queued = useRef(false);
+
   const refresh = useCallback(async () => {
+    // A tab toggle, a favourite edit and a reconnect can all ask for a refresh
+    // in quick succession; without this they each fire a 5-request batch.
+    // Requests arriving mid-batch collapse into ONE trailing run.
+    if (inFlight.current) {
+      queued.current = true;
+      return;
+    }
+    inFlight.current = true;
     try {
-      const [genreTree, tagList, favIds, status, review] = await Promise.all([
-        request<GenreNode[]>("/api/genres"),
-        request<TagSummary[]>("/api/tags"),
-        request<number[]>("/api/favourites/ids"),
-        request<EnrichmentStatus>("/api/enrichment/status"),
-        request<Audiobook[]>("/api/enrichment/review-queue"),
-      ]);
-      setGenres(genreTree);
-      setTags(tagList);
-      setFavourites(favIds);
-      setEnrichment(status);
-      setReviewQueue(review);
-      void cacheFavourites(favIds, getServerUrl());
-    } catch {
-      // Browse degrades to the plain library rather than an error screen. If
-      // the profile key is unlocked (offline sign-in), show the last encrypted
-      // favourites instead of an empty heart set.
-      const cached = await readFavourites(getServerUrl());
-      if (cached) setFavourites(cached);
+      while (true) {
+        queued.current = false;
+        try {
+          const [genreTree, tagList, favIds, status, review] = await Promise.all([
+            request<GenreNode[]>("/api/genres"),
+            request<TagSummary[]>("/api/tags"),
+            request<number[]>("/api/favourites/ids"),
+            request<EnrichmentStatus>("/api/enrichment/status"),
+            request<Audiobook[]>("/api/enrichment/review-queue"),
+          ]);
+          setGenres(genreTree);
+          setTags(tagList);
+          setFavourites(favIds);
+          setEnrichment(status);
+          setReviewQueue(review);
+          void cacheFavourites(favIds, getServerUrl());
+        } catch {
+          // Browse degrades to the plain library rather than an error screen. If
+          // the profile key is unlocked (offline sign-in), show the last encrypted
+          // favourites instead of an empty heart set.
+          const cached = await readFavourites(getServerUrl());
+          if (cached) setFavourites(cached);
+        }
+        if (!queued.current) break;
+      }
     } finally {
+      inFlight.current = false;
       setLoaded(true);
     }
   }, [profileId]);
