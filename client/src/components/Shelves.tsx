@@ -106,10 +106,11 @@ export function ShelfRow({
       </MachineHead>
 
       {/* Bleeds to the screen edge on a phone so a shelf reads as continuing
-          rather than as a boxed list that happens to be cut off. */}
+          rather than as a boxed list that happens to be cut off; the clipping
+          room lives in `.scroll-bleed`. */}
       <div
         ref={scroller}
-        className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0"
+        className="scroll-bleed snap-x snap-mandatory"
         role="group"
         aria-label={shelf.title}
         tabIndex={0}

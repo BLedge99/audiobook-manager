@@ -215,7 +215,10 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
         title={copy.continueListening.heading}
         count={copy.continueListening.count(books.length)}
       />
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+      {/* Bleeds to the screen edge on a phone so a shelf reads as continuing
+          rather than as a boxed list that happens to be cut off; the clipping
+          room lives in `.scroll-bleed`. */}
+      <div className="scroll-bleed snap-x snap-mandatory">
         {books.map((book, index) => {
           const { line, percent } = describeBookProgress(book);
           const isFeatured = index === 0;

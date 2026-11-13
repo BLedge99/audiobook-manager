@@ -238,6 +238,10 @@ h4 {
   outline-offset: 2px;
   border-radius: 6px;
 }
+/* The ring reaches 5px past a border; anything inside a scrolling row that
+   clips at its padding box will slice it off. Scrolling rows of tilted or
+   outlined controls must use `.scroll-bleed` (components layer), never a
+   hand-rolled overflow pair with tight padding. */
 * {
   scrollbar-color: var(--line) transparent;
   scrollbar-width: thin;
@@ -312,6 +316,44 @@ button:focus {
 }
 .panel--sunk {
   background: var(--sunk);
+}
+
+/*
+ * The clipped scroller. One implementation of the rule every edge-to-edge
+ * row of tilted or focus-ringed controls needs, so it cannot drift per
+ * call site (it did: three near-identical rails each had the padding wrong).
+ *
+ *   1. `overflow-y: hidden` — once `overflow-x` is non-visible, a `visible`
+ *      y-axis computes to `auto`, which leaks a vertical scrollbar.
+ *   2. Vertical padding clears the tilt plus the focus ring (see
+ *      `:focus-visible`): a capsule leaning 2.5° rises ~7px and the ring
+ *      reaches 5px past its border. Clipping happens at the *padding* box,
+ *      so `--clip-pad` (default 1rem) must exceed both.
+ *   3. Negative inline margins bleed the row to the screen edge on a phone;
+ *      from `sm` up the row sits in the flow, so the bleed is released.
+ *
+ * Tune with custom properties, not per-instance utility classes:
+ *   `--bleed`      bleed width on phones (default 1rem; chips use .5rem)
+ *   `--clip-pad`   vertical clip allowance  (default 1rem; chips use .5rem)
+ *   `--scroll-gap` gap between children     (default .75rem; chips .5rem)
+ * Call sites add `snap-x`/`snap-mandatory` as utilities where snapping is
+ * wanted; from the components layer anything a utility says wins.
+ */
+.scroll-bleed {
+  --bleed: 1rem;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: var(--scroll-gap, 0.75rem);
+  margin-inline: calc(-1 * var(--bleed));
+  padding-inline: var(--bleed);
+  padding-block: var(--clip-pad, 1rem);
+}
+@media (min-width: 640px) {
+  .scroll-bleed {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
 }
 
 /* The capsule: a canted acrylic shell. This is the signature move, so it gets

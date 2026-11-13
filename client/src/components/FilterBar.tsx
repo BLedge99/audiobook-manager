@@ -1,5 +1,5 @@
 import { SlidersHorizontal, X } from "lucide-react";
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, type CSSProperties } from "react";
 import { copy } from "../copy";
 import {
   activeFilterCount,
@@ -95,10 +95,12 @@ const FacetGroup = memo(function FacetGroup({
           </button>
         )}
       </div>
-      {/* `-mx-1 px-1` lets the chips bleed to the screen edge without the
-          scrollbar sitting on top of the first chip. */}
+      {/* `-mx-2 px-2` bleeds the chips to the screen edge on a phone; from
+          `sm` up they wrap instead. Clipping room and the bleed itself live
+          in `.scroll-bleed`, tuned here via `--bleed`/`--clip-pad`. */}
       <div
-        className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible"
+        className="scroll-bleed snap-x sm:flex-wrap sm:overflow-visible"
+        style={{ "--bleed": "0.5rem", "--clip-pad": "0.5rem", "--scroll-gap": "0.5rem" } as CSSProperties}
         role="group"
         aria-label={copy.filters.groupLabel(label)}
       >
