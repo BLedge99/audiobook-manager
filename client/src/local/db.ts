@@ -131,11 +131,34 @@ export interface CoverRecord {
   bytes: number;
 }
 
+/**
+ * A book the listener owns in another store (spec 39 — Feature A).
+ *
+ * Device-local only, by construction: no file path, no progress, no
+ * relationship to `ReplicaBook`. Nothing here is ever sent to the server —
+ * this is the one table that never syncs.
+ */
+export interface ExternalItem {
+  /** Local identity: crypto.randomUUID(). */
+  id: string;
+  store: "audible" | "playbooks" | "kobo" | "librofm";
+  /** ASIN | Play id | Kobo slug | ISBN-13. */
+  externalId: string;
+  /** Canonicalised product URL — the only launch target we hand to Android. */
+  httpsUrl: string;
+  title: string;
+  author: string | null;
+  narrator: string | null;
+  coverUrl: string | null;
+  createdAt: string;
+}
+
 export class LocalLibraryDatabase extends Dexie {
   books!: Table<ReplicaBook, string>;
   covers!: Table<CoverRecord, string>;
   keyEnvelopes!: Table<KeyEnvelopeRecord, number>;
   privateRows!: Table<PrivateRowRecord, string>;
+  externalItems!: Table<ExternalItem, string>;
 
   constructor(name = "audiobooks") {
     super(name);
@@ -165,6 +188,16 @@ export class LocalLibraryDatabase extends Dexie {
       covers: "&key",
       keyEnvelopes: "&profileId",
       privateRows: "&id, [profileId+table]",
+    });
+    // Spec 39: external books live beside the replica and never sync. Additive
+    // again: every existing table keeps its shape, so this upgrade needs no
+    // data migration — only the new store.
+    this.version(5).stores({
+      books: "bookKey",
+      covers: "&key",
+      keyEnvelopes: "&profileId",
+      privateRows: "&id, [profileId+table]",
+      externalItems: "&id, [store+externalId], createdAt",
     });
   }
 }
