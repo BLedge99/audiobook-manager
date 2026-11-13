@@ -88,6 +88,17 @@ describe("admin panel authentication", () => {
     await auth.seed("dedicated-admin-password");
   });
 
+  it("a missing asset answers 404 JSON, never index.html (spec 38 postmortem, 2026-11-13)", async () => {
+    const missing = await adminApp.inject({ url: "/assets/definitely-not-here-xyz.js" });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().error).toBe("not_found");
+
+    // The SPA fallback still serves the app shell for SPA routes.
+    const fallback = await adminApp.inject({ url: "/some/spa/route" });
+    expect(fallback.statusCode).toBe(200);
+    expect(String(fallback.headers["content-type"])).toContain("text/html");
+  });
+
   it("reports status only to a valid admin session and avoids returning secret values", async () => {
     const unauthorized = await adminApp.inject({ url: "/api/admin/status" });
     expect(unauthorized.statusCode).toBe(401);

@@ -274,6 +274,12 @@ export async function buildAdminApp(options: {
     await app.register(fastifyStatic, { root: clientDist, prefix: "/", wildcard: false });
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith("/api/")) return reply.code(404).send({ error: "not_found" });
+      // Spec 38 lesson (2026-11-13): serving index.html for a missing JS/CSS
+      // asset turns "stale bundle / unreadable file" into a silent blank page
+      // and costs an hour of debugging. Asset misses fail loudly.
+      if (/\.(js|mjs|css|map|png|jpe?g|svg|webp|ico|woff2?)$/i.test(request.url.split("?")[0])) {
+        return reply.code(404).send({ error: "not_found" });
+      }
       return reply.sendFile("index.html");
     });
   } else {
