@@ -104,6 +104,10 @@ stop:
 # server will crash on startup (e.g. "Cannot find module 'better-sqlite3'").
 # Run `make reset-server-modules` first in that case.
 restart:
+	# Rebuild the admin mini-app so the baked bundle inside the dev image
+	# never decides what the operator sees. Best effort: a missing host npm
+	# must not stop the restart (compose mounts ./client/admin-dist anyway).
+	- npm --prefix client run build:admin
 	docker compose up -d --force-recreate
 	@if command -v powershell.exe >/dev/null 2>&1; then $(MAKE) keepalive; fi
 

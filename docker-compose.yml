@@ -36,6 +36,12 @@ services:
     command: sh -c "echo '[compose] generating the SQLite Prisma client'; npx prisma generate --schema prisma/sqlite/schema.prisma; echo '[compose] prisma generate exited with code '$$?; echo '[compose] applying SQLite migrations'; npx prisma migrate deploy --schema prisma/sqlite/schema.prisma; echo '[compose] prisma migrate deploy exited with code '$$?; echo '[compose] starting Fastify'; npm run dev"
     volumes:
       - ./server:/app/server
+      # The container image bakes the admin mini-app at image build time
+      # (Dockerfile.server runs `npm run build:admin` then), which nobody
+      # rebuilds on `make restart`. Shadow it with the live host bundle so
+      # the admin panel the operator sees is always the current one. Read-only;
+      # rebuilt on the host with `npm --prefix client run build:admin`.
+      - ./client/admin-dist:/app/client/admin-dist:ro
       # server_node_modules holds Linux-compatible node_modules for the dev
       # container. Named volumes persist across `docker compose up -d --build`,
       # so adding or removing a dependency in package.json does NOT refresh it.
