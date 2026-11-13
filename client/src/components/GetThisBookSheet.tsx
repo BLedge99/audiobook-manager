@@ -6,6 +6,7 @@ import { EXTERNAL_STORES, type ExternalStoreId } from "../lib/externalStores";
 import { launchStoreLink } from "../lib/externalIntent";
 import { buildBuyLinks, type BuyLink } from "../lib/buyLinks";
 import { Btn, cn } from "../ui/primitives";
+import { requestRaw } from "../lib/request";
 
 /**
  * Spec 39 — Feature B. "Where do I get this book?"
@@ -36,6 +37,12 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
   const [librivoxUrl, setLibrivoxUrl] = useState<string | null>(null);
 
   // One lookup per open. Failure simply omits the Free row — never an error.
+  //
+  // Through `request`, not a bare `fetch`: the native shell is not same-origin
+  // with the API, so a relative URL would resolve against the app origin and
+  // the raw call would carry no session — the Free row could never appear in
+  // the app. `requestRaw` resolves against the configured server, sends the
+  // session (cookie same-origin, header in the shell), and keeps the deadline.
   useEffect(() => {
     if (!open || isChild) {
       setLibrivoxUrl(null);
@@ -44,7 +51,7 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
     const controller = new AbortController();
     const params = new URLSearchParams({ title });
     if (author?.trim()) params.set("author", author.trim());
-    fetch(`/api/buy-context?${params.toString()}`, {
+    requestRaw(`/api/buy-context?${params.toString()}`, {
       signal: controller.signal,
       headers: { accept: "application/json" },
     })
