@@ -7,6 +7,25 @@
       "skillPath": "skills/design-mobile-apps/SKILL.md",
       "computedHash": "30bfa26c39e384af50d5ca2a9da7c39e239ce822f5e3fd2a31e8e6b55d3679ac"
     },
+    "optimize": {
+      "source": "registry:kursku/optimize",
+      "commit_sha": "c4dcbb2355d898186449bba9df2a0aa311e59e27",
+      "digest": "sha256:d1ae39244d411b690cc2de42c028661df5d6094037fbda7001b1a8cb846dfdaa",
+      "agents": [
+        "claude-code",
+        "codex",
+        "opencode",
+        "github-copilot",
+        "antigravity-cli"
+      ],
+      "mode": {
+        "claude-code": "junction",
+        "codex": "canonical",
+        "opencode": "junction",
+        "github-copilot": "junction",
+        "antigravity-cli": "canonical"
+      }
+    },
     "security-review": {
       "source": "registry:github/security-review",
       "commit_sha": "e986f49695491311df2774030ebe11efabd0fb77",
