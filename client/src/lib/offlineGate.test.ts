@@ -20,6 +20,7 @@ const base: OfflineGateInput = {
   cache: "present",
   unlocked: false,
   skippedUnlock: false,
+  isNativeShell: true,
 };
 
 function screen(overrides: Partial<OfflineGateInput>) {
@@ -84,6 +85,19 @@ describe("the offline screen", () => {
     });
   });
 
+  it("tells a zero-book browser the truth instead of an empty shelf", () => {
+    expect(screen({ booksOnDevice: 0, isNativeShell: false })).toEqual({
+      kind: "browserNotice",
+    });
+  });
+
+  it("keeps the empty-state shell for a zero-book native shell", () => {
+    expect(screen({ booksOnDevice: 0, isNativeShell: true })).toEqual({
+      kind: "shell",
+      progressAvailable: false,
+    });
+  });
+
   it("never returns a screen without an action when books exist", () => {
     // The rule, stated as an assertion: for every combination of the inputs
     // that describe a phone holding books, the result is a screen the listener
@@ -93,7 +107,7 @@ describe("the offline screen", () => {
         for (const unlocked of [true, false]) {
           for (const skippedUnlock of [true, false]) {
             const result = screen({ cache, hasProfile, unlocked, skippedUnlock });
-            expect(["waiting", "unlock", "shell"]).toContain(result.kind);
+            expect(["waiting", "unlock", "shell", "browserNotice"]).toContain(result.kind);
           }
         }
       }

@@ -686,16 +686,16 @@ function App() {
         cache: cacheState,
         unlocked: offlineUnlocked,
         skippedUnlock,
+        isNativeShell: isNativeShell(),
       })
     : null;
 
   if (offline && screen) {
-    // The ladder in `offlineGate` picked the screen; render what it picked. The
-    // precedence lives there, not here.
+    // The ladder in `offlineGate` picked the screen; render what it picked.
+    // The precedence lives there, not here.
     switch (screen.kind) {
       case "waiting":
-        if (device.loading) return <Splash />;
-        break;
+        return <Splash />;
       case "libraryReadFailed":
         return (
           <OfflineNotice
@@ -706,29 +706,22 @@ function App() {
           />
         );
       case "unlock":
-        if (device.books.length === 0) {
-          return (
-            <OfflineUnlock
-              onUnlocked={() => {
-                setOfflineUnlocked(true);
-                // Re-read the replica now that the key is in memory, so cached
-                // progress appears on the shelf immediately.
-                void device.refresh();
-                void browse.refresh();
-              }}
-              onChangeServer={openServerSetup}
-              onListenWithoutProgress={() => setSkippedUnlock(true)}
-            />
-          );
-        }
-        break;
+        return (
+          <OfflineUnlock
+            onUnlocked={() => {
+              setOfflineUnlocked(true);
+              // Re-read the replica now that the key is in memory, so cached
+              // progress appears on the shelf immediately.
+              void device.refresh();
+              void browse.refresh();
+            }}
+            onChangeServer={openServerSetup}
+            onListenWithoutProgress={() => setSkippedUnlock(true)}
+          />
+        );
+      case "browserNotice":
+        return <OfflineNotice hasBooks={false} onRetry={retryOffline} onChangeServer={openServerSetup} />;
       case "shell":
-        // A browser has no on-device library, so "No books downloaded" would be
-        // the wrong sentence there. The notice keeps both exits and says the
-        // honest thing.
-        if (device.books.length === 0 && !isNativeShell()) {
-          return <OfflineNotice hasBooks={false} onRetry={retryOffline} onChangeServer={openServerSetup} />;
-        }
         break;
     }
   }
