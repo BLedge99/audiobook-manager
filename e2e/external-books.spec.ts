@@ -15,6 +15,18 @@ import { E2E_BASE_URL, login, pickAnyProfile } from "./helpers";
 const ADMIN_PORT = process.env.ADMIN_PORT || "3100";
 const ADMIN_BASE = `http://localhost:${ADMIN_PORT}`;
 
+function adminBaseUrl(): string {
+  if (process.env.E2E_ADMIN_URL) return process.env.E2E_ADMIN_URL;
+  try {
+    const env = fs.readFileSync(path.resolve(__dirname, "..", ".env"), "utf8");
+    const line = env.split(/\r?\n/).find((entry) => entry.startsWith("ADMIN_PORT="));
+    const port = line?.slice("ADMIN_PORT=".length).trim();
+    return `http://localhost:${port || "3100"}`;
+  } catch {
+    return ADMIN_BASE;
+  }
+}
+
 const STORE_URLS = [
   { name: "Audible", url: "https://www.audible.com/pd/The-Count-of-Monte-Cristo/B00S2LTCQK", canonical: "https://www.audible.com/pd/The-Count-of-Monte-Cristo/B00S2LTCQK" },
   { name: "Google Play Books", url: "https://play.google.com/store/audiobooks/details?id=AQAAAACf3Vbd2M", canonical: "https://play.google.com/store/audiobooks/details?id=AQAAAACf3Vbd2M" },
@@ -53,13 +65,15 @@ test.describe("external books (spec 39)", () => {
       await expect(page.getByText(store.name, { exact: true })).toBeVisible();
     }
 
-    // The popup carries the canonical URL for the first (Audible) item.
+    // The popup carries the canonical URL of the first card (newest first,
+    // so the Libro.fm item added last renders as the first card).
     const firstCard = page.locator("[data-external-id]").first();
     const [popup] = await Promise.all([
       page.waitForEvent("popup"),
       firstCard.getByRole("button", { name: /^open /i }).first().click(),
     ]);
-    expect(popup.url()).toBe(STORE_URLS[0].canonical);
+    await popup.waitForLoadState("domcontentloaded");
+    expect(popup.url()).toContain("libro.fm/audiobooks/9781705085059-fourth-wing");
     await popup.close();
 
     // Two-step remove: the first tap never deletes.
@@ -74,7 +88,7 @@ test.describe("external books (spec 39)", () => {
     const adminPassword = readAdminPassword();
     test.skip(adminPassword === null, "ADMIN_PANEL_PASSWORD not configured");
 
-    const admin = await playwrightRequest.newContext({ baseURL: ADMIN_BASE });
+    const admin = await playwrightRequest.newContext({ baseURL: adminBaseUrl() });
     const login = await admin.post("/api/admin/login", { data: { password: adminPassword! } });
     expect(login.ok()).toBeTruthy();
 
