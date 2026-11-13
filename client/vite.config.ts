@@ -29,6 +29,20 @@ export default defineConfig(({ mode }) => ({
   define: {
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Vendor chunks split by library lifetime, not by route: react-dom
+        // (~130 KB raw) and dexie change rarely, so repeat visitors revalidate
+        // nothing when the app code changes. The PWA precaches all of them.
+        manualChunks(id: string) {
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
+          if (id.includes('node_modules/dexie')) return 'dexie';
+          if (id.includes('node_modules/lucide-react')) return 'icons';
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),

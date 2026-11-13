@@ -329,6 +329,11 @@ button:focus {
   box-shadow:
     0 2px 0 -1px color-mix(in srgb, var(--ink) 26%, transparent),
     0 12px 20px -16px color-mix(in srgb, var(--ink) 80%, transparent);
+  /* Offscreen cards in a 1,500-book grid are skipped for rendering, not
+     hidden from AT or find-in-page. `auto` remembers the last rendered size;
+     ~330px is the pre-measure estimate, close to a phone 2-across capsule. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 330px;
 }
 .capsule:hover,
 .capsule:focus-within {
