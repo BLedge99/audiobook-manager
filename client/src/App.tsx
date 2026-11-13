@@ -1062,7 +1062,7 @@ function App() {
           </>
         )}
 
-        {shownTab === "discover" && <Discover discover={discover} hasFavourites={favouriteIds.size > 0} />}
+        {shownTab === "discover" && <Discover discover={discover} hasFavourites={favouriteIds.size > 0} canBuy={session?.role !== "child"} />}
 
         {shownTab === "server-library" && (
           <ServerLibrary

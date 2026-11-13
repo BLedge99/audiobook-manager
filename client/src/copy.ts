@@ -384,6 +384,7 @@ export const copy = {
   buyLinks: {
     getButton: "Get this book",
     sheetTitle: "Get this book",
+    freeAction: "LibriVox — Free",
     checkPrice: "Check price →",
     adCue: "Ad · we may earn a commission",
     freeLabel: "Free — public domain",

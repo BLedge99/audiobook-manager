@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Discover } from "./Discover";
@@ -145,5 +145,57 @@ describe("Discover pagination", () => {
     // no runtime. A second page of them is still not an audiobook.
     render(<Discover discover={makeDiscover()} hasFavourites />);
     expect(screen.getAllByText(/not an audiobook yet/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe("spec 39 — Get this book", () => {
+  const wishlistItem = {
+    id: 7,
+    title: "Wanted Book",
+    author: "Some Author",
+    narrators: [],
+    description: null,
+    coverUrl: null,
+    genres: [],
+    seriesName: null,
+    publisher: null,
+    publishedYear: null,
+    provider: "openlibrary",
+    seedMediaItemId: null,
+    owned: false,
+    createdAt: "2026-11-13T00:00:00.000Z",
+    playable: false as const,
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ librivox: null }), { status: 200 })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("adult session: recommendations carry a Get button that opens the sheet", async () => {
+    const user = userEvent.setup();
+    render(<Discover discover={makeDiscover()} hasFavourites canBuy />);
+    const buttons = screen.getAllByRole("button", { name: "Get this book" });
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
+    await user.click(buttons[0]);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("adult session: wishlist rows carry the same affordance", async () => {
+    const user = userEvent.setup();
+    render(<Discover discover={makeDiscover({ wishlist: [wishlistItem] })} hasFavourites canBuy />);
+    await user.click(screen.getByRole("button", { name: /Get this book: Wanted Book/ }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("child session: no buy affordance anywhere and no network call", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    render(<Discover discover={makeDiscover({ wishlist: [wishlistItem] })} hasFavourites canBuy={false} />);
+    expect(screen.queryByRole("button", { name: /Get this book/i })).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
   });
 });

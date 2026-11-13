@@ -3,6 +3,7 @@ import { Compass, Plus, RefreshCw, Trash2, Check, LoaderCircle } from "lucide-re
 import type { DiscoverResult, Recommendation, WishlistItem } from "../types";
 import type { useDiscover } from "../useBrowse";
 import { copy } from "../copy";
+import { GetThisBookSheet } from "./GetThisBookSheet";
 import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
 import { CoverImage, urlCoverKey } from "../local/CoverImage";
 
@@ -15,16 +16,31 @@ import { CoverImage, urlCoverKey } from "../local/CoverImage";
  * implying a recommender (ADR 010).
  */
 
+/**
+ * What the sheet needs about the thing being bought. Saved recommendations
+ * carry the provider ISBN; wishlist rows carry no ISBN (they were minted
+ * before the field existed).
+ */
+export interface BuyTarget {
+  title: string;
+  author?: string;
+  isbn?: string;
+}
+
 function RecommendationCard({
   recommendation,
   index,
   saved,
   onSave,
+  canBuy,
+  onBuy,
 }: {
   recommendation: Recommendation;
   index: number;
   saved: boolean;
   onSave: () => void;
+  canBuy: boolean;
+  onBuy: (target: BuyTarget) => void;
 }) {
   return (
     <article
@@ -74,13 +90,34 @@ function RecommendationCard({
             {saved ? <Check size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
             {saved ? copy.discover.onYourWishlist : copy.discover.saveToWishlist}
           </Btn>
+          {canBuy && (
+            <Btn
+              size="sm"
+              variant="quiet"
+              onClick={() => onBuy({ title: recommendation.title, author: recommendation.author, isbn: recommendation.isbn })}
+            >
+              {copy.buyLinks.getButton}
+            </Btn>
+          )}
         </div>
       </div>
     </article>
   );
 }
 
-function WishlistRow({ item, onRemove, onMarkOwned }: { item: WishlistItem; onRemove: () => void; onMarkOwned: (owned: boolean) => void }) {
+function WishlistRow({
+  item,
+  onRemove,
+  onMarkOwned,
+  canBuy,
+  onBuy,
+}: {
+  item: WishlistItem;
+  onRemove: () => void;
+  onMarkOwned: (owned: boolean) => void;
+  canBuy: boolean;
+  onBuy: (target: BuyTarget) => void;
+}) {
   return (
     <article className="panel flex items-start gap-3 p-3">
       <div className="min-w-0 flex-1">
@@ -101,6 +138,16 @@ function WishlistRow({ item, onRemove, onMarkOwned }: { item: WishlistItem; onRe
         >
           <Check size={15} aria-hidden="true" />
         </Btn>
+        {canBuy && (
+          <Btn
+            size="sm"
+            variant="quiet"
+            aria-label={`${copy.buyLinks.getButton}: ${item.title}`}
+            onClick={() => onBuy({ title: item.title, author: item.author ?? undefined })}
+          >
+            {copy.buyLinks.getButton}
+          </Btn>
+        )}
         <Btn size="sm" variant="quiet" onClick={onRemove} aria-label={copy.discover.removeFromWishlist(item.title)} className="text-rasp-ink">
           <Trash2 size={15} aria-hidden="true" />
         </Btn>
@@ -165,8 +212,18 @@ function messageText(message: DiscoverResult["message"]): string | undefined {
   }
 }
 
-export function Discover({ discover, hasFavourites }: { discover: ReturnType<typeof useDiscover>; hasFavourites: boolean }) {
+export function Discover({
+  discover,
+  hasFavourites,
+  canBuy = true,
+}: {
+  discover: ReturnType<typeof useDiscover>;
+  hasFavourites: boolean;
+  /** False for child sessions: no buy affordance renders at all. */
+  canBuy?: boolean;
+}) {
   const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [buyTarget, setBuyTarget] = useState<BuyTarget | null>(null);
 
   // Destructured so the dependency list names *functions*, which are stable
   // `useCallback`s, rather than `discover` itself, which is a fresh object on
@@ -240,6 +297,8 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
                     index={index}
                     recommendation={recommendation}
                     saved={saved.has(key)}
+                    canBuy={canBuy}
+                    onBuy={setBuyTarget}
                     onSave={() => {
                       setSaved((current) => new Set(current).add(key));
                       void discover.save(recommendation).catch(() => setSaved((current) => {
@@ -296,6 +355,8 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
               <WishlistRow
                 key={item.id}
                 item={item}
+                canBuy={canBuy}
+                onBuy={setBuyTarget}
                 onRemove={() => void discover.remove(item.id)}
                 onMarkOwned={(owned) => void discover.markOwned(item.id, owned)}
               />
@@ -303,6 +364,15 @@ export function Discover({ discover, hasFavourites }: { discover: ReturnType<typ
           </div>
         )}
       </section>
+
+      <GetThisBookSheet
+        open={buyTarget !== null}
+        onClose={() => setBuyTarget(null)}
+        isChild={!canBuy}
+        title={buyTarget?.title ?? ""}
+        author={buyTarget?.author}
+        isbn={buyTarget?.isbn}
+      />
     </div>
   );
 }
