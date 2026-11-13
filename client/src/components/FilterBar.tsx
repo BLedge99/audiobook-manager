@@ -171,7 +171,7 @@ export function FilterBar({
         )}
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2">
         {FACETS.map((facet) => (
           <FacetGroup
             key={facet.key}

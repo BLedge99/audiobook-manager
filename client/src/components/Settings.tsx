@@ -146,7 +146,7 @@ export function Settings({
           </Btn>
         </div>
 
-        <form onSubmit={test} className="panel grid gap-3 p-5">
+        <form onSubmit={test} className="panel grid grid-cols-[minmax(0,1fr)] gap-3 p-5">
           <label htmlFor="server-url" className="flex items-center gap-2 text-[14px] font-bold text-ink">
             <Server size={16} className="text-rasp" aria-hidden="true" />
             {copy.operator.serverAddressLabel}

@@ -185,7 +185,7 @@ export function TagSuiteEditor({
 
       {status && <p role="status" className="mb-3 text-[12.5px] font-bold text-cobalt-ink">{status}</p>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
         <Field label={copy.operator.tagSuite.fields.title} field="title" />
         <Field label={copy.operator.tagSuite.fields.author} field="author" />
         <Field label={copy.operator.tagSuite.fields.publisher} field="publisher" />

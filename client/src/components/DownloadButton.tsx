@@ -87,7 +87,7 @@ export function DownloadButton({
 
   if (isDownloaded) {
     return (
-      <div className="grid gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <Btn variant="quiet" onClick={() => void remove()} disabled={busy}>
           {busy ? (
             <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
@@ -113,7 +113,7 @@ export function DownloadButton({
   }
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
       <Btn variant="primary" onClick={() => void start()} disabled={busy}>
         {busy ? (
           <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />

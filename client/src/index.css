@@ -767,6 +767,10 @@ button:focus {
 
 .field {
   width: 100%;
+  /* Grid/flex items default to min-width:auto, which pins an input to its
+     `size`-attribute width and pushes the whole panel past its bounds on a
+     phone. The one line that opts it out. */
+  min-width: 0;
   min-height: 44px;
   padding: 0 15px;
   border-radius: 22px;

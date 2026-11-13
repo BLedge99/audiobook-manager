@@ -293,7 +293,7 @@ export function Discover({
 
         {result?.recommendations.length ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {result.recommendations.map((recommendation, index) => {
                 const key = `${recommendation.provider}:${recommendation.providerKey ?? recommendation.title}`;
                 return (
@@ -355,7 +355,7 @@ export function Discover({
             {copy.discover.wishlistEmpty}
           </p>
         ) : (
-          <div className="grid gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
             {wishlist.map((item) => (
               <WishlistRow
                 key={item.id}

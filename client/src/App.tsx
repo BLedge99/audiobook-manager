@@ -992,7 +992,7 @@ function App() {
                   emptyMessage={offline ? copy.offline.emptyHeading : copy.library.empty}
                   emptyAction={
                     offline ? (
-                      <div className="grid justify-items-center gap-3">
+                      <div className="grid grid-cols-[minmax(0,1fr)] justify-items-center gap-3">
                         <p className="max-w-sm text-sm text-ink2">{copy.offline.emptyIntro}</p>
                         <div className="flex flex-wrap justify-center gap-2">
                           <Btn variant="primary" size="sm" onClick={retryOffline}>

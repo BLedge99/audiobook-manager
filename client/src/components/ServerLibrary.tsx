@@ -150,7 +150,7 @@ export function ServerLibrary({
               title={copy.serverLibrary.allAudiobooks}
               count={copy.serverLibrary.heldCount(held, books.length)}
             />
-            <ul className="grid gap-2 sm:grid-cols-2">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
               {books.map((book) => (
                 <ServerLibraryRow
                   key={book.id}
@@ -243,7 +243,7 @@ function OfflineServerLibrary({
               title={copy.serverLibrary.onThisDevice}
               count={copy.serverLibrary.offlineCount(books.length)}
             />
-            <ul className="grid gap-2 sm:grid-cols-2">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
               {books.map((book) => (
                 <li key={book.id} className="min-w-0">
                   <div className="panel flex min-w-0 items-center gap-3 p-2">
