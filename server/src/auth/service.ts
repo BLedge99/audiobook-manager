@@ -1,21 +1,26 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import type { DeviceCredential, Prisma, PrismaClient, Profile, Session } from "@prisma/client";
-import type { ApiErrorCode, ApiErrorParams } from "../http-errors";
+import type { PrismaClient, Profile } from "@prisma/client";
 import {
   hashPassword,
   validatePassword,
   verifyPassword,
 } from "./password";
 import {
-  SESSION_MAX_AGE_MS,
-  SESSION_RENEW_WINDOW_MS,
-  SESSION_TOUCH_MS,
   SESSION_TTL_MS,
   hashSessionToken,
   newSessionId,
   newSessionToken,
-  sessionExpiry,
 } from "./session";
+import {
+  AuthFailure,
+  createSessionCore,
+  type AuthContext,
+  type AuthVia,
+  type DeviceSession,
+  type LoginResult,
+  type SessionMetadata,
+} from "./internal";
+import { SessionsService } from "./sessions";
 import {
   cleanupExpiredPersonalDataArtifacts,
   purgeInactiveProfiles,
@@ -25,93 +30,18 @@ import { exchangeAuthorizationCode, fetchOAuthIdentity, safeEqualStrings } from 
 import { resetProfilePasswordCore } from "./profile-admin";
 import { RateLimiter } from "../rate-limit";
 
-export type AuthRole = "admin" | "member" | "child";
-export type AuthVia = "profile" | "household" | "device" | "oauth";
-
-/** The session-facing profile: the full account row minus the password hash. */
-export type SessionProfile = Omit<Profile, "passwordHash">;
-
-/**
- * What `validate()` pulls per request. Every Profile column except
- * `passwordHash`, which no request-path consumer reads — loading it per
- * authenticated request was pure exposure of the one secret in the row.
- */
-const SESSION_PROFILE_SELECT = {
-  id: true,
-  name: true,
-  color: true,
-  createdAt: true,
-  passwordUpdatedAt: true,
-  role: true,
-  disabled: true,
-  failedLoginCount: true,
-  lockedUntil: true,
-  lastLoginAt: true,
-  lastActiveAt: true,
-  oauthProvider: true,
-  oauthProviderId: true,
-  email: true,
-  ageBand: true,
-  followsServerLibrary: true,
-} satisfies Prisma.ProfileSelect;
-
-export interface AuthContext {
-  token: string;
-  session: Session;
-  profile: SessionProfile | null;
-  role: AuthRole;
-  via: AuthVia;
-}
-
-export interface SessionMetadata {
-  userAgent?: string | null;
-  deviceLabel?: string | null;
-}
-
-/**
- * One signed-in device, as the "Signed-in devices" panel shows it.
- *
- * Spec 36: a device, not a sign-in. A device is a device credential (Android)
- * or a browser session (web); the panel groups by that and says how many live
- * sessions the device holds.
- */
-export interface DeviceSession {
-  /** Opaque key: the device credential's id, or the session id for a browser. */
-  key: string;
-  /** The enrolled device name, or a label derived from the user agent. */
-  label: string | null;
-  /** The raw user agent, so a listener can tell two similar devices apart. */
-  userAgent: string | null;
-  /** The client's own installation id, when the device reported one. */
-  deviceId: string | null;
-  via: string;
-  /** When this device was first signed in. */
-  createdAt: Date;
-  /** When it was last used. */
-  lastActiveAt: Date;
-  /** True when the caller's own session belongs to this device. */
-  current: boolean;
-  /** How many live sessions this device holds. */
-  sessions: number;
-}
-
-export interface LoginResult {
-  token: string;
-  session: Session;
-  profile: Profile | null;
-  role: AuthRole;
-}
-
-export class AuthFailure extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: ApiErrorCode,
-    readonly params?: ApiErrorParams,
-  ) {
-    super(code);
-    this.name = "AuthFailure";
-  }
-}
+// Re-exported for the consumers that import from ./service (routes, passkeys,
+// admin); the definitions live in ./internal.
+export { AuthFailure } from "./internal";
+export type {
+  AuthRole,
+  AuthVia,
+  SessionProfile,
+  AuthContext,
+  SessionMetadata,
+  DeviceSession,
+  LoginResult,
+} from "./internal";
 
 export interface AuthServiceOptions {
   prisma: PrismaClient;
@@ -145,6 +75,7 @@ export class AuthService {
   private readonly ipFailures = new RateLimiter(IP_WINDOW_MS);
   private readonly oauthFailures = new RateLimiter(IP_WINDOW_MS);
   private readonly accountSignups = new RateLimiter(IP_WINDOW_MS);
+  private readonly sessions: SessionsService;
 
   constructor(options: AuthServiceOptions) {
     this.prisma = options.prisma;
@@ -152,6 +83,8 @@ export class AuthService {
     this.oauth = options.oauth ?? { enabled: false, providers: [] };
     this.enabled = Boolean(options.appPassword);
     this.now = options.now ?? (() => new Date());
+    // Same `now` seam: tests that freeze time freeze both halves.
+    this.sessions = new SessionsService({ prisma: this.prisma, now: this.now });
   }
 
   /**
@@ -663,349 +596,75 @@ export class AuthService {
    * server-generated, so a client cannot point a session at somebody else's
    * credential.
    */
+  // Sessions and devices live in ./sessions (spec 37 candidate 4). The
+  // facade delegates so auth/routes.ts and auth/passkeys.ts never change.
+
   async createProfileSession(
-    profileId: number,
-    via: AuthVia,
-    meta: SessionMetadata,
-    options: { deviceCredentialId?: string | null; deviceLabel?: string | null } = {},
+    ...args: Parameters<SessionsService["createProfileSession"]>
   ): Promise<LoginResult> {
-    const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
-    if (!profile) throw new AuthFailure(404, "not_found");
-    if (profile.disabled) throw new AuthFailure(403, "account_disabled");
-    await this.prisma.profile.update({
-      where: { id: profileId },
-      data: { lastActiveAt: this.now() },
-    });
-    return this.createSession(profileId, via, meta, options);
+    return this.sessions.createProfileSession(...args);
   }
 
-  /**
-   * Create a device-bound secret. Only its hash is stored by the server.
-   *
-   * Spec 36: a device that reports an id it has already used **rotates** its
-   * credential rather than getting a second one. Two credentials for one phone
-   * is what made the "signed-in devices" list grow every time the phone
-   * re-enrolled -- which is what happened after the Keystore key was
-   * invalidated and the phone had to be set up again.
-   *
-   * The rotation replaces the secret, so the previous one stops working. The
-   * caller is already signed in as the profile, and it could have revoked the
-   * credential outright, so handing the phone a fresh secret for it gives it
-   * nothing it did not already have.
-   */
   async createDeviceCredential(
-    profileId: number,
-    label: string | null,
-    deviceId?: string | null,
-  ) {
-    const profile = await this.prisma.profile.findUnique({ where: { id: profileId } });
-    if (!profile) throw new AuthFailure(404, "not_found");
-    if (profile.disabled) throw new AuthFailure(403, "account_disabled");
-    const secret = randomBytes(32).toString("base64url");
-    const trimmedDeviceId = deviceId?.trim() || null;
-
-    if (trimmedDeviceId) {
-      const existing = await this.prisma.deviceCredential.findFirst({
-        where: { profileId, deviceId: trimmedDeviceId, revokedAt: null },
-        orderBy: { createdAt: "desc" },
-      });
-      if (existing) {
-        const rotated = await this.prisma.deviceCredential.update({
-          where: { id: existing.id },
-          data: {
-            secretHash: hashSessionToken(secret),
-            label: label?.trim() || existing.label,
-            lastUsedAt: this.now(),
-          },
-        });
-        return {
-          id: rotated.id,
-          secret,
-          label: rotated.label,
-          deviceId: rotated.deviceId,
-          expiresAt: rotated.expiresAt,
-        };
-      }
-    }
-
-    const created = await this.prisma.deviceCredential.create({
-      data: {
-        id: randomUUID(), profileId, secretHash: hashSessionToken(secret),
-        label: label?.trim() || null,
-        deviceId: trimmedDeviceId,
-        expiresAt: new Date(this.now().getTime() + 90 * 24 * 60 * 60 * 1000),
-      },
-    });
-    return {
-      id: created.id,
-      secret,
-      label: created.label,
-      deviceId: created.deviceId,
-      expiresAt: created.expiresAt,
-    };
+    ...args: Parameters<SessionsService["createDeviceCredential"]>
+  ): ReturnType<SessionsService["createDeviceCredential"]> {
+    return this.sessions.createDeviceCredential(...args);
   }
 
-  /**
-   * Exchange a device secret for a session.
-   *
-   * Spec 36: a session belongs to a **device**, not to a sign-in. The first
-   * exchange creates the session; every later one rotates the token on the
-   * session the device already holds, so a phone that signs in fifty times is
-   * still one row in the "Signed-in devices" panel.
-   *
-   * The rotation is not optional. Only the hash of a token is stored, so the
-   * old token cannot be re-issued -- it is replaced, and it stops validating
-   * immediately.
-   */
-  async exchangeDeviceCredential(secret: string, meta: SessionMetadata): Promise<LoginResult> {
-    const credential = await this.prisma.deviceCredential.findUnique({
-      where: { secretHash: hashSessionToken(secret) },
-    });
-    const now = this.now();
-    if (!credential || credential.revokedAt || credential.expiresAt <= now) {
-      throw new AuthFailure(401, "device_auth_failed");
-    }
-    await this.prisma.deviceCredential.update({
-      where: { id: credential.id }, data: { lastUsedAt: now },
-    });
-
-    const existing = await this.prisma.session.findFirst({
-      where: {
-        profileId: credential.profileId,
-        deviceCredentialId: credential.id,
-        revokedAt: null,
-        expiresAt: { gt: now },
-      },
-      orderBy: { lastUsedAt: "desc" },
-    });
-    if (existing) return this.rotateSession(existing, credential, meta);
-
-    return this.createProfileSession(credential.profileId, "device", meta, {
-      deviceCredentialId: credential.id,
-      deviceLabel: credential.label ?? meta.deviceLabel ?? null,
-    });
-  }
-
-  /**
-   * Issue a fresh token for a session the device already holds.
-   *
-   * The row keeps its id and its creation date, so the panel's "first signed
-   * in" date stays the truth, and the 90-day cap is still measured from that
-   * first sign-in.
-   */
-  private async rotateSession(
-    session: Session,
-    credential: DeviceCredential,
-    meta: SessionMetadata,
+  async exchangeDeviceCredential(
+    ...args: Parameters<SessionsService["exchangeDeviceCredential"]>
   ): Promise<LoginResult> {
-    const token = newSessionToken();
-    const now = this.now();
-    const updated = await this.prisma.session.update({
-      where: { id: session.id },
-      data: {
-        tokenHash: hashSessionToken(token),
-        lastUsedAt: now,
-        expiresAt: sessionExpiry(now, session.createdAt),
-        userAgent: meta.userAgent?.slice(0, 500) ?? session.userAgent,
-        deviceLabel: credential.label?.trim() || session.deviceLabel,
-      },
-    });
-    const profile = await this.prisma.profile.findUnique({
-      where: { id: credential.profileId },
-    });
-    return {
-      token,
-      session: updated,
-      profile,
-      role: profile?.role === "admin" ? "admin" : profile ? "member" : "admin",
-    };
+    return this.sessions.exchangeDeviceCredential(...args);
   }
 
-  async listDeviceCredentials(profileId: number) {
-    return this.prisma.deviceCredential.findMany({
-      where: { profileId, revokedAt: null }, orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        label: true,
-        deviceId: true,
-        createdAt: true,
-        lastUsedAt: true,
-        expiresAt: true,
-      },
-    });
+  async listDeviceCredentials(
+    ...args: Parameters<SessionsService["listDeviceCredentials"]>
+  ): ReturnType<SessionsService["listDeviceCredentials"]> {
+    return this.sessions.listDeviceCredentials(...args);
   }
 
-  async revokeDeviceCredential(profileId: number, id: string): Promise<void> {
-    const result = await this.prisma.deviceCredential.updateMany({
-      where: { id, profileId, revokedAt: null }, data: { revokedAt: this.now() },
-    });
-    if (!result.count) throw new AuthFailure(404, "device_not_found");
-    // A revoked credential must not leave a live session behind: the session
-    // is useless without the secret that minted it, and the session is what
-    // the panel lists.
-    await this.prisma.session.updateMany({
-      where: { profileId, deviceCredentialId: id, revokedAt: null },
-      data: { revokedAt: this.now() },
-    });
+  async revokeDeviceCredential(
+    ...args: Parameters<SessionsService["revokeDeviceCredential"]>
+  ): Promise<void> {
+    return this.sessions.revokeDeviceCredential(...args);
   }
 
-  async validate(token: string): Promise<AuthContext | null> {
-    const tokenHash = hashSessionToken(token);
-    const session = await this.prisma.session.findUnique({
-      where: { tokenHash },
-      include: { profile: { select: SESSION_PROFILE_SELECT } },
-    });
-    if (!session) return null;
-    if (session.revokedAt) return null;
-
-    const now = this.now();
-    if (session.expiresAt.getTime() <= now.getTime()) return null;
-    if (session.profile?.disabled) return null;
-
-    const cap = new Date(session.createdAt.getTime() + SESSION_MAX_AGE_MS);
-    let expiresAt = session.expiresAt;
-    if (
-      now.getTime() > session.expiresAt.getTime() - SESSION_RENEW_WINDOW_MS &&
-      now.getTime() < cap.getTime()
-    ) {
-      const proposed = new Date(now.getTime() + SESSION_TTL_MS);
-      expiresAt = proposed.getTime() < cap.getTime() ? proposed : cap;
-    }
-
-    const shouldTouch = now.getTime() - session.lastUsedAt.getTime() > SESSION_TOUCH_MS;
-    if (shouldTouch || expiresAt.getTime() !== session.expiresAt.getTime()) {
-      await this.prisma.session.update({
-        where: { id: session.id },
-        data: {
-          lastUsedAt: shouldTouch ? now : session.lastUsedAt,
-          expiresAt,
-        },
-      });
-      session.lastUsedAt = shouldTouch ? now : session.lastUsedAt;
-      session.expiresAt = expiresAt;
-    }
-
-    const role: AuthRole = session.profile?.role === "admin" ? "admin" : session.profile?.role === "child" ? "child" : session.profile ? "member" : "admin";
-    return {
-      token,
-      session,
-      profile: session.profile,
-      role,
-      via: session.via as AuthVia,
-    };
+  async validate(
+    ...args: Parameters<SessionsService["validate"]>
+  ): Promise<AuthContext | null> {
+    return this.sessions.validate(...args);
   }
 
-  async revokeToken(token: string): Promise<void> {
-    await this.prisma.session.updateMany({
-      where: { tokenHash: hashSessionToken(token), revokedAt: null },
-      data: { revokedAt: this.now() },
-    });
+  async revokeToken(
+    ...args: Parameters<SessionsService["revokeToken"]>
+  ): Promise<void> {
+    return this.sessions.revokeToken(...args);
   }
 
-  /**
-   * The caller's signed-in **devices**.
-   *
-   * Spec 36: the panel used to list sign-ins, so one phone appeared once per
-   * launch. It now lists devices. A device is a device credential (Android) or
-   * a browser session (web), and the entry says how many live sessions it
-   * holds -- which is one, except for rows that predate this spec.
-   */
-  async listDevices(context: AuthContext): Promise<DeviceSession[]> {
-    if (!context.profile) return [];
-    const now = this.now();
-    const rows = await this.prisma.session.findMany({
-      where: { profileId: context.profile.id, revokedAt: null, expiresAt: { gt: now } },
-      orderBy: { lastUsedAt: "desc" },
-      include: { deviceCredential: true },
-    });
-
-    const devices = new Map<string, DeviceSession>();
-    for (const row of rows) {
-      const key = row.deviceCredentialId ?? row.id;
-      const existing = devices.get(key);
-      if (existing) {
-        existing.sessions += 1;
-        if (row.createdAt < existing.createdAt) existing.createdAt = row.createdAt;
-        if (row.lastUsedAt > existing.lastActiveAt) existing.lastActiveAt = row.lastUsedAt;
-        if (row.id === context.session.id) existing.current = true;
-        continue;
-      }
-      devices.set(key, {
-        key,
-        label: row.deviceCredential?.label?.trim() || row.deviceLabel,
-        userAgent: row.userAgent,
-        deviceId: row.deviceCredential?.deviceId ?? null,
-        via: row.via,
-        createdAt: row.createdAt,
-        lastActiveAt: row.lastUsedAt,
-        current: row.id === context.session.id,
-        sessions: 1,
-      });
-    }
-    return [...devices.values()];
+  async listDevices(
+    ...args: Parameters<SessionsService["listDevices"]>
+  ): Promise<DeviceSession[]> {
+    return this.sessions.listDevices(...args);
   }
 
-  /**
-   * Sign a device out: revoke every session it holds.
-   *
-   * The key is the device credential's id for an Android device, or the
-   * session id for a browser. Both are resolved against the calling profile,
-   * so a member cannot sign out somebody else's device by guessing a key.
-   */
-  async revokeDeviceSessions(context: AuthContext, key: string): Promise<number> {
-    const profileId = context.profile?.id;
-    if (!profileId) throw new AuthFailure(404, "session_not_found");
-    const now = this.now();
-
-    const credential = await this.prisma.deviceCredential.findFirst({
-      where: { id: key, profileId },
-      select: { id: true },
-    });
-    if (credential) {
-      const revoked = await this.prisma.session.updateMany({
-        where: { profileId, deviceCredentialId: credential.id, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      return revoked.count;
-    }
-
-    const session = await this.prisma.session.findFirst({
-      where: { id: key, profileId },
-      select: { id: true },
-    });
-    if (!session) throw new AuthFailure(404, "session_not_found");
-    await this.prisma.session.update({ where: { id: session.id }, data: { revokedAt: now } });
-    return 1;
+  async revokeDeviceSessions(
+    ...args: Parameters<SessionsService["revokeDeviceSessions"]>
+  ): Promise<number> {
+    return this.sessions.revokeDeviceSessions(...args);
   }
 
-  /**
-   * Sign every other device out, leaving the caller's own session alone.
-   *
-   * This is the cleanup for a household that already has the pile: one action
-   * instead of one click per row.
-   */
-  async revokeOtherSessions(context: AuthContext): Promise<number> {
-    const profileId = context.profile?.id;
-    if (!profileId) throw new AuthFailure(404, "session_not_found");
-    const revoked = await this.prisma.session.updateMany({
-      where: { profileId, revokedAt: null, id: { not: context.session.id } },
-      data: { revokedAt: this.now() },
-    });
-    return revoked.count;
+  async revokeOtherSessions(
+    ...args: Parameters<SessionsService["revokeOtherSessions"]>
+  ): Promise<number> {
+    return this.sessions.revokeOtherSessions(...args);
   }
 
-  async revokeSession(context: AuthContext, sessionId: string): Promise<void> {
-    if (!context.profile) throw new AuthFailure(404, "session_not_found");
-    const session = await this.prisma.session.findFirst({
-      where: { id: sessionId, profileId: context.profile.id },
-      select: { id: true },
-    });
-    if (!session) throw new AuthFailure(404, "session_not_found");
-    await this.prisma.session.update({
-      where: { id: session.id },
-      data: { revokedAt: this.now() },
-    });
+  async revokeSession(
+    ...args: Parameters<SessionsService["revokeSession"]>
+  ): Promise<void> {
+    return this.sessions.revokeSession(...args);
   }
+
 
   /** Best effort; correctness never depends on this having run. */
   async cleanupExpired(): Promise<void> {
@@ -1020,38 +679,15 @@ export class AuthService {
     await purgeInactiveProfiles(this.prisma, now);
   }
 
-  private async createSession(
+  private createSession(
     profileId: number | null,
     via: AuthVia,
     meta: SessionMetadata,
     options: { deviceCredentialId?: string | null; deviceLabel?: string | null } = {},
   ): Promise<LoginResult> {
-    const token = newSessionToken();
-    const now = this.now();
-    const session = await this.prisma.session.create({
-      data: {
-        id: newSessionId(),
-        tokenHash: hashSessionToken(token),
-        profileId,
-        via,
-        userAgent: meta.userAgent?.slice(0, 500) ?? null,
-        deviceLabel: (options.deviceLabel ?? meta.deviceLabel)?.slice(0, 100) ?? null,
-        deviceCredentialId: options.deviceCredentialId ?? null,
-        createdAt: now,
-        lastUsedAt: now,
-        expiresAt: sessionExpiry(now, now),
-      },
-    });
-    const profile = profileId
-      ? await this.prisma.profile.findUnique({ where: { id: profileId } })
-      : null;
-    return {
-      token,
-      session,
-      profile,
-      role: profile?.role === "admin" ? "admin" : profile ? "member" : "admin",
-    };
+    return createSessionCore(this.prisma, this.now, profileId, via, meta, options);
   }
+
 
   private assertPassword(password: string, profileName: string): void {
     const failure = validatePassword(password, profileName);
