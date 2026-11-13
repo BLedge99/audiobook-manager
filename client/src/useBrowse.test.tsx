@@ -20,6 +20,7 @@ function fakeResponse(body: unknown, status = 200) {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+    text: async () => JSON.stringify(body),
   } as unknown as Response;
 }
 
@@ -95,6 +96,24 @@ describe("useBrowse", () => {
 
     await waitFor(() => expect(view.result.current.favourites).toEqual([4, 5]));
     expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([4, 5], getServerUrl());
+  });
+
+  it("keeps the favourites when the enrichment endpoints answer 404 (production demo)", async () => {
+    // The demo hides /api/enrichment/status and /api/enrichment/review-queue.
+    // The batch used to reject wholesale and the favourite ids were lost with
+    // it, so the heart looked like it never saved.
+    fetchMock.mockImplementation(async (url: string) => {
+      const path = String(url);
+      if (path.endsWith("/api/favourites/ids")) return fakeResponse([7, 8]);
+      if (path.endsWith("/api/enrichment/status") || path.endsWith("/api/enrichment/review-queue")) {
+        return fakeResponse({ code: "not_found" }, 404);
+      }
+      return fakeResponse([]);
+    });
+
+    const view = mount("7");
+    await waitFor(() => expect(view.result.current.favourites).toEqual([7, 8]));
+    expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([7, 8], getServerUrl());
   });
 
   it("falls back to cached favourites for the new profile when the server is unreachable", async () => {

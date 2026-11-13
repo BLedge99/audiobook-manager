@@ -59,26 +59,33 @@ export function useBrowse(profileId: string | null = null) {
     try {
       while (true) {
         queued.current = false;
-        try {
-          const [genreTree, tagList, favIds, status, review] = await Promise.all([
-            request<GenreNode[]>("/api/genres"),
-            request<TagSummary[]>("/api/tags"),
-            request<number[]>("/api/favourites/ids"),
-            request<EnrichmentStatus>("/api/enrichment/status"),
-            request<Audiobook[]>("/api/enrichment/review-queue"),
-          ]);
-          setGenres(genreTree);
-          setTags(tagList);
+        // Each request settles on its own. The enrichment endpoints answer 404
+        // in the production demo (spec 37), and a batch that rejects wholesale
+        // used to lose the favourite ids with it -- the heart looked like it
+        // never saved. One failing surface must not blank the others.
+        const [genreTree, tagList, favIds, status, review] = await Promise.all([
+          request<GenreNode[]>("/api/genres").catch(() => undefined),
+          request<TagSummary[]>("/api/tags").catch(() => undefined),
+          request<number[]>("/api/favourites/ids").catch(() => undefined),
+          request<EnrichmentStatus>("/api/enrichment/status").catch(() => undefined),
+          request<Audiobook[]>("/api/enrichment/review-queue").catch(() => undefined),
+        ]);
+        if (genreTree) setGenres(genreTree);
+        if (tagList) setTags(tagList);
+        if (status) setEnrichment(status);
+        if (review) setReviewQueue(review);
+        if (favIds) {
           setFavourites(favIds);
-          setEnrichment(status);
-          setReviewQueue(review);
           void cacheFavourites(favIds, getServerUrl());
-        } catch {
-          // Browse degrades to the plain library rather than an error screen. If
-          // the profile key is unlocked (offline sign-in), show the last encrypted
-          // favourites instead of an empty heart set.
-          const cached = await readFavourites(getServerUrl());
-          if (cached) setFavourites(cached);
+        } else {
+          // The profile key is unlocked (offline sign-in): show the last
+          // encrypted favourites rather than an empty heart set.
+          try {
+            const cached = await readFavourites(getServerUrl());
+            if (cached) setFavourites(cached);
+          } catch {
+            // Cache unreadable; keep whatever the screen has.
+          }
         }
         if (!queued.current) break;
       }
