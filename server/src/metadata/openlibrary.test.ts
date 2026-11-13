@@ -35,7 +35,16 @@ describe("mapOpenLibraryDoc", () => {
       seriesPosition: 4,
       genres: ["Magic fiction", "Wizards"],
       workKey: "/works/OL45804W",
+      providerKey: "/works/OL45804W",
     });
+  });
+
+  it("carries a providerKey, so the candidate can be wishlisted", () => {
+    // POST /api/wishlist requires providerKey. Open Library recommendations
+    // used to arrive without one — the schema answered 400 FST_ERR_VALIDATION
+    // every time, so "Save to wishlist" was a no-op on the phone.
+    expect(mapOpenLibraryDoc({ title: "X", key: "/works/OL45804W" }).providerKey).toBe("/works/OL45804W");
+    expect(mapOpenLibraryDoc({ title: "X" }).providerKey).toBeUndefined();
   });
 
   it("rejects an implausible publication year", () => {

@@ -27,6 +27,10 @@ export function mapOpenLibraryDoc(doc: Record<string, unknown>): MappedFields {
   return {
     title: String(doc.title ?? "Unknown"),
     author: firstString(doc.author_name),
+    // Open Library's stable anchor for the work. Chunks of the rest of the
+    // product treat providerKey as mandatory on save, so a candidate that
+    // never carries one cannot be wishlisted.
+    providerKey: typeof doc.key === "string" && doc.key.trim().length > 0 ? doc.key : undefined,
     coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : undefined,
     publisher: firstString(doc.publisher),
     isbn: firstString(doc.isbn),
