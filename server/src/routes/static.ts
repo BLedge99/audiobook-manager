@@ -95,6 +95,7 @@ export async function registerStaticRoutes(
     <li>Catalogue enrichment queries (Open Library, LibriVox, Audnexus, optional Google Books) send only book identifiers such as ISBN, title or author — never your reading data or profile identity.</li>
     <li>Optional AI via LM Studio runs locally and sends no user personal data.</li>
     <li>Optional Supabase Storage sync stores audiobook files only (server-side, private bucket), not personal data.</li>
+    <li>The app can show links to audiobook stores and libraries. Purchases made through links marked as an advert may earn the app a commission. Your tap is not sent to us, and the store decides what it receives.</li>
   </ul>
 
   <h2 id="how-long">How long we keep it</h2>

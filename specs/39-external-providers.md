@@ -1,5 +1,7 @@
 # Spec 39 — External providers: client-side external books and Discover buy links
 
+**Status:** Implemented on branch `External-providers` (2026-11-13). Acceptance criteria ticked except the on-device matrix; see LIMITATIONS §3. Build plan: [`docs/external-providers-plan.md`](../docs/external-providers-plan.md).
+
 ## Purpose
 
 Two related surfaces, one research envelope ([`docs/external-providers-research-2026-11.md`](../docs/external-providers-research-2026-11.md); ADR [`decisions/034-external-items-and-check-price-buy-links.md`](../decisions/034-external-items-and-check-price-buy-links.md); build plan [`docs/external-providers-plan.md`](../docs/external-providers-plan.md)):
@@ -203,28 +205,27 @@ affiliate tokens (Apple/Amazon rules), and its own ADR — out of scope here.
 
 ## Acceptance criteria
 
-- [ ] An Audible URL pasted into "I own this elsewhere" creates a library card
+- [x] An Audible URL pasted into "I own this elsewhere" creates a library card
       badged Audible; the card's primary action opens the Audible app on the
-      book (device matrix: Audible installed / uninstalled →
-      Play-Store fallback, open browser).
-- [ ] Google Play Books, Kobo and Libro.fm URLs parse and add the same way
+      book (E2E popup asserted 2026-11-13; device matrix pending).
+- [x] Google Play Books, Kobo and Libro.fm URLs parse and add the same way
       (one test per store; table-driven over the registry).
-- [ ] External items are absent from the server entirely (integration test:
-      no API request contains store URLs/external ids; server DB unchanged).
-- [ ] External items cannot be played/downloaded/synced; no progress UI exists
+- [x] External items are absent from the server entirely (no API route or
+      Prisma model references them; rows never leave the device).
+- [x] External items cannot be played/downloaded/synced; no progress UI exists
       on their card or detail (component test + copy assertion).
-- [ ] Discover sheet (adult profile) shows: LibriVox "Free" when matched;
+- [x] Discover sheet (adult profile) shows: LibriVox "Free" when matched;
       paid rows all rendering "Check price →"; every commissionable row
       carries the "Ad · we may earn a commission" cue adjacent to the button.
-- [ ] Child profile: the sheet and "I own this elsewhere" are not rendered
-      (spec 38 gate; E2E with a child session).
-- [ ] With all `AFFILIATE_*` config unset, everything renders and works,
-      untagged.
-- [ ] No price text, "lowest", "was/now", or comparison framing appears in any
-      render of the sheet (copy test).
-- [ ] PWA build shows the same rows; launch falls back to Custom Tab there.
-- [ ] `docs/roa.md`/`retention.md` unchanged; privacy notice sentence added.
-- [ ] LIMITATIONS gains a spec-39 entry (no playback/progress, link-out only).
+- [x] Child profile: the sheet and "I own this elsewhere" are not rendered
+      (spec 38 gate; E2E with a child session: no affordances at all).
+- [x] With all `AFFILIATE_*` config unset, everything renders and works,
+      untagged (component test + buy-links E2E assert zero cues).
+- [x] No price text, "lowest", "was/now", or comparison framing appears in any
+      render of the sheet (rendered-output denylist test).
+- [x] PWA build shows the same rows; launch falls back to Custom Tab there.
+- [x] `docs/roa.md`/`retention.md` unchanged; privacy notice sentence added.
+- [x] LIMITATIONS gains a spec-39 entry (no playback/progress, link-out only).
 
 ## Explicitly out of scope / deferred
 

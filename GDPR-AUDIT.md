@@ -135,6 +135,8 @@ No personal data is sent to third parties in the normal household flow. The foll
 | Audnexus | ASIN-keyed chapter titles only | No | Third party | No |
 | LM Studio (optional, local) | Book metadata + folder names (spec 12) | No user personal data | Local/self-hosted | N/A |
 | Supabase Storage (optional) | Audiobook files + metadata | No personal data (content, not user data) | Processor (Supabase) | Supabase DPA applies if used |
+| Retailer/library deep links (spec 39, client-side only) | Nothing — links open the retailer in the system browser/store app; no identifiers, clicks or referrers go to us | No | Link targets, not processors | N/A |
+| LibriVox via `GET /api/buy-context` (spec 39) | Title/author only, never logged, never persisted (server-side proxy; librivox.org sends no CORS header) | No | Third party (public API) | No |
 
 **Finding:** No third-party processor receives personal data. This is a strong privacy position. **Gap:** No processor inventory or DPA register documented; if Supabase Storage is enabled, a DPA should be confirmed/referenced.
 
