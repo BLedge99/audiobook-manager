@@ -1,6 +1,6 @@
 # External providers — build plan (spec 39 / ADR 034)
 
-**Status:** Plan, not started. Approved research: [`external-providers-research-2026-11.md`](external-providers-research-2026-11.md); licensing detail: [`buy-links-licensing-research-2026-11.md`](buy-links-licensing-research-2026-11.md); spec: [`specs/39-external-providers.md`](../specs/39-external-providers.md); ADR: [`decisions/034-external-items-and-check-price-buy-links.md`](../decisions/034-external-items-and-check-price-buy-links.md).
+**Status:** Phases 0–8 implemented on branch `External-providers` (2026-11-13). Phase 9: unit suites green, full builds green (APK assembled), new E2E specs green; **the manual device matrix could not be run — no device attached to this machine (`adb devices` empty), so it remains pending**; the WSL Chromium path cannot launch on this host (`libnspr4.so` missing), so the suite runs from Windows. Phase 10 unchanged. Approved research: [`external-providers-research-2026-11.md`](external-providers-research-2026-11.md); licensing detail: [`buy-links-licensing-research-2026-11.md`](buy-links-licensing-research-2026-11.md); spec: [`specs/39-external-providers.md`](../specs/39-external-providers.md); ADR: [`decisions/034-external-items-and-check-price-buy-links.md`](../decisions/034-external-items-and-check-price-buy-links.md).
 
 **Hard ground rules (do not relitigate during build):**
 
