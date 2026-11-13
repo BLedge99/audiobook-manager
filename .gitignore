@@ -79,6 +79,22 @@ client/dev-dist/
 .claude/
 .codex/
 .impeccable/
+# Agent session logs and lockfiles: working state for one machine, not the
+# project. The plan lives in roadmap.md + specs/; decisions live in decisions/.
+handoff.md
+skills-lock.json
+# Ad-hoc session implementation notes from the biometric work; superseded by
+# specs/28-accounts-passkeys-biometrics.md and decisions/027.
+BIOMETRIC_FIX_HANDOFF.md
+BIOMETRIC_FIX_SUMMARY.md
+BIOMETRIC_IMPLEMENTATION_SUMMARY.md
+# Personal scratch notes.
+To fix.txt
+# Generated build output, rebuilt by `npm --prefix client run build:admin`
+# (and by the production Dockerfile); dev compose bind-mounts it read-only.
+client/admin-dist/
+# Stray captured test-run logs.
+client/test-output*.txt
 
 # Generated architecture-review output; kept locally, not project source.
 docs/spec-37-architecture-deepening-report.html
