@@ -57,14 +57,16 @@
   --l-cobalt: #3345d8;
   --l-cobalt-ink: #1b27a8;
 
-  /* dark: the same machine, lit from inside, for listening in bed */
-  --d-ground: #14121a;
+  /* dark: the same machine, lit from inside, for listening in bed.
+     Deeper ground (near-black, warm plum cast) so covers and glow read as the
+     light sources; the ink ramp is brightened to match. */
+  --d-ground: #100e15;
   --d-surface: #1e1b26;
-  --d-sunk: #100e16;
-  --d-ink: #f7f4f9;
-  --d-ink-2: #bdb6c7;
-  --d-ink-3: #9a92a9;
-  --d-line: #302b3c;
+  --d-sunk: #0c0a10;
+  --d-ink: #faf8fd;
+  --d-ink-2: #c9c3d3;
+  --d-ink-3: #a89fb5;
+  --d-line: #322d40;
   --d-rasp: #ff5c87;
   --d-rasp-ink: #ffa8c1;
   --d-tan: #ff9445;
@@ -124,6 +126,29 @@
      underneath it: the wordmark sat directly on a book title. Frosted glass is
      a treatment, not a licence to make text unreadable. */
   --glass: color-mix(in srgb, var(--surface) 93%, transparent);
+
+  /* The room the machine stands in. A near-imperceptible stack: a vertical
+     gradient between two very close tints, a radial falloff from the top of
+     the room, and exactly ONE soft pool of warmth (a lamp just out of frame) --
+     never a block of colour, and never loud enough to sit next to covers. */
+  --atmo-hi: #f7f5f9;
+  --atmo-lo: #ece9ee;
+  --atmo-topglow: #fbfafc;
+  --atmo-warm: rgba(255, 168, 108, 0.13);
+  --atmo-stack:
+    radial-gradient(1150px 640px at 78% -16%, var(--atmo-warm) 0%, transparent 60%),
+    radial-gradient(140% 90% at 50% -30%, var(--atmo-topglow) 0%, transparent 55%),
+    linear-gradient(180deg, var(--atmo-hi) 0%, var(--atmo-lo) 100%);
+
+  /* Aero material tokens. One definition per theme; the component classes only
+     reference these. */
+  --panel-hi: #ffffff;
+  --panel-lo: #eee9ee;
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.18) 45%, transparent 80%);
+  --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --glass-rim-bar: 0 12px 30px -20px rgba(27, 23, 32, 0.42);
+  --glass-rim-rail: 0 -12px 30px -20px rgba(27, 23, 32, 0.42);
+  --panel-sheen: linear-gradient(180deg, var(--panel-hi) 0%, var(--surface) 38%, var(--panel-lo) 160%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -145,6 +170,16 @@
     --cobalt: var(--d-cobalt);
     --cobalt-ink: var(--d-cobalt-ink);
     --glass: color-mix(in srgb, var(--surface) 91%, transparent);
+    --atmo-hi: #16121e;
+    --atmo-lo: #0d0b12;
+    --atmo-topglow: #1a1622;
+    --atmo-warm: rgba(255, 157, 92, 0.075);
+    --panel-hi: #262231;
+    --panel-lo: #1a1722;
+    --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 45%, transparent 80%);
+    --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-rim-bar: 0 12px 34px -18px rgba(0, 0, 0, 0.62);
+    --glass-rim-rail: 0 -12px 34px -18px rgba(0, 0, 0, 0.62);
   }
 }
 
@@ -166,6 +201,16 @@
   --cobalt: var(--d-cobalt);
   --cobalt-ink: var(--d-cobalt-ink);
   --glass: color-mix(in srgb, var(--surface) 91%, transparent);
+  --atmo-hi: #16121e;
+  --atmo-lo: #0d0b12;
+  --atmo-topglow: #1a1622;
+  --atmo-warm: rgba(255, 157, 92, 0.075);
+  --panel-hi: #262231;
+  --panel-lo: #1a1722;
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 45%, transparent 80%);
+  --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --glass-rim-bar: 0 12px 34px -18px rgba(0, 0, 0, 0.62);
+  --glass-rim-rail: 0 -12px 34px -18px rgba(0, 0, 0, 0.62);
 }
 
 @theme inline {
@@ -198,7 +243,12 @@ html {
 
 body {
   margin: 0;
-  background: var(--ground);
+  background-color: var(--ground);
+  /* The room behind the machine: vertical falloff between two close tints, a
+     radial light from above, and one quiet pool of warmth. Fixed, so the
+     backdrop holds still while content scrolls over it. */
+  background-image: var(--atmo-stack);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: "Nunito", ui-rounded, system-ui, sans-serif;
   font-size: 15px;
@@ -302,9 +352,11 @@ button:focus {
 
 /* Base drawn panel: marker stroke plus a doubled edge, which is what makes a
    rectangle read as drawn rather than rendered. Radius wobble (see --r-shell)
-   does the hand-drawn half of it. */
+   does the hand-drawn half of it. The fill is a vertical light gradient --
+   brighter at the top, like a shell lit from above -- subtle enough that the
+   2px ink border still does the structural work. */
 .panel {
-  background: var(--surface);
+  background: var(--panel-sheen, var(--surface));
   border: var(--stroke) solid var(--ink);
   border-radius: var(--r-shell);
   box-shadow:
@@ -386,12 +438,51 @@ button:focus {
   content-visibility: auto;
   contain-intrinsic-size: auto 330px;
 }
+/* Squashes to 0.96 on press and settles back on the existing --ease-pop curve
+   (see the transform transition above). The canted state keeps its cant; the
+   hovered state keeps its lift. */
+.capsule:active {
+  transform: rotate(var(--cant)) scale(0.96);
+}
+.capsule--alt:active {
+  transform: rotate(var(--cant-alt)) scale(0.96);
+}
+.capsule:hover:active,
+.capsule:focus-within:active {
+  transform: rotate(0deg) translateY(-2px) scale(0.96);
+}
+/* One-shot excited wobble on hover: at most +1.2deg, then a single swing
+   back, then settle. No wobble past the hover target. Runs once per hover. */
+@keyframes excited-wobble {
+  0% {
+    transform: rotate(0deg) translateY(-3px);
+  }
+  35% {
+    transform: rotate(1.2deg) translateY(-3px);
+  }
+  65% {
+    transform: rotate(-0.7deg) translateY(-3px);
+  }
+  100% {
+    transform: rotate(0deg) translateY(-3px);
+  }
+}
 .capsule:hover,
 .capsule:focus-within {
   transform: rotate(0deg) translateY(-3px);
   box-shadow:
     0 4px 0 -1px color-mix(in srgb, var(--ink) 30%, transparent),
     0 18px 28px -18px color-mix(in srgb, var(--ink) 85%, transparent);
+}
+/* The wobble is hover-only: keyboard focus gets the lift and ring without a
+   flourish the user did not ask for. */
+.capsule:hover {
+  animation: excited-wobble 450ms ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .capsule:hover {
+    animation: none;
+  }
 }
 .capsule--alt {
   transform: rotate(var(--cant-alt));
@@ -401,31 +492,39 @@ button:focus {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(255, 255, 255, 0.12) 26%,
-    transparent 52%
-  );
+  /* A specular half-light: one soft diagonal sheen from the top-left, plus the
+     long plastic falloff. CSS only. */
+  background:
+    radial-gradient(115% 88% at 16% 6%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.16) 38%, transparent 56%),
+    linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.42) 0%,
+      rgba(255, 255, 255, 0.1) 26%,
+      transparent 52%
+    );
 }
 /* Plastic only reads as plastic when something is behind it, so the gloss is
    a light source in dark mode rather than a white haze in both. */
 :root[data-theme="dark"] .capsule__gloss {
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.14) 0%,
-    rgba(255, 255, 255, 0.04) 28%,
-    transparent 55%
-  );
+  background:
+    radial-gradient(115% 88% at 16% 6%, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.05) 40%, transparent 56%),
+    linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.035) 28%,
+      transparent 55%
+    );
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .capsule__gloss {
-    background: linear-gradient(
-      160deg,
-      rgba(255, 255, 255, 0.14) 0%,
-      rgba(255, 255, 255, 0.04) 28%,
-      transparent 55%
-    );
+    background:
+      radial-gradient(115% 88% at 16% 6%, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.05) 40%, transparent 56%),
+      linear-gradient(
+        160deg,
+        rgba(255, 255, 255, 0.12) 0%,
+        rgba(255, 255, 255, 0.035) 28%,
+        transparent 55%
+      );
   }
 }
 .capsule__seam {
@@ -515,6 +614,64 @@ button:focus {
     0 0 0 color-mix(in srgb, var(--ink) 88%, transparent),
     0 4px 10px -6px color-mix(in srgb, var(--rasp) 80%, transparent);
 }
+/* The jelly squash: a brief scaleX/scaleY cross-squeeze on press, ~380ms,
+   ending exactly on the pressed pose so nothing jumps when the animation
+   hands control back to `:active`. Unlayered so it wins over the Tailwind
+   `animate-[spin...]` utility used while playing -- the press must read as
+   one toy, spin or no spin. Collapses to 1ms under reduced motion via the
+   global rule. */
+@keyframes dome-jelly {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  30% {
+    transform: translateY(3px) scale(1.2, 0.8);
+  }
+  55% {
+    transform: translateY(2px) scale(0.92, 1.09);
+  }
+  78% {
+    transform: translateY(3px) scale(1.05, 0.95);
+  }
+  100% {
+    transform: translateY(4px) scale(1, 1);
+  }
+}
+/* A soft rasp halo in dark mode, like gel catching an inner light. Restrained
+   and static -- no animation, no pulse -- so the dome stays the one glossy
+   thing in the app without becoming a beacon. */
+:root[data-theme="dark"] .dome:not(:active) {
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.55),
+    inset 0 -4px 8px color-mix(in srgb, var(--rasp-ink) 60%, transparent),
+    0 4px 0 color-mix(in srgb, var(--ink) 88%, transparent),
+    0 12px 22px -12px color-mix(in srgb, var(--rasp) 90%, transparent),
+    0 0 46px -12px color-mix(in srgb, var(--rasp) 42%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dome:not(:active) {
+    box-shadow:
+      inset 0 2px 2px rgba(255, 255, 255, 0.55),
+      inset 0 -4px 8px color-mix(in srgb, var(--rasp-ink) 60%, transparent),
+      0 4px 0 color-mix(in srgb, var(--ink) 88%, transparent),
+      0 12px 22px -12px color-mix(in srgb, var(--rasp) 90%, transparent),
+      0 0 46px -12px color-mix(in srgb, var(--rasp) 42%, transparent);
+  }
+}
+:root[data-theme="dark"] .btn--primary {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 3px 0 color-mix(in srgb, var(--ink) 80%, transparent),
+    0 0 40px -14px color-mix(in srgb, var(--rasp) 38%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn--primary {
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, 0.35),
+      0 3px 0 color-mix(in srgb, var(--ink) 80%, transparent),
+      0 0 40px -14px color-mix(in srgb, var(--rasp) 38%, transparent);
+  }
+}
 .dome__play {
   width: 0;
   height: 0;
@@ -599,10 +756,48 @@ button:focus {
   overflow: hidden;
 }
 .tube > i {
+  position: relative;
   display: block;
   height: 100%;
   border-radius: 99px;
   background: var(--tan);
+  overflow: hidden;
+}
+/* A slow, low-amplitude light sweep along the fill. Transform/opacity only,
+   one band, long pause between sweeps. */
+.tube > i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, 0.38) 50%, transparent 75%);
+  transform: translateX(-100%);
+  opacity: 0;
+  animation: tube-shimmer 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes tube-shimmer {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  48% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tube > i::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 .tube--done > i {
   background: var(--mint);
@@ -838,24 +1033,40 @@ button:focus {
   top: 0;
   z-index: 30;
   border-bottom: var(--stroke) solid color-mix(in srgb, var(--ink) 26%, transparent);
+  /* Soft outer rim shadow, so the bar reads as a shell hovering over the
+     scrolling content rather than a painted line. */
+  box-shadow: var(--glass-rim-bar);
 }
 .bar::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  /* Layered fill: a vertical light sheen over the 93/91% glass. The 1px
+     inner top highlight catches the light like the top edge of a real
+     moulded shell. */
+  background: var(--glass-sheen), var(--glass);
+  box-shadow: var(--glass-inner);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
 }
 /* Safe to filter directly: the rail has no fixed-position descendants, so it
    traps no containing block. */
 .rail {
   position: relative;
-  background: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  background: var(--glass-sheen), var(--glass);
+  box-shadow: var(--glass-inner), var(--glass-rim-rail);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
   border-top: var(--stroke) solid color-mix(in srgb, var(--ink) 26%, transparent);
+}
+/* The opaque twin of the body backdrop, for the full-screen containers that
+   must cover the app behind them (settings, gates, the app shell). Same
+   layered gradients over an opaque ground -- never see-through. */
+.atmosphere {
+  background-color: var(--ground);
+  background-image: var(--atmo-stack);
+  background-attachment: fixed;
 }
 .sheet {
   position: fixed;
@@ -928,3 +1139,13 @@ button:focus {
 }
 
 } /* end @layer components */
+
+/* The jelly squash on the play dome, unlayered on purpose: an unlayered rule
+   beats every cascade layer, so this wins over the Tailwind
+   `animate-[spin_1.1s_linear_infinite]` utility used while the book is
+   playing -- the press must read as one toy. Transform only; ~380ms; the
+   final keyframe is the resting :active pose, so handing control back is
+   seamless. The global prefers-reduced-motion rule collapses it to 1ms. */
+.dome:active {
+  animation: dome-jelly 380ms var(--ease-pop) 1;
+}

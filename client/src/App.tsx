@@ -787,7 +787,7 @@ function App() {
   }
 
   return (
-    <div className="relative min-h-dvh bg-ground text-ink">
+    <div className="atmosphere relative min-h-dvh text-ink">
       <Specks />
       <header className="bar">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
