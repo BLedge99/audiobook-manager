@@ -1,11 +1,15 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Bundle budget. Run after `npm run build` in client/.
  *
- * The split that matters is not the total (that only grows) — it is that the
+ * The split that matters is not the total (that only grows) - it is that the
  * *app* chunk does not creep and the vendor chunks stay cacheable. Budgets
  * carry ~10 % headroom over the 2026-11 split; raise them deliberately, in
  * the same change as whatever legitimately grew the bundle.
+ *
+ * 2026-11-14: app CSS 64 -> 74 KB - the aero-polish passes (horizon backdrop,
+ * panel sheen, specular glass, dark ramp) legitimately added ~3 KB minified
+ * over the 64 KB line; the budget keeps ~10 % headroom over 67 KB.
  *
  *   node scripts/check-bundle-size.mjs   # from client/, or pass the dist dir
  */
@@ -19,7 +23,7 @@ const budgets = [
   { pattern: /^react-.*\.js$/, label: 'react vendor', maxBytes: 240 * 1024 },
   { pattern: /^dexie-.*\.js$/, label: 'dexie vendor', maxBytes: 110 * 1024 },
   { pattern: /^icons-.*\.js$/, label: 'icons vendor', maxBytes: 30 * 1024 },
-  { pattern: /^index-.*\.css$/, label: 'app CSS', maxBytes: 64 * 1024 },
+  { pattern: /^index-.*\.css$/, label: 'app CSS', maxBytes: 74 * 1024 },
 ];
 
 let failures = 0;
