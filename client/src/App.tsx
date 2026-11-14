@@ -787,7 +787,7 @@ function App() {
   }
 
   return (
-    <div className="relative min-h-dvh bg-ground text-ink">
+    <div className="atmosphere relative min-h-dvh text-ink">
       <Specks />
       <header className="bar">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
@@ -799,7 +799,11 @@ function App() {
                 document never exceeds the viewport. */}
             <div className="min-w-0 flex-1">
               <h1 className="wordmark truncate">{copy.brand.name}</h1>
-              <p className="mt-0.5 truncate text-[12px] font-semibold text-ink3 tnum">
+              {/* --ink, not ink-2: pass 4 darkened the ramp past the point
+                  where ink-2 holds AA against the bar's top sheen strip
+                  (3.33:1 worst case; 4.54:1 flat). ink clears 5.23:1 even
+                  with the strip -- see .bar in index.css. */}
+              <p className="mt-0.5 truncate text-[0.75rem] font-semibold text-ink tnum">
                 {copy.shell.libraryCount(libraryBooks.length, roots.length)}
               </p>
             </div>
@@ -852,16 +856,16 @@ function App() {
                   onClick={() => openTab(id)}
                   aria-current={shownTab === id ? "page" : undefined}
                   className={cn(
-                    "flex w-full flex-col items-center justify-center gap-1 rounded-[16px_13px_16px_13px/13px_16px_13px_16px] px-2 py-2 text-[11px] font-bold transition sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13.5px]",
+                    "flex min-w-0 w-full flex-col items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-[16px_13px_16px_13px/13px_16px_13px_16px] px-1 py-2 text-[0.6875rem] font-bold transition sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[0.84375rem]",
                     shownTab === id
                       ? "bg-rasp text-white shadow-[0_3px_0_-1px_color-mix(in_srgb,var(--ink)_70%,transparent)]"
                       : "text-ink2 hover:bg-ink/5",
                   )}
                 >
-                  <Icon size={17} aria-hidden="true" />
-                  <span className="truncate">{tabLabel}</span>
+                  <Icon size={17} className="shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 max-w-full truncate">{tabLabel}</span>
                   {id === "favourites" && favouriteIds.size > 0 && (
-                    <span className="ml-0.5 rounded-full bg-ink/15 px-1.5 text-[10px] text-ink2 tnum sm:bg-ink/10">
+                    <span className="ml-0.5 shrink-0 rounded-full bg-ink/15 px-1.5 text-[0.625rem] text-ink2 tnum sm:bg-ink/10">
                       {favouriteIds.size}
                     </span>
                   )}
@@ -893,7 +897,7 @@ function App() {
                 and the person cannot tell from it whether the server is down
                 or the *phone* cannot reach it -- which are the two things that
                 actually happen, and they have different fixes. */}
-            <p className="mt-1 text-[12.5px]">{copy.shell.offlineBannerHint}</p>
+            <p className="mt-1 text-[0.78125rem]">{copy.shell.offlineBannerHint}</p>
           </Notice>
         )}
 
@@ -919,7 +923,7 @@ function App() {
               <Notice tone="warn" role="status" className="mb-6">
                 <p>{copy.offline.unclaimed(device.unclaimed.length)}</p>
                 {offline ? (
-                  <p className="mt-1 text-[12.5px]">{copy.offline.unclaimedOffline}</p>
+                  <p className="mt-1 text-[0.78125rem]">{copy.offline.unclaimedOffline}</p>
                 ) : (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Btn
@@ -931,7 +935,7 @@ function App() {
                       {recovering ? copy.offline.unclaimedFinding : copy.offline.unclaimedAction}
                     </Btn>
                     {recoverMessage && (
-                      <span className="text-[12.5px] font-bold">{recoverMessage}</span>
+                      <span className="text-[0.78125rem] font-bold">{recoverMessage}</span>
                     )}
                   </div>
                 )}
@@ -975,7 +979,7 @@ function App() {
                   a screen reader should announce it once, politely.
                 */}
                 {refreshing && (
-                  <span role="status" className="flex items-center gap-1.5 text-[12.5px] font-bold text-ink3">
+                  <span role="status" className="flex items-center gap-1.5 text-[0.78125rem] font-bold text-ink3">
                     <RefreshCw size={13} className="animate-spin" aria-hidden="true" />
                     {copy.shell.refreshingShort}
                   </span>
@@ -1051,7 +1055,7 @@ function App() {
         {shownTab === "browse" && (
           <>
             <section className="mb-7">
-              <h2 className="text-[30px] leading-[1.05] sm:text-4xl">{copy.browse.heading}</h2>
+              <h2 className="text-[1.875rem] leading-[1.05] sm:text-4xl">{copy.browse.heading}</h2>
               <p className="mt-2 max-w-xl text-ink2">{copy.browse.intro}</p>
             </section>
 
@@ -1109,7 +1113,7 @@ function App() {
 
         {shownTab === "favourites" && (
           <section>
-            <h2 className="text-[30px] leading-[1.05] sm:text-4xl">{copy.favourites.heading}</h2>
+            <h2 className="text-[1.875rem] leading-[1.05] sm:text-4xl">{copy.favourites.heading}</h2>
             <p className="mb-6 mt-2 max-w-xl text-ink2">
               {favouriteIds.size === 0 ? copy.favourites.empty : copy.favourites.count(favouriteIds.size)}
             </p>
@@ -1122,7 +1126,7 @@ function App() {
         )}
       </main>
 
-      <footer className="relative z-10 px-5 pb-28 pt-6 text-center text-[12px] text-ink3 sm:pb-10">
+      <footer className="relative z-10 px-5 pb-28 pt-6 text-center text-[0.75rem] text-ink3 sm:pb-10">
         {copy.brand.footer}
       </footer>
       {selectedBook && <AudiobookDetail

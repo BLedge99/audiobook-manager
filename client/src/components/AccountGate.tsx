@@ -621,7 +621,7 @@ export function AccountGate({
                       )
                     }
                     className={cn(
-                      "capsule flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
+                      "capsule capsule--select flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
                       index % 2 ? "capsule--alt" : "",
                       account.disabled && "opacity-55",
                     )}
@@ -633,15 +633,15 @@ export function AccountGate({
                     >
                       <UserRound size={18} className="text-white" />
                     </span>
-                    <span className="min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-ink">
+                    <span className="min-w-0 flex-1 truncate font-display text-[1.0625rem] font-semibold text-ink">
                       {account.name}
                     </span>
                     {account.disabled ? (
-                      <span className="shrink-0 text-[11px] font-bold text-ink3">
+                      <span className="shrink-0 text-[0.6875rem] font-bold text-ink3">
                         {copy.account.disabled}
                       </span>
                     ) : !account.hasPassword ? (
-                      <span className="shrink-0 rounded-full border-2 border-ink bg-tan/40 px-2 py-0.5 text-[11px] font-bold text-ink">
+                      <span className="shrink-0 rounded-full border-2 border-ink bg-tan/40 px-2 py-0.5 text-[0.6875rem] font-bold text-ink">
                         {copy.account.needsSetup}
                       </span>
                     ) : null}
@@ -763,12 +763,12 @@ export function AccountGate({
                   it is gone. This profile has device sign-in set up, so the one
                   thing the listener can do about it is enrol a fingerprint. */}
               {!biometricsAvailable && mode.account.hasDeviceUnlock && isNativeShell() && (
-                <p className="text-center text-[12.5px] leading-relaxed text-ink3">
+                <p className="text-center text-[0.78125rem] leading-relaxed text-ink3">
                   {copy.security.deviceUnavailable}
                 </p>
               )}
               {biometricsAvailable && !mode.account.hasDeviceUnlock && isNativeShell() && (
-                <p className="text-center text-[12.5px] leading-relaxed text-ink3">
+                <p className="text-center text-[0.78125rem] leading-relaxed text-ink3">
                   {copy.security.deviceNeedsPassword}
                 </p>
               )}

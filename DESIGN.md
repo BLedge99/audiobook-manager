@@ -22,17 +22,19 @@ place and both themes move together.
 
 | Role | Light | Dark | Used for |
 |---|---|---|---|
-| `--ground` | `#f4f2f5` | `#14121a` | page background |
+| `--ground` | `#f6f2f6` | `#100e15` | page background |
 | `--surface` | `#ffffff` | `#1e1b26` | panels, cards, sheets |
-| `--sunk` | `#eae7ef` | `#100e16` | recessed panels, inactive rows |
-| `--ink` | `#1b1720` | `#f7f4f9` | headings, primary text |
-| `--ink-2` | `#514b5c` | `#bdb6c7` | body text |
-| `--ink-3` | `#6b6577` | `#9a92a9` | metadata, counts |
-| `--line` | `#dbd7e2` | `#302b3c` | rules, borders |
+| `--sunk` | `#eae7ef` | `#0c0a10` | recessed panels, inactive rows |
+| `--ink` | `#1b1720` | `#cdd0da` | headings, primary text |
+| `--ink-2` | `#514b5c` | `#a9a4b8` | body text |
+| `--ink-3` | `#6b6577` | `#827d92` | metadata, counts |
+| `--line` | `#dbd7e2` | `#322d40` | rules, borders |
 | `--rasp` | `#ff3d71` | `#ff5c87` | **the accent** — play dome, active tab |
 | `--tan` | `#ff7a18` | `#ff9445` | in progress |
 | `--mint` | `#0f9e83` | `#2fd9b6` | finished |
 | `--cobalt` | `#3345d8` | `#8ba0ff` | not started |
+
+Note on the dark ramp: it is deliberately mid-tone lavender-grey, not near-white — the previous off-white ramp still read as glare on the phone. `--ink-3` clears AA only on the opaque atmosphere (4.65:1 vs atmo-hi, 4.93:1 vs atmo-lo); on surface it lands at 4.27:1 and on panel-hi at 3.81:1, so ink-3 is metadata-on-atmosphere only. `--ink-2` clears AA on every opaque dark surface (7.93 ground / 7.01 surface / 6.25 panel-hi) and on flat bar/rail glass (4.54 / 4.89), but not under the bar/rail sheen strip (3.33 / 3.59) — the bar's small line of text is `--ink`, which holds 5.23:1 (bar, with strip) and 5.63:1 (rail, with strip). Full table in `.bar`'s comment in `index.css`.
 
 Each accent has an `-ink` variant (`--rasp-ink` and friends) that is the only
 version allowed to carry text. The saturated accents fail 4.5:1 on the light
@@ -113,10 +115,46 @@ tabular numerals.
 
 ### Glass
 
-Used in exactly two places, the top bar and the tab rail, and only because both
-genuinely sit over scrolling content. At 91–93% opacity, not less: at 72% it
-looked correct over a plain light ground and turned out unreadable on a real
-phone in dark mode, where cover artwork scrolls underneath it.
+Used in five places, and only because each earns it: the top bar and
+the tab rail (both genuinely sit over scrolling content), the detail-sheet
+close button (`.iconbtn--glass`, chrome at button scale), the selectable
+family — the profile-picker capsules and the filter/tag chips (a control you
+press, not a pane of chrome) — and the primary CTA (`.btn--primary`, the app's
+play-shaped material). Chrome sits at 86–93% opacity, never less: at
+72% it looked correct over a plain light ground and turned out unreadable on a
+real phone in dark mode, where cover artwork scrolls underneath it. The
+selectable fill is the surface at ~64–68% — translucent on purpose, so the
+atmosphere reads through — and never sits over artwork. The primary CTA
+simulates the same layered translucency over an opaque base instead, because
+nothing should bleed through a control carrying white text.
+
+All of it is one recipe drawn from shared tokens, one hue parameter per
+family. The chrome draws from `--glass-spec`, `--glass-inset` and
+`--glass-edge` plus a directional rim shadow; selectables add `--select-fill`
+and the accent-family halo (`--glass-glow`, low-alpha rasp/plum — stronger on
+hover/focus, compressed on press); the primary CTA reuses the identical halo
+tokens (`--glass-glow` / `--glass-glow-hot` / `--glass-glow-press`, untouched)
+and swaps in a rasp-hued series — `--btn-base` (opaque deepened base),
+`--btn-grad` (82–90% alpha stops, top rim lit), `--btn-sheen` (faint
+rasp-tinted falloff), `--btn-inset` (1px specular top edge, .55 fading by ~30%
+to .385) and `--btn-edge` (rasp-pearl hairline, ~68% white on light, 50% pearl
+on dark). The chrome takes a directional rim shadow; selectables and the
+primary take the halo. Future tweaks edit the tokens, not the call sites.
+
+### The primary CTA
+
+Every `.btn--primary` in the app — Continue, Sign in, Try again,
+create-profile submits — is one material derived from the same tokens as
+the bar, the rail, the selectables and the close button. Painted
+bottom-to-top: opaque `--btn-base` (`#8f002e` light / `#6d0023` dark), the
+82–90% alpha `--btn-grad` (top stop `#d2104e`, deepening toward the base),
+then `--btn-sheen`, then the halo. White text holds
+≥ 4.5:1 at every row of the fill in both themes (4.77 light / 4.91 dark,
+sheen included); the previous flat `--rasp` slab ran 3.4:1 (light) and
+2.9:1 (dark). Hover strengthens the halo one notch and travels 1px;
+press travels 3px into the shadow and compresses it to the press tier;
+focus-visible keeps the global cobalt ring. No `backdrop-filter` — the
+translucency is simulated in the layered fill.
 
 ## Composition rules
 
@@ -152,7 +190,7 @@ These are documented at length in spec 15 and each one cost real time:
 ## Verifying a change
 
 ```bash
-npm --prefix client run test                 # 266 unit tests
+npm --prefix client run test                 # 895 unit tests
 npx playwright test                          # 40 E2E, needs a running stack
 node scripts/capture-ui.js                   # screenshots + layout guards
 ```

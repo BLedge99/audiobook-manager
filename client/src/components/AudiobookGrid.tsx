@@ -12,6 +12,7 @@ import {
   totalDuration,
 } from "../lib/position";
 import { headingText, remainingLabel } from "../lib/segmentCopy";
+import { dispenseShakeThen } from "../lib/dispense";
 import { copy } from "../copy";
 import {
   CapsuleMarks,
@@ -59,7 +60,7 @@ const cardGrid = "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 
 /** The readout stamped into the shell: how long the book is, in tabular figures. */
 function Stamp({ book }: { book: Audiobook }) {
   return (
-    <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-ink/25 bg-surface px-2 py-0.5 text-[11px] font-bold text-ink2 tnum">
+    <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-ink/25 bg-surface px-2 py-0.5 text-[0.6875rem] font-bold text-ink2 tnum">
       <Clock3 size={11} aria-hidden="true" />
       {durationLabel(book.duration)}
     </span>
@@ -116,13 +117,16 @@ const LibraryCard = memo(function LibraryCard({
         needsReview && "ring-2 ring-rasp",
       )}
     >
-      <button onClick={() => onSelect(book)} className="relative block w-full text-left">
+      <button
+        onClick={(event) => dispenseShakeThen(event.currentTarget, () => onSelect(book))}
+        className="relative block w-full text-left"
+      >
         {/* In flow, above the cover. As an absolutely positioned tab it was
             clipped by the neighbouring capsule in a tight 2-across grid, and a
             ring alone was too quiet to say "this changed" -- which is the whole
             point of the queue holding its mark. */}
         {needsReview && (
-          <span className="mb-1.5 inline-flex rounded-full border-2 border-ink bg-rasp px-2 py-0.5 text-[10px] font-bold text-white">
+          <span className="mb-1.5 inline-flex rounded-full border-2 border-ink bg-rasp px-2 py-0.5 text-[0.625rem] font-bold text-white">
             {copy.status.changed}
           </span>
         )}
@@ -137,19 +141,19 @@ const LibraryCard = memo(function LibraryCard({
               that distinguishes "Short Ghost and Horror Collection 034" from
               052, and the varying height left every row of the shelf ragged.
               The author line is reserved to one line for the same reason. */}
-          <h3 className="line-clamp-2 min-h-[2.3em] font-display text-[15px] font-semibold leading-tight text-ink">
+          <h3 className="line-clamp-2 min-h-[2.3em] font-display text-[0.9375rem] font-semibold leading-tight text-ink">
             {book.title}
           </h3>
-          <p className="mt-0.5 truncate text-[12.5px] text-ink2">{book.author}</p>
+          <p className="mt-0.5 truncate text-[0.78125rem] text-ink2">{book.author}</p>
           {narrators.length > 0 && (
-            <p className="mt-0.5 truncate text-[11.5px] text-ink3">
+            <p className="mt-0.5 truncate text-[0.71875rem] text-ink3">
               {narrators.length === 1
                 ? copy.narratedBy(narrators[0].name)
                 : copy.narratedByCount(narrators.length)}
             </p>
           )}
           {book.tracks.length > 1 && (
-            <p className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-cobalt">
+            <p className="mt-1.5 flex items-center gap-1 text-[0.6875rem] font-bold text-cobalt">
               <Headphones size={12} aria-hidden="true" /> {copy.card.tracks(book.tracks.length)}
             </p>
           )}
@@ -159,7 +163,7 @@ const LibraryCard = memo(function LibraryCard({
             <Tube percent={percent} />
             <span className="mt-1.5 flex items-center justify-between gap-2">
               <StatusTag status={status} />
-              <span className="truncate text-[11px] text-ink3 tnum">{line}</span>
+              <span className="truncate text-[0.6875rem] text-ink3 tnum">{line}</span>
             </span>
           </span>
         )}
@@ -230,7 +234,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
           return (
             <button
               key={`${book.serverId ?? ""}#${book.id}`}
-              onClick={() => onSelect(book)}
+              onClick={(event) => dispenseShakeThen(event.currentTarget, () => onSelect(book))}
               className={cn(
                 "capsule flex shrink-0 snap-start items-center gap-3 p-3 text-left",
                 index % 2 ? "capsule--alt" : "",
@@ -239,10 +243,10 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
             >
               <ShellCover bookId={book.id} serverId={book.serverId} className={isFeatured ? "w-[68px] shrink-0" : "w-[54px] shrink-0"} />
               <span className="min-w-0 flex-1">
-                <h3 className={cn("truncate font-display font-semibold text-ink", isFeatured ? "text-[17px]" : "text-[15px]")}>
+                <h3 className={cn("truncate font-display font-semibold text-ink", isFeatured ? "text-[1.0625rem]" : "text-[0.9375rem]")}>
                   {book.title}
                 </h3>
-                <span className="mt-0.5 block truncate text-[12.5px] text-ink2">{book.author}</span>
+                <span className="mt-0.5 block truncate text-[0.78125rem] text-ink2">{book.author}</span>
                 <span className="mt-2 block">
                   <Tube percent={percent} />
                 </span>
@@ -251,7 +255,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
                     enough width to stay on one line. */}
                 <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                   <StatusTag status={statusFor(percent)} />
-                  <span className="truncate text-[11px] text-ink3 tnum">{line}</span>
+                  <span className="truncate text-[0.6875rem] text-ink3 tnum">{line}</span>
                 </span>
               </span>
               {isFeatured ? (

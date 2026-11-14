@@ -61,7 +61,7 @@ export function OfflineNotice({
 
           <h1 className="mt-5 font-display text-2xl font-semibold text-ink">{copy.offline.heading}</h1>
 
-          <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-ink2">
+          <p className="mx-auto mt-3 max-w-sm text-[0.9375rem] leading-relaxed text-ink2">
             {libraryReadFailed
               ? copy.offline.libraryReadFailed
               : hasBooks

@@ -162,12 +162,12 @@ export function RemoveFromLibraryQuestion({
       role="group"
       aria-label={copy.removeBook.question}
     >
-      <p className="text-[13.5px] font-semibold text-ink">{copy.removeBook.question}</p>
+      <p className="text-[0.84375rem] font-semibold text-ink">{copy.removeBook.question}</p>
       {hasDownload && (
-        <p className="mt-1 text-[13px] text-ink2">{copy.removeBook.alsoDelete}</p>
+        <p className="mt-1 text-[0.8125rem] text-ink2">{copy.removeBook.alsoDelete}</p>
       )}
       {error && (
-        <p role="alert" className="mt-1.5 text-[12.5px] font-bold text-rasp-ink">
+        <p role="alert" className="mt-1.5 text-[0.78125rem] font-bold text-rasp-ink">
           {error}
         </p>
       )}

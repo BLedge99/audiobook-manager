@@ -40,8 +40,9 @@
 
 /* ---- 2. raw palettes ---- */
 :root {
-  /* light: plastic chalk under household light */
-  --l-ground: #f4f2f5;
+  /* light: plastic chalk under household light, a few percent warmer so the
+     room behind the machine reads lit rather than grey */
+  --l-ground: #f6f2f6;
   --l-surface: #ffffff;
   --l-sunk: #eae7ef;
   --l-ink: #1b1720;
@@ -57,14 +58,21 @@
   --l-cobalt: #3345d8;
   --l-cobalt-ink: #1b27a8;
 
-  /* dark: the same machine, lit from inside, for listening in bed */
-  --d-ground: #14121a;
+  /* dark: the same machine, lit from inside, for listening in bed.
+     Deeper ground (near-black, warm plum cast) so covers and glow read as the
+     light sources. The ink ramp is deliberately mid-tone lavender-grey, well
+     below near-white: pass 3's off-white ramp still read as glare on the
+     phone. ink-3 is only retained for metadata set on the opaque atmosphere
+     (4.65:1 vs atmo-hi, 4.93:1 vs atmo-lo); on surface and panel-hi it dips
+     below 4.5:1, as does ink-2 over the bar/rail sheen strip -- see the
+     ramp table in DESIGN.md and the .bar comment. */
+  --d-ground: #100e15;
   --d-surface: #1e1b26;
-  --d-sunk: #100e16;
-  --d-ink: #f7f4f9;
-  --d-ink-2: #bdb6c7;
-  --d-ink-3: #9a92a9;
-  --d-line: #302b3c;
+  --d-sunk: #0c0a10;
+  --d-ink: #cdd0da;
+  --d-ink-2: #a9a4b8;
+  --d-ink-3: #827d92;
+  --d-line: #322d40;
   --d-rasp: #ff5c87;
   --d-rasp-ink: #ffa8c1;
   --d-tan: #ff9445;
@@ -114,16 +122,107 @@
   --t-slow: 420ms;
   --t-dispense: 720ms;
 
-  /* Glass is used in exactly two places -- the top bar and the tab rail -- and
-     only because both genuinely sit over scrolling content. Anywhere else it
-     would be decoration, so there is no generic `.glass` utility.
+  /* Glass is used in exactly two chrome places -- the top bar and the tab
+     rail -- and only because both genuinely sit over scrolling content. The
+     selectable-glass family (picker capsules, chips) is the third use, added
+     in pass 3: it is a control you press, not a pane of chrome.
 
      The opacity is high on purpose. At 72% the frosted panel looked correct
      over the plain light ground in a screenshot, and turned out to be
      unreadable on the device in dark mode, where cover artwork scrolls
      underneath it: the wordmark sat directly on a book title. Frosted glass is
-     a treatment, not a licence to make text unreadable. */
+     a treatment, not a licence to make text unreadable.
+
+     Dark mode sits lower (88%, and 86% on the bar, which sits over the larger
+     art at the top edge). Contrast vs pure-white art: the bar's one small
+     line is --ink (5.23:1 with the top sheen strip); ink-2 clears 4.54:1 on
+     flat bar glass and dips below AA under the strip -- see the `.bar`
+     comment for the table. Light mode is unchanged at 93%. */
   --glass: color-mix(in srgb, var(--surface) 93%, transparent);
+
+  /* The room the machine stands in. A horizon wash across the top ~40% of the
+     viewport (coral into rose into pearl; the dark room gets plum into
+     aubergine), one warm lamp just out of frame top-right, exactly ONE cool
+     counter-glow bottom-left so the room has a second light source without
+     becoming a duotone, and a soft vignette sinking into the bottom edge.
+     Band-limited alpha everywhere: never a block of colour, never loud enough
+     to sit next to covers. */
+  --atmo-hi: #f9f5f6;
+  --atmo-lo: #ece7ea;
+  --atmo-topglow: #fcf9f8;
+  --atmo-warm: rgba(255, 168, 108, 0.21);
+  --atmo-horizon:
+    radial-gradient(130% 48% at 50% -8%, rgba(255, 214, 205, 0.13) 0%, transparent 58%),
+    linear-gradient(180deg, rgba(255, 148, 116, 0.15) 0%, rgba(226, 152, 168, 0.115) 17%, rgba(247, 243, 246, 0) 40%);
+  --atmo-cool: radial-gradient(880px 640px at -14% 112%, rgba(101, 115, 197, 0.10) 0%, transparent 62%);
+  --atmo-vignette: linear-gradient(180deg, transparent 55%, rgba(44, 38, 51, 0.07) 100%);
+  --atmo-stack:
+    var(--atmo-horizon),
+    var(--atmo-cool),
+    var(--atmo-vignette),
+    radial-gradient(1150px 640px at 78% -16%, var(--atmo-warm) 0%, transparent 60%),
+    radial-gradient(140% 90% at 50% -30%, var(--atmo-topglow) 0%, transparent 55%),
+    linear-gradient(180deg, var(--atmo-hi) 0%, var(--atmo-lo) 100%);
+
+  /* Aero material tokens. One definition per theme; the component classes only
+     reference these. The sheen is deliberately visible now -- pass 1's version
+     was within rounding error of the flat surface, which is why the detail
+     sheet read as unchanged.
+
+     THE SHARED GLASS RECIPE. Every pane of glass in the app draws from the
+     same four tokens, so a future tweak lands everywhere at once:
+       --glass-spec    the vertical light sheen laid over the fill
+       --glass-inset   the 1px specular top edge (inner highlight)
+       --glass-edge    the hairline border that bounds the pane
+       --glass-glow    the low-alpha accent-family halo (selectables)
+     Chrome (bar, rail) carries spec + inset + edge plus its directional rim
+     shadow; selectables (profile-picker capsules, chips) add the fill and the
+     glow; the primary CTA carries the same glow and a rasp-hued spec/inset/
+     edge trio (--btn-sheen / --btn-inset / --btn-edge). backdrop-filter is
+     always blur + saturate(1.15) where used. */
+  --panel-hi: #ffffff;
+  --panel-lo: #ddd8e0;
+  --glass-spec: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.18) 45%, transparent 80%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --glass-edge: color-mix(in srgb, var(--ink) 28%, transparent);
+  --glass-rim-bar: 0 12px 30px -20px rgba(27, 23, 32, 0.42);
+  --glass-rim-rail: 0 -12px 30px -20px rgba(27, 23, 32, 0.42);
+  /* The selectable-glass fill: the surface at ~68%, so the room reads through
+     the control instead of the control reading as a painted chip. Only the
+     selectables use it; the bar/rail legibility-tested --glass stays denser. */
+  --select-fill: color-mix(in srgb, var(--surface) 68%, transparent);
+  /* The ambient halo, rasp-leaning warm (light) / plum-rasp (dark). Low alpha
+     at rest, stronger on hover/focus, compressed on press. Never a beacon. */
+  --glass-glow: 0 0 26px -12px color-mix(in srgb, var(--rasp) 30%, transparent);
+  --glass-glow-hot: 0 0 34px -10px color-mix(in srgb, var(--rasp) 42%, transparent);
+  --glass-glow-press: 0 0 16px -12px color-mix(in srgb, var(--rasp) 27%, transparent);
+  --panel-sheen: linear-gradient(180deg, var(--panel-hi) 0%, var(--surface) 26%, var(--panel-lo) 112%);
+
+  /* The primary CTA's hue parameter. Same world as the shared glass recipe
+     above -- one material, rasp-family hue -- so chips, selectables, bar/rail,
+     iconbtn and the primary all draw from the same sheen/inset/edge/glow
+     language.
+
+     The fill is SIMULATED translucency, layered over an opaque base, for the
+     same reason the chips simulate print layering and for a harder one:
+     nothing should bleed through a control carrying white text, and the
+     opaque base is what lets white glyphs hold >= 4.5:1 across every row of
+     the gradient. The 82-90% alpha lives in --btn-grad, which is layered
+     exactly as painted: --btn-sheen over --btn-grad over --btn-base.
+     Top rim lit (#d2104e), deepened base (#8f002e). --btn-sheen is the
+     rasp-tinted falloff at deliberately low alpha -- white text must stay
+     AA at every row, so this cannot be the chips' .62 white -- and
+     --btn-inset is the 1px specular top edge (.55) fading by ~30% (.385),
+     rasp-tinted. The halo is the untouched --glass-glow* family: one
+     recipe, hue only. No backdrop-filter anywhere in the primary.
+
+     Effective composite under white glyphs, per painted row (sheen incl.):
+     4.77:1 at the top edge, rising to 9.51:1 at the base. */
+  --btn-base: #8f002e;
+  --btn-grad: linear-gradient(180deg, rgba(210, 16, 78, 0.9) 0%, rgba(180, 18, 68, 0.9) 50%, rgba(143, 0, 46, 0.9) 100%);
+  --btn-sheen: linear-gradient(180deg, rgba(255, 223, 231, 0.16) 0%, rgba(255, 223, 231, 0.07) 28%, transparent 60%);
+  --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 3px 6px -3px rgba(255, 228, 233, 0.385);
+  --btn-edge: rgba(255, 226, 234, 0.68);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -144,7 +243,40 @@
     --mint-ink: var(--d-mint-ink);
     --cobalt: var(--d-cobalt);
     --cobalt-ink: var(--d-cobalt-ink);
-    --glass: color-mix(in srgb, var(--surface) 91%, transparent);
+    --glass: color-mix(in srgb, var(--surface) 88%, transparent);
+    /* The bar sits over brighter art than the rail (it is at the top edge,
+       where covers are largest), so it goes a touch clearer still. Effective
+       opacity verified against pure-white art -- see .bar for the numbers. */
+    --glass-bar: color-mix(in srgb, var(--surface) 86%, transparent);
+    --atmo-hi: #16121e;
+    --atmo-lo: #0d0b12;
+    --atmo-topglow: #1a1622;
+    --atmo-warm: rgba(255, 157, 92, 0.16);
+    --atmo-horizon:
+      radial-gradient(130% 48% at 50% -8%, rgba(120, 44, 104, 0.16) 0%, transparent 58%),
+      linear-gradient(180deg, rgba(112, 46, 100, 0.15) 0%, rgba(74, 35, 75, 0.12) 17%, rgba(16, 14, 21, 0) 40%);
+    --atmo-cool: radial-gradient(880px 640px at -14% 112%, rgba(146, 158, 235, 0.09) 0%, transparent 62%);
+    --atmo-vignette: linear-gradient(180deg, transparent 50%, rgba(2, 2, 5, 0.36) 100%);
+    --panel-hi: #282433;
+    --panel-lo: #16131e;
+    --glass-spec: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 45%, transparent 80%);
+    --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-edge: color-mix(in srgb, var(--ink) 21%, transparent);
+    --glass-rim-bar: 0 12px 34px -18px rgba(0, 0, 0, 0.62);
+    --glass-rim-rail: 0 -12px 34px -18px rgba(0, 0, 0, 0.62);
+    --select-fill: color-mix(in srgb, var(--surface) 64%, transparent);
+    --glass-glow: 0 0 30px -12px color-mix(in srgb, var(--rasp) 36%, transparent);
+    --glass-glow-hot: 0 0 38px -10px color-mix(in srgb, var(--rasp) 48%, transparent);
+    --glass-glow-press: 0 0 18px -12px color-mix(in srgb, var(--rasp) 32%, transparent);
+    /* Primary CTA, dark twin of the light block. Deepened base (#6d0023) so
+       the room stays dark; same stops, slightly shallower sheen. Effective
+       composite under white glyphs: 4.91:1 at the top edge, rising to
+       11.39:1 at the base. */
+    --btn-base: #6d0023;
+    --btn-grad: linear-gradient(180deg, rgba(210, 16, 78, 0.9) 0%, rgba(180, 18, 72, 0.9) 50%, rgba(122, 0, 40, 0.9) 100%);
+    --btn-sheen: linear-gradient(180deg, rgba(255, 213, 222, 0.16) 0%, rgba(255, 213, 222, 0.07) 28%, transparent 60%);
+    --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 3px 6px -3px rgba(255, 222, 229, 0.35);
+    --btn-edge: rgba(255, 205, 220, 0.5);
   }
 }
 
@@ -165,7 +297,39 @@
   --mint-ink: var(--d-mint-ink);
   --cobalt: var(--d-cobalt);
   --cobalt-ink: var(--d-cobalt-ink);
-  --glass: color-mix(in srgb, var(--surface) 91%, transparent);
+  --glass: color-mix(in srgb, var(--surface) 88%, transparent);
+  /* The bar sits over brighter art than the rail, so it goes a touch clearer
+     still. Effective opacity verified against pure-white art -- see .bar. */
+  --glass-bar: color-mix(in srgb, var(--surface) 86%, transparent);
+  --atmo-hi: #16121e;
+  --atmo-lo: #0d0b12;
+  --atmo-topglow: #1a1622;
+  --atmo-warm: rgba(255, 157, 92, 0.16);
+  --atmo-horizon:
+    radial-gradient(130% 48% at 50% -8%, rgba(120, 44, 104, 0.16) 0%, transparent 58%),
+    linear-gradient(180deg, rgba(112, 46, 100, 0.15) 0%, rgba(74, 35, 75, 0.12) 17%, rgba(16, 14, 21, 0) 40%);
+  --atmo-cool: radial-gradient(880px 640px at -14% 112%, rgba(146, 158, 235, 0.09) 0%, transparent 62%);
+  --atmo-vignette: linear-gradient(180deg, transparent 50%, rgba(2, 2, 5, 0.36) 100%);
+  --panel-hi: #282433;
+  --panel-lo: #16131e;
+  --glass-spec: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 45%, transparent 80%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --glass-edge: color-mix(in srgb, var(--ink) 21%, transparent);
+  --glass-rim-bar: 0 12px 34px -18px rgba(0, 0, 0, 0.62);
+  --glass-rim-rail: 0 -12px 34px -18px rgba(0, 0, 0, 0.62);
+  --select-fill: color-mix(in srgb, var(--surface) 64%, transparent);
+  --glass-glow: 0 0 30px -12px color-mix(in srgb, var(--rasp) 36%, transparent);
+  --glass-glow-hot: 0 0 38px -10px color-mix(in srgb, var(--rasp) 48%, transparent);
+  --glass-glow-press: 0 0 18px -12px color-mix(in srgb, var(--rasp) 32%, transparent);
+  /* Primary CTA, dark twin of the light block. Deepened base (#6d0023) so
+     the room stays dark; same stops, slightly shallower sheen. Effective
+     composite under white glyphs: 4.91:1 at the top edge, rising to
+     11.39:1 at the base. */
+  --btn-base: #6d0023;
+  --btn-grad: linear-gradient(180deg, rgba(210, 16, 78, 0.9) 0%, rgba(180, 18, 72, 0.9) 50%, rgba(122, 0, 40, 0.9) 100%);
+  --btn-sheen: linear-gradient(180deg, rgba(255, 213, 222, 0.16) 0%, rgba(255, 213, 222, 0.07) 28%, transparent 60%);
+  --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 3px 6px -3px rgba(255, 222, 229, 0.35);
+  --btn-edge: rgba(255, 205, 220, 0.5);
 }
 
 @theme inline {
@@ -198,10 +362,15 @@ html {
 
 body {
   margin: 0;
-  background: var(--ground);
+  background-color: var(--ground);
+  /* The room behind the machine: vertical falloff between two close tints, a
+     radial light from above, and one quiet pool of warmth. Fixed, so the
+     backdrop holds still while content scrolls over it. */
+  background-image: var(--atmo-stack);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: "Nunito", ui-rounded, system-ui, sans-serif;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.45;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -302,9 +471,11 @@ button:focus {
 
 /* Base drawn panel: marker stroke plus a doubled edge, which is what makes a
    rectangle read as drawn rather than rendered. Radius wobble (see --r-shell)
-   does the hand-drawn half of it. */
+   does the hand-drawn half of it. The fill is a vertical light gradient --
+   brighter at the top, like a shell lit from above -- subtle enough that the
+   2px ink border still does the structural work. */
 .panel {
-  background: var(--surface);
+  background: var(--panel-sheen, var(--surface));
   border: var(--stroke) solid var(--ink);
   border-radius: var(--r-shell);
   box-shadow:
@@ -373,7 +544,10 @@ button:focus {
   border-radius: var(--r-pod);
   border: var(--stroke) solid var(--ink);
   background: var(--surface);
-  transform: rotate(var(--cant));
+  /* One source of truth for the resting cant, so press/shake keyframes can
+     rotate relative to it instead of fighting `.capsule--alt`. */
+  --cant-current: var(--cant);
+  transform: rotate(var(--cant-current));
   transition:
     transform var(--t-base) var(--ease-pop),
     box-shadow var(--t-base) var(--ease);
@@ -386,6 +560,61 @@ button:focus {
   content-visibility: auto;
   contain-intrinsic-size: auto 330px;
 }
+/* Squashes to 0.93 on press with a small +0.8deg rock of the shell, and
+   settles back on the existing --ease-pop curve (see the transform transition
+   above). The canted state keeps its cant; the hovered state keeps its lift. */
+.capsule:active {
+  transform: rotate(calc(var(--cant-current) + 0.8deg)) scale(0.93);
+}
+.capsule:hover:active,
+.capsule:focus-within:active {
+  transform: rotate(0.8deg) translateY(-2px) scale(0.93);
+}
+/* One-shot excited wobble on hover: ±2deg, at most two swings (out to +2,
+   through to -2, home), ~500ms, then settle. No wobble past the hover
+   target. Runs once per hover. */
+@keyframes excited-wobble {
+  0% {
+    transform: rotate(0deg) translateY(-3px);
+  }
+  30% {
+    transform: rotate(2deg) translateY(-3px);
+  }
+  62% {
+    transform: rotate(-2deg) translateY(-3px);
+  }
+  100% {
+    transform: rotate(0deg) translateY(-3px);
+  }
+}
+/* The dispense shake: two short shakes of ±1.6deg over ~340ms, toggled by
+   JS on card tap just before the detail opens. The rotation swings around
+   the capsule's own resting cant via --cant-current, so alt cards shake on
+   their own angle. Reduced-motion listeners never get the class (see
+   lib/dispense.ts) and the global reduced-motion rule collapses it anyway. */
+@keyframes dispense-shake {
+  0% {
+    transform: rotate(var(--cant-current));
+  }
+  15% {
+    transform: rotate(calc(var(--cant-current) + 1.6deg));
+  }
+  33% {
+    transform: rotate(calc(var(--cant-current) - 1.6deg));
+  }
+  50% {
+    transform: rotate(calc(var(--cant-current) + 1.6deg));
+  }
+  68% {
+    transform: rotate(calc(var(--cant-current) - 1.6deg));
+  }
+  100% {
+    transform: rotate(var(--cant-current));
+  }
+}
+/* The keyframes for the dispense shake; the class itself is declared further
+   down, after `.capsule:hover`, so it wins the `animation` property over the
+   hover wobble while it runs (equal specificity, later source order). */
 .capsule:hover,
 .capsule:focus-within {
   transform: rotate(0deg) translateY(-3px);
@@ -393,39 +622,72 @@ button:focus {
     0 4px 0 -1px color-mix(in srgb, var(--ink) 30%, transparent),
     0 18px 28px -18px color-mix(in srgb, var(--ink) 85%, transparent);
 }
+/* The wobble is hover-only: keyboard focus gets the lift and ring without a
+   flourish the user did not ask for. */
+.capsule:hover {
+  animation: excited-wobble 500ms ease-out 1;
+}
+/* The dispense shake class. Declared after the hover rules on purpose:
+   `.capsule.dispense-shake` and `.capsule:hover` carry the same specificity
+   (0,2,0), and during the 340ms window the shake -- not the hover wobble --
+   must own the `animation` property, or a pointer parked over the card
+   swallows the whole effect. Reduced-motion listeners never get the class
+   (see lib/dispense.ts); the global reduced-motion rule collapses it too. */
+.capsule.dispense-shake {
+  animation: dispense-shake 340ms var(--ease-pop) 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .capsule.dispense-shake {
+    animation: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .capsule:hover {
+    animation: none;
+  }
+}
 .capsule--alt {
-  transform: rotate(var(--cant-alt));
+  --cant-current: var(--cant-alt);
+  transform: rotate(var(--cant-current));
 }
 .capsule__gloss {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(255, 255, 255, 0.12) 26%,
-    transparent 52%
-  );
+  /* A specular half-light: one soft diagonal sheen from the top-left, plus the
+     long plastic falloff. CSS only. */
+  background:
+    radial-gradient(115% 88% at 16% 6%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.16) 38%, transparent 56%),
+    linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.42) 0%,
+      rgba(255, 255, 255, 0.1) 26%,
+      transparent 52%
+    );
 }
 /* Plastic only reads as plastic when something is behind it, so the gloss is
    a light source in dark mode rather than a white haze in both. */
 :root[data-theme="dark"] .capsule__gloss {
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.14) 0%,
-    rgba(255, 255, 255, 0.04) 28%,
-    transparent 55%
-  );
+  background:
+    radial-gradient(115% 88% at 16% 6%, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.05) 40%, transparent 56%),
+    linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.035) 28%,
+      transparent 55%
+    );
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .capsule__gloss {
-    background: linear-gradient(
-      160deg,
-      rgba(255, 255, 255, 0.14) 0%,
-      rgba(255, 255, 255, 0.04) 28%,
-      transparent 55%
-    );
+    background:
+      radial-gradient(115% 88% at 16% 6%, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.05) 40%, transparent 56%),
+      linear-gradient(
+        160deg,
+        rgba(255, 255, 255, 0.12) 0%,
+        rgba(255, 255, 255, 0.035) 28%,
+        transparent 55%
+      );
   }
 }
 .capsule__seam {
@@ -515,6 +777,48 @@ button:focus {
     0 0 0 color-mix(in srgb, var(--ink) 88%, transparent),
     0 4px 10px -6px color-mix(in srgb, var(--rasp) 80%, transparent);
 }
+/* The jelly squash: scaleX/scaleY cross-squeeze on press, ~120ms held at
+   (0.88, 1.1), then released back onto the resting pressed pose so handing
+   control back to `:active` never jumps. ~380ms overall; transform only.
+   Unlayered so it wins over the Tailwind `animate-[spin...]` utility used
+   while playing -- the press must read as one toy, spin or no spin.
+   Collapses to 1ms under reduced motion via the global rule. */
+@keyframes dome-jelly {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  24% {
+    transform: translateY(4px) scale(0.88, 1.1);
+  }
+  56% {
+    transform: translateY(4px) scale(0.88, 1.1);
+  }
+  100% {
+    transform: translateY(4px) scale(1, 1);
+  }
+}
+/* A rasp gel halo in dark mode, like gel catching an inner light. A touch
+   more presence than pass 1 (+2px blur, +9% alpha) so it registers over the
+   dark ground; still static -- no animation, no pulse -- so the dome stays
+   the one glossy thing in the app without becoming a beacon. */
+:root[data-theme="dark"] .dome:not(:active) {
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.55),
+    inset 0 -4px 8px color-mix(in srgb, var(--rasp-ink) 60%, transparent),
+    0 4px 0 color-mix(in srgb, var(--ink) 88%, transparent),
+    0 12px 22px -12px color-mix(in srgb, var(--rasp) 90%, transparent),
+    0 0 48px -10px color-mix(in srgb, var(--rasp) 51%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dome:not(:active) {
+    box-shadow:
+      inset 0 2px 2px rgba(255, 255, 255, 0.55),
+      inset 0 -4px 8px color-mix(in srgb, var(--rasp-ink) 60%, transparent),
+      0 4px 0 color-mix(in srgb, var(--ink) 88%, transparent),
+      0 12px 22px -12px color-mix(in srgb, var(--rasp) 90%, transparent),
+      0 0 48px -10px color-mix(in srgb, var(--rasp) 51%, transparent);
+  }
+}
 .dome__play {
   width: 0;
   height: 0;
@@ -599,10 +903,48 @@ button:focus {
   overflow: hidden;
 }
 .tube > i {
+  position: relative;
   display: block;
   height: 100%;
   border-radius: 99px;
   background: var(--tan);
+  overflow: hidden;
+}
+/* A slow, low-amplitude light sweep along the fill. Transform/opacity only,
+   one band, long pause between sweeps. */
+.tube > i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, 0.5) 50%, transparent 75%);
+  transform: translateX(-100%);
+  opacity: 0;
+  animation: tube-shimmer 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes tube-shimmer {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  48% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tube > i::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 .tube--done > i {
   background: var(--mint);
@@ -694,7 +1036,7 @@ button:focus {
   background: var(--surface);
   color: var(--ink);
   font-weight: 700;
-  font-size: 14.5px;
+  font-size: 0.90625rem;
   letter-spacing: -0.01em;
   cursor: pointer;
   box-shadow: 0 3px 0 -1px color-mix(in srgb, var(--ink) 80%, transparent);
@@ -716,12 +1058,42 @@ button:focus {
   cursor: not-allowed;
   box-shadow: none;
 }
-.btn--primary {
-  background: var(--rasp);
-  color: #fff;
+/* The primary CTA: the shared glass recipe with a rasp hue parameter.
+   Painted bottom-to-top: opaque --btn-base (so nothing bleeds through a
+   control carrying white text), the 82-90% alpha --btn-grad (top rim lit,
+   deepened base), then --btn-sheen, the rasp-tinted falloff that fades by
+   ~28% -- deliberately faint, because white glyphs must hold >= 4.5:1 at
+   every row (4.77 light / 4.91 dark, see the :root comment). Hairline
+   rasp-pearl edge (--btn-edge), the 1px specular top edge at .55 fading by
+   ~30% to .385 (--btn-inset), and the SAME --glass-glow halo the picker
+   capsules and chips carry -- one recipe, hue only. No backdrop-filter.
+   Hover strengthens the halo one notch and the shell travels 1px; press
+   travels 3px into the shadow and compresses the halo to the press tier;
+   focus-visible keeps the global cobalt ring. `.btn.btn--primary` (not a
+   bare modifier) so the hairline and glow also beat `.btn--sm`'s 1.5px
+   border and the base `.btn:hover/:active` shadows by specificity. */
+.btn.btn--primary {
+  border: 1px solid var(--btn-edge);
+  background: var(--btn-sheen), var(--btn-grad), var(--btn-base);
+  color: #ffffff;
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.35),
-    0 3px 0 color-mix(in srgb, var(--ink) 80%, transparent);
+    var(--btn-inset),
+    0 3px 0 -1px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-glow);
+}
+.btn.btn--primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    var(--btn-inset),
+    0 5px 0 -1px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-glow-hot);
+}
+.btn.btn--primary:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    var(--btn-inset),
+    0 0 0 -1px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-glow-press);
 }
 .btn--mint {
   background: var(--mint);
@@ -741,7 +1113,7 @@ button:focus {
 .btn--sm {
   min-height: 36px;
   padding: 0 13px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   border-width: 1.5px;
 }
 
@@ -764,6 +1136,21 @@ button:focus {
   color: var(--ink);
   transform: rotate(-4deg);
 }
+/* The close button on the detail sheet reads as glass, not paint: the shared
+   sheen and inner specular highlight from the bar/rail treatment at button
+   scale, plus the 1px top specular edge. Backdrop-filter is safe here -- the
+   button has no positioned descendants. Chrome, not a selectable: no accent
+   glow, and the saturation matches the rest of the glass (1.15). */
+.iconbtn--glass {
+  background: var(--glass-spec), var(--glass);
+  box-shadow: var(--glass-inset);
+  border-color: var(--glass-edge);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+}
+.iconbtn--glass:hover {
+  color: var(--ink);
+}
 
 .field {
   width: 100%;
@@ -776,7 +1163,7 @@ button:focus {
   border-radius: 22px;
   border: var(--stroke) solid color-mix(in srgb, var(--ink) 34%, transparent);
   background: var(--surface);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .field::placeholder {
   color: var(--ink-3);
@@ -787,6 +1174,25 @@ button:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--cobalt) 25%, transparent);
 }
 
+/* Selectable glass. One material for everything you pick with: the profile
+   picker's capsules (`.capsule--select`, used in ProfileGate) and the chip
+   family (`.chip`, used by the filter bar, the tag editor and the primitives
+   <Chip>). Both draw from the same tokens, so the pair always moves together.
+
+   The recipe, in paint order:
+     1. --glass-spec over --select-fill  -- the sheen stripe and the
+        translucent fill; the room reads through the control
+     2. --glass-inset                    -- 1px specular top edge
+     3. --glass-glow                     -- low-alpha accent-family halo
+     4. --glass-edge hairline            -- theme-true border (ink at 28%
+        light, pearl/off-white at 21% dark)
+   On hover or :focus-visible the halo strengthens; while pressed it
+   compresses. Static -- no animation -- so it never becomes a beacon. The
+   capsules additionally keep their cant and offset shadow (they are capsules);
+   chips stay flat canted pills. No backdrop-filter on chips: they scroll in
+   long horizontal rows where per-chip blur would cost every frame, and the
+   fill reads fine over the panel behind them. The picker capsules (a handful,
+   on a static gate backdrop) do get blur(10px) saturate(1.15). */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -794,16 +1200,18 @@ button:focus {
   min-height: 36px;
   padding: 0 14px;
   border-radius: 99px;
-  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
-  background: var(--surface);
-  font-size: 13px;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-spec), var(--select-fill);
+  box-shadow: var(--glass-inset), var(--glass-glow);
+  font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   transition:
     background var(--t-fast) var(--ease),
     border-color var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+    transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
 }
 .chip[aria-pressed="true"],
 .chip[data-on="true"] {
@@ -813,6 +1221,59 @@ button:focus {
 }
 .chip:hover {
   transform: translateY(-1px) rotate(-1deg);
+  box-shadow: var(--glass-inset), var(--glass-glow-hot);
+}
+.chip:focus-visible {
+  box-shadow: var(--glass-inset), var(--glass-glow-hot);
+}
+.chip:active {
+  box-shadow: var(--glass-inset), var(--glass-glow-press);
+}
+/* Disabled chips (the tag editor is inert outside edit mode) must not lift or
+   glow on hover -- the affordance would be a lie. */
+.chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.chip:disabled:hover,
+.chip:disabled:focus-visible {
+  transform: none;
+  box-shadow: var(--glass-inset), var(--glass-glow);
+}
+
+/* The profile-picker capsule (`.capsule` + this modifier, ProfileGate). The
+   capsule keeps EVERYTHING that makes it a capsule -- cant, press physics,
+   offset shadow, hover straighten -- and swaps only its material: the solid
+   two-pixel imperturbability becomes the shared selectable-glass recipe with
+   the halo. Blur is affordable here (a handful of capsules on a static gate
+   backdrop); the children are static, so the containing-block rule never
+   bites. `border` drops to the hairline; the avatar ring inside keeps its
+   2px stroke, which is what keeps the person legible on the glass. */
+.capsule--select {
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-spec), var(--select-fill);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  box-shadow:
+    0 2px 0 -1px color-mix(in srgb, var(--ink) 26%, transparent),
+    0 12px 20px -16px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-inset),
+    var(--glass-glow);
+}
+.capsule--select:hover,
+.capsule--select:focus-visible {
+  box-shadow:
+    0 4px 0 -1px color-mix(in srgb, var(--ink) 30%, transparent),
+    0 18px 28px -18px color-mix(in srgb, var(--ink) 85%, transparent),
+    var(--glass-inset),
+    var(--glass-glow-hot);
+}
+.capsule--select:active {
+  box-shadow:
+    0 1px 0 -1px color-mix(in srgb, var(--ink) 26%, transparent),
+    0 8px 14px -14px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-inset),
+    var(--glass-glow-press);
 }
 
 /* ---- 8. shell ---- */
@@ -837,25 +1298,68 @@ button:focus {
   position: sticky;
   top: 0;
   z-index: 30;
-  border-bottom: var(--stroke) solid color-mix(in srgb, var(--ink) 26%, transparent);
+  border-bottom: var(--stroke) solid var(--glass-edge);
+  /* Soft outer rim shadow, so the bar reads as a shell hovering over the
+     scrolling content rather than a painted line. */
+  box-shadow: var(--glass-rim-bar);
 }
 .bar::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  /* Layered fill: a vertical light sheen over the glass. Dark mode glass is
+     88% (rail) / 86% (bar, via --glass-bar); light is unchanged at 93%. The
+     1px inner top highlight catches the light like the top edge of a real
+     moulded shell.
+
+     Effective opacity verified against the worst case, pure-white cover art
+     behind the bar (dark theme). Composite = glass over art, then the top
+     sheen strip (10% white at the very top edge):
+
+                           art = white, flat    + top sheen strip
+     ink   #cdd0da      7.12 : 1           5.23 : 1
+     ink-2 #a9a4b8      4.54 : 1           3.33 : 1   <- sheen dips below AA
+     ink-3 #827d92      2.77 : 1           2.03 : 1   <- sub-AA, do not use
+     Rail at 88% over the same art, flat / + sheen:
+     ink                 7.68 : 1           5.63 : 1
+     ink-2               4.89 : 1           3.59 : 1   <- sheen dips below AA
+
+     Pass 4 darkened the ramp (#cdd0da / #a9a4b8 / #827d92) past the point
+     where ink-2 could carry the bar's small line against the sheen strip,
+     so that line is now set in --ink (App.tsx), which clears 5.23:1 even with
+     the strip. ink-2 stays valid on flat glass (4.54 bar / 4.89 rail); the
+     +sheen column is the paint-order worst case at the very top edge, where
+     no glyphs sit -- it is published, not used. The dark ink ramp (pass 4) is
+     mid-tone, not near-white: the room stays dark. See DESIGN.md for the full
+     ramp table. */
+  background: var(--glass-spec), var(--glass-bar, var(--glass));
+  box-shadow: var(--glass-inset);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
 }
 /* Safe to filter directly: the rail has no fixed-position descendants, so it
-   traps no containing block. */
+   traps no containing block. Dark mode glass is 88% here; light is 93%.
+   Worst case over pure-white art: ink 7.68:1 flat / 5.63:1 under the sheen
+   strip; ink-2 4.89:1 flat / 3.59:1 under it. The phone rail's tab labels
+   sit at the vertical centre of the element, where the sheen is ~2-3%
+   (ink-2 ~= 4.5-4.6:1) -- the thinnest AA pair in the app, flagged rather
+   than hidden. Do not set small text at the rail's top edge. */
 .rail {
   position: relative;
-  background: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  border-top: var(--stroke) solid color-mix(in srgb, var(--ink) 26%, transparent);
+  background: var(--glass-spec), var(--glass);
+  box-shadow: var(--glass-inset), var(--glass-rim-rail);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border-top: var(--stroke) solid var(--glass-edge);
+}
+/* The opaque twin of the body backdrop, for the full-screen containers that
+   must cover the app behind them (settings, gates, the app shell). Same
+   layered gradients over an opaque ground -- never see-through. */
+.atmosphere {
+  background-color: var(--ground);
+  background-image: var(--atmo-stack);
+  background-attachment: fixed;
 }
 .sheet {
   position: fixed;
@@ -870,7 +1374,7 @@ button:focus {
 .wordmark {
   font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
   font-weight: 600;
-  font-size: 26px;
+  font-size: 1.625rem;
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -887,7 +1391,7 @@ button:focus {
   border-bottom: var(--stroke) solid color-mix(in srgb, var(--ink) 24%, transparent);
 }
 .machine-head h2 {
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 /* The ambient field: a handful of slow drifting specks so the machine reads as
@@ -928,3 +1432,13 @@ button:focus {
 }
 
 } /* end @layer components */
+
+/* The jelly squash on the play dome, unlayered on purpose: an unlayered rule
+   beats every cascade layer, so this wins over the Tailwind
+   `animate-[spin_1.1s_linear_infinite]` utility used while the book is
+   playing -- the press must read as one toy. Transform only; ~380ms; the
+   final keyframe is the resting :active pose, so handing control back is
+   seamless. The global prefers-reduced-motion rule collapses it to 1ms. */
+.dome:active {
+  animation: dome-jelly 380ms var(--ease-pop) 1;
+}

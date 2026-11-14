@@ -119,7 +119,7 @@ export function ServerLibrary({
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-[30px] leading-[1.05] sm:text-4xl">
+            <h2 className="flex items-center gap-2 text-[1.875rem] leading-[1.05] sm:text-4xl">
               <Server size={26} className="text-rasp" aria-hidden="true" /> {copy.serverLibrary.heading}
             </h2>
             <p className="mt-2 text-ink2">{copy.serverLibrary.intro}</p>
@@ -224,7 +224,7 @@ function OfflineServerLibrary({
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-[30px] leading-[1.05] sm:text-4xl">
+            <h2 className="flex items-center gap-2 text-[1.875rem] leading-[1.05] sm:text-4xl">
               <HardDrive size={26} className="text-rasp" aria-hidden="true" /> {copy.serverLibrary.offlineHeading}
             </h2>
             <p className="mt-2 text-ink2">{copy.serverLibrary.offlineIntro}</p>
@@ -256,11 +256,11 @@ function OfflineServerLibrary({
                       <button
                         type="button"
                         onClick={() => onOpen?.(book)}
-                        className="block w-full min-w-0 truncate text-left font-display text-[15px] font-semibold text-ink"
+                        className="block w-full min-w-0 truncate text-left font-display text-[0.9375rem] font-semibold text-ink"
                       >
                         {book.title}
                       </button>
-                      <span className="block truncate text-[12.5px] text-ink2">{book.author}</span>
+                      <span className="block truncate text-[0.78125rem] text-ink2">{book.author}</span>
                     </span>
                     {/* The trash can, because this one really does delete: the
                         file goes with it. The book page says the same thing in
@@ -352,11 +352,11 @@ function ServerLibraryRow({
           <button
             type="button"
             onClick={() => onOpen?.(book)}
-            className="block w-full min-w-0 truncate text-left font-display text-[15px] font-semibold text-ink"
+            className="block w-full min-w-0 truncate text-left font-display text-[0.9375rem] font-semibold text-ink"
           >
             {book.title}
           </button>
-          <span className="block truncate text-[12.5px] text-ink2">{book.author}</span>
+          <span className="block truncate text-[0.78125rem] text-ink2">{book.author}</span>
         </span>
         {inLibrary ? (
           <Btn

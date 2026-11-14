@@ -85,11 +85,11 @@ export function PasskeySettings() {
 
   return (
     <section className="panel mt-4 p-5">
-      <h3 className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
+      <h3 className="flex items-center gap-2 font-display text-[1.0625rem] font-semibold text-ink">
         <Fingerprint size={17} className="text-rasp" aria-hidden="true" />
         {copy.security.heading}
       </h3>
-      <p className="mt-1.5 text-[13.5px] text-ink2">{copy.security.intro}</p>
+      <p className="mt-1.5 text-[0.84375rem] text-ink2">{copy.security.intro}</p>
 
       {passkeys === null ? (
         <p className="mt-3 flex items-center gap-2 text-sm text-ink2" role="status">
@@ -97,7 +97,7 @@ export function PasskeySettings() {
           {copy.login.checking}
         </p>
       ) : passkeys.length === 0 ? (
-        <p className="mt-3 text-[13.5px] text-ink3">{copy.security.empty}</p>
+        <p className="mt-3 text-[0.84375rem] text-ink3">{copy.security.empty}</p>
       ) : (
         <ul className="mt-3 grid gap-2">
           {passkeys.map((passkey) => (
@@ -106,10 +106,10 @@ export function PasskeySettings() {
               className="flex items-center justify-between gap-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/20 px-3 py-2"
             >
               <span className="min-w-0">
-                <span className="block truncate text-[14px] font-bold text-ink">
+                <span className="block truncate text-[0.875rem] font-bold text-ink">
                   {passkey.label ?? copy.security.heading}
                 </span>
-                <span className="block text-[12px] text-ink3">
+                <span className="block text-[0.75rem] text-ink3">
                   {passkey.lastUsedAt
                     ? copy.security.lastUsed(new Date(passkey.lastUsedAt).toLocaleDateString())
                     : copy.security.neverUsed}

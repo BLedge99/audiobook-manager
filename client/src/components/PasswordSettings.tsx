@@ -86,7 +86,7 @@ export function PasswordSettings({ offline = false }: { offline?: boolean }) {
       <p className="mt-1 text-sm text-ink2">{copy.security.passwordIntro}</p>
 
       <form onSubmit={submit} className="mt-4 grid gap-3">
-        <label htmlFor="current-password" className="text-[13px] font-bold text-ink">
+        <label htmlFor="current-password" className="text-[0.8125rem] font-bold text-ink">
           {copy.security.currentPasswordLabel}
         </label>
         <Field
@@ -98,7 +98,7 @@ export function PasswordSettings({ offline = false }: { offline?: boolean }) {
           required
         />
 
-        <label htmlFor="new-password" className="text-[13px] font-bold text-ink">
+        <label htmlFor="new-password" className="text-[0.8125rem] font-bold text-ink">
           {copy.account.newPasswordLabel}
         </label>
         <Field
@@ -110,7 +110,7 @@ export function PasswordSettings({ offline = false }: { offline?: boolean }) {
           required
         />
 
-        <label htmlFor="confirm-password" className="text-[13px] font-bold text-ink">
+        <label htmlFor="confirm-password" className="text-[0.8125rem] font-bold text-ink">
           {copy.account.confirmPasswordLabel}
         </label>
         <Field

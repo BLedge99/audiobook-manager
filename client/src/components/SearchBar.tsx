@@ -72,7 +72,7 @@ export function SearchBar({
           placeholder={copy.search.placeholder}
           aria-label={copy.search.label}
           aria-describedby="search-help"
-          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink3"
+          className="min-w-0 flex-1 bg-transparent text-[0.9375rem] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-ink3"
         />
         {draft.length > 0 && (
           <button
@@ -90,7 +90,7 @@ export function SearchBar({
         )}
       </div>
 
-      <p id="search-help" className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-ink3">
+      <p id="search-help" className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[0.78125rem] text-ink3">
         {active ? (
           <span role="status" className="font-bold text-ink2">
             {copy.search.matches(resultCount)}{" "}
@@ -104,7 +104,7 @@ export function SearchBar({
                 key={example}
                 type="button"
                 onClick={() => setDraft(example)}
-                className="rounded-full border border-ink/20 px-2 py-0.5 font-mono text-[12px] text-ink2 transition hover:border-ink hover:text-ink"
+                className="rounded-full border border-ink/20 px-2 py-0.5 font-mono text-[0.75rem] text-ink2 transition hover:border-ink hover:text-ink"
               >
                 {example}
               </button>

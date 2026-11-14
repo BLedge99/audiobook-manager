@@ -45,14 +45,14 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
   };
 
   const selectClass =
-    "min-w-0 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-2 text-[14px] font-bold text-ink";
+    "min-w-0 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-2 text-[0.875rem] font-bold text-ink";
 
   return (
     <section aria-labelledby="tag-manager" className="panel p-4 sm:p-5">
       <MachineHead id="tag-manager" title={copy.operator.tags.heading} count={`${tags.length}`}>
         <TagIcon size={20} className="shrink-0 text-rasp" aria-hidden="true" />
       </MachineHead>
-      <p className="text-[13.5px] text-ink2">{copy.operator.tags.intro}</p>
+      <p className="text-[0.84375rem] text-ink2">{copy.operator.tags.intro}</p>
 
       <form onSubmit={create} className="mt-4 flex flex-wrap gap-2">
         <Field
@@ -72,7 +72,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
       {message && <Notice tone="info" role="status" className="mt-3">{message}</Notice>}
 
       {tags.length === 0 ? (
-        <p className="panel panel--sunk mt-4 px-4 py-5 text-center text-[13.5px] text-ink2">{copy.operator.tags.none}</p>
+        <p className="panel panel--sunk mt-4 px-4 py-5 text-center text-[0.84375rem] text-ink2">{copy.operator.tags.none}</p>
       ) : (
         <ul className="mt-4 grid gap-2">
           {tags.map((tag, index) => (
@@ -92,8 +92,8 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                   className="min-w-0 flex-1"
                 />
               ) : (
-                <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">
-                  {tag.name} <span className="text-[12px] font-bold text-ink3 tnum">({tag.count})</span>
+                <span className="min-w-0 flex-1 truncate text-[0.875rem] font-semibold text-ink">
+                  {tag.name} <span className="text-[0.75rem] font-bold text-ink3 tnum">({tag.count})</span>
                 </span>
               )}
 
@@ -142,10 +142,10 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
 
       {tags.length > 1 && (
         <div className="mt-5 border-t-2 border-dashed border-ink/20 pt-4">
-          <p className="font-display text-[16px] font-semibold text-ink">{copy.operator.tags.mergeHeading}</p>
-          <p className="mt-1 text-[12.5px] text-ink3">{copy.operator.tags.mergeIntro}</p>
+          <p className="font-display text-[1rem] font-semibold text-ink">{copy.operator.tags.mergeHeading}</p>
+          <p className="mt-1 text-[0.78125rem] text-ink3">{copy.operator.tags.mergeIntro}</p>
           <div className="mt-3 flex flex-wrap items-end gap-2">
-            <label className="min-w-0 text-[12px] font-bold text-ink3">
+            <label className="min-w-0 text-[0.75rem] font-bold text-ink3">
               <span className="mb-1 block">{copy.operator.tags.mergeFrom}</span>
               <select
                 aria-label={copy.operator.tags.mergeLabel}
@@ -157,7 +157,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
                 {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
               </select>
             </label>
-            <label className="min-w-0 text-[12px] font-bold text-ink3">
+            <label className="min-w-0 text-[0.75rem] font-bold text-ink3">
               <span className="mb-1 block">{copy.operator.tags.mergeInto}</span>
               <select
                 aria-label={copy.operator.tags.mergeIntoLabel}

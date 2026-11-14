@@ -62,18 +62,18 @@ function RecommendationCard({
         )}
       </span>
       <div className="min-w-0 flex-1">
-        <h3 className="truncate font-display text-[15px] font-semibold text-ink">{recommendation.title}</h3>
-        <p className="truncate text-[12.5px] text-ink2">{recommendation.author ?? copy.unknownAuthor}</p>
+        <h3 className="truncate font-display text-[0.9375rem] font-semibold text-ink">{recommendation.title}</h3>
+        <p className="truncate text-[0.78125rem] text-ink2">{recommendation.author ?? copy.unknownAuthor}</p>
         {recommendation.narrators.length > 0 && (
-          <p className="mt-0.5 truncate text-[11.5px] text-ink3">
+          <p className="mt-0.5 truncate text-[0.71875rem] text-ink3">
             {copy.narratedBy(recommendation.narrators.slice(0, 3).join(", "))}
           </p>
         )}
         {recommendation.description && (
-          <p className="mt-1.5 line-clamp-2 text-[11.5px] text-ink3">{recommendation.description}</p>
+          <p className="mt-1.5 line-clamp-2 text-[0.71875rem] text-ink3">{recommendation.description}</p>
         )}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-ink/25 bg-sunk px-2.5 py-0.5 text-[11px] font-bold text-ink2">
+          <span className="rounded-full border border-ink/25 bg-sunk px-2.5 py-0.5 text-[0.6875rem] font-bold text-ink2">
             {reasonText(recommendation.reason)}
           </span>
           <Btn
@@ -126,10 +126,10 @@ function WishlistRow({
   return (
     <article className="panel flex items-start gap-3 p-3">
       <div className="min-w-0 flex-1">
-        <h3 className="truncate font-display text-[15px] font-semibold text-ink">{item.title}</h3>
-        <p className="truncate text-[12.5px] text-ink2">{item.author ?? copy.unknownAuthor}</p>
+        <h3 className="truncate font-display text-[0.9375rem] font-semibold text-ink">{item.title}</h3>
+        <p className="truncate text-[0.78125rem] text-ink2">{item.author ?? copy.unknownAuthor}</p>
         {/* Wishlist books are metadata-only; there is deliberately no play control. */}
-        <p className="mt-1 text-[11.5px] text-ink3">{copy.discover.notInLibrary}</p>
+        <p className="mt-1 text-[0.71875rem] text-ink3">{copy.discover.notInLibrary}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <Btn
@@ -256,7 +256,7 @@ export function Discover({
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-[30px] leading-[1.05] sm:text-4xl">
+            <h2 className="flex items-center gap-2 text-[1.875rem] leading-[1.05] sm:text-4xl">
               <Compass size={26} className="text-rasp" aria-hidden="true" /> {copy.discover.heading}
             </h2>
             <p className="mt-2 text-ink2">{copy.discover.intro}</p>
@@ -279,7 +279,7 @@ export function Discover({
             <span className="mx-auto grid size-14 -rotate-6 place-items-center rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink bg-sunk">
               <Compass size={24} className="text-ink3" aria-hidden="true" />
             </span>
-            <p className="mx-auto mt-4 max-w-md text-[14px] leading-relaxed text-ink2">
+            <p className="mx-auto mt-4 max-w-md text-[0.875rem] leading-relaxed text-ink2">
               {copy.discover.needsFavourites}
             </p>
           </div>
@@ -338,7 +338,7 @@ export function Discover({
                   )}
                 </Btn>
                 {typeof result.total === "number" && (
-                  <p className="text-[12px] text-ink3 tnum">
+                  <p className="text-[0.75rem] text-ink3 tnum">
                     {copy.discover.showing(result.recommendations.length, result.total)}
                   </p>
                 )}
@@ -351,7 +351,7 @@ export function Discover({
       <section aria-labelledby="wishlist">
         <MachineHead id="wishlist" title={copy.discover.wishlistHeading} count={`${wishlist.length}`} />
         {wishlist.length === 0 ? (
-          <p className="panel panel--sunk px-4 py-6 text-center text-[13.5px] text-ink2">
+          <p className="panel panel--sunk px-4 py-6 text-center text-[0.84375rem] text-ink2">
             {copy.discover.wishlistEmpty}
           </p>
         ) : (

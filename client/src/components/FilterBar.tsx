@@ -84,12 +84,12 @@ const FacetGroup = memo(function FacetGroup({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center gap-2">
-        <h3 className="font-display text-[15px] font-semibold text-ink">{label}</h3>
+        <h3 className="font-display text-[0.9375rem] font-semibold text-ink">{label}</h3>
         {selected.length > 0 && (
           <button
             type="button"
             onClick={() => onClear(facet)}
-            className="text-[12.5px] font-bold text-rasp-ink underline decoration-dotted underline-offset-4 hover:decoration-solid"
+            className="text-[0.78125rem] font-bold text-rasp-ink underline decoration-dotted underline-offset-4 hover:decoration-solid"
           >
             {copy.filters.clear}
           </button>
@@ -156,7 +156,7 @@ export function FilterBar({
   return (
     <section className="panel mb-8 p-4 sm:p-5" aria-labelledby="filter-bar">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id="filter-bar" className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
+        <h2 id="filter-bar" className="flex items-center gap-2 font-display text-[1.0625rem] font-semibold text-ink">
           <SlidersHorizontal size={17} aria-hidden="true" className="text-rasp" />
           {copy.filters.heading}
         </h2>

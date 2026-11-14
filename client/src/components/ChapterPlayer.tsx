@@ -122,7 +122,7 @@ const ChapterRow = memo(function ChapterRow({
         type="button"
         onClick={() => onSelect(index)}
         aria-current={active ? "true" : undefined}
-        className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-[13.5px] font-semibold transition ${
+        className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-[0.84375rem] font-semibold transition ${
           active ? "bg-rasp text-white" : "text-ink2 hover:bg-ink/5"
         }`}
       >
@@ -130,7 +130,7 @@ const ChapterRow = memo(function ChapterRow({
           <span className={`mr-2 tnum ${active ? "text-white/70" : "text-ink3"}`}>{index + 1}.</span>
           {segment.title || copy.player.trackFallback(index + 1)}
         </span>
-        <span className="shrink-0 text-[11.5px] tnum opacity-80">
+        <span className="shrink-0 text-[0.71875rem] tnum opacity-80">
           {active ? `${timeLabel(elapsed)} / ` : ""}
           {timeLabel(segment.duration)}
         </span>
@@ -897,7 +897,7 @@ export function ChapterPlayer({
           aria-label={copy.player.speed}
           value={speed}
           onChange={(event) => changeSpeed(Number(event.target.value))}
-          className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[13px] font-bold text-ink"
+          className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[0.8125rem] font-bold text-ink"
         >
           {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((rate) => <option key={rate} value={rate}>{rate}x</option>)}
         </select>
@@ -905,7 +905,7 @@ export function ChapterPlayer({
           aria-label={copy.player.sleepTimer}
           value={sleepMinutes ?? "off"}
           onChange={(event) => setSleepTimer(event.target.value === "off" ? null : Number(event.target.value))}
-          className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[13px] font-bold text-ink"
+          className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[0.8125rem] font-bold text-ink"
         >
           <option value="off">{copy.player.sleepOff}</option>
           <option value="15">{copy.player.sleepMinutes(15)}</option>
@@ -915,17 +915,17 @@ export function ChapterPlayer({
         </select>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-[15px] font-semibold text-ink">
+          <p className="truncate font-display text-[0.9375rem] font-semibold text-ink">
             {described.title || heading}
           </p>
-          <p className="text-[12px] text-ink3 tnum">
+          <p className="text-[0.75rem] text-ink3 tnum">
             {segments.length > 1 ? `${heading} of ${segments.length}` : heading}
           </p>
         </div>
       </div>
 
       {!activeProfileId && (
-        <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[13px] font-bold text-tan-ink">
+        <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[0.8125rem] font-bold text-tan-ink">
           {copy.player.needsProfile}
         </p>
       )}
@@ -934,14 +934,14 @@ export function ChapterPlayer({
           times a second and announcing each change would make the player
           unusable with a screen reader (decisions/007). */}
       <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1" data-testid="position-readout">
-        <p className="min-w-0 font-display text-[16px] font-semibold text-ink">
+        <p className="min-w-0 font-display text-[1rem] font-semibold text-ink">
           {heading}
           {described.title && <span className="font-normal text-ink2"> — {described.title}</span>}
         </p>
-        <p className="text-[12.5px] text-ink3 tnum" data-testid="chapter-readout">
+        <p className="text-[0.78125rem] text-ink3 tnum" data-testid="chapter-readout">
           {timeLabel(described.segmentElapsed)} {copy.player.intoThis(kind === "tracks" ? "track" : "chapter")} · {Math.round(described.segmentPercent)}%
         </p>
-        <p className="text-[12.5px] text-ink3 tnum" data-testid="book-readout">
+        <p className="text-[0.78125rem] text-ink3 tnum" data-testid="book-readout">
           {Math.round(described.bookPercent)}% of the book · {remainingLabel(described.bookRemaining)}
         </p>
       </div>
@@ -967,7 +967,7 @@ export function ChapterPlayer({
       </div>
 
       {error && (
-        <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[13px] font-bold text-rasp-ink">{error}</p>
+        <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[0.8125rem] font-bold text-rasp-ink">{error}</p>
       )}
 
       {segments.length > 1 && (

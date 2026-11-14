@@ -46,7 +46,7 @@ export function StatusTag({ status, className }: { status: StatusKey; className?
   const entry = STATUS[status];
   return (
     <span
-      className={cn("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-bold", className)}
+      className={cn("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[0.6875rem] font-bold", className)}
       style={{ color: entry.color }}
     >
       <Swatch color={entry.color} />
@@ -307,7 +307,7 @@ export function Wordmark({ title, subtitle }: { title: string; subtitle?: ReactN
       <MachineMark />
       <div className="min-w-0">
         <p className="wordmark truncate">{title}</p>
-        {subtitle ? <p className="mt-0.5 truncate text-[12px] font-semibold text-ink3">{subtitle}</p> : null}
+        {subtitle ? <p className="mt-0.5 truncate text-[0.75rem] font-semibold text-ink3">{subtitle}</p> : null}
       </div>
     </div>
   );
@@ -321,7 +321,7 @@ export function Wordmark({ title, subtitle }: { title: string; subtitle?: ReactN
  */
 export function FullScreen({ children }: { children: ReactNode }) {
   return (
-    <div className="relative grid min-h-dvh place-items-center bg-ground px-5 py-10">
+    <div className="atmosphere relative grid min-h-dvh place-items-center px-5 py-10">
       <Specks />
       <div className="relative z-10 w-full max-w-md">{children}</div>
     </div>
@@ -419,7 +419,7 @@ export function MachineHead({
     <div className="machine-head">
       <h2 id={id}>{title}</h2>
       {children}
-      {count ? <span className="shrink-0 text-[13px] font-bold text-ink3 tnum">{count}</span> : null}
+      {count ? <span className="shrink-0 text-[0.8125rem] font-bold text-ink3 tnum">{count}</span> : null}
     </div>
   );
 }

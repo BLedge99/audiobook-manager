@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bookle design lab — gallery</title>
+<style>
+  :root {
+    --bg: #17141c;
+    --panel: #1f1c26;
+    --line: #2e2a38;
+    --ink: #f2eef7;
+    --ink-2: #b7b0c4;
+    --ink-3: #8a8198;
+    --rasp: #ff5c87;
+    --tan: #ff9445;
+    --mint: #2fd9b6;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 "Nunito", system-ui, sans-serif;
+    padding: 40px 20px 80px;
+  }
+  main { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 30px; letter-spacing: -0.02em; margin-bottom: 6px; }
+  h1 span { color: var(--rasp); }
+  .sub { color: var(--ink-2); margin-bottom: 28px; max-width: 72ch; }
+  .honesty {
+    border: 1px solid var(--line); border-radius: 14px;
+    background: var(--panel); padding: 14px 16px; margin-bottom: 30px;
+    color: var(--ink-2); font-size: 13px; max-width: 88ch;
+  }
+  .honesty strong { color: var(--ink); }
+  nav.toc { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 34px; }
+  nav.toc a {
+    color: var(--ink-2); text-decoration: none; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px;
+  }
+  nav.toc a:hover { color: var(--ink); border-color: var(--rasp); }
+  nav.toc a.extinct { opacity: .55; }
+  section { margin-bottom: 40px; border-top: 1px solid var(--line); padding-top: 22px; }
+  h2 { font-size: 20px; margin-bottom: 2px; }
+  h2 small { color: var(--ink-3); font-weight: 400; font-size: 13px; margin-left: 10px; }
+  .concept { color: var(--ink-2); margin: 6px 0 4px; max-width: 88ch; }
+  .meta { color: var(--ink-3); font-size: 12px; margin-bottom: 14px; }
+  .meta b { color: var(--ink-2); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  figure { background: #100e16; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  figure a { display: block; }
+  img { width: 100%; height: auto; display: block; image-rendering: auto; }
+  figcaption { font-size: 11px; color: var(--ink-3); padding: 6px 9px 8px; }
+  .win { grid-column: span 1; border-color: #3a2f22; }
+  footer { margin-top: 34px; color: var(--ink-3); font-size: 12px; border-top: 1px solid var(--line); padding-top: 16px; max-width: 88ch; }
+  code { background: #262230; padding: 1px 6px; border-radius: 6px; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Design lab <span>— gallery</span></h1>
+  <p class="sub">Evolutionary GUI overhaul for Bookle, in the spirit of Human Made's
+  self-optimising WordPress: agent-generated variants, checkpointed and captured —
+  honestly labelled below. Open any image full-size in your browser.</p>
+
+  <div class="honesty">
+    <strong>Honesty first.</strong> The tournament has not run yet (cloud VL quota exhausted
+    2026-11-14; in-session judging substituted while iterating). Nothing here is
+    “chosen”. Every variant is a live git tag: <code>design-lab/gen1/vN</code>; rolling back
+    is a checkout. Screenshots come from the seeded fixture library (LibriVox, public domain)
+    via the <code>design-lab</code> throwaway profile — no household media appears here.
+  </div>
+
+  <nav class="toc">
+    <a href="#gen0">Gen 0 · champion</a>
+    <a href="#v1">v1 · quiet hierarchy</a>
+    <a href="#v2">v2 · dark luxury</a>
+    <a href="#v3" class="extinct">v3 · zine (extinct)</a>
+    <a href="#v4">v4 · aero polish</a>
+  </nav>
+
+  <section id="gen0">
+    <h2>Gen 0 — baseline <small>champion · c22f573</small></h2>
+    <p class="concept">The shipped client as it stood: injection-moulded capsule vending, drawn by hand.</p>
+    <p class="meta">guards <b>pass</b> · capture 2026-11-14 · branch <code>design-lab/gen0/champion</code></p>
+    <div class="grid">
+      <figure><a href="gen-0/phone-library-light.png"><img alt="phone library light" src="gen-0/phone-library-light.png"></a><figcaption>phone · library · light</figcaption></figure>
+      <figure><a href="gen-0/phone-browse-light.png"><img alt="phone browse light" src="gen-0/phone-browse-light.png"></a><figcaption>phone · browse · light</figcaption></figure>
+      <figure><a href="gen-0/phone-detail-light.png"><img alt="phone detail light" src="gen-0/phone-detail-light.png"></a><figcaption>phone · detail · light</figcaption></figure>
+      <figure><a href="gen-0/phone-library-dark.png"><img alt="phone library dark" src="gen-0/phone-library-dark.png"></a><figcaption>phone · library · dark</figcaption></figure>
+      <figure><a href="gen-0/phone-browse-dark.png"><img alt="phone browse dark" src="gen-0/phone-browse-dark.png"></a><figcaption>phone · browse · dark</figcaption></figure>
+      <figure><a href="gen-0/desktop-library-light.png"><img alt="desktop library light" src="gen-0/desktop-library-light.png"></a><figcaption>desktop · library · light</figcaption></figure>
+      <figure><a href="gen-0/desktop-library-dark.png"><img alt="desktop library dark" src="gen-0/desktop-library-dark.png"></a><figcaption>desktop · library · dark</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="v1">
+    <h2>Gen 1 v1 — quiet hierarchy <small>hill-climb seed</small></h2>
+    <p class="concept">The volume knobs, not the voice: cover-forward cards, one calm filter rail, one tabular-numerals contract for every figure.</p>
+    <p class="meta">guards <b>pass</b> · 895 tests · branch <code>design-lab/gen1/v1</code></p>
+    <div class="grid">
+      <figure><a href="gen-1/v1/phone-library-light.png"><img alt="v1 library light" src="gen-1/v1/phone-library-light.png"></a><figcaption>phone · library · light</figcaption></figure>
+      <figure><a href="gen-1/v1/phone-browse-light.png"><img alt="v1 browse light" src="gen-1/v1/phone-browse-light.png"></a><figcaption>phone · browse · light</figcaption></figure>
+      <figure><a href="gen-1/v1/phone-detail-light.png"><img alt="v1 detail light" src="gen-1/v1/phone-detail-light.png"></a><figcaption>phone · detail · light</figcaption></figure>
+      <figure><a href="gen-1/v1/phone-library-dark.png"><img alt="v1 library dark" src="gen-1/v1/phone-library-dark.png"></a><figcaption>phone · library · dark</figcaption></figure>
+      <figure><a href="gen-1/v1/phone-browse-dark.png"><img alt="v1 browse dark" src="gen-1/v1/phone-browse-dark.png"></a><figcaption>phone · browse · dark</figcaption></figure>
+      <figure><a href="gen-1/v1/desktop-library-light.png"><img alt="v1 desktop light" src="gen-1/v1/desktop-library-light.png"></a><figcaption>desktop · library · light</figcaption></figure>
+      <figure><a href="gen-1/v1/desktop-library-dark.png"><img alt="v1 desktop dark" src="gen-1/v1/desktop-library-dark.png"></a><figcaption>desktop · library · dark</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="v2">
+    <h2>Gen 1 v2 — dark-mode luxury <small>hill-climb seed</small></h2>
+    <p class="concept">Dark mode as a lamp-lit room, not a dimmed page — warmer sunk, lifted umber surface, brighter inks, covers with a warm rim light; light theme untouched.</p>
+    <p class="meta">guards <b>pass</b> · 895 tests · branch <code>design-lab/gen1/v2</code> · DESIGN.md needs syncing if merged</p>
+    <div class="grid">
+      <figure><a href="gen-1/v2/phone-library-light.png"><img alt="v2 library light" src="gen-1/v2/phone-library-light.png"></a><figcaption>phone · library · light</figcaption></figure>
+      <figure><a href="gen-1/v2/phone-browse-light.png"><img alt="v2 browse light" src="gen-1/v2/phone-browse-light.png"></a><figcaption>phone · browse · light</figcaption></figure>
+      <figure><a href="gen-1/v2/phone-detail-light.png"><img alt="v2 detail light" src="gen-1/v2/phone-detail-light.png"></a><figcaption>phone · detail · light</figcaption></figure>
+      <figure><a href="gen-1/v2/phone-library-dark.png"><img alt="v2 library dark" src="gen-1/v2/phone-library-dark.png"></a><figcaption>phone · library · dark</figcaption></figure>
+      <figure><a href="gen-1/v2/phone-browse-dark.png"><img alt="v2 browse dark" src="gen-1/v2/phone-browse-dark.png"></a><figcaption>phone · browse · dark</figcaption></figure>
+      <figure><a href="gen-1/v2/desktop-library-light.png"><img alt="v2 desktop light" src="gen-1/v2/desktop-library-light.png"></a><figcaption>desktop · library · light</figcaption></figure>
+      <figure><a href="gen-1/v2/desktop-library-dark.png"><img alt="v2 desktop dark" src="gen-1/v2/desktop-library-dark.png"></a><figcaption>desktop · library · dark</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="v3">
+    <h2>Gen 1 v3 — newsprint zine <small>extinct, 2026-11-14</small></h2>
+    <p class="concept">Riso print world: ivory paper, one spot colour, zero radius, hard offset registration shadows, serif masthead. Rejected without tournament; kept as the extinction record.</p>
+    <p class="meta">guards <b>pass</b> · 895 tests · branch <code>design-lab/gen1/v3</code> · <b>do not revive without explicit request</b></p>
+    <div class="grid">
+      <figure><a href="gen-1/v3/phone-library-light.png"><img alt="v3 library light" src="gen-1/v3/phone-library-light.png"></a><figcaption>phone · library · light</figcaption></figure>
+      <figure><a href="gen-1/v3/phone-browse-light.png"><img alt="v3 browse light" src="gen-1/v3/phone-browse-light.png"></a><figcaption>phone · browse · light</figcaption></figure>
+      <figure><a href="gen-1/v3/phone-detail-light.png"><img alt="v3 detail light" src="gen-1/v3/phone-detail-light.png"></a><figcaption>phone · detail · light</figcaption></figure>
+      <figure><a href="gen-1/v3/phone-library-dark.png"><img alt="v3 library dark" src="gen-1/v3/phone-library-dark.png"></a><figcaption>phone · library · dark</figcaption></figure>
+      <figure><a href="gen-1/v3/phone-browse-dark.png"><img alt="v3 browse dark" src="gen-1/v3/phone-browse-dark.png"></a><figcaption>phone · browse · dark</figcaption></figure>
+      <figure><a href="gen-1/v3/desktop-library-light.png"><img alt="v3 desktop light" src="gen-1/v3/desktop-library-light.png"></a><figcaption>desktop · library · light</figcaption></figure>
+      <figure><a href="gen-1/v3/desktop-library-dark.png"><img alt="v3 desktop dark" src="gen-1/v3/desktop-library-dark.png"></a><figcaption>desktop · library · dark</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="v4">
+    <h2>Gen 1 v4 — aero polish <small>user-steered iteration</small></h2>
+    <p class="concept">Same machine, materially lit — a visible horizon wash (rose-coral to pearl), lamp pool top-right, cool lavender settling bottom-left; specular glass from one shared recipe with hue parameterisation; press rock, hover wobble, dome jelly, dispense shake. Pass 3: off-white ramp + select buttons translucent with hairline borders &amp; accent halo. Pass 4: the rasp primary CTA gets the same glass material (deep gradient, pearl hairline, inner specular, halo — white ≥ 4.5:1 everywhere) and the dark ramp is genuinely mid-tone (#cdd0da).</p>
+    <p class="meta">guards <b>pass</b> · 895 tests · branch <code>design-lab/gen1/v4</code> · pass 4 captured incl. setup CTA shot</p>
+    <div class="grid">
+      <figure><a href="gen-1/v4/gate-phone-light.png"><img alt="v4 gate light" src="gen-1/v4/gate-phone-light.png"></a><figcaption>phone · gate · light</figcaption></figure>
+      <figure><a href="gen-1/v4/gate-phone-dark.png"><img alt="v4 gate dark" src="gen-1/v4/gate-phone-dark.png"></a><figcaption>phone · gate · dark</figcaption></figure>
+      <figure><a href="gen-1/v4/phone-library-light.png"><img alt="v4 library light" src="gen-1/v4/phone-library-light.png"></a><figcaption>phone · library · light</figcaption></figure>
+      <figure><a href="gen-1/v4/phone-library-dark.png"><img alt="v4 library dark" src="gen-1/v4/phone-library-dark.png"></a><figcaption>phone · library · dark</figcaption></figure>
+      <figure><a href="gen-1/v4/phone-browse-light.png"><img alt="v4 browse light" src="gen-1/v4/phone-browse-light.png"></a><figcaption>phone · browse · light</figcaption></figure>
+      <figure><a href="gen-1/v4/phone-browse-dark.png"><img alt="v4 browse dark" src="gen-1/v4/phone-browse-dark.png"></a><figcaption>phone · browse · dark</figcaption></figure>
+      <figure><a href="gen-1/v4/setup-rasp-light.png"><img alt="v4 setup CTA" src="gen-1/v4/setup-rasp-light.png"></a><figcaption>phone · setup · rasp CTA</figcaption></figure>
+      <figure><a href="gen-1/v4/phone-detail-light.png"><img alt="v4 detail light" src="gen-1/v4/phone-detail-light.png"></a><figcaption>phone · detail · light · sheen + glass close</figcaption></figure>
+      <figure><a href="gen-1/v4/desktop-library-light.png"><img alt="v4 desktop light" src="gen-1/v4/desktop-library-light.png"></a><figcaption>desktop · library · light</figcaption></figure>
+      <figure><a href="gen-1/v4/desktop-library-dark.png"><img alt="v4 desktop dark" src="gen-1/v4/desktop-library-dark.png"></a><figcaption>desktop · library · dark</figcaption></figure>
+    </div>
+  </section>
+
+  <footer>
+    Rollback by design: every section is a branch/tag. The lab driver lives in
+    <code>scripts/design-lab-capture.js</code>; the hidden judge rubric never enters this
+    repo. Motion can't be photographed faithfully — v4 ships hover wobble, dome jelly and a
+    dispense shake as well as the screens above; judges moving images should run the build.
+  </footer>
+</main>
+</body>
+</html>
