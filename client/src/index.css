@@ -490,6 +490,30 @@ button:focus {
     3px 4px 0 -1px color-mix(in srgb, var(--ink) 22%, transparent),
     0 10px 24px -18px color-mix(in srgb, var(--ink) 70%, transparent);
 }
+.panel--cover {
+  /* The backdrop variant is an environment, not a slab: the cover art paints
+     underneath and the layered veil above takes the rest. The panel itself
+     paints nothing. The hand-drawn stroke still does the structural work. */
+}
+/* The single veil we rely on everywhere: lighter toward the top edge (art
+   glows through here), darker toward the footer (AA body text). */
+:root {
+  --veil-top: rgba(255,255,255,.78);
+  --veil-mid: rgba(255,255,255,.3);
+  --veil-bottom: rgba(255,255,255,.82);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --veil-top: rgba(18,15,25,.74);
+    --veil-mid: rgba(18,15,25,.38);
+    --veil-bottom: rgba(18,15,25,.8);
+  }
+}
+:root[data-theme="dark"] {
+  --veil-top: rgba(18,15,25,.74);
+  --veil-mid: rgba(18,15,25,.38);
+  --veil-bottom: rgba(18,15,25,.8);
+}
 .panel--flat {
   box-shadow: none;
 }
@@ -595,26 +619,20 @@ button:focus {
     transform: rotate(0deg) translateY(-3px);
   }
 }
-/* The dispense shake: two short shakes of ±1.6deg over ~340ms, toggled by
-   JS on card tap just before the detail opens. The rotation swings around
-   the capsule's own resting cant via --cant-current, so alt cards shake on
-   their own angle. Reduced-motion listeners never get the class (see
-   lib/dispense.ts) and the global reduced-motion rule collapses it anyway. */
+/* The dispense shake: a single gentle double-nudge of ≤1deg over ~200ms,
+   toggled by JS on card tap just before the detail opens. Same cant flip
+   as gen-0's press/lift — feels like the capsule tilting rather than being
+   shaken. The rotation swings around the capsule's own resting cant via
+   --cant-current. Reduced-motion listeners never get the class. */
 @keyframes dispense-shake {
   0% {
     transform: rotate(var(--cant-current));
   }
-  15% {
-    transform: rotate(calc(var(--cant-current) + 1.6deg));
+  30% {
+    transform: rotate(calc(var(--cant-current) + 1deg));
   }
-  33% {
-    transform: rotate(calc(var(--cant-current) - 1.6deg));
-  }
-  50% {
-    transform: rotate(calc(var(--cant-current) + 1.6deg));
-  }
-  68% {
-    transform: rotate(calc(var(--cant-current) - 1.6deg));
+  60% {
+    transform: rotate(calc(var(--cant-current) - 0.8deg));
   }
   100% {
     transform: rotate(var(--cant-current));
@@ -637,12 +655,12 @@ button:focus {
 }
 /* The dispense shake class. Declared after the hover rules on purpose:
    `.capsule.dispense-shake` and `.capsule:hover` carry the same specificity
-   (0,2,0), and during the 340ms window the shake -- not the hover wobble --
-   must own the `animation` property, or a pointer parked over the card
-   swallows the whole effect. Reduced-motion listeners never get the class
-   (see lib/dispense.ts); the global reduced-motion rule collapses it too. */
+   (0,2,0), and during the 200ms window the shake -- not the hover wobble --
+   must own the `animation` property. Reduced-motion listeners never get
+   the class (see lib/dispense.ts); the global reduced-motion rule collapses
+   it too. */
 .capsule.dispense-shake {
-  animation: dispense-shake 340ms var(--ease-pop) 1;
+  animation: dispense-shake 200ms var(--ease-pop) 1;
 }
 @media (prefers-reduced-motion: reduce) {
   .capsule.dispense-shake {

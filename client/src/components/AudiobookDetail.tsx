@@ -1,7 +1,7 @@
 import { X, Clock3, Compass, FileAudio, ChevronDown, Heart, Sparkles } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
-import { bookCoverKey, CoverImage } from "../local/CoverImage";
+import { bookCoverKey, useCover } from "../local/CoverImage";
 import { isFromThisServer } from "../lib/api";
 import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
@@ -238,6 +238,8 @@ export function AudiobookDetail({
     serverId: book.serverId,
   });
 
+  const cover = useCover(bookCoverKey(book.id, book.serverId));
+
   return (
     /* `fixed inset-0` with the <article> as its direct child is load-bearing:
        `e2e/phone-layout` locates the dialog with
@@ -248,9 +250,23 @@ export function AudiobookDetail({
       onClick={onClose}
     >
       <article
-        className="panel relative grid max-h-[92dvh] w-full max-w-3xl grid-cols-[minmax(0,1fr)] overflow-auto rounded-b-none sm:rounded-[26px_20px_26px_20px/20px_26px_20px_26px] md:grid-cols-[220px_minmax(0,1fr)]"
+        className="panel panel--cover relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-b-none sm:rounded-[26px_20px_26px_20px/20px_26px_20px_26px]"
         onClick={(event) => event.stopPropagation()}
       >
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+          {cover.status === "ready" ? (
+            <img
+              src={cover.url}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ filter: "blur(16px) saturate(1.12) brightness(1.02)", transform: "scale(1.2)" }}
+            />
+          ) : null}
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(180deg, var(--veil-top) 0%, var(--veil-mid) 26%, var(--veil-mid) 64%, var(--veil-bottom) 100%)" }}
+          />
+        </div>
         <button
           aria-label={copy.detail.close}
           onClick={onClose}
@@ -259,53 +275,7 @@ export function AudiobookDetail({
           <X size={19} aria-hidden="true" />
         </button>
 
-        {/* `minmax(0,1fr)` on both breakpoints is the actual fix, and is the standard
-            remedy for a grid blowout. A bare `grid` / `1fr` track has an `auto`
-            *maximum*, which resolves to the content's max-content width -- for
-            the description that is the whole paragraph on one line. The column
-            was 615px inside a 359px dialog; the dialog's own `overflow-auto`
-            turned that into sideways scrolling that read as "zoomed in".
-
-            `min-w-0` on the children is necessary but not sufficient on its own:
-            it lowers the item minimum, not the track maximum.
-
-            Note `e2e/phone-layout` initially gave a false green here, because it
-            only asserted the *document* did not scroll -- the dialog is viewport
-            width, so the page was fine while the dialog scrolled inside itself.
-            It now asserts the dialog does not scroll internally too. */}
-        <div className="relative min-w-0">
-          {/*
-            Smaller on a phone than the `md` 180px cap. The detail dialog stacks
-            on one column below `md`, so on the device this app mostly runs on,
-            a 270px-tall cover pushed the player -- the thing someone opened the
-            book for -- below the fold. 120px keeps the artwork recognisable and
-            brings the transport up with the title.
-
-            The bytes come from the device cache like every other cover, so a
-            book opened on a train shows its cover.
-          */}
-          <CoverImage
-            cacheKey={bookCoverKey(book.id, book.serverId)}
-            className="mx-auto block aspect-[2/3] w-full max-w-[120px] min-w-0 [&>img]:h-full [&>img]:w-full [&>img]:object-cover sm:max-w-[180px] md:h-full md:max-w-none"
-          />
-          <span className="capsule__seam" aria-hidden="true" />
-        </div>
-
-        {/*
-          Spec 15b feature 5 — player first.
-
-          The order here is the argument: cover, what this is, **play it**, then
-          the things a listener does next, then the one-line facts, then a fold
-          for everything the operator cares about. It previously ran
-          tags → description → online metadata lookup → player, so the most
-          common reason for opening a book was the last thing on the page. That
-          is ADR 012's own thesis -- the device is a synchronised player, not a
-          second library manager -- contradicted by its own layout.
-
-          Nothing here was rebuilt. `ChapterPlayer`, `position.ts` and
-          `ProgressTimeline` are spec 14/15's work and are untouched.
-        */}
-        <div className="min-w-0 p-5 pt-14 md:p-8 md:pt-8">
+        <div className="relative min-w-0 min-h-0 flex-1 overflow-y-auto p-5 pt-14 md:p-8 md:pt-8">
           <h2 className="pr-10 text-[1.625rem] leading-[1.08] md:text-3xl">{book.title}</h2>
           {book.subtitle && <p className="mt-1 text-[1rem] italic text-ink2 md:text-lg">{book.subtitle}</p>}
           <p className="mt-2 text-[1rem] font-semibold text-ink2 md:text-lg">{book.author}</p>
