@@ -751,7 +751,12 @@ function App() {
           }
           setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
           void (async () => {
+            // The mount-shaped refresh fired before sign-in had a session, so
+            // its favourites batch came back 401 and the shelf rendered with
+            // no hearts. Fire it again now that the cookie exists -- the
+            // shelf should already know the listener's favourites.
             await refresh();
+            await browse.refresh();
             await probeServer();
           })();
         }}
@@ -771,6 +776,9 @@ function App() {
       <ProfileGate
         onSuccess={() => {
           setProfileId(getActiveProfileId());
+          // The mount-shaped refresh had no profile header yet, so it asked
+          // /api/favourites/ids for a profile it never named. Redo it now.
+          void browse.refresh();
           void probeServer();
         }}
         onContinueOffline={isNativeShell() ? handleContinueOffline : undefined}
