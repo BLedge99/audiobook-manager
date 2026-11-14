@@ -1,0 +1,30 @@
+{
+  "experiment": "design-lab",
+  "started": "2026-11-14",
+  "honesty": "fitness is judge-perceived quality against a hidden rubric, not household behaviour",
+  "branch": "design-lab/evo",
+  "champion_tag_prefix": "design-lab/gen",
+  "generations": [
+    {
+      "gen": 0,
+      "role": "champion",
+      "tag": "design-lab/gen0/champion",
+      "commit": "c22f573",
+      "capturedAt": "2026-11-14",
+      "concept": "shipped post-spec-15b capsule-vending baseline",
+      "surfaces": [
+        "phone-library-light",
+        "phone-detail-light",
+        "phone-browse-light",
+        "phone-library-dark",
+        "phone-browse-dark",
+        "desktop-library-light",
+        "desktop-library-dark"
+      ],
+      "guards": { "layout": true },
+      "fitness": null,
+      "judge": "calibration pending — free tier exhausted 2026-11-14, resume 2026-11-15",
+      "failures": []
+    }
+  ]
+}

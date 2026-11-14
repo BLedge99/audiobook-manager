@@ -1,0 +1,20 @@
+{
+  "gen": "gen-0",
+  "capturedAt": "2026-11-14T01:08:11.127Z",
+  "url": "http://127.0.0.1:5173",
+  "gitSha": "c22f573018d0f1fc75c0249454c456582c898ae5",
+  "gitBranch": "design-lab/evo",
+  "surfaces": [
+    "phone-library-light",
+    "phone-detail-light",
+    "phone-browse-light",
+    "phone-library-dark",
+    "phone-browse-dark",
+    "desktop-library-light",
+    "desktop-library-dark"
+  ],
+  "guards": {
+    "layout": true
+  },
+  "failures": []
+}
