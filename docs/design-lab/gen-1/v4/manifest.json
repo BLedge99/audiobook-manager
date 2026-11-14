@@ -1,8 +1,8 @@
 {
   "gen": "gen-1/v4",
-  "capturedAt": "2026-11-14T10:46:25.258Z",
-  "url": "http://127.0.0.1:5173",
-  "gitSha": "4c44a712ad846dd24a291e0578e2075af8055ca4",
+  "capturedAt": "2026-11-14T11:36:27.171Z",
+  "url": "http://127.0.0.1:4174",
+  "gitSha": "f4fe11120c7445ff448c43cfdb7b02d9c55c93fa",
   "gitBranch": "design-lab/gen1/v4",
   "surfaces": [
     "phone-library-light",
