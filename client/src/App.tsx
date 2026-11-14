@@ -787,7 +787,7 @@ function App() {
   }
 
   return (
-    <div className="relative min-h-dvh bg-ground text-ink">
+    <div className="atmosphere relative min-h-dvh text-ink">
       <Specks />
       <header className="bar">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
@@ -799,7 +799,11 @@ function App() {
                 document never exceeds the viewport. */}
             <div className="min-w-0 flex-1">
               <h1 className="wordmark truncate">{copy.brand.name}</h1>
-              <p className="mt-0.5 truncate text-[0.75rem] font-semibold text-ink3 tnum">
+              {/* --ink, not ink-2: pass 4 darkened the ramp past the point
+                  where ink-2 holds AA against the bar's top sheen strip
+                  (3.33:1 worst case; 4.54:1 flat). ink clears 5.23:1 even
+                  with the strip -- see .bar in index.css. */}
+              <p className="mt-0.5 truncate text-[0.75rem] font-semibold text-ink tnum">
                 {copy.shell.libraryCount(libraryBooks.length, roots.length)}
               </p>
             </div>

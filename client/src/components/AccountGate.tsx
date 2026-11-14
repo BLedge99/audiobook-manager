@@ -621,7 +621,7 @@ export function AccountGate({
                       )
                     }
                     className={cn(
-                      "capsule flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
+                      "capsule capsule--select flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
                       index % 2 ? "capsule--alt" : "",
                       account.disabled && "opacity-55",
                     )}

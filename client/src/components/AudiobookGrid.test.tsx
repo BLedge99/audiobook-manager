@@ -25,10 +25,19 @@ describe("AudiobookGrid", () => {
     expect(screen.getByText("1h 1m")).toBeInTheDocument();
   });
 
-  it("calls onSelect when a card is clicked", () => {
-    const onSelect = vi.fn();
-    render(<AudiobookGrid books={[book]} onSelect={onSelect} />);
-    fireEvent.click(screen.getByText("The Tell-Tale Heart"));
-    expect(onSelect).toHaveBeenCalledWith(book);
+  it("calls onSelect once the dispense shake has landed, not before", () => {
+    // The card gives one short double-shake (~340ms) before the detail opens,
+    // so onSelect is deliberately not synchronous with the click.
+    vi.useFakeTimers();
+    try {
+      const onSelect = vi.fn();
+      render(<AudiobookGrid books={[book]} onSelect={onSelect} />);
+      fireEvent.click(screen.getByText("The Tell-Tale Heart"));
+      expect(onSelect).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(340);
+      expect(onSelect).toHaveBeenCalledWith(book);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

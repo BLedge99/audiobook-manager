@@ -321,7 +321,7 @@ export function Wordmark({ title, subtitle }: { title: string; subtitle?: ReactN
  */
 export function FullScreen({ children }: { children: ReactNode }) {
   return (
-    <div className="relative grid min-h-dvh place-items-center bg-ground px-5 py-10">
+    <div className="atmosphere relative grid min-h-dvh place-items-center px-5 py-10">
       <Specks />
       <div className="relative z-10 w-full max-w-md">{children}</div>
     </div>

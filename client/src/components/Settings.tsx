@@ -132,7 +132,7 @@ export function Settings({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-ground px-4 py-8 sm:px-5">
+    <div className="atmosphere fixed inset-0 z-50 overflow-y-auto px-4 py-8 sm:px-5">
       <div className="mx-auto max-w-xl">
         <div className="mb-7 flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">

@@ -254,7 +254,7 @@ export function AudiobookDetail({
         <button
           aria-label={copy.detail.close}
           onClick={onClose}
-          className="iconbtn absolute right-3 top-3 z-10 bg-surface/90 backdrop-blur-sm"
+          className="iconbtn iconbtn--glass absolute right-3 top-3 z-10"
         >
           <X size={19} aria-hidden="true" />
         </button>
