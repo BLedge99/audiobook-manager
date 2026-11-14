@@ -99,20 +99,21 @@ the final call stays with you either way. Gen 1 fitness scores below are not rec
 ## Gen 1 v4 — aero polish
 
 - Branch: `design-lab/gen1/v4` · user-steered iteration, inside identity
-- Concept: same machine, materially lit — atmospheric layered backdrop (not a flat ground),
-  one warm off-frame pool, deeper dark ground with raised ink ramp, top-lit panel sheen,
-  layered glass bar/rail with specular edge, shell gloss, static rasp halo, and four
-  reduced-motion-safe motions (capsule squash, one-shot hover wobble, dome jelly press,
-  tube shimmer). Contrast recomputed: darkest pair ink-3/ground 7.57.
-- Guards: **pass** · 895 unit tests pass
+- Concept: same machine, materially lit — a visible horizon wash (rose-coral to pearl),
+  lamp pool top-right, cool lavender settling bottom-left; top-lit panels and specular
+  glass bar/rail; capsule press rock, two-swing hover wobble, dome jelly, dispense shake
+  before detail opens; deeper dark ground; **pass 3**: one off-white ink ramp (ink `#e8e4ee`),
+  one glass recipe everywhere, select buttons translucent with theme-true hairline borders
+  and an accent-family halo, disabled chips finally read as disabled.
+- Guards: **pass** · 895 unit tests pass · pass 3 contrast table recomputed and documented in DESIGN.md
 
-| Library (light) | Library (dark) | Browse (light) | Detail (light) |
+| Gate (light) | Library (light) | Library (dark) | Browse (light) | Detail (light) |
+|---|---|---|---|---|
+| ![v4 gate light](gen-1/v4/gate-phone-light.png) | ![v4 lib light](gen-1/v4/phone-library-light.png) | ![v4 lib dark](gen-1/v4/phone-library-dark.png) | ![v4 browse light](gen-1/v4/phone-browse-light.png) | ![v4 detail light](gen-1/v4/phone-detail-light.png) |
+
+| Gate (dark) | Browse (dark) | Desktop (light) | Desktop (dark) |
 |---|---|---|---|
-| ![v4 lib light](gen-1/v4/phone-library-light.png) | ![v4 lib dark](gen-1/v4/phone-library-dark.png) | ![v4 browse light](gen-1/v4/phone-browse-light.png) | ![v4 detail light](gen-1/v4/phone-detail-light.png) |
-
-| Browse (dark) | Desktop (light) | Desktop (dark) |
-|---|---|---|
-| ![v4 browse dark](gen-1/v4/phone-browse-dark.png) | ![v4 desktop light](gen-1/v4/desktop-library-light.png) | ![v4 desktop dark](gen-1/v4/desktop-library-dark.png) |
+| ![v4 gate dark](gen-1/v4/gate-phone-dark.png) | ![v4 browse dark](gen-1/v4/phone-browse-dark.png) | ![v4 desktop light](gen-1/v4/desktop-library-light.png) | ![v4 desktop dark](gen-1/v4/desktop-library-dark.png) |
 
 ## Candidates & their pages
 
