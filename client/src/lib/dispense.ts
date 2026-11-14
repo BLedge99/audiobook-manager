@@ -1,8 +1,8 @@
 /**
  * The "dispense shake": tapping a book card rattles the capsule like the
- * machine is deciding whether to eject it, then the detail opens. Two shakes
- * of ±1.6deg over ~340ms, then navigation -- instant enough not to annoy,
- * unmistakably a toy.
+ * machine is deciding whether to eject it, then the detail opens. Two nudges
+ * of ~1deg over ~200ms, then navigation -- quicker and gentler than pass 2,
+ * closer to the gen-0 capsule's own press/lift.
  *
  * Orchestrated here rather than with a bare CSS `:active` because the detail
  * must open *after* the shake, and because a reduced-motion listener should
@@ -23,7 +23,7 @@ function prefersReducedMotion(): boolean {
 }
 
 /** Total length of the shake; the detail opens when it lands. */
-export const DISPENSE_SHAKE_MS = 340;
+export const DISPENSE_SHAKE_MS = 200;
 
 /**
  * Shake the `.capsule` ancestor of `from`, then run `open`.

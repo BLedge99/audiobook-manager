@@ -1,9 +1,9 @@
 {
   "gen": "gen-1/v4",
-  "capturedAt": "2026-11-14T15:37:14.713Z",
-  "url": "http://127.0.0.1:4174",
-  "gitSha": "45bf6bf7bca3f85ab69c80e05cbf47f9a557366a",
-  "gitBranch": "design-lab/gen1/v4",
+  "capturedAt": "2026-11-14T17:28:07.802Z",
+  "url": "http://127.0.0.1:4179",
+  "gitSha": "ae2f0e8c908d5ffc4096b7db8f90a682d5e9f1bc",
+  "gitBranch": "master",
   "surfaces": [
     "gate-phone-light",
     "gate-phone-dark",
