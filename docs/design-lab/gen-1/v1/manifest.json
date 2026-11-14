@@ -1,0 +1,20 @@
+{
+  "gen": "gen-1/v1",
+  "capturedAt": "2026-11-14T02:01:53.395Z",
+  "url": "http://127.0.0.1:5173",
+  "gitSha": "297d808a65b80ee0e3d023109b035d442057f8c3",
+  "gitBranch": "design-lab/gen1/v1",
+  "surfaces": [
+    "phone-library-light",
+    "phone-detail-light",
+    "phone-browse-light",
+    "phone-library-dark",
+    "phone-browse-dark",
+    "desktop-library-light",
+    "desktop-library-dark"
+  ],
+  "guards": {
+    "layout": true
+  },
+  "failures": []
+}

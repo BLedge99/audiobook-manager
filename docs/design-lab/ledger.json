@@ -1,9 +1,10 @@
 {
   "experiment": "design-lab",
   "started": "2026-11-14",
-  "honesty": "fitness is judge-perceived quality against a hidden rubric, not household behaviour. Gen 1 v3 eliminated by direction, not tournament, 2026-11-14.",
+  "honesty": "fitness is judge-perceived quality against a hidden rubric, not household behaviour. No tournament has run yet. Gen 1 v3 eliminated by direction 2026-11-14, not by tournament. Gen 1 v4 pass 1 judged imperceptible vs gen 0; pass 2 raised the horizon wash to visible levels and strengthened materials/motion.",
   "branch": "design-lab/evo",
   "champion_tag_prefix": "design-lab/gen",
+  "capture_pipeline": "gen-1/v4 pass 2 used a Windows-native vite preview + /api proxy to bypass a degraded WSL→docker relay; earlier captures used the Vite dev server on 5173 (WSL9P file-watch pollution fixed locally via uncommitted docker-compose.override.yml with CHOKIDAR_USEPOLLING=true)",
   "generations": [
     {
       "gen": 0,
@@ -21,18 +22,51 @@
         "desktop-library-light",
         "desktop-library-dark"
       ],
-      "guards": {
-        "layout": true
-      },
+      "guards": { "layout": true },
       "fitness": null,
-      "judge": "calibration pending — free tier exhausted 2026-11-14, resume 2026-11-15",
+      "judge": "calibration pending — cloud VL quota exhausted 2026-11-14; judge in-session until 2026-11-15 reset",
       "failures": []
     },
     {
       "gen": 1,
+      "variant": "v1",
+      "role": "hill-climb",
+      "tag": "design-lab/gen1/v1",
+      "commit": "e3fbb2d",
+      "concept": "quiet hierarchy: cover-forward cards, calm filter rail, tabular-numerals everywhere",
+      "guards": { "layout": true },
+      "tests": 895,
+      "fitness": null
+    },
+    {
+      "gen": 1,
+      "variant": "v2",
+      "role": "hill-climb",
+      "tag": "design-lab/gen1/v2",
+      "commit": "dbfaa4d",
+      "concept": "dark-mode luxury: lamp-lit dark tokens, rim-light covers, rasp halo CTAs",
+      "guards": { "layout": true },
+      "tests": 895,
+      "fitness": null
+    },
+    {
+      "gen": 1,
+      "variant": "v3",
       "role": "eliminated",
       "tag": "design-lab/gen1/v3",
-      "note": "newsprint zine - rejected by direction 2026-11-14: too harsh, moves away from capsule vending identity; kept as extinct seed"
+      "commit": "513b967",
+      "note": "newsprint zine — rejected by direction 2026-11-14; kept as extinct seed"
+    },
+    {
+      "gen": 1,
+      "variant": "v4",
+      "role": "user-steered iteration",
+      "tag": "design-lab/gen1/v4",
+      "commit": "f38955e",
+      "concept": "aero polish: visible horizon backdrop, lamp pool, glass specular, shell gloss, press rock, hover wobble, dome jelly, dispense shake; dark ground deepened",
+      "guards": { "layout": true },
+      "tests": 895,
+      "fitness": null
     }
   ]
 }

@@ -104,9 +104,9 @@ async function enterApp(page, failures) {
   // sequentially through the dev relay). Poll instead of a fixed wait.
   const profileButton = page.getByRole("button", { name: new RegExp("^" + PROFILE + "(\\b|$)") });
   try {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+    for (let attempt = 0; attempt < 90; attempt += 1) {
       if (await profileButton.isVisible().catch(() => false)) break;
-      if (attempt === 59) throw new Error("profile picker never rendered within 60s");
+      if (attempt === 89) throw new Error("profile picker never rendered within 90s");
       await page.waitForTimeout(1000);
     }
     await profileButton.click();
@@ -129,7 +129,7 @@ async function enterApp(page, failures) {
   }
 
   try {
-    await page.getByRole("heading", { name: /your audiobooks/i }).first().waitFor({ timeout: 60_000 });
+    await page.getByRole("heading", { name: /your audiobooks/i }).first().waitFor({ timeout: 90_000 });
   } catch {
     failures.push("library heading never appeared after entry");
     await page.screenshot({ path: path.join(OUT, "FAILED-library.png") });

@@ -1,62 +1,123 @@
 # Design lab — gallery
 
-An experimental, evolutionary GUI overhaul for Bookle, inspired by Human Made's
+Experimental, evolutionary GUI overhaul for Bookle, inspired by Human Made's
 [self-optimising WordPress](https://humanmade.com/word-on-the-future/self-optimising-wordpress/):
-agent-generated variants, scored by a vision model against a hidden rubric, iterated on a
-checkpointed branch. See `scripts/design-lab-capture.js` for the capture harness and
-`ledger.json` beside this file for the machine-readable history.
+agent-generated variants scored by an (eventual) vision-model judge against a hidden rubric,
+iterated on checkpointed branches. See `scripts/design-lab-capture.js` for the capture
+harness and `ledger.json` beside this file for the machine-readable history.
+
+**Honest status, 2026-11-14 (updated):** the tournament has *not* run yet — the cloud VL
+free tier is exhausted, and judging in-session was substituted for calibration because
+generating variants couldn't wait. Fitness judging is pending the 2026-11-15 quota reset;
+the final call stays with you either way. Gen 1 fitness scores below are not recorded yet.
 
 **Honesty notes (read once):**
 
-- Fitness measures *judge-perceived quality against a hidden rubric*, not measured
-  household behaviour. There is no conversion funnel in a family app, and no amount of
-  judging conjures one. What this can produce: increasingly bold, increasingly polished
-  screens, chosen ruthlessly. What it cannot produce: evidence that they land with the
-  household. That verdict stays with the people who live here — at merge time, not in
-  the loop.
-- The hidden rubric (`rubric.md`, kept outside this repo by design) weights legibility,
-  hierarchy, touch ergonomics, household warmth, dark-mode craft, phone-first composition,
-  status clarity, distinctiveness, composition discipline and coherence. Generator agents
-  never see it; judge agents score against it.
-- Every generation is a git tag. Rolling back to any design in this gallery is a checkout,
-  not archaeology.
-- Screenshots are of the seeded fixture library (LibriVox, public domain). No household
-  data appears here.
+- Fitness measures *judge-perceived quality against a hidden rubric*, not household
+  behaviour. There is no conversion funnel in a family app. What the lab produces:
+  increasingly bold, increasingly polished screens chosen ruthlessly. What it cannot
+  produce: evidence these land with the household — that's your veto at merge time.
+- The rubric lives outside this repo (`rubric.md`, not committed by design); variant
+  implementers never see it — only judges do.
+- Every generation is a git tag/branch. Rolling back is a checkout, not archaeology.
+- Screenshots show the seeded fixture library (LibriVox, public domain) as seen by the
+  throwaway `design-lab` capture profile. No household media appears in git history.
+- The screens below were captured against the live stack *after* the WSL 9P file-watch fix
+  (see `docs/design-lab/ledger.json`). Earlier v1/v2 captures that showed the frozen
+  build were retaken; those retakes are what you see here.
 
-**Status:** Phase 0 complete except judge calibration — the OpenCode free tier was
-exhausted on 2026-11-14, so the VL judge calibration runs first on 2026-11-15.
-Tournament results begin with Gen 1.
+## Quick start (no running app required)
 
-## How to read an entry
+- **Browser:** double-click [`gallery.html`](gallery.html) in this folder — every design, side by side, no server needed.
+- **GitHub/IDE:** this file.
+- **Git tags:** `design-lab/gen0/champion` marks the untouched baseline; each variant kept
+  its branch `design-lab/gen1/vN`.
 
-Each generation lists its concept, its fitness, the judge's one-line verdict, and the
-screens at 390px (phone, light and dark) and 1440px (desktop). Git tags are named
-`design-lab/gen<N>/<role>` where role is `champion` or a losing seed (`v1`, `v2`, …).
-Losing seeds are kept, not deleted — extinction is part of the record.
+## Gen 0 — baseline (champion)
 
----
-
-## Gen 0 — baseline
-
-- Tag: `design-lab/gen0/champion` · captured 2026-11-14 · commit `c22f573`
-- Concept: shipped post-spec-15b client — injection-moulded capsule vending, drawn by hand
+- Tag: `design-lab/gen0/champion` · commit `c22f573` · captured 2026-11-14
+- Concept: post-spec-15b shipped client — injection-moulded capsule vending, drawn by hand
 - Guards: layout, sideways-scroll, detail-dialog fit, leaked comments — **pass**
-- Fitness: unmeasured (baseline seed)
 
-### Phone — light
-
-| Library | Detail | Browse |
+| Phone — library (light) | Browse (light) | Detail (light) |
 |---|---|---|
-| ![phone library light](gen-0/phone-library-light.png) | ![phone detail light](gen-0/phone-detail-light.png) | ![phone browse light](gen-0/phone-browse-light.png) |
+| ![g0 lib light](gen-0/phone-library-light.png) | ![g0 browse light](gen-0/phone-browse-light.png) | ![g0 detail light](gen-0/phone-detail-light.png) |
 
-### Phone — dark
+| Phone — library (dark) | Browse (dark) | Desktop — light | Desktop — dark |
+|---|---|---|---|
+| ![g0 lib dark](gen-0/phone-library-dark.png) | ![g0 browse dark](gen-0/phone-browse-dark.png) | ![g0 desktop light](gen-0/desktop-library-light.png) | ![g0 desktop dark](gen-0/desktop-library-dark.png) |
 
-| Library | Browse |
-|---|---|
-| ![phone library dark](gen-0/phone-library-dark.png) | ![phone browse dark](gen-0/phone-browse-dark.png) |
+## Gen 1 v1 — quiet hierarchy
 
-### Desktop — light / dark
+- Branch: `design-lab/gen1/v1` · hill-climb seed, inside identity
+- Concept: the volume knobs, not the voice — cover-forward cards (art fills more of the card),
+  calmer filter strip as a subordinate control rail, one shared tabular-numerals contract
+  for every figure (.nums), header stat line reworked. Card chrome tightened; no tokens changed.
+- Guards: **pass** · 895 unit tests pass
 
-| Light (full page) | Dark (full page) |
-|---|---|
-| ![desktop library light](gen-0/desktop-library-light.png) | ![desktop library dark](gen-0/desktop-library-dark.png) |
+| Library (light) | Library (dark) | Browse (light) | Detail (light) |
+|---|---|---|---|
+| ![v1 lib light](gen-1/v1/phone-library-light.png) | ![v1 lib dark](gen-1/v1/phone-library-dark.png) | ![v1 browse light](gen-1/v1/phone-browse-light.png) | ![v1 detail light](gen-1/v1/phone-detail-light.png) |
+
+| Browse (dark) | Desktop (light) | Desktop (dark) |
+|---|---|---|
+| ![v1 browse dark](gen-1/v1/phone-browse-dark.png) | ![v1 desktop light](gen-1/v1/desktop-library-light.png) | ![v1 desktop dark](gen-1/v1/desktop-library-dark.png) |
+
+## Gen 1 v2 — dark-mode luxury
+
+- Branch: `design-lab/gen1/v2` · hill-climb seed, dark only
+- Concept: the dark theme as a lamp-lit room, not a dimmed page — deeper ground, warmer
+  plum sunk, surface lifted with umber warmth, inks and accent-inks all beat their
+  old contrast ratios, covers get a warm rim-light and deeper drop shadow, dark CTAs gain
+  a static rasp halo. Light theme untouched.
+- Guards: **pass** · 895 unit tests pass · DESIGN.md dark hex table needs syncing if merged
+
+| Library (light) | Library (dark) | Browse (light) | Detail (light) |
+|---|---|---|---|
+| ![v2 lib light](gen-1/v2/phone-library-light.png) | ![v2 lib dark](gen-1/v2/phone-library-dark.png) | ![v2 browse light](gen-1/v2/phone-browse-light.png) | ![v2 detail light](gen-1/v2/phone-detail-light.png) |
+
+| Browse (dark) | Desktop (light) | Desktop (dark) |
+|---|---|---|
+| ![v2 browse dark](gen-1/v2/phone-browse-dark.png) | ![v2 desktop light](gen-1/v2/desktop-library-light.png) | ![v2 desktop dark](gen-1/v2/desktop-library-dark.png) |
+
+## Gen 1 v3 — newsprint zine (eliminated by direction)
+
+- Branch: `design-lab/gen1/v3` · **extinct — rejected 2026-11-14 without tournament**
+- Concept: risograph print world — ivory paper, one spot colour (riso rasp), zero radius,
+  hard offset registration shadows, 900-weight serif masthead, barcode status tags.
+- Kept deliberately: extinction is part of the record. Not mergeable; do not revive without
+  an explicit request.
+
+| Library (light) | Library (dark) | Browse (light) | Detail (light) |
+|---|---|---|---|
+| ![v3 lib light](gen-1/v3/phone-library-light.png) | ![v3 lib dark](gen-1/v3/phone-library-dark.png) | ![v3 browse light](gen-1/v3/phone-browse-light.png) | ![v3 detail light](gen-1/v3/phone-detail-light.png) |
+
+| Browse (dark) | Desktop (light) | Desktop (dark) |
+|---|---|---|
+| ![v3 browse dark](gen-1/v3/phone-browse-dark.png) | ![v3 desktop light](gen-1/v3/desktop-library-light.png) | ![v3 desktop dark](gen-1/v3/desktop-library-dark.png) |
+
+## Gen 1 v4 — aero polish
+
+- Branch: `design-lab/gen1/v4` · user-steered iteration, inside identity
+- Concept: same machine, materially lit — atmospheric layered backdrop (not a flat ground),
+  one warm off-frame pool, deeper dark ground with raised ink ramp, top-lit panel sheen,
+  layered glass bar/rail with specular edge, shell gloss, static rasp halo, and four
+  reduced-motion-safe motions (capsule squash, one-shot hover wobble, dome jelly press,
+  tube shimmer). Contrast recomputed: darkest pair ink-3/ground 7.57.
+- Guards: **pass** · 895 unit tests pass
+
+| Library (light) | Library (dark) | Browse (light) | Detail (light) |
+|---|---|---|---|
+| ![v4 lib light](gen-1/v4/phone-library-light.png) | ![v4 lib dark](gen-1/v4/phone-library-dark.png) | ![v4 browse light](gen-1/v4/phone-browse-light.png) | ![v4 detail light](gen-1/v4/phone-detail-light.png) |
+
+| Browse (dark) | Desktop (light) | Desktop (dark) |
+|---|---|---|
+| ![v4 browse dark](gen-1/v4/phone-browse-dark.png) | ![v4 desktop light](gen-1/v4/desktop-library-light.png) | ![v4 desktop dark](gen-1/v4/desktop-library-dark.png) |
+
+## Candidates & their pages
+
+- **Watch the motion (v4):** `page@0e6f5fff0fd3f056ccb104e362f8730c.webm` was recorded on
+  demand and lives in `.impeccable/design-lab-clips/` (gitignored). If motion needs judging,
+  re-record; stills were never going to tell you whether the wobble is delightful or silly.
+- Fitness: **not yet recorded** — see `ledger.json`. Tournament pending your call + the
+  VL quota reset (2026-11-15).
