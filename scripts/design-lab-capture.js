@@ -96,7 +96,9 @@ async function enterApp(page, failures) {
     }
   }
   console.log(`[lab] opening ${TARGET}`);
-  await page.goto(TARGET);
+  // domcontentloaded, not load: the relay plus a cold dev server can push the
+  // load event past any sane deadline; the gate is readiness-polled anyway.
+  await page.goto(TARGET, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
   // The app takes ~20-45s to finish bootstrapping (per-profile probes fly
   // sequentially through the dev relay). Poll instead of a fixed wait.
@@ -152,8 +154,18 @@ async function main() {
     failures: [],
   };
 
-  const shot = async (page, name) => {
-    await page.screenshot({ path: path.join(OUT, `${name}.png`) });
+  const shot = async (page, name, options = {}) => {
+    // Playwright screenshot writes fail transiently under on-access AV scans;
+    // one bad write must not discard a whole generation.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        await page.screenshot({ path: path.join(OUT, `${name}.png`), ...options });
+        break;
+      } catch (error) {
+        if (attempt === 3) throw error;
+        await page.waitForTimeout(1500);
+      }
+    }
     manifest.surfaces.push(name);
   };
 
@@ -206,11 +218,9 @@ async function main() {
     await nav.getByRole("button", { name: "Library" }).click();
     await page.waitForTimeout(700);
     await setTheme(page, "light");
-    await page.screenshot({ path: path.join(OUT, "desktop-library-light.png"), fullPage: true });
-    manifest.surfaces.push("desktop-library-light");
+    await shot(page, "desktop-library-light", { fullPage: true });
     await setTheme(page, "dark");
-    await page.screenshot({ path: path.join(OUT, "desktop-library-dark.png"), fullPage: true });
-    manifest.surfaces.push("desktop-library-dark");
+    await shot(page, "desktop-library-dark", { fullPage: true });
 
     const wideOverflow = await findOverflow(page);
     if (wideOverflow.scrollWidth > wideOverflow.viewport + 1) {

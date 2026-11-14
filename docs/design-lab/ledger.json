@@ -1,7 +1,7 @@
 {
   "experiment": "design-lab",
   "started": "2026-11-14",
-  "honesty": "fitness is judge-perceived quality against a hidden rubric, not household behaviour",
+  "honesty": "fitness is judge-perceived quality against a hidden rubric, not household behaviour. Gen 1 v3 eliminated by direction, not tournament, 2026-11-14.",
   "branch": "design-lab/evo",
   "champion_tag_prefix": "design-lab/gen",
   "generations": [
@@ -21,10 +21,18 @@
         "desktop-library-light",
         "desktop-library-dark"
       ],
-      "guards": { "layout": true },
+      "guards": {
+        "layout": true
+      },
       "fitness": null,
       "judge": "calibration pending — free tier exhausted 2026-11-14, resume 2026-11-15",
       "failures": []
+    },
+    {
+      "gen": 1,
+      "role": "eliminated",
+      "tag": "design-lab/gen1/v3",
+      "note": "newsprint zine - rejected by direction 2026-11-14: too harsh, moves away from capsule vending identity; kept as extinct seed"
     }
   ]
 }
