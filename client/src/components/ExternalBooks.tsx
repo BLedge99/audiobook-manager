@@ -26,7 +26,7 @@ function StoreBadge({ store }: { store: ExternalStoreId }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide",
         badgeTone[store],
       )}
     >
@@ -73,13 +73,13 @@ function ExternalBookCard({
           </span>
         </span>
         <span className="block pt-2">
-          <span className="line-clamp-2 block font-display text-[14.5px] font-semibold leading-tight text-ink">
+          <span className="line-clamp-2 block font-display text-[0.90625rem] font-semibold leading-tight text-ink">
             {item.title}
           </span>
           {item.author && (
-            <span className="mt-0.5 block truncate text-[12px] text-ink2">{item.author}</span>
+            <span className="mt-0.5 block truncate text-[0.75rem] text-ink2">{item.author}</span>
           )}
-          <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-cobalt">
+          <span className="mt-1.5 inline-flex items-center gap-1 text-[0.6875rem] font-bold text-cobalt">
             <Link2 size={11} aria-hidden="true" /> {copy.external.openIn(def.label)} →
           </span>
         </span>
@@ -87,7 +87,7 @@ function ExternalBookCard({
       <span className="flex shrink-0 flex-col items-end justify-end gap-1 pb-1">
         {confirming ? (
           <span className="grid justify-items-end gap-1">
-            <span className="text-[11px] font-bold text-ink2">{copy.external.removeConfirm}</span>
+            <span className="text-[0.6875rem] font-bold text-ink2">{copy.external.removeConfirm}</span>
             <span className="flex gap-1.5">
               <Btn size="sm" variant="quiet" onClick={() => onRemove(item.id)}>
                 {copy.external.removeConfirmYes}
@@ -130,7 +130,7 @@ export function ExternalBooks({
     <section aria-labelledby="external-books" className="mt-8">
       <h2
         id="external-books"
-        className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-ink3"
+        className="mb-2.5 text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-ink3"
       >
         {copy.external.heading}
       </h2>
@@ -214,7 +214,7 @@ export function AddExternalBookDialog({
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <p className="mt-1.5 text-[13px] leading-snug text-ink2">{copy.external.addBody}</p>
+        <p className="mt-1.5 text-[0.8125rem] leading-snug text-ink2">{copy.external.addBody}</p>
 
         <label className="mt-4 block">
           <span className="sr-only">{copy.external.pastePlaceholder}</span>
@@ -228,31 +228,31 @@ export function AddExternalBookDialog({
             onKeyDown={(event) => {
               if (event.key === "Enter") void submit();
             }}
-            className="w-full rounded-[14px] border border-ink/25 bg-sunk px-4 py-2.5 text-[15px] text-ink placeholder:text-ink3 focus:border-ink focus:outline-none"
+            className="w-full rounded-[14px] border border-ink/25 bg-sunk px-4 py-2.5 text-[0.9375rem] text-ink placeholder:text-ink3 focus:border-ink focus:outline-none"
           />
         </label>
 
-        {showError && <p className="mt-2 text-[12.5px] font-semibold text-rasp-ink">{copy.external.invalidLink}</p>}
+        {showError && <p className="mt-2 text-[0.78125rem] font-semibold text-rasp-ink">{copy.external.invalidLink}</p>}
 
         {ready && storeLabel && (
           <div className="mt-3 grid gap-2.5 rounded-[16px] border border-ink/20 bg-sunk/60 p-3">
             <StoreBadge store={(parsed as Extract<typeof parsed, { ok: true }>).store} />
             <label className="block">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-ink3">{copy.external.titleField}</span>
+              <span className="text-[0.6875rem] font-bold uppercase tracking-wide text-ink3">{copy.external.titleField}</span>
               <input
                 aria-label={copy.external.titleField}
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="mt-1 w-full rounded-[12px] border border-ink/20 bg-surface px-3 py-2 text-[14px] text-ink focus:border-ink focus:outline-none"
+                className="mt-1 w-full rounded-[12px] border border-ink/20 bg-surface px-3 py-2 text-[0.875rem] text-ink focus:border-ink focus:outline-none"
               />
             </label>
             <label className="block">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-ink3">{copy.external.authorField}</span>
+              <span className="text-[0.6875rem] font-bold uppercase tracking-wide text-ink3">{copy.external.authorField}</span>
               <input
                 aria-label={copy.external.authorField}
                 value={author}
                 onChange={(event) => setAuthor(event.target.value)}
-                className="mt-1 w-full rounded-[12px] border border-ink/20 bg-surface px-3 py-2 text-[14px] text-ink focus:border-ink focus:outline-none"
+                className="mt-1 w-full rounded-[12px] border border-ink/20 bg-surface px-3 py-2 text-[0.875rem] text-ink focus:border-ink focus:outline-none"
               />
             </label>
           </div>

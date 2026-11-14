@@ -124,7 +124,7 @@ export function ProfileGate({
                 >
                   <UserRound size={18} className="text-white" />
                 </span>
-                <span className="min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-ink">
+                <span className="min-w-0 flex-1 truncate font-display text-[1.0625rem] font-semibold text-ink">
                   {profile.name}
                 </span>
               </button>

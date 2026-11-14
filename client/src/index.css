@@ -201,7 +201,7 @@ body {
   background: var(--ground);
   color: var(--ink);
   font-family: "Nunito", ui-rounded, system-ui, sans-serif;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.45;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -694,7 +694,7 @@ button:focus {
   background: var(--surface);
   color: var(--ink);
   font-weight: 700;
-  font-size: 14.5px;
+  font-size: 0.90625rem;
   letter-spacing: -0.01em;
   cursor: pointer;
   box-shadow: 0 3px 0 -1px color-mix(in srgb, var(--ink) 80%, transparent);
@@ -741,7 +741,7 @@ button:focus {
 .btn--sm {
   min-height: 36px;
   padding: 0 13px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   border-width: 1.5px;
 }
 
@@ -776,7 +776,7 @@ button:focus {
   border-radius: 22px;
   border: var(--stroke) solid color-mix(in srgb, var(--ink) 34%, transparent);
   background: var(--surface);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .field::placeholder {
   color: var(--ink-3);
@@ -796,7 +796,7 @@ button:focus {
   border-radius: 99px;
   border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
   background: var(--surface);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -870,7 +870,7 @@ button:focus {
 .wordmark {
   font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
   font-weight: 600;
-  font-size: 26px;
+  font-size: 1.625rem;
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -887,7 +887,7 @@ button:focus {
   border-bottom: var(--stroke) solid color-mix(in srgb, var(--ink) 24%, transparent);
 }
 .machine-head h2 {
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 /* The ambient field: a handful of slow drifting specks so the machine reads as

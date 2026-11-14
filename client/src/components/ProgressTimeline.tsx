@@ -85,7 +85,7 @@ export function ProgressTimeline({
         />
       </div>
 
-      <div className="mt-0.5 flex justify-between text-[12.5px] font-bold text-ink3 tnum">
+      <div className="mt-0.5 flex justify-between text-[0.78125rem] font-bold text-ink3 tnum">
         <span>{timeLabel(value)}</span>
         <span>-{timeLabel(Math.max(0, total - value))}</span>
         <span>{timeLabel(total)}</span>
@@ -93,7 +93,7 @@ export function ProgressTimeline({
 
       {showChapterBar && (
         <div className="mt-2.5" data-testid="chapter-bar">
-          <div className="flex justify-between gap-3 text-[12.5px] font-semibold text-ink2">
+          <div className="flex justify-between gap-3 text-[0.78125rem] font-semibold text-ink2">
             <span className="min-w-0 truncate">{segmentHeading}</span>
             <span className="shrink-0 tnum">{`${timeLabel(segmentElapsed)} / ${timeLabel(segmentDuration)}`}</span>
           </div>

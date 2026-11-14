@@ -137,7 +137,7 @@ export function Settings({
         <div className="mb-7 flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <MachineMark />
-            <h2 className="min-w-0 font-display text-[26px] font-semibold leading-tight text-ink">
+            <h2 className="min-w-0 font-display text-[1.625rem] font-semibold leading-tight text-ink">
               {copy.operator.settings.heading}
             </h2>
           </div>
@@ -147,7 +147,7 @@ export function Settings({
         </div>
 
         <form onSubmit={test} className="panel grid grid-cols-[minmax(0,1fr)] gap-3 p-5">
-          <label htmlFor="server-url" className="flex items-center gap-2 text-[14px] font-bold text-ink">
+          <label htmlFor="server-url" className="flex items-center gap-2 text-[0.875rem] font-bold text-ink">
             <Server size={16} className="text-rasp" aria-hidden="true" />
             {copy.operator.serverAddressLabel}
           </label>
@@ -161,7 +161,7 @@ export function Settings({
             spellCheck={false}
             className="font-mono"
           />
-          <p className="text-[12.5px] text-ink3">{copy.operator.settings.addressHelp}</p>
+          <p className="text-[0.78125rem] text-ink3">{copy.operator.settings.addressHelp}</p>
           <Btn type="submit" variant="primary" disabled={status === "checking"}>
             {status === "checking" ? (
               <>
@@ -189,10 +189,10 @@ export function Settings({
           */}
           {recent.length > 0 && (
             <div className="border-t-2 border-dashed border-ink/20 pt-3">
-              <p className="text-[12px] font-bold uppercase tracking-wide text-ink3">
+              <p className="text-[0.75rem] font-bold uppercase tracking-wide text-ink3">
                 {copy.operator.settings.recentHeading}
               </p>
-              <p className="mt-0.5 text-[12px] text-ink3">{copy.operator.settings.recentHelp}</p>
+              <p className="mt-0.5 text-[0.75rem] text-ink3">{copy.operator.settings.recentHelp}</p>
               <ul className="mt-2 grid grid-cols-[minmax(0,1fr)] gap-1.5">
                 {recent.map((address) => {
                   const isCurrent = address === getServerUrl();
@@ -202,12 +202,12 @@ export function Settings({
                         type="button"
                         onClick={() => switchTo(address)}
                         disabled={status === "checking"}
-                        className="min-w-0 flex-1 truncate rounded-[10px] border-2 border-ink/15 bg-sunk px-2.5 py-1.5 text-left font-mono text-[12.5px] text-ink2 transition-colors hover:border-ink hover:text-ink disabled:opacity-60"
+                        className="min-w-0 flex-1 truncate rounded-[10px] border-2 border-ink/15 bg-sunk px-2.5 py-1.5 text-left font-mono text-[0.78125rem] text-ink2 transition-colors hover:border-ink hover:text-ink disabled:opacity-60"
                       >
                         {address}
                       </button>
                       {isCurrent && (
-                        <span className="shrink-0 rounded-full border-2 border-cobalt-ink/40 bg-cobalt/10 px-2 py-0.5 text-[11px] font-bold text-cobalt-ink">
+                        <span className="shrink-0 rounded-full border-2 border-cobalt-ink/40 bg-cobalt/10 px-2 py-0.5 text-[0.6875rem] font-bold text-cobalt-ink">
                           {copy.operator.settings.current}
                         </span>
                       )}
@@ -228,23 +228,23 @@ export function Settings({
         </form>
 
         <section className="panel mt-4 p-5">
-          <h3 className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
+          <h3 className="flex items-center gap-2 font-display text-[1.0625rem] font-semibold text-ink">
             <HardDriveDownload size={17} className="text-rasp" aria-hidden="true" />
             {copy.operator.settings.deviceHeading}
           </h3>
 
           {/* Which build is this? Every APK reports versionName 1.0, so
               without this the phone cannot answer "did my change take?". */}
-          <p className="mt-2 text-[12px] text-ink3 tnum">
+          <p className="mt-2 text-[0.75rem] text-ink3 tnum">
             {copy.operator.settings.build}: {builtAt}
           </p>
 
           {/* The tube, not a dial: there is no meaningful maximum to fill
               against, so a proportional ring would be a lie. */}
-          <p className="mt-2 font-display text-[32px] font-semibold leading-none text-ink tnum">
+          <p className="mt-2 font-display text-[2rem] font-semibold leading-none text-ink tnum">
             {formatBytes(usedBytes)}
           </p>
-          <p className="mt-1 text-[13.5px] text-ink2">
+          <p className="mt-1 text-[0.84375rem] text-ink2">
             {copy.operator.settings.booksDownloaded(downloadedCount)}
           </p>
           <Tube percent={downloadedCount > 0 ? 100 : 0} className="mt-3" />
@@ -278,11 +278,11 @@ export function Settings({
                 around a styled run. `tnum` on the line keeps the figures
                 aligned.
               */}
-              <p className="text-[13.5px] text-ink2 tnum">
+              <p className="text-[0.84375rem] text-ink2 tnum">
                 {copy.operator.settings.coversCached(formatBytes(coverBytes))}
               </p>
               {coversCleared ? (
-                <p role="status" className="mt-2 text-[13px] font-bold text-cobalt-ink">
+                <p role="status" className="mt-2 text-[0.8125rem] font-bold text-cobalt-ink">
                   {copy.operator.settings.coversCleared}
                 </p>
               ) : (

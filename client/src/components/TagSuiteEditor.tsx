@@ -105,13 +105,13 @@ export function TagSuiteEditor({
   const Field = ({ label, field, placeholder }: { label: string; field: string; placeholder?: string }) => (
     <label className="block min-w-0">
       <span className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="text-[13px] font-bold text-ink">{label}</span>
+        <span className="text-[0.8125rem] font-bold text-ink">{label}</span>
         {/* The provenance badge is decorative next to the field name. Without
             aria-hidden it is read as part of the label, so every input's
             accessible name became "Title embedded" instead of "Title". */}
         <span
           aria-hidden="true"
-          className={cn("rounded-full border px-1.5 py-0.5 text-[10.5px] font-bold", overridden.has(field) ? "border-ink bg-rasp text-white" : "border-ink/25 text-ink3")}
+          className={cn("rounded-full border px-1.5 py-0.5 text-[0.65625rem] font-bold", overridden.has(field) ? "border-ink bg-rasp text-white" : "border-ink/25 text-ink3")}
         >
           {provenance(field)}
         </span>
@@ -125,7 +125,7 @@ export function TagSuiteEditor({
           className="field"
         />
       ) : (
-        <p className="text-[14px] text-ink2">{String(draft[field] ?? "") || <span className="text-ink3">—</span>}</p>
+        <p className="text-[0.875rem] text-ink2">{String(draft[field] ?? "") || <span className="text-ink3">—</span>}</p>
       )}
     </label>
   );
@@ -156,7 +156,7 @@ export function TagSuiteEditor({
   return (
     <section className="panel mt-6 p-4 sm:p-5" aria-labelledby="tag-suite">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 id="tag-suite" className="font-display text-[17px] font-semibold text-ink">{copy.operator.tagSuite.heading}</h2>
+        <h2 id="tag-suite" className="font-display text-[1.0625rem] font-semibold text-ink">{copy.operator.tagSuite.heading}</h2>
         <div className="flex items-center gap-2">
           {editing ? (
             <>
@@ -183,7 +183,7 @@ export function TagSuiteEditor({
         </div>
       </div>
 
-      {status && <p role="status" className="mb-3 text-[12.5px] font-bold text-cobalt-ink">{status}</p>}
+      {status && <p role="status" className="mb-3 text-[0.78125rem] font-bold text-cobalt-ink">{status}</p>}
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
         <Field label={copy.operator.tagSuite.fields.title} field="title" />
@@ -198,7 +198,7 @@ export function TagSuiteEditor({
 
       {suite.suite.description !== undefined && (
         <div className="mt-4">
-          <span className="mb-1 block text-[13px] font-bold text-ink">{copy.operator.tagSuite.fields.description}</span>
+          <span className="mb-1 block text-[0.8125rem] font-bold text-ink">{copy.operator.tagSuite.fields.description}</span>
           {editing ? (
             <textarea
               aria-label={copy.operator.tagSuite.fields.description}
@@ -208,7 +208,7 @@ export function TagSuiteEditor({
               className="field min-h-24 rounded-[22px_18px_22px_18px/18px_22px_18px_22px] py-2.5"
             />
           ) : (
-            <p className="text-[14px] leading-relaxed text-ink2">
+            <p className="text-[0.875rem] leading-relaxed text-ink2">
               {suite.suite.description || <span className="text-ink3">—</span>}
             </p>
           )}
@@ -217,7 +217,7 @@ export function TagSuiteEditor({
 
       {suite.suite.contributors.length > 0 && (
         <div className="mt-4">
-          <span className="mb-1.5 block text-[13px] font-bold text-ink">
+          <span className="mb-1.5 block text-[0.8125rem] font-bold text-ink">
             {suite.suite.contributors.filter((c) => c.role === "narrator").length > 0
               ? copy.operator.tagSuite.narrators
               : copy.operator.tagSuite.contributors}
@@ -226,7 +226,7 @@ export function TagSuiteEditor({
             {suite.suite.contributors.map((contributor) => (
               <li
                 key={`${contributor.id}-${contributor.role}`}
-                className="rounded-full border-2 border-ink/25 bg-sunk px-3 py-1 text-[12px] font-semibold text-ink2"
+                className="rounded-full border-2 border-ink/25 bg-sunk px-3 py-1 text-[0.75rem] font-semibold text-ink2"
               >
                 {contributor.name}
                 <span className="ml-1.5 text-ink3">{contributor.role}</span>
@@ -238,7 +238,7 @@ export function TagSuiteEditor({
 
       {genres.length > 0 && (
         <fieldset className="mt-4">
-          <legend className="mb-2 font-display text-[15px] font-semibold text-ink">{copy.operator.tagSuite.genres}</legend>
+          <legend className="mb-2 font-display text-[0.9375rem] font-semibold text-ink">{copy.operator.tagSuite.genres}</legend>
           <div className="flex flex-wrap gap-2">
             {genres.flatMap((parent) => [parent, ...(parent.children ?? [])]).map((genre) => {
               const selected = ((draft.genreIds as number[]) ?? []).includes(genre.id);
@@ -269,7 +269,7 @@ export function TagSuiteEditor({
 
       {tags.length > 0 && (
         <fieldset className="mt-4">
-          <legend className="mb-2 font-display text-[15px] font-semibold text-ink">{copy.operator.tagSuite.yourTags}</legend>
+          <legend className="mb-2 font-display text-[0.9375rem] font-semibold text-ink">{copy.operator.tagSuite.yourTags}</legend>
           <div className="flex flex-wrap gap-2">
             {tags.map((tag) => {
               const selected = ((draft.tagIds as number[]) ?? []).includes(tag.id);

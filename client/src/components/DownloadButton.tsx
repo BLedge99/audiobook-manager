@@ -96,13 +96,13 @@ export function DownloadButton({
           )}
           {copy.download.removeFromDevice}
         </Btn>
-        <p className="flex items-center gap-2 text-[12.5px] font-bold text-mint-ink">
+        <p className="flex items-center gap-2 text-[0.78125rem] font-bold text-mint-ink">
           <Check size={14} aria-hidden="true" />
           {copy.download.onThisDevice(formatBytes(bytes))}
         </p>
         {error && <Notice tone="warn" role="status">{error}</Notice>}
         {trace && trace.length > 0 && (
-          <ol className="panel panel--sunk mt-1 list-inside list-disc px-4 py-2 space-y-0.5 font-mono text-[11px] text-ink2">
+          <ol className="panel panel--sunk mt-1 list-inside list-disc px-4 py-2 space-y-0.5 font-mono text-[0.6875rem] text-ink2">
             {trace.map((line) => (
               <li key={line}>{line}</li>
             ))}
@@ -138,7 +138,7 @@ export function DownloadButton({
 
       {error && <Notice tone="error" role="status">{error}</Notice>}
       {trace && trace.length > 0 && (
-        <ol className="panel panel--sunk mt-1 list-inside list-disc px-4 py-2 space-y-0.5 font-mono text-[11px] text-ink2">
+        <ol className="panel panel--sunk mt-1 list-inside list-disc px-4 py-2 space-y-0.5 font-mono text-[0.6875rem] text-ink2">
           {trace.map((line) => (
             <li key={line}>{line}</li>
           ))}

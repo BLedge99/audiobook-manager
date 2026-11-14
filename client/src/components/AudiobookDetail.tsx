@@ -75,19 +75,19 @@ function MetadataEditor({ book, canLookup, onUpdated }: { book: Audiobook; canLo
             <Sparkles size={15} aria-hidden="true" /> {state === "loading" ? copy.operator.metadata.lookingUp : copy.operator.metadata.lookup}
           </Btn>
           {state === "error" && (
-            <p role="alert" className="mt-2 text-[13px] font-bold text-rasp-ink">{error || copy.operator.metadata.failed}</p>
+            <p role="alert" className="mt-2 text-[0.8125rem] font-bold text-rasp-ink">{error || copy.operator.metadata.failed}</p>
           )}
           {state === "ready" && (
             <ul className="mt-3 grid gap-2">
-              {candidates.length === 0 && <li className="text-[13.5px] text-ink3">{copy.operator.metadata.noMatches}</li>}
+              {candidates.length === 0 && <li className="text-[0.84375rem] text-ink3">{copy.operator.metadata.noMatches}</li>}
               {candidates.map((candidate) => (
                 <li
                   key={candidate.id}
-                  className="flex items-center justify-between gap-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/20 bg-sunk px-3 py-2 text-[13.5px]"
+                  className="flex items-center justify-between gap-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/20 bg-sunk px-3 py-2 text-[0.84375rem]"
                 >
                   <span className="min-w-0 truncate text-ink2">
                     {candidate.title} {candidate.author && <span className="text-ink3">— {candidate.author}</span>}
-                    <span className="ml-2 text-[11px] font-bold uppercase text-ink3">{candidate.source}</span>
+                    <span className="ml-2 text-[0.6875rem] font-bold uppercase text-ink3">{candidate.source}</span>
                   </span>
                   <Btn size="sm" variant="quiet" onClick={() => void apply(candidate.id)} className="shrink-0">{copy.use}</Btn>
                 </li>
@@ -306,11 +306,11 @@ export function AudiobookDetail({
           `ProgressTimeline` are spec 14/15's work and are untouched.
         */}
         <div className="min-w-0 p-5 pt-14 md:p-8 md:pt-8">
-          <h2 className="pr-10 text-[26px] leading-[1.08] md:text-3xl">{book.title}</h2>
-          {book.subtitle && <p className="mt-1 text-[16px] italic text-ink2 md:text-lg">{book.subtitle}</p>}
-          <p className="mt-2 text-[16px] font-semibold text-ink2 md:text-lg">{book.author}</p>
+          <h2 className="pr-10 text-[1.625rem] leading-[1.08] md:text-3xl">{book.title}</h2>
+          {book.subtitle && <p className="mt-1 text-[1rem] italic text-ink2 md:text-lg">{book.subtitle}</p>}
+          <p className="mt-2 text-[1rem] font-semibold text-ink2 md:text-lg">{book.author}</p>
           {narrators.length > 0 && (
-            <p className="mt-1 text-[13.5px] text-ink3">{copy.narratedBy(narrators.map((entry) => entry.name).join(", "))}</p>
+            <p className="mt-1 text-[0.84375rem] text-ink3">{copy.narratedBy(narrators.map((entry) => entry.name).join(", "))}</p>
           )}
           {deviceAction && <div className="mt-5">{deviceAction}</div>}
 
@@ -373,7 +373,7 @@ export function AudiobookDetail({
           {/* The facts that fit on one line stay out of the fold. A reader
               choosing between two books needs "how long is it", not a
               paragraph. */}
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] font-semibold text-ink2">
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[0.8125rem] font-semibold text-ink2">
             <span className="flex items-center gap-1.5"><Clock3 size={15} aria-hidden="true" /> {durationLabel(book.duration)}</span>
             <span className="flex items-center gap-1.5"><FileAudio size={15} aria-hidden="true" /> {book.fileFormat.toUpperCase()}</span>
             {book.publishedYear && <span className="tnum">{book.publishedYear}</span>}

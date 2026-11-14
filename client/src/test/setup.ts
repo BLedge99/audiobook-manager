@@ -18,6 +18,32 @@ import "@testing-library/jest-dom/vitest";
 import "fake-indexeddb/auto";
 
 /**
+ * jsdom has no `window.matchMedia`, and the theme resolver reads it to watch
+ * `prefers-color-scheme`. Without a stub, every test that mounts the app with
+ * the `auto` theme crashes with `window.matchMedia is not a function` — the
+ * failure used to pass or fail depending on test ordering. A minimal but
+ * honest stub: `matches` is `false` (light scheme, like a dumb shell), it
+ * implements the modern `addEventListener`/`removeEventListener` interface
+ * the theme code uses, and it never actually fires a change event.
+ */
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  window.matchMedia = (query: string): MediaQueryList => {
+    const listeners = new Set<(event: MediaQueryListEvent) => void>();
+    const mql: MediaQueryList = {
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: (_type: string, cb: (event: MediaQueryListEvent) => void) => { listeners.add(cb); },
+      removeEventListener: (_type: string, cb: (event: MediaQueryListEvent) => void) => { listeners.delete(cb); },
+      addListener: (cb: (event: MediaQueryListEvent) => void) => { listeners.add(cb); },
+      removeListener: (cb: (event: MediaQueryListEvent) => void) => { listeners.delete(cb); },
+      dispatchEvent: () => true,
+    } as unknown as MediaQueryList;
+    return mql;
+  };
+}
+
+/**
  * Polyfill HTMLMediaElement methods that jsdom doesn't implement.
  * This prevents "Not implemented: HTMLMediaElement.prototype.pause/load" errors
  * in tests that render audio/video elements.

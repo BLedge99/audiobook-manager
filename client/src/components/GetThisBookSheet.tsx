@@ -106,8 +106,8 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
           {freeLink && (
             <li data-row="librivox" className="flex items-center justify-between gap-3 rounded-[16px] border-2 border-mint bg-[#E9F8EE] p-3">
               <span className="min-w-0">
-                <span className="block text-[13.5px] font-bold text-ink">{freeLink.label}</span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-ink2">{copy.buyLinks.freeCopy}</span>
+                <span className="block text-[0.84375rem] font-bold text-ink">{freeLink.label}</span>
+                <span className="mt-0.5 block text-[0.6875rem] leading-snug text-ink2">{copy.buyLinks.freeCopy}</span>
               </span>
               <a href={freeLink.href} target="_blank" rel="noopener noreferrer" className="shrink-0">
                 <Btn size="sm" variant="primary">{copy.buyLinks.freeAction}</Btn>
@@ -117,7 +117,7 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
           {paidRows.map((link) => (
             <li key={link.id} data-row={link.id} className="rounded-[16px] border border-ink/15 bg-sunk/50 p-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="min-w-0 truncate text-[13px] font-semibold text-ink2">{link.label}</span>
+                <span className="min-w-0 truncate text-[0.8125rem] font-semibold text-ink2">{link.label}</span>
                 <Btn
                   size="sm"
                   variant="quiet"
@@ -129,7 +129,7 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
                 </Btn>
               </div>
               {link.commission && (
-                <p className="mt-1.5 text-[10.5px] font-bold uppercase tracking-wide text-ink3">
+                <p className="mt-1.5 text-[0.65625rem] font-bold uppercase tracking-wide text-ink3">
                   {copy.buyLinks.adCue}
                 </p>
               )}
@@ -137,7 +137,7 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
           ))}
         </ul>
 
-        <p className={cn("mt-3 border-t border-ink/15 pt-3 text-[10.5px] leading-snug text-ink3")}>
+        <p className={cn("mt-3 border-t border-ink/15 pt-3 text-[0.65625rem] leading-snug text-ink3")}>
           {hasCommission ? copy.buyLinks.disclosure(networkList) : copy.buyLinks.disclosureNoNetworks}
         </p>
       </div>

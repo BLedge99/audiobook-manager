@@ -45,10 +45,10 @@ function ShelfCard({
           <ShellCover bookId={book.id} serverId={book.serverId} className="w-full" />
           <CapsuleMarks />
         </span>
-        <h3 className="mt-2 line-clamp-2 min-h-[2.3em] font-display text-[13.5px] font-semibold leading-tight text-ink">
+        <h3 className="mt-2 line-clamp-2 min-h-[2.3em] font-display text-[0.84375rem] font-semibold leading-tight text-ink">
           {book.title}
         </h3>
-        <p className="truncate text-[11.5px] text-ink2">{book.author}</p>
+        <p className="truncate text-[0.71875rem] text-ink2">{book.author}</p>
       </button>
       {onToggleFavourite && isFromThisServer(book) && (
         <div className="absolute right-3 top-3 max-sm:opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100">
