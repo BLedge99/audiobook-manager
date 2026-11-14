@@ -85,7 +85,7 @@ const findLeakedComments = async (page) =>
 /** Spec-28 default gate: the app boots to the profile picker. Picks the lab
  *  profile and, if it asks, fills the profile password. The credentials file
  *  is gitignored (.impeccable/design-lab-creds.json); env wins if set. */
-async function enterApp(page, failures) {
+async function enterApp(page, failures, shot) {
   const fsPath = path.join(".impeccable", "design-lab-creds.json");
   let profilePass = process.env.CAPTURE_PROFILE_PASSWORD;
   if (!profilePass) {
@@ -99,6 +99,24 @@ async function enterApp(page, failures) {
   // domcontentloaded, not load: the relay plus a cold dev server can push the
   // load event past any sane deadline; the gate is readiness-polled anyway.
   await page.goto(TARGET, { waitUntil: "domcontentloaded", timeout: 60_000 });
+
+  // The spec-28 default gate is the profile picker — the lab's glow/select
+  // material lives on its capsules, so document it before signing in. Wait for
+  // the buttons to render (the API fetch lags the heading) or the shot lands
+  // on the bare "Checking…" state.
+  try {
+    await page.getByRole("heading", { name: "Who's listening?" }).waitFor({ timeout: 90_000 });
+    await page.locator(".capsule--select").first().waitFor({ state: "visible", timeout: 90_000 });
+    await shot(page, "gate-phone-light");
+    await setTheme(page, "dark");
+    await page.waitForTimeout(600);
+    await shot(page, "gate-phone-dark");
+    await setTheme(page, "light");
+    await page.waitForTimeout(400);
+  } catch (error) {
+    failures.push(`gate capture skipped: ${error.message}`);
+    await page.screenshot({ path: path.join(OUT, "FAILED-gate.png") }).catch(() => undefined);
+  }
 
   // The app takes ~20-45s to finish bootstrapping (per-profile probes fly
   // sequentially through the dev relay). Poll instead of a fixed wait.
@@ -171,7 +189,7 @@ async function main() {
 
   try {
     const page = await browser.newPage({ viewport: PHONE, serviceWorkers: "block" });
-    if (!(await enterApp(page, failures))) throw new Error("entry failed; see FAILED-*.png");
+    if (!(await enterApp(page, failures, shot))) throw new Error("entry failed; see FAILED-*.png");
     const nav = page.getByRole("navigation", { name: "Sections" });
 
     // --- phone, light ----------------------------------------------------
