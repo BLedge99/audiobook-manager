@@ -852,16 +852,16 @@ function App() {
                   onClick={() => openTab(id)}
                   aria-current={shownTab === id ? "page" : undefined}
                   className={cn(
-                    "flex w-full flex-col items-center justify-center gap-1 rounded-[16px_13px_16px_13px/13px_16px_13px_16px] px-2 py-2 text-[11px] font-bold transition sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13.5px]",
+                    "flex min-w-0 w-full flex-col items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-[16px_13px_16px_13px/13px_16px_13px_16px] px-1 py-2 text-[11px] font-bold transition sm:flex-row sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13.5px]",
                     shownTab === id
                       ? "bg-rasp text-white shadow-[0_3px_0_-1px_color-mix(in_srgb,var(--ink)_70%,transparent)]"
                       : "text-ink2 hover:bg-ink/5",
                   )}
                 >
-                  <Icon size={17} aria-hidden="true" />
-                  <span className="truncate">{tabLabel}</span>
+                  <Icon size={17} className="shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 max-w-full truncate">{tabLabel}</span>
                   {id === "favourites" && favouriteIds.size > 0 && (
-                    <span className="ml-0.5 rounded-full bg-ink/15 px-1.5 text-[10px] text-ink2 tnum sm:bg-ink/10">
+                    <span className="ml-0.5 shrink-0 rounded-full bg-ink/15 px-1.5 text-[10px] text-ink2 tnum sm:bg-ink/10">
                       {favouriteIds.size}
                     </span>
                   )}
