@@ -95,6 +95,11 @@ describe("AccountGate native OAuth", () => {
     const button = await screen.findByRole("button", { name: copy.login.oauthGoogleAction });
     fireEvent.click(button);
 
+    // Clicking "Sign in with Google" shows a themed confirmation first; the
+    // native handoff only fires when the listener chooses to continue.
+    const confirm = await screen.findByRole("button", { name: copy.login.oauthGoogleContinue });
+    fireEvent.click(confirm);
+
     expect(mocks.begin).toHaveBeenCalledWith("google");
   });
 
