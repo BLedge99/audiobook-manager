@@ -1,12 +1,12 @@
 /*
  * Design-lab capture harness (Phase 0 of the GUI-evolution experiment).
  *
- * Forked from scripts/capture-ui.js with three deliberate changes:
- *   1. Sign-in handles BOTH stack auth modes: if the household password gate
- *      is showing it signs in with CAPTURE_PASS; if the API is running with
- *      auth off (the WSL dev stack) the app boots straight to the profile
- *      picker, and we pick CAPTURE_PROFILE instead. The old script hung for
- *      30s and then for the rest of the process lifetime on this stack.
+ * Forked from scripts/capture-ui.js with deliberate changes:
+ *   1. Sign-in follows the spec-28 gate: the app boots to the profile picker;
+ *      the harness picks the lab profile and fills the profile password if it
+ *      is asked. The lab profile is a throwaway "design-lab" account created
+ *      for captures only (creds in .impeccable/design-lab-creds.json, never
+ *      committed). The household password is never involved.
  *   2. Browser close is in a finally block, so a failure cannot leave a
  *      chromium process holding the node event loop open.
  *   3. Every capture also writes a manifest.json (git sha, surfaces, guard
@@ -21,10 +21,10 @@
  *   node scripts/design-lab-capture.js gen-0
  *
  * Env:
- *   CAPTURE_URL      client origin      (default http://127.0.0.1:5173)
- *   CAPTURE_PASS     household password (default household)
- *   CAPTURE_PROFILE  profile to pick    (default admin — seeded, passwordless)
- *   CAPTURE_OUT      output override    (default docs/design-lab/<gen-id>)
+ *   CAPTURE_URL       client origin (default http://127.0.0.1:5173)
+ *   CAPTURE_PROFILE_PASSWORD  lab profile password (default: read from .impeccable/design-lab-creds.json)
+ *   CAPTURE_PROFILE           lab profile        (default design-lab)
+ *   CAPTURE_OUT       output override    (default docs/design-lab/<gen-id>)
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -38,9 +38,8 @@ if (!GEN) {
 }
 
 const TARGET = process.env.CAPTURE_URL || "http://127.0.0.1:5173";
-// A seeded, password-less profile: deterministic first-listed fixture profile.
-// Ben's profile has a password and is never used for lab captures.
-const PROFILE = process.env.CAPTURE_PROFILE || "admin";
+// The lab's throwaway capture profile — never a household member's profile.
+const PROFILE = process.env.CAPTURE_PROFILE || "design-lab";
 const OUT = process.env.CAPTURE_OUT || path.join("docs", "design-lab", GEN);
 
 const PHONE = { width: 390, height: 844 };
@@ -83,54 +82,52 @@ const findLeakedComments = async (page) =>
     return hits;
   });
 
-/** Spec-28 gate flow: the default gate is the profile picker with a
- *  "Use the household password" recovery link; a deployment with the recovery
- *  disabled shows the household form directly. Either is a valid entry. */
+/** Spec-28 default gate: the app boots to the profile picker. Picks the lab
+ *  profile and, if it asks, fills the profile password. The credentials file
+ *  is gitignored (.impeccable/design-lab-creds.json); env wins if set. */
 async function enterApp(page, failures) {
-  const PASS = process.env.CAPTURE_PASS || "household";
+  const fsPath = path.join(".impeccable", "design-lab-creds.json");
+  let profilePass = process.env.CAPTURE_PROFILE_PASSWORD;
+  if (!profilePass) {
+    try {
+      profilePass = JSON.parse(fs.readFileSync(fsPath, "utf8")).password;
+    } catch {
+      // passwordless profile, or none configured; the sign-in step will tell us
+    }
+  }
   console.log(`[lab] opening ${TARGET}`);
   await page.goto(TARGET);
 
-  const direct = page.getByPlaceholder("Household password");
-  const recovery = page.getByRole("button", { name: "Use the household password" });
+  // The app takes ~20-45s to finish bootstrapping (per-profile probes fly
+  // sequentially through the dev relay). Poll instead of a fixed wait.
+  const profileButton = page.getByRole("button", { name: new RegExp("^" + PROFILE + "(\\b|$)") });
   try {
-    await page.waitForFunction(
-      () => document.body && document.body.innerText.length > 0,
-      undefined,
-      { timeout: 5000 },
-    ).catch(() => undefined);
     for (let attempt = 0; attempt < 60; attempt += 1) {
-      if (await direct.isVisible().catch(() => false)) break;
-      if (await recovery.isVisible().catch(() => false)) {
-        console.log("[lab] profile picker is the gate; using household recovery");
-        await recovery.click();
-        break;
-      }
-      if (attempt === 59) throw new Error("gate never appeared");
-      await page.waitForTimeout(500);
+      if (await profileButton.isVisible().catch(() => false)) break;
+      if (attempt === 59) throw new Error("profile picker never rendered within 60s");
+      await page.waitForTimeout(1000);
     }
-    await direct.fill(PASS);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    console.log("[lab] signed in through the household gate");
+    await profileButton.click();
+    console.log(`[lab] picked profile ${PROFILE}`);
+    const passwordBox = page.getByPlaceholder("Profile password");
+    try {
+      await passwordBox.waitFor({ timeout: 20_000 });
+      if (!profilePass) throw new Error("profile password required but none provided");
+      await passwordBox.fill(profilePass);
+      await page.getByRole("button", { name: /sign in/i }).first().click();
+      console.log("[lab] profile password accepted, signing in");
+    } catch (error) {
+      if (/password required/.test(String(error.message))) throw error;
+      // No password prompt — this profile signs in directly.
+    }
   } catch (error) {
-    failures.push(`household sign-in failed: ${error.message}`);
+    failures.push(`profile entry failed: ${error.message}`);
     await page.screenshot({ path: path.join(OUT, "FAILED-entry.png") });
     return false;
   }
 
-  const profileButton = page.getByRole("button", { name: PROFILE, exact: true });
   try {
-    await profileButton.waitFor({ timeout: 15_000 });
-    await profileButton.click();
-    console.log(`[lab] picked profile ${PROFILE}`);
-  } catch {
-    failures.push(`profile "${PROFILE}" never appeared after sign-in`);
-    await page.screenshot({ path: path.join(OUT, "FAILED-profile.png") });
-    return false;
-  }
-
-  try {
-    await page.getByRole("heading", { name: /your audiobooks/i }).first().waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { name: /your audiobooks/i }).first().waitFor({ timeout: 60_000 });
   } catch {
     failures.push("library heading never appeared after entry");
     await page.screenshot({ path: path.join(OUT, "FAILED-library.png") });
