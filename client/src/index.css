@@ -427,6 +427,14 @@ h4 {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+/* Native scroll arrows (classic Windows scrollbars and old Firefox/classic)
+   are drawn as square buttons at the ends of the scrollbar, which overlap
+   the panel's deliberately uneven corner arcs and make the border look
+   unfinished. Modern scrollbars have none; this is the one line that makes
+   every scroll container agree with the drawn. */
+::-webkit-scrollbar-button {
+  display: none;
+}
 input,
 textarea,
 select,
@@ -1141,12 +1149,22 @@ button:focus {
    scale, plus the 1px top specular edge. Backdrop-filter is safe here -- the
    button has no positioned descendants. Chrome, not a selectable: no accent
    glow, and the saturation matches the rest of the glass (1.15). */
+/* Glass icon button — header and rail sit on top of covers scrolling
+   underneath, so they need blur. Inside .panel, the same button would sit
+   over the panel's own corner, where a translucent disk bleeds the backdrop
+   through the panel's tight arc; the panel's corner is already solid surface,
+   so an opaque button belongs there instead. */
 .iconbtn--glass {
   background: var(--glass-spec), var(--glass);
   box-shadow: var(--glass-inset);
   border-color: var(--glass-edge);
   backdrop-filter: blur(10px) saturate(1.15);
   -webkit-backdrop-filter: blur(10px) saturate(1.15);
+}
+.panel .iconbtn--glass {
+  background: var(--surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .iconbtn--glass:hover {
   color: var(--ink);
