@@ -22,13 +22,13 @@ place and both themes move together.
 
 | Role | Light | Dark | Used for |
 |---|---|---|---|
-| `--ground` | `#f4f2f5` | `#14121a` | page background |
+| `--ground` | `#f6f2f6` | `#100e15` | page background |
 | `--surface` | `#ffffff` | `#1e1b26` | panels, cards, sheets |
-| `--sunk` | `#eae7ef` | `#100e16` | recessed panels, inactive rows |
-| `--ink` | `#1b1720` | `#f7f4f9` | headings, primary text |
-| `--ink-2` | `#514b5c` | `#bdb6c7` | body text |
-| `--ink-3` | `#6b6577` | `#9a92a9` | metadata, counts |
-| `--line` | `#dbd7e2` | `#302b3c` | rules, borders |
+| `--sunk` | `#eae7ef` | `#0c0a10` | recessed panels, inactive rows |
+| `--ink` | `#1b1720` | `#e8e4ee` | headings, primary text |
+| `--ink-2` | `#514b5c` | `#c6c1cf` | body text |
+| `--ink-3` | `#6b6577` | `#928ca1` | metadata, counts |
+| `--line` | `#dbd7e2` | `#322d40` | rules, borders |
 | `--rasp` | `#ff3d71` | `#ff5c87` | **the accent** — play dome, active tab |
 | `--tan` | `#ff7a18` | `#ff9445` | in progress |
 | `--mint` | `#0f9e83` | `#2fd9b6` | finished |
@@ -113,10 +113,23 @@ tabular numerals.
 
 ### Glass
 
-Used in exactly two places, the top bar and the tab rail, and only because both
-genuinely sit over scrolling content. At 91–93% opacity, not less: at 72% it
-looked correct over a plain light ground and turned out unreadable on a real
-phone in dark mode, where cover artwork scrolls underneath it.
+Used in exactly four places, and only because each earns it: the top bar and
+the tab rail (both genuinely sit over scrolling content), the detail-sheet
+close button (`.iconbtn--glass`, chrome at button scale), and the selectable
+family — the profile-picker capsules and the filter/tag chips (a control you
+press, not a pane of chrome). Chrome sits at 86–93% opacity, never less: at
+72% it looked correct over a plain light ground and turned out unreadable on a
+real phone in dark mode, where cover artwork scrolls underneath it. The
+selectable fill is the surface at ~64–68% — translucent on purpose, so the
+atmosphere reads through — and never sits over artwork.
+
+All of it is one recipe drawn from shared tokens (`--glass-spec`,
+`--glass-inset`, `--glass-edge`, `--glass-glow`, `--select-fill`): the same
+sheen, the same 1px inner specular top edge, the same hairline, the same
+`saturate(1.15)`. The chrome takes a directional rim shadow; selectables take
+the accent-family halo (`--glass-glow`, low-alpha rasp/plum — stronger on
+hover/focus, compressed on press). Future tweaks edit the tokens, not the
+call sites.
 
 ## Composition rules
 
@@ -152,7 +165,7 @@ These are documented at length in spec 15 and each one cost real time:
 ## Verifying a change
 
 ```bash
-npm --prefix client run test                 # 266 unit tests
+npm --prefix client run test                 # 895 unit tests
 npx playwright test                          # 40 E2E, needs a running stack
 node scripts/capture-ui.js                   # screenshots + layout guards
 ```

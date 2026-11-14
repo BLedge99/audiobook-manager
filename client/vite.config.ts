@@ -73,8 +73,8 @@ export default defineConfig(({ mode }) => ({
               // The machine's own ground, not the old slate. Kept in step with
               // --ground in src/index.css; index.html carries the per-scheme
               // <meta name="theme-color"> for the Android status bar.
-              theme_color: '#f4f2f5',
-              background_color: '#f4f2f5',
+              theme_color: '#f6f2f6',
+              background_color: '#f6f2f6',
               display: 'standalone',
               icons: [
                 { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },

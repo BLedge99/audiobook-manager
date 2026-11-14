@@ -60,13 +60,16 @@
 
   /* dark: the same machine, lit from inside, for listening in bed.
      Deeper ground (near-black, warm plum cast) so covers and glow read as the
-     light sources; the ink ramp is brightened to match. */
+     light sources. The ink ramp is off-white rather than near-white: full
+     white reads as glare on a dark screen, which is the one thing this room
+     is not. Ramp floor is a >= 4.4:1 text pair on panel-hi (ink-3) and
+     >= 4.5:1 on the bar's worst-case glass (ink-2); see the .bar comment. */
   --d-ground: #100e15;
   --d-surface: #1e1b26;
   --d-sunk: #0c0a10;
-  --d-ink: #faf8fd;
-  --d-ink-2: #c9c3d3;
-  --d-ink-3: #a89fb5;
+  --d-ink: #e8e4ee;
+  --d-ink-2: #c6c1cf;
+  --d-ink-3: #928ca1;
   --d-line: #322d40;
   --d-rasp: #ff5c87;
   --d-rasp-ink: #ffa8c1;
@@ -117,9 +120,10 @@
   --t-slow: 420ms;
   --t-dispense: 720ms;
 
-  /* Glass is used in exactly two places -- the top bar and the tab rail -- and
-     only because both genuinely sit over scrolling content. Anywhere else it
-     would be decoration, so there is no generic `.glass` utility.
+  /* Glass is used in exactly two chrome places -- the top bar and the tab
+     rail -- and only because both genuinely sit over scrolling content. The
+     selectable-glass family (picker capsules, chips) is the third use, added
+     in pass 3: it is a control you press, not a pane of chrome.
 
      The opacity is high on purpose. At 72% the frosted panel looked correct
      over the plain light ground in a screenshot, and turned out to be
@@ -128,9 +132,9 @@
      a treatment, not a licence to make text unreadable.
 
      Dark mode sits lower (88%, and 86% on the bar, which sits over the larger
-     art at the top edge). Measured worst case over pure-white cover art, ink
-     and ink-2 text keep >= 4.7:1 -- see the `.bar` comment for the table.
-     Light mode is unchanged at 93%. */
+     art at the top edge). Contrast vs pure-white art stays >= 4.5:1 for the
+     bar's ink-2 small text and far above for ink -- see the `.bar` comment
+     for the table. Light mode is unchanged at 93%. */
   --glass: color-mix(in srgb, var(--surface) 93%, transparent);
 
   /* The room the machine stands in. A horizon wash across the top ~40% of the
@@ -160,13 +164,33 @@
   /* Aero material tokens. One definition per theme; the component classes only
      reference these. The sheen is deliberately visible now -- pass 1's version
      was within rounding error of the flat surface, which is why the detail
-     sheet read as unchanged. */
+     sheet read as unchanged.
+
+     THE SHARED GLASS RECIPE. Every pane of glass in the app draws from the
+     same four tokens, so a future tweak lands everywhere at once:
+       --glass-spec    the vertical light sheen laid over the fill
+       --glass-inset   the 1px specular top edge (inner highlight)
+       --glass-edge    the hairline border that bounds the pane
+       --glass-glow    the low-alpha accent-family halo (selectables)
+     Chrome (bar, rail) carries spec + inset + edge plus its directional rim
+     shadow; selectables (profile-picker capsules, chips) add the fill and the
+     glow. backdrop-filter is always blur + saturate(1.15). */
   --panel-hi: #ffffff;
   --panel-lo: #ddd8e0;
-  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.18) 45%, transparent 80%);
-  --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --glass-spec: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.18) 45%, transparent 80%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --glass-edge: color-mix(in srgb, var(--ink) 28%, transparent);
   --glass-rim-bar: 0 12px 30px -20px rgba(27, 23, 32, 0.42);
   --glass-rim-rail: 0 -12px 30px -20px rgba(27, 23, 32, 0.42);
+  /* The selectable-glass fill: the surface at ~68%, so the room reads through
+     the control instead of the control reading as a painted chip. Only the
+     selectables use it; the bar/rail legibility-tested --glass stays denser. */
+  --select-fill: color-mix(in srgb, var(--surface) 68%, transparent);
+  /* The ambient halo, rasp-leaning warm (light) / plum-rasp (dark). Low alpha
+     at rest, stronger on hover/focus, compressed on press. Never a beacon. */
+  --glass-glow: 0 0 26px -12px color-mix(in srgb, var(--rasp) 30%, transparent);
+  --glass-glow-hot: 0 0 34px -10px color-mix(in srgb, var(--rasp) 42%, transparent);
+  --glass-glow-press: 0 0 16px -12px color-mix(in srgb, var(--rasp) 27%, transparent);
   --panel-sheen: linear-gradient(180deg, var(--panel-hi) 0%, var(--surface) 26%, var(--panel-lo) 112%);
 }
 
@@ -204,10 +228,15 @@
     --atmo-vignette: linear-gradient(180deg, transparent 50%, rgba(2, 2, 5, 0.36) 100%);
     --panel-hi: #282433;
     --panel-lo: #16131e;
-    --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 45%, transparent 80%);
-    --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-spec: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 45%, transparent 80%);
+    --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-edge: color-mix(in srgb, var(--ink) 21%, transparent);
     --glass-rim-bar: 0 12px 34px -18px rgba(0, 0, 0, 0.62);
     --glass-rim-rail: 0 -12px 34px -18px rgba(0, 0, 0, 0.62);
+    --select-fill: color-mix(in srgb, var(--surface) 64%, transparent);
+    --glass-glow: 0 0 30px -12px color-mix(in srgb, var(--rasp) 36%, transparent);
+    --glass-glow-hot: 0 0 38px -10px color-mix(in srgb, var(--rasp) 48%, transparent);
+    --glass-glow-press: 0 0 18px -12px color-mix(in srgb, var(--rasp) 32%, transparent);
   }
 }
 
@@ -243,10 +272,15 @@
   --atmo-vignette: linear-gradient(180deg, transparent 50%, rgba(2, 2, 5, 0.36) 100%);
   --panel-hi: #282433;
   --panel-lo: #16131e;
-  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 45%, transparent 80%);
-  --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --glass-spec: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 45%, transparent 80%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --glass-edge: color-mix(in srgb, var(--ink) 21%, transparent);
   --glass-rim-bar: 0 12px 34px -18px rgba(0, 0, 0, 0.62);
   --glass-rim-rail: 0 -12px 34px -18px rgba(0, 0, 0, 0.62);
+  --select-fill: color-mix(in srgb, var(--surface) 64%, transparent);
+  --glass-glow: 0 0 30px -12px color-mix(in srgb, var(--rasp) 36%, transparent);
+  --glass-glow-hot: 0 0 38px -10px color-mix(in srgb, var(--rasp) 48%, transparent);
+  --glass-glow-press: 0 0 18px -12px color-mix(in srgb, var(--rasp) 32%, transparent);
 }
 
 @theme inline {
@@ -1040,13 +1074,14 @@ button:focus {
 /* The close button on the detail sheet reads as glass, not paint: the shared
    sheen and inner specular highlight from the bar/rail treatment at button
    scale, plus the 1px top specular edge. Backdrop-filter is safe here -- the
-   button has no positioned descendants. */
+   button has no positioned descendants. Chrome, not a selectable: no accent
+   glow, and the saturation matches the rest of the glass (1.15). */
 .iconbtn--glass {
-  background: var(--glass-sheen), var(--glass);
-  box-shadow: var(--glass-inner);
-  border-color: color-mix(in srgb, var(--ink) 30%, transparent);
-  backdrop-filter: blur(10px) saturate(1.2);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  background: var(--glass-spec), var(--glass);
+  box-shadow: var(--glass-inset);
+  border-color: var(--glass-edge);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
 }
 .iconbtn--glass:hover {
   color: var(--ink);
@@ -1074,6 +1109,25 @@ button:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--cobalt) 25%, transparent);
 }
 
+/* Selectable glass. One material for everything you pick with: the profile
+   picker's capsules (`.capsule--select`, used in ProfileGate) and the chip
+   family (`.chip`, used by the filter bar, the tag editor and the primitives
+   <Chip>). Both draw from the same tokens, so the pair always moves together.
+
+   The recipe, in paint order:
+     1. --glass-spec over --select-fill  -- the sheen stripe and the
+        translucent fill; the room reads through the control
+     2. --glass-inset                    -- 1px specular top edge
+     3. --glass-glow                     -- low-alpha accent-family halo
+     4. --glass-edge hairline            -- theme-true border (ink at 28%
+        light, pearl/off-white at 21% dark)
+   On hover or :focus-visible the halo strengthens; while pressed it
+   compresses. Static -- no animation -- so it never becomes a beacon. The
+   capsules additionally keep their cant and offset shadow (they are capsules);
+   chips stay flat canted pills. No backdrop-filter on chips: they scroll in
+   long horizontal rows where per-chip blur would cost every frame, and the
+   fill reads fine over the panel behind them. The picker capsules (a handful,
+   on a static gate backdrop) do get blur(10px) saturate(1.15). */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -1081,8 +1135,9 @@ button:focus {
   min-height: 36px;
   padding: 0 14px;
   border-radius: 99px;
-  border: 1.5px solid color-mix(in srgb, var(--ink) 30%, transparent);
-  background: var(--surface);
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-spec), var(--select-fill);
+  box-shadow: var(--glass-inset), var(--glass-glow);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -1090,7 +1145,8 @@ button:focus {
   transition:
     background var(--t-fast) var(--ease),
     border-color var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+    transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
 }
 .chip[aria-pressed="true"],
 .chip[data-on="true"] {
@@ -1100,6 +1156,59 @@ button:focus {
 }
 .chip:hover {
   transform: translateY(-1px) rotate(-1deg);
+  box-shadow: var(--glass-inset), var(--glass-glow-hot);
+}
+.chip:focus-visible {
+  box-shadow: var(--glass-inset), var(--glass-glow-hot);
+}
+.chip:active {
+  box-shadow: var(--glass-inset), var(--glass-glow-press);
+}
+/* Disabled chips (the tag editor is inert outside edit mode) must not lift or
+   glow on hover -- the affordance would be a lie. */
+.chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.chip:disabled:hover,
+.chip:disabled:focus-visible {
+  transform: none;
+  box-shadow: var(--glass-inset), var(--glass-glow);
+}
+
+/* The profile-picker capsule (`.capsule` + this modifier, ProfileGate). The
+   capsule keeps EVERYTHING that makes it a capsule -- cant, press physics,
+   offset shadow, hover straighten -- and swaps only its material: the solid
+   two-pixel imperturbability becomes the shared selectable-glass recipe with
+   the halo. Blur is affordable here (a handful of capsules on a static gate
+   backdrop); the children are static, so the containing-block rule never
+   bites. `border` drops to the hairline; the avatar ring inside keeps its
+   2px stroke, which is what keeps the person legible on the glass. */
+.capsule--select {
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-spec), var(--select-fill);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  box-shadow:
+    0 2px 0 -1px color-mix(in srgb, var(--ink) 26%, transparent),
+    0 12px 20px -16px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-inset),
+    var(--glass-glow);
+}
+.capsule--select:hover,
+.capsule--select:focus-visible {
+  box-shadow:
+    0 4px 0 -1px color-mix(in srgb, var(--ink) 30%, transparent),
+    0 18px 28px -18px color-mix(in srgb, var(--ink) 85%, transparent),
+    var(--glass-inset),
+    var(--glass-glow-hot);
+}
+.capsule--select:active {
+  box-shadow:
+    0 1px 0 -1px color-mix(in srgb, var(--ink) 26%, transparent),
+    0 8px 14px -14px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-inset),
+    var(--glass-glow-press);
 }
 
 /* ---- 8. shell ---- */
@@ -1124,7 +1233,7 @@ button:focus {
   position: sticky;
   top: 0;
   z-index: 30;
-  border-bottom: var(--stroke) solid color-mix(in srgb, var(--ink) 26%, transparent);
+  border-bottom: var(--stroke) solid var(--glass-edge);
   /* Soft outer rim shadow, so the bar reads as a shell hovering over the
      scrolling content rather than a painted line. */
   box-shadow: var(--glass-rim-bar);
@@ -1144,31 +1253,33 @@ button:focus {
      sheen strip (10% white at the very top edge):
 
                        art = white, flat    + top sheen strip
-       ink   #faf8fd     10.40 : 1           7.64 : 1
-       ink-2 #c9c3d3      6.39 : 1           4.69 : 1   <- bar's small text
-       ink-3 #a89fb5      4.33 : 1           3.18 : 1   <- sub-AA, do not use
+       ink   #e8e4ee      8.78 : 1           6.47 : 1
+       ink-2 #c6c1cf      6.25 : 1           4.60 : 1   <- bar's small text
+       ink-3 #928ca1      3.40 : 1           2.50 : 1   <- sub-AA, do not use
      Rail at 88% over the same art, flat / + sheen:
-       ink                 11.21 : 1           8.23 : 1
-       ink-2                6.89 : 1           5.05 : 1
+       ink                 9.40 : 1           6.90 : 1
+       ink-2               6.69 : 1           4.91 : 1
 
-     So the bar's one small line of text moved from ink-3 to ink-2 (App.tsx);
-     nothing else on bar or rail dips below 4.5:1. */
-  background: var(--glass-sheen), var(--glass-bar, var(--glass));
-  box-shadow: var(--glass-inner);
+     So the bar's one small line of text stays ink-2 (App.tsx); nothing on
+     bar or rail dips below 4.5:1. The dark ink ramp (pass 3) is off-white --
+     #e8e4ee / #c6c1cf / #928ca1 -- not near-white: enough elevation over the
+     dark ground to read, low enough to keep the room dark. */
+  background: var(--glass-spec), var(--glass-bar, var(--glass));
+  box-shadow: var(--glass-inset);
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
 }
 /* Safe to filter directly: the rail has no fixed-position descendants, so it
    traps no containing block. Dark mode glass is 88% here; light is 93%.
-   Worst case over pure-white art with the sheen strip: ink 8.23:1, ink-2
-   5.05:1. See .bar for the full table. */
+   Worst case over pure-white art with the sheen strip: ink 6.90:1, ink-2
+   4.91:1. See .bar for the full table. */
 .rail {
   position: relative;
-  background: var(--glass-sheen), var(--glass);
-  box-shadow: var(--glass-inner), var(--glass-rim-rail);
+  background: var(--glass-spec), var(--glass);
+  box-shadow: var(--glass-inset), var(--glass-rim-rail);
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  border-top: var(--stroke) solid color-mix(in srgb, var(--ink) 26%, transparent);
+  border-top: var(--stroke) solid var(--glass-edge);
 }
 /* The opaque twin of the body backdrop, for the full-screen containers that
    must cover the app behind them (settings, gates, the app shell). Same

@@ -113,7 +113,12 @@ export function ProfileGate({
                 type="button"
                 onClick={() => select(profile.id)}
                 className={cn(
-                  "capsule flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
+                  /* The selectable-glass material (pass 3): translucent fill,
+                     theme-true hairline, inner specular top edge and the
+                     accent-family halo -- shared with the chip family via the
+                     --glass-* / --select-fill tokens. Cant and press physics
+                     stay .capsule's. */
+                  "capsule capsule--select flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
                   index % 2 ? "capsule--alt" : "",
                 )}
               >
