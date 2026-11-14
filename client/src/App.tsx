@@ -799,7 +799,10 @@ function App() {
                 document never exceeds the viewport. */}
             <div className="min-w-0 flex-1">
               <h1 className="wordmark truncate">{copy.brand.name}</h1>
-              <p className="mt-0.5 truncate text-[12px] font-semibold text-ink3 tnum">
+              {/* ink-2, not ink-3: ink-3 lands at 3.2:1 over the dark bar at
+                  its clearest-possible art background, below AA. ink-2 clears
+                  4.7:1 even with the top sheen strip -- see .bar in index.css. */}
+              <p className="mt-0.5 truncate text-[12px] font-semibold text-ink2 tnum">
                 {copy.shell.libraryCount(libraryBooks.length, roots.length)}
               </p>
             </div>

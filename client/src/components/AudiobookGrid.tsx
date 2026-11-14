@@ -12,6 +12,7 @@ import {
   totalDuration,
 } from "../lib/position";
 import { headingText, remainingLabel } from "../lib/segmentCopy";
+import { dispenseShakeThen } from "../lib/dispense";
 import { copy } from "../copy";
 import {
   CapsuleMarks,
@@ -116,7 +117,10 @@ const LibraryCard = memo(function LibraryCard({
         needsReview && "ring-2 ring-rasp",
       )}
     >
-      <button onClick={() => onSelect(book)} className="relative block w-full text-left">
+      <button
+        onClick={(event) => dispenseShakeThen(event.currentTarget, () => onSelect(book))}
+        className="relative block w-full text-left"
+      >
         {/* In flow, above the cover. As an absolutely positioned tab it was
             clipped by the neighbouring capsule in a tight 2-across grid, and a
             ring alone was too quiet to say "this changed" -- which is the whole
@@ -230,7 +234,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
           return (
             <button
               key={`${book.serverId ?? ""}#${book.id}`}
-              onClick={() => onSelect(book)}
+              onClick={(event) => dispenseShakeThen(event.currentTarget, () => onSelect(book))}
               className={cn(
                 "capsule flex shrink-0 snap-start items-center gap-3 p-3 text-left",
                 index % 2 ? "capsule--alt" : "",
