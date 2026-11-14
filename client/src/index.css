@@ -60,16 +60,18 @@
 
   /* dark: the same machine, lit from inside, for listening in bed.
      Deeper ground (near-black, warm plum cast) so covers and glow read as the
-     light sources. The ink ramp is off-white rather than near-white: full
-     white reads as glare on a dark screen, which is the one thing this room
-     is not. Ramp floor is a >= 4.4:1 text pair on panel-hi (ink-3) and
-     >= 4.5:1 on the bar's worst-case glass (ink-2); see the .bar comment. */
+     light sources. The ink ramp is deliberately mid-tone lavender-grey, well
+     below near-white: pass 3's off-white ramp still read as glare on the
+     phone. ink-3 is only retained for metadata set on the opaque atmosphere
+     (4.65:1 vs atmo-hi, 4.93:1 vs atmo-lo); on surface and panel-hi it dips
+     below 4.5:1, as does ink-2 over the bar/rail sheen strip -- see the
+     ramp table in DESIGN.md and the .bar comment. */
   --d-ground: #100e15;
   --d-surface: #1e1b26;
   --d-sunk: #0c0a10;
-  --d-ink: #e8e4ee;
-  --d-ink-2: #c6c1cf;
-  --d-ink-3: #928ca1;
+  --d-ink: #cdd0da;
+  --d-ink-2: #a9a4b8;
+  --d-ink-3: #827d92;
   --d-line: #322d40;
   --d-rasp: #ff5c87;
   --d-rasp-ink: #ffa8c1;
@@ -132,9 +134,10 @@
      a treatment, not a licence to make text unreadable.
 
      Dark mode sits lower (88%, and 86% on the bar, which sits over the larger
-     art at the top edge). Contrast vs pure-white art stays >= 4.5:1 for the
-     bar's ink-2 small text and far above for ink -- see the `.bar` comment
-     for the table. Light mode is unchanged at 93%. */
+     art at the top edge). Contrast vs pure-white art: the bar's one small
+     line is --ink (5.23:1 with the top sheen strip); ink-2 clears 4.54:1 on
+     flat bar glass and dips below AA under the strip -- see the `.bar`
+     comment for the table. Light mode is unchanged at 93%. */
   --glass: color-mix(in srgb, var(--surface) 93%, transparent);
 
   /* The room the machine stands in. A horizon wash across the top ~40% of the
@@ -174,7 +177,9 @@
        --glass-glow    the low-alpha accent-family halo (selectables)
      Chrome (bar, rail) carries spec + inset + edge plus its directional rim
      shadow; selectables (profile-picker capsules, chips) add the fill and the
-     glow. backdrop-filter is always blur + saturate(1.15). */
+     glow; the primary CTA carries the same glow and a rasp-hued spec/inset/
+     edge trio (--btn-sheen / --btn-inset / --btn-edge). backdrop-filter is
+     always blur + saturate(1.15) where used. */
   --panel-hi: #ffffff;
   --panel-lo: #ddd8e0;
   --glass-spec: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.18) 45%, transparent 80%);
@@ -192,6 +197,32 @@
   --glass-glow-hot: 0 0 34px -10px color-mix(in srgb, var(--rasp) 42%, transparent);
   --glass-glow-press: 0 0 16px -12px color-mix(in srgb, var(--rasp) 27%, transparent);
   --panel-sheen: linear-gradient(180deg, var(--panel-hi) 0%, var(--surface) 26%, var(--panel-lo) 112%);
+
+  /* The primary CTA's hue parameter. Same world as the shared glass recipe
+     above -- one material, rasp-family hue -- so chips, selectables, bar/rail,
+     iconbtn and the primary all draw from the same sheen/inset/edge/glow
+     language.
+
+     The fill is SIMULATED translucency, layered over an opaque base, for the
+     same reason the chips simulate print layering and for a harder one:
+     nothing should bleed through a control carrying white text, and the
+     opaque base is what lets white glyphs hold >= 4.5:1 across every row of
+     the gradient. The 82-90% alpha lives in --btn-grad, which is layered
+     exactly as painted: --btn-sheen over --btn-grad over --btn-base.
+     Top rim lit (#d2104e), deepened base (#8f002e). --btn-sheen is the
+     rasp-tinted falloff at deliberately low alpha -- white text must stay
+     AA at every row, so this cannot be the chips' .62 white -- and
+     --btn-inset is the 1px specular top edge (.55) fading by ~30% (.385),
+     rasp-tinted. The halo is the untouched --glass-glow* family: one
+     recipe, hue only. No backdrop-filter anywhere in the primary.
+
+     Effective composite under white glyphs, per painted row (sheen incl.):
+     4.77:1 at the top edge, rising to 9.51:1 at the base. */
+  --btn-base: #8f002e;
+  --btn-grad: linear-gradient(180deg, rgba(210, 16, 78, 0.9) 0%, rgba(180, 18, 68, 0.9) 50%, rgba(143, 0, 46, 0.9) 100%);
+  --btn-sheen: linear-gradient(180deg, rgba(255, 223, 231, 0.16) 0%, rgba(255, 223, 231, 0.07) 28%, transparent 60%);
+  --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 3px 6px -3px rgba(255, 228, 233, 0.385);
+  --btn-edge: rgba(255, 226, 234, 0.68);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -237,6 +268,15 @@
     --glass-glow: 0 0 30px -12px color-mix(in srgb, var(--rasp) 36%, transparent);
     --glass-glow-hot: 0 0 38px -10px color-mix(in srgb, var(--rasp) 48%, transparent);
     --glass-glow-press: 0 0 18px -12px color-mix(in srgb, var(--rasp) 32%, transparent);
+    /* Primary CTA, dark twin of the light block. Deepened base (#6d0023) so
+       the room stays dark; same stops, slightly shallower sheen. Effective
+       composite under white glyphs: 4.91:1 at the top edge, rising to
+       11.39:1 at the base. */
+    --btn-base: #6d0023;
+    --btn-grad: linear-gradient(180deg, rgba(210, 16, 78, 0.9) 0%, rgba(180, 18, 72, 0.9) 50%, rgba(122, 0, 40, 0.9) 100%);
+    --btn-sheen: linear-gradient(180deg, rgba(255, 213, 222, 0.16) 0%, rgba(255, 213, 222, 0.07) 28%, transparent 60%);
+    --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 3px 6px -3px rgba(255, 222, 229, 0.35);
+    --btn-edge: rgba(255, 205, 220, 0.5);
   }
 }
 
@@ -281,6 +321,15 @@
   --glass-glow: 0 0 30px -12px color-mix(in srgb, var(--rasp) 36%, transparent);
   --glass-glow-hot: 0 0 38px -10px color-mix(in srgb, var(--rasp) 48%, transparent);
   --glass-glow-press: 0 0 18px -12px color-mix(in srgb, var(--rasp) 32%, transparent);
+  /* Primary CTA, dark twin of the light block. Deepened base (#6d0023) so
+     the room stays dark; same stops, slightly shallower sheen. Effective
+     composite under white glyphs: 4.91:1 at the top edge, rising to
+     11.39:1 at the base. */
+  --btn-base: #6d0023;
+  --btn-grad: linear-gradient(180deg, rgba(210, 16, 78, 0.9) 0%, rgba(180, 18, 72, 0.9) 50%, rgba(122, 0, 40, 0.9) 100%);
+  --btn-sheen: linear-gradient(180deg, rgba(255, 213, 222, 0.16) 0%, rgba(255, 213, 222, 0.07) 28%, transparent 60%);
+  --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 3px 6px -3px rgba(255, 222, 229, 0.35);
+  --btn-edge: rgba(255, 205, 220, 0.5);
 }
 
 @theme inline {
@@ -770,20 +819,6 @@ button:focus {
       0 0 48px -10px color-mix(in srgb, var(--rasp) 51%, transparent);
   }
 }
-:root[data-theme="dark"] .btn--primary {
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.35),
-    0 3px 0 color-mix(in srgb, var(--ink) 80%, transparent),
-    0 0 40px -14px color-mix(in srgb, var(--rasp) 38%, transparent);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .btn--primary {
-    box-shadow:
-      inset 0 2px 0 rgba(255, 255, 255, 0.35),
-      0 3px 0 color-mix(in srgb, var(--ink) 80%, transparent),
-      0 0 40px -14px color-mix(in srgb, var(--rasp) 38%, transparent);
-  }
-}
 .dome__play {
   width: 0;
   height: 0;
@@ -1023,12 +1058,42 @@ button:focus {
   cursor: not-allowed;
   box-shadow: none;
 }
-.btn--primary {
-  background: var(--rasp);
-  color: #fff;
+/* The primary CTA: the shared glass recipe with a rasp hue parameter.
+   Painted bottom-to-top: opaque --btn-base (so nothing bleeds through a
+   control carrying white text), the 82-90% alpha --btn-grad (top rim lit,
+   deepened base), then --btn-sheen, the rasp-tinted falloff that fades by
+   ~28% -- deliberately faint, because white glyphs must hold >= 4.5:1 at
+   every row (4.77 light / 4.91 dark, see the :root comment). Hairline
+   rasp-pearl edge (--btn-edge), the 1px specular top edge at .55 fading by
+   ~30% to .385 (--btn-inset), and the SAME --glass-glow halo the picker
+   capsules and chips carry -- one recipe, hue only. No backdrop-filter.
+   Hover strengthens the halo one notch and the shell travels 1px; press
+   travels 3px into the shadow and compresses the halo to the press tier;
+   focus-visible keeps the global cobalt ring. `.btn.btn--primary` (not a
+   bare modifier) so the hairline and glow also beat `.btn--sm`'s 1.5px
+   border and the base `.btn:hover/:active` shadows by specificity. */
+.btn.btn--primary {
+  border: 1px solid var(--btn-edge);
+  background: var(--btn-sheen), var(--btn-grad), var(--btn-base);
+  color: #ffffff;
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.35),
-    0 3px 0 color-mix(in srgb, var(--ink) 80%, transparent);
+    var(--btn-inset),
+    0 3px 0 -1px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-glow);
+}
+.btn.btn--primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    var(--btn-inset),
+    0 5px 0 -1px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-glow-hot);
+}
+.btn.btn--primary:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    var(--btn-inset),
+    0 0 0 -1px color-mix(in srgb, var(--ink) 80%, transparent),
+    var(--glass-glow-press);
 }
 .btn--mint {
   background: var(--mint);
@@ -1252,18 +1317,22 @@ button:focus {
      behind the bar (dark theme). Composite = glass over art, then the top
      sheen strip (10% white at the very top edge):
 
-                       art = white, flat    + top sheen strip
-       ink   #e8e4ee      8.78 : 1           6.47 : 1
-       ink-2 #c6c1cf      6.25 : 1           4.60 : 1   <- bar's small text
-       ink-3 #928ca1      3.40 : 1           2.50 : 1   <- sub-AA, do not use
+                           art = white, flat    + top sheen strip
+     ink   #cdd0da      7.12 : 1           5.23 : 1
+     ink-2 #a9a4b8      4.54 : 1           3.33 : 1   <- sheen dips below AA
+     ink-3 #827d92      2.77 : 1           2.03 : 1   <- sub-AA, do not use
      Rail at 88% over the same art, flat / + sheen:
-       ink                 9.40 : 1           6.90 : 1
-       ink-2               6.69 : 1           4.91 : 1
+     ink                 7.68 : 1           5.63 : 1
+     ink-2               4.89 : 1           3.59 : 1   <- sheen dips below AA
 
-     So the bar's one small line of text stays ink-2 (App.tsx); nothing on
-     bar or rail dips below 4.5:1. The dark ink ramp (pass 3) is off-white --
-     #e8e4ee / #c6c1cf / #928ca1 -- not near-white: enough elevation over the
-     dark ground to read, low enough to keep the room dark. */
+     Pass 4 darkened the ramp (#cdd0da / #a9a4b8 / #827d92) past the point
+     where ink-2 could carry the bar's small line against the sheen strip,
+     so that line is now set in --ink (App.tsx), which clears 5.23:1 even with
+     the strip. ink-2 stays valid on flat glass (4.54 bar / 4.89 rail); the
+     +sheen column is the paint-order worst case at the very top edge, where
+     no glyphs sit -- it is published, not used. The dark ink ramp (pass 4) is
+     mid-tone, not near-white: the room stays dark. See DESIGN.md for the full
+     ramp table. */
   background: var(--glass-spec), var(--glass-bar, var(--glass));
   box-shadow: var(--glass-inset);
   backdrop-filter: blur(14px) saturate(1.15);
@@ -1271,8 +1340,11 @@ button:focus {
 }
 /* Safe to filter directly: the rail has no fixed-position descendants, so it
    traps no containing block. Dark mode glass is 88% here; light is 93%.
-   Worst case over pure-white art with the sheen strip: ink 6.90:1, ink-2
-   4.91:1. See .bar for the full table. */
+   Worst case over pure-white art: ink 7.68:1 flat / 5.63:1 under the sheen
+   strip; ink-2 4.89:1 flat / 3.59:1 under it. The phone rail's tab labels
+   sit at the vertical centre of the element, where the sheen is ~2-3%
+   (ink-2 ~= 4.5-4.6:1) -- the thinnest AA pair in the app, flagged rather
+   than hidden. Do not set small text at the rail's top edge. */
 .rail {
   position: relative;
   background: var(--glass-spec), var(--glass);
