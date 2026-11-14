@@ -624,16 +624,16 @@ export function AccountGate({
           {!loading && !finishing && mode.kind === "list" && accountExperience === "demo" && (
             <>
               <div className="mt-5 grid min-w-0 gap-3">
-                <button type="button" onClick={() => setConfirmOauth("google")} className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                <button type="button" onClick={() => setConfirmOauth("google")} className="btn btn--glass w-full text-left">
                   {copy.login.oauthGoogleAction}
                 </button>
-                <button type="button" onClick={() => startOAuth("github")} className="block w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                <button type="button" onClick={() => startOAuth("github")} className="btn btn--glass w-full text-left">
                   {copy.login.oauthGithubAction}
                 </button>
-                <button type="button" onClick={() => { setError(undefined); setMode({ kind: "email" }); }} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                <button type="button" onClick={() => { setError(undefined); setMode({ kind: "email" }); }} className="btn btn--glass w-full text-left">
                   {copy.login.emailAction}
                 </button>
-                <button type="button" onClick={() => { setEmailSignup(true); setError(undefined); setMode({ kind: "email" }); }} className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink">
+                <button type="button" onClick={() => { setEmailSignup(true); setError(undefined); setMode({ kind: "email" }); }} className="btn btn--glass w-full text-left">
                   {copy.login.emailCreateAction}
                 </button>
               </div>
@@ -711,7 +711,7 @@ export function AccountGate({
                   <button
                     type="button"
                     onClick={() => setConfirmOauth("google")}
-                    className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
+                    className="btn btn--glass w-full text-left"
                   >
                     {copy.login.oauthGoogleAction}
                   </button>
@@ -720,7 +720,7 @@ export function AccountGate({
                   <button
                     type="button"
                     onClick={() => startOAuth("github")}
-                    className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
+                    className="btn btn--glass w-full text-left"
                   >
                     {copy.login.oauthGithubAction}
                   </button>
@@ -731,7 +731,7 @@ export function AccountGate({
                     setError(undefined);
                     setMode({ kind: "email" });
                   }}
-                  className="w-full rounded-2xl border-2 border-ink bg-tan/40 px-4 py-3 text-left text-sm font-bold text-ink"
+                  className="btn btn--glass w-full text-left"
                 >
                   {copy.login.emailAction}
                 </button>
