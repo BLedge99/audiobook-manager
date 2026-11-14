@@ -40,6 +40,11 @@ describe("normalizeSubjects", () => {
     expect(normalizeSubjects(undefined)).toEqual([]);
     expect(normalizeSubjects("Magic fiction")).toEqual([]);
   });
+
+  it("caps at 20 distinct subjects: the wishlist endpoint refuses payloads with more", () => {
+    const raw = Array.from({ length: 45 }, (_, i) => `genre-${i}`);
+    expect(normalizeSubjects(raw)).toHaveLength(20);
+  });
 });
 
 describe("pickLanguage", () => {

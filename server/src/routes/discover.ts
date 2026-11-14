@@ -203,7 +203,7 @@ export async function registerDiscoverRoutes(
 
     const item = await recommendations.saveToWishlist(
       profileId,
-      { ...body, narrators: body.narrators ?? [], genres: body.genres ?? [], score: 0, reason: { code: "related" } },
+      { ...body, narrators: body.narrators ?? [], genres: (body.genres ?? []).slice(0, 20), score: 0, reason: { code: "related" } },
       body.seedMediaItemId,
     );
     return reply.code(201).send(publicWishlistItem(item));

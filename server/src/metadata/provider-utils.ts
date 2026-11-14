@@ -40,6 +40,10 @@ export function isJunkSubject(value: string): boolean {
  *   "Wizards -- Juvenile fiction", "Harry Potter (Fictitious character) -- Fiction"
  * Keep the most specific head and drop the qualifiers, which describe the
  * character or the audience rather than the genre.
+ *
+ * Cap at 20 after filtering: Open Library pools many subjects per edition,
+ * which is more context than anything downstream can use, and the wishlist
+ * route refuses payloads with more than 20 genres.
  */
 export function normalizeSubjects(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -53,7 +57,9 @@ export function normalizeSubjects(raw: unknown): string[] {
       .trim();
     if (cleaned.length < 3 || cleaned.length > 60) continue;
     if (isJunkSubject(cleaned)) continue;
-    if (!out.some((value) => value.toLowerCase() === cleaned.toLowerCase())) out.push(cleaned);
+    if (out.some((value) => value.toLowerCase() === cleaned.toLowerCase())) continue;
+    out.push(cleaned);
+    if (out.length >= 20) break;
   }
   return out;
 }
