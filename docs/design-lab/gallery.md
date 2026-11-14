@@ -100,20 +100,20 @@ the final call stays with you either way. Gen 1 fitness scores below are not rec
 
 - Branch: `design-lab/gen1/v4` · user-steered iteration, inside identity
 - Concept: same machine, materially lit — a visible horizon wash (rose-coral to pearl),
-  lamp pool top-right, cool lavender settling bottom-left; top-lit panels and specular
-  glass bar/rail; capsule press rock, two-swing hover wobble, dome jelly, dispense shake
-  before detail opens; deeper dark ground; **pass 3**: one off-white ink ramp (ink `#e8e4ee`),
-  one glass recipe everywhere, select buttons translucent with theme-true hairline borders
-  and an accent-family halo, disabled chips finally read as disabled.
-- Guards: **pass** · 895 unit tests pass · pass 3 contrast table recomputed and documented in DESIGN.md
+  lamp pool top-right, cool lavender settling bottom-left; specular glass everywhere from
+  one recipe (bar/rail/chips/selectables/primary CTA, hue parameterised); **pass 3**:
+  off-white ink ramp; **pass 4**: the rasp primary CTA gets the shared glass material
+  (deep gradient, pearl hairline, inner specular, accent halo, white ≥ 4.5:1 across the
+  whole fill); dark ramp genuinely darkened (ink #cdd0da · ink-2 #a9a4b8 · ink-3 #827d92).
+- Guards: **pass** · 895 unit tests pass · pass 4 contrast table in DESIGN.md
 
-| Gate (light) | Library (light) | Library (dark) | Browse (light) | Detail (light) |
+| Gate (light) | Gate (dark) | Library (light) | Library (dark) | Browse (light) |
 |---|---|---|---|---|
-| ![v4 gate light](gen-1/v4/gate-phone-light.png) | ![v4 lib light](gen-1/v4/phone-library-light.png) | ![v4 lib dark](gen-1/v4/phone-library-dark.png) | ![v4 browse light](gen-1/v4/phone-browse-light.png) | ![v4 detail light](gen-1/v4/phone-detail-light.png) |
+| ![v4 gate light](gen-1/v4/gate-phone-light.png) | ![v4 gate dark](gen-1/v4/gate-phone-dark.png) | ![v4 lib light](gen-1/v4/phone-library-light.png) | ![v4 lib dark](gen-1/v4/phone-library-dark.png) | ![v4 browse light](gen-1/v4/phone-browse-light.png) |
 
-| Gate (dark) | Browse (dark) | Desktop (light) | Desktop (dark) |
-|---|---|---|---|
-| ![v4 gate dark](gen-1/v4/gate-phone-dark.png) | ![v4 browse dark](gen-1/v4/phone-browse-dark.png) | ![v4 desktop light](gen-1/v4/desktop-library-light.png) | ![v4 desktop dark](gen-1/v4/desktop-library-dark.png) |
+| Detail (light) | Browse (dark) | Setup CTA (light) | Desktop (light) | Desktop (dark) |
+|---|---|---|---|---|
+| ![v4 detail light](gen-1/v4/phone-detail-light.png) | ![v4 browse dark](gen-1/v4/phone-browse-dark.png) | ![v4 setup rasp](gen-1/v4/setup-rasp-light.png) | ![v4 desktop light](gen-1/v4/desktop-library-light.png) | ![v4 desktop dark](gen-1/v4/desktop-library-dark.png) |
 
 ## Candidates & their pages
 

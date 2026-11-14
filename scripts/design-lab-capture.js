@@ -118,6 +118,23 @@ async function enterApp(page, failures, shot) {
     await page.screenshot({ path: path.join(OUT, "FAILED-gate.png") }).catch(() => undefined);
   }
 
+  // One shot of the deepened primary CTA material: a passwordless profile
+  // opens the "set up" screen whose big submit is .btn--primary — the rasp
+  // gradient with pearl hairline + halo the user asked to see. Leaving the
+  // screen persists nothing.
+  try {
+    const setupButton = page.getByRole("button", { name: /^admin\b/ }).first();
+    await setupButton.click();
+    await page.getByRole("heading", { name: /set up/i }).waitFor({ timeout: 30_000 });
+    await shot(page, "setup-rasp-light");
+    console.log("[lab] captured setup CTA (rasp primary material)");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1200);
+  } catch (error) {
+    failures.push(`setup-CTA capture skipped: ${error.message}`);
+    await page.screenshot({ path: path.join(OUT, "FAILED-setup.png") }).catch(() => undefined);
+  }
+
   // The app takes ~20-45s to finish bootstrapping (per-profile probes fly
   // sequentially through the dev relay). Poll instead of a fixed wait.
   const profileButton = page.getByRole("button", { name: new RegExp("^" + PROFILE + "(\\b|$)") });
