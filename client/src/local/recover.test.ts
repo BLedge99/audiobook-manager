@@ -9,7 +9,7 @@ import {
   parseTrackFile,
   recoverBooks,
 } from "./recover";
-import { downloadedTracks, isFullyDownloaded, trackPath, replicaBookKey, type FileSystemPort } from "./replica";
+import { downloadedTracks, isFullyDownloaded, replicaBookKey, bookDir, type FileSystemPort } from "./replica";
 
 /**
  * Spec 29, phase 5 -- recovering audio that outlived its database row.
@@ -152,8 +152,8 @@ describe("recoverBooks", () => {
     const row = await db.books.get(key(7));
     expect(isFullyDownloaded(row)).toBe(true);
     expect(downloadedTracks(row).map((track) => track.path)).toEqual([
-      trackPath(7, 70, "mp3"),
-      trackPath(7, 71, "mp3"),
+      "books/7/70.mp3",
+      "books/7/71.mp3",
     ]);
     expect(downloadedTracks(row)[0].bytes).toBe(4096);
   });
@@ -212,5 +212,97 @@ describe("recoverBooks", () => {
     const rows = await db.books.toArray();
     expect(rows).toHaveLength(1);
     expect(downloadedTracks(rows[0])).toHaveLength(2);
+  });
+});
+
+const SERVER = "https://home.example";
+const OTHER = "https://other.example";
+const keyFor = (bookId: number, serverId: string) => replicaBookKey(serverId, bookId);
+
+describe("per-server audio layout (spec 41 phase 1)", () => {
+  it("adopts a per-server folder into that server's shelf with per-server paths", async () => {
+    const dir = `books/${bookDir(SERVER)}/7`;
+    const { files } = fakeFiles({ [dir]: ["70.mp3", "71.mp3"] });
+    const result = await recoverBooks([7], {
+      db,
+      files,
+      fetchBook: async () => book(),
+      now: () => new Date("2026-03-01T00:00:00.000Z"),
+      sourceServer: SERVER,
+    });
+
+    expect(result.recovered).toEqual([
+      { bookId: 7, title: "The Left Hand of Darkness", tracks: 2 },
+    ]);
+    const row = await db.books.get(keyFor(7, SERVER));
+    expect(downloadedTracks(row).map((track) => track.path)).toEqual([
+      `${dir}/70.mp3`,
+      `${dir}/71.mp3`,
+    ]);
+    // The legacy key stays untouched; the two shelves never mix.
+    expect(await db.books.get(keyFor(7, ""))).toBeUndefined();
+  });
+
+  it("does not adopt another server's per-server folder", async () => {
+    const foreignDir = `books/${bookDir(OTHER)}/7`;
+    const { files } = fakeFiles({ [foreignDir]: ["70.mp3", "71.mp3"] });
+    const result = await recoverBooks([7], {
+      db,
+      files,
+      fetchBook: async () => book(),
+      sourceServer: SERVER,
+    });
+
+    expect(result.unreadable).toEqual([7]);
+    expect(await db.books.get(keyFor(7, SERVER))).toBeUndefined();
+  });
+
+  it("prefers the per-server layout over a legacy folder of the same id", async () => {
+    const dir = `books/${bookDir(SERVER)}/7`;
+    const { files } = fakeFiles({
+      [dir]: ["70.mp3", "71.mp3"],
+      "books/7": ["70.mp3", "71.mp3"],
+    });
+    const result = await recoverBooks([7], {
+      db,
+      files,
+      fetchBook: async () => book(),
+      sourceServer: SERVER,
+    });
+
+    expect(result.recovered[0].tracks).toBe(2);
+    const row = await db.books.get(keyFor(7, SERVER));
+    expect(downloadedTracks(row).map((track) => track.path)).toEqual([
+      `${dir}/70.mp3`,
+      `${dir}/71.mp3`,
+    ]);
+  });
+
+  it("listUnclaimedOnDevice finds unclaimed audio in the current server's dir and in legacy folders", async () => {
+    const dirName = bookDir(SERVER);
+    const { files } = fakeFiles({
+      books: [dirName, "notes", "9"],
+      [`books/${dirName}`]: ["7", "8", "readme"],
+    });
+    // The union claim set is empty, the server-scoped one claims book 8.
+    await expect(
+      listUnclaimedOnDevice(files, [], SERVER, [8]),
+    ).resolves.toEqual([7, 9]);
+  });
+
+  it("listUnclaimedOnDevice never offers another server's per-server dir", async () => {
+    const mine = bookDir(SERVER);
+    const theirs = bookDir(OTHER);
+    const { files } = fakeFiles({
+      books: [mine, theirs],
+      [`books/${mine}`]: ["7"],
+      [`books/${theirs}`]: ["8"],
+    });
+    await expect(listUnclaimedOnDevice(files, [], SERVER)).resolves.toEqual([7]);
+  });
+
+  it("listUnclaimedOnDevice still works for a pure legacy layout", async () => {
+    const { files } = fakeFiles({ books: ["7", "8", "notes"] });
+    await expect(listUnclaimedOnDevice(files, [7], SERVER)).resolves.toEqual([8]);
   });
 });

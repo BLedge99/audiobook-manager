@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Audiobook } from "../types";
 import { LocalLibraryDatabase } from "./db";
 import { downloadBook, type DownloadProgress } from "./download";
-import { downloadedTracks, isFullyDownloaded, replicaBookKey, type FileSystemPort } from "./replica";
+import { downloadedTracks, isFullyDownloaded, replicaBookKey, bookDir, type FileSystemPort } from "./replica";
 
 function book(overrides: Partial<Audiobook> = {}): Audiobook {
   return {
@@ -71,7 +71,30 @@ describe("downloadBook", () => {
   it("writes each track to a path derived from book and track id", async () => {
     const { files, written } = fakeFiles();
     await downloadBook(book(), { db, files, trackUrl: (id) => `url/${id}` });
-    expect([...written.keys()]).toEqual(["books/7/70.mp3", "books/7/71.mp3"]);
+    expect([...written.keys()]).toEqual(["books/local/7/70.mp3", "books/local/7/71.mp3"]);
+  });
+
+  it("scopes the audio directory to the source server's shelf", async () => {
+    const { files, written } = fakeFiles();
+    await downloadBook(book(), {
+      db,
+      files,
+      trackUrl: (id) => `url/${id}`,
+      sourceServer: "https://a.example",
+    });
+    const paths = [...written.keys()];
+    expect(paths.every((p) => p.startsWith(`books/${bookDir("https://a.example")}/7/`))).toBe(true);
+    expect(paths.join()).not.toContain("a.example");
+
+    // A second server downloading the same numeric book id must not collide.
+    const other = fakeFiles();
+    await downloadBook(book(), {
+      db: new LocalLibraryDatabase(`dl-test-${counter++}`),
+      files: other.files,
+      trackUrl: (id) => `url/${id}`,
+      sourceServer: "https://b.example",
+    });
+    expect([...other.written.keys()].every((p) => !paths.includes(p))).toBe(true);
   });
 
   it("records the byte size so the storage screen is accurate", async () => {
@@ -93,14 +116,14 @@ describe("downloadBook", () => {
   it("uses the book's file format for the extension", async () => {
     const { files, written } = fakeFiles();
     await downloadBook(book({ fileFormat: "m4b" }), { db, files, trackUrl: (id) => `url/${id}` });
-    expect([...written.keys()]).toEqual(["books/7/70.m4b", "books/7/71.m4b"]);
+    expect([...written.keys()]).toEqual(["books/local/7/70.m4b", "books/local/7/71.m4b"]);
   });
 
   it("stores the metadata before any audio, so partial progress is recordable", async () => {
     // Tracks are recorded against the replica row as they land; if metadata
     // were written last, a failure would leave audio on disk that the app has
     // no record of.
-    const { files } = fakeFiles({ failOn: new Set(["books/7/71.mp3"]) });
+    const { files } = fakeFiles({ failOn: new Set(["books/local/7/71.mp3"]) });
     await expect(
       downloadBook(book(), { db, files, trackUrl: (id) => `url/${id}` }),
     ).rejects.toThrow("network died");
@@ -110,7 +133,7 @@ describe("downloadBook", () => {
   });
 
   it("keeps the tracks that arrived before a failure", async () => {
-    const { files } = fakeFiles({ failOn: new Set(["books/7/71.mp3"]) });
+    const { files } = fakeFiles({ failOn: new Set(["books/local/7/71.mp3"]) });
     await expect(
       downloadBook(book(), { db, files, trackUrl: (id) => `url/${id}` }),
     ).rejects.toThrow("network died");
@@ -121,7 +144,7 @@ describe("downloadBook", () => {
   });
 
   it("stops at the first failure rather than hammering the network", async () => {
-    const { files } = fakeFiles({ failOn: new Set(["books/7/70.mp3"]) });
+    const { files } = fakeFiles({ failOn: new Set(["books/local/7/70.mp3"]) });
     await expect(
       downloadBook(book(), { db, files, trackUrl: (id) => `url/${id}` }),
     ).rejects.toThrow("network died");

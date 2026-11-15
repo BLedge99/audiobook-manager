@@ -85,15 +85,14 @@ export function bookDir(serverId: string): string {
 /**
  * Where one track is stored.
  *
- * Keyed by book and track id rather than the track's filename: filenames come
- * from the media files and can collide or contain characters the filesystem
- * dislikes, whereas ids are stable and already safe.
- *
- * The per-server directory (bookDir) is wired in spec 41 step 1.2; this
- * commit changes nothing about the paths on disk.
+ * Keyed by server, book and track id rather than the track's filename:
+ * filenames come from the media files and can collide or contain characters
+ * the filesystem dislikes, whereas ids are stable and already safe. The
+ * server segment is `bookDir(serverId)` -- two servers that both number
+ * their books from 1 must not share a folder.
  */
-export function trackPath(bookId: number, trackId: number, extension = "mp3"): string {
-  return `${BOOK_DIR}/${bookId}/${trackId}.${extension.replace(/^\./, "")}`;
+export function trackPath(serverId: string, bookId: number, trackId: number, extension = "mp3"): string {
+  return `${BOOK_DIR}/${bookDir(serverId)}/${bookId}/${trackId}.${extension.replace(/^\./, "")}`;
 }
 
 /** The file extension to save a track under, from its server-reported format. */

@@ -65,7 +65,7 @@ async function downloaded(bookToStore: Audiobook, serverId = SERVER) {
   for (const track of bookToStore.tracks ?? []) {
     tracks[track.id] = {
       trackId: track.id,
-      path: trackPath(bookToStore.id, track.id),
+      path: trackPath(SERVER, bookToStore.id, track.id),
       bytes: 1024,
       downloadedAt: "2026-01-01T00:00:00.000Z",
     };

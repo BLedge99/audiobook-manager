@@ -38,7 +38,7 @@ function book(overrides: Partial<Audiobook> = {}): Audiobook {
 }
 
 function track(trackId: number, bytes = 1024, bookId = 1) {
-  return { trackId, path: trackPath(bookId, trackId), bytes, downloadedAt: "2026-01-01T00:00:00.000Z" };
+  return { trackId, path: trackPath("", bookId, trackId), bytes, downloadedAt: "2026-01-01T00:00:00.000Z" };
 }
 
 /** In-memory filesystem. Records what was deleted so order can be asserted. */
@@ -99,14 +99,23 @@ describe("bookDir", () => {
 });
 
 describe("trackPath", () => {
-  it("nests by book then track, with no leading slash", () => {
+  it("nests by server dir, book then track, with no leading slash", () => {
     // Capacitor treats a leading slash in `path` as absolute-from-root, which
     // would write outside the app's data directory.
-    expect(trackPath(42, 7)).toBe("books/42/7.mp3");
+    expect(trackPath("", 42, 7)).toBe("books/local/42/7.mp3");
+  });
+
+  it("keys the server segment off the serverId, never off the URL", () => {
+    const a = trackPath("https://a.example", 42, 7);
+    const b = trackPath("https://b.example", 42, 7);
+    expect(a).toBe(`books/${bookDir("https://a.example")}/42/7.mp3`);
+    expect(b).toBe(`books/${bookDir("https://b.example")}/42/7.mp3`);
+    expect(a).not.toBe(b);
+    expect(a).not.toContain("a.example");
   });
 
   it("does not double the dot when the format already has one", () => {
-    expect(trackPath(1, 1, ".m4b")).toBe("books/1/1.m4b");
+    expect(trackPath("", 1, 1, ".m4b")).toBe("books/local/1/1.m4b");
   });
 });
 
@@ -233,6 +242,24 @@ describe("totalReplicaBytes", () => {
   });
 });
 
+describe("legacy rows are never rewritten (spec 41 step 1.6)", () => {
+  it("a row from the pre-41 layout still plays and deletes cleanly", async () => {
+    // Rows written before the per-server layout keep their stored legacy
+    // paths forever. Nothing in this plan migrates them.
+    const legacyTrack = { trackId: 10, path: "books/1/10.mp3", bytes: 4096, downloadedAt: "2026-01-01T00:00:00.000Z" };
+    await putReplicaBook(db, book(), { 10: legacyTrack, 11: { ...legacyTrack, trackId: 11, path: "books/1/11.mp3" } });
+
+    const rows = await db.books.toArray();
+    expect(isFullyDownloaded(rows[0])).toBe(true);
+    expect(downloadedTracks(rows[0]).map((t) => t.path)).toEqual(["books/1/10.mp3", "books/1/11.mp3"]);
+
+    const { files, removed } = fakeFiles();
+    const result = await removeDownloadedBook(db, files, 1);
+    expect(result).toEqual({ removed: true, failed: [] });
+    expect(removed).toEqual(["books/1/10.mp3", "books/1/11.mp3"]);
+  });
+});
+
 describe("removeDownloadedBook", () => {
   it("deletes the files and the record", async () => {
     await putReplicaBook(db, book());
@@ -243,7 +270,7 @@ describe("removeDownloadedBook", () => {
     const result = await removeDownloadedBook(db, files, 1);
 
     expect(result).toEqual({ removed: true, failed: [] });
-    expect(removed).toEqual(["books/1/10.mp3", "books/1/11.mp3"]);
+    expect(removed).toEqual([trackPath("", 1, 10), trackPath("", 1, 11)]);
     expect(await db.books.get(key(1))).toBeUndefined();
   });
 
@@ -274,12 +301,12 @@ describe("removeDownloadedBook", () => {
     await putDownloadedTrack(db, 1, track(10));
     await putDownloadedTrack(db, 1, track(11));
     const { files, failOn } = fakeFiles();
-    failOn.add("books/1/10.mp3");
+    failOn.add(trackPath("", 1, 10));
 
     const result = await removeDownloadedBook(db, files, 1);
 
     expect(result.removed).toBe(true);
-    expect(result.failed).toEqual(["books/1/10.mp3"]);
+    expect(result.failed).toEqual([trackPath("", 1, 10)]);
     expect(await db.books.get(key(1))).toBeUndefined();
   });
 

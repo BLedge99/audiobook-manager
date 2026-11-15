@@ -3,13 +3,22 @@
  *
  * ## The loss this repairs
  *
- * Downloads live in two places: the audio files (`books/<bookId>/<trackId>.<ext>`)
- * and the replica rows in IndexedDB that describe which books and tracks they
- * belong to. The files survive an app-data scare far more often than the rows
- * do -- moving the WebView origin from `http://localhost` to
- * `https://localhost` (ADR 014) left gigabytes of audio behind with nothing in
- * the database pointing at it. From the listener's side that is "my books
- * disappeared"; from the filesystem's side nothing was lost at all.
+ * Downloads live in two places: the audio files and the replica rows in
+ * IndexedDB that describe which books and tracks they belong to. The files
+ * survive an app-data scare far more often than the rows do -- moving the
+ * WebView origin from `http://localhost` to `https://localhost` (ADR 014) left
+ * gigabytes of audio behind with nothing in the database pointing at it. From
+ * the listener's side that is "my books disappeared"; from the filesystem's
+ * side nothing was lost at all.
+ *
+ * ## Where the audio lives
+ *
+ * New downloads write `books/srv-<hash>/<bookId>/` (spec 41): the replica
+ * rows have always been scoped per server, and now the files are too, so two
+ * servers that both number their books from 1 can never share a folder.
+ * Detected-but-unrecoverable audio in the pre-41 layout (`books/<id>/`) is
+ * adopted into the current shelf **without moving the files** -- the rows
+ * keep the legacy paths, because that is where the bytes really are.
  *
  * ## What this deliberately does not do
  *
@@ -24,6 +33,7 @@ import type { Audiobook } from "../types";
 import type { DownloadedTrack, LocalLibraryDatabase } from "./db";
 import {
   BOOK_DIR,
+  bookDir,
   putDownloadedTrack,
   putReplicaBook,
   trackPath,
@@ -55,13 +65,43 @@ export function findUnclaimedBookIds(directories: string[], knownIds: Iterable<n
   return [...found].sort((a, b) => a - b);
 }
 
-/** One `books/` listing, best effort: detection is never allowed to break the app. */
+/**
+ * What unclaimed audio sits on the device, for one shelf.
+ *
+ * Two layouts exist side by side during the spec-41 transition:
+ *
+ *  - per-server, `books/srv-<hash>/<bookId>` — what downloads write now;
+ *    scanned only for `sourceServer`, and only against the ids that shelf
+ *    claims, so another server's shelf can never surface as "unclaimed" audio;
+ *  - legacy, `books/<bookId>` — what the pre-41 layout wrote; scanned at the
+ *    root against the union of everything the device claims, because audio in
+ *    a legacy folder cannot be attributed to a shelf.
+ *
+ * Best effort: detection is never allowed to break the app.
+ */
 export async function listUnclaimedOnDevice(
   files: FileSystemPort,
   knownIds: Iterable<number>,
+  sourceServer = "",
+  sourceServerKnownIds?: Iterable<number>,
 ): Promise<number[]> {
+  const union = new Set(knownIds);
+  const server = new Set(sourceServerKnownIds ?? [...union]);
   try {
-    return findUnclaimedBookIds(await files.listDir(BOOK_DIR), knownIds);
+    const root = await files.listDir(BOOK_DIR);
+    const found = new Set<number>();
+    const shelfDir = bookDir(sourceServer);
+    if (root.includes(shelfDir)) {
+      let shelfEntries: string[] = [];
+      try {
+        shelfEntries = await files.listDir(`${BOOK_DIR}/${shelfDir}`);
+      } catch {
+        // Unreadable shelf dir: treat as empty, not as a failure of detection.
+      }
+      for (const id of findUnclaimedBookIds(shelfEntries, server)) found.add(id);
+    }
+    for (const id of findUnclaimedBookIds(root, union)) found.add(id);
+    return [...found].sort((a, b) => a - b);
   } catch {
     // No `books/` directory yet, or a native listing failure. Either way the
     // honest answer is "we cannot see any", not an error on the shelf.
@@ -128,6 +168,25 @@ export interface RecoveryResult {
   unreadable: number[];
 }
 
+/** Per-book candidate directories, in preference order: current layout first. */
+function adoptionLayouts(
+  sourceServer: string,
+  bookId: number,
+): { tag: "per-server" | "legacy"; dir: string; pathFor: (trackId: number, extension: string) => string }[] {
+  return [
+    {
+      tag: "per-server",
+      dir: `${BOOK_DIR}/${bookDir(sourceServer)}/${bookId}`,
+      pathFor: (trackId, extension) => trackPath(sourceServer, bookId, trackId, extension),
+    },
+    {
+      tag: "legacy",
+      dir: `${BOOK_DIR}/${bookId}`,
+      pathFor: (trackId, extension) => `${BOOK_DIR}/${bookId}/${trackId}.${extension.replace(/^\./, "")}`,
+    },
+  ];
+}
+
 /**
  * Rebuild replica rows from the files that are really on the phone.
  *
@@ -135,6 +194,11 @@ export interface RecoveryResult {
  * indistinguishable from one that downloaded normally: partial books stay
  * partial, complete books become playable immediately, and nothing is deleted.
  * Ids make this idempotent -- running it twice cannot duplicate a track.
+ *
+ * Per-server layout is preferred; the legacy layout is consulted when the
+ * per-server folder is missing or holds nothing recognisable, and adopted
+ * rows keep the legacy path -- the files really live there, and nothing is
+ * moved behind the listener's back.
  */
 export async function recoverBooks(
   bookIds: number[],
@@ -142,6 +206,7 @@ export async function recoverBooks(
 ): Promise<RecoveryResult> {
   const result: RecoveryResult = { recovered: [], missing: [], unmatched: [], unreadable: [] };
   const now = deps.now ?? (() => new Date());
+  const sourceServer = deps.sourceServer ?? "";
 
   for (const bookId of bookIds) {
     let book: Audiobook | "missing";
@@ -156,15 +221,29 @@ export async function recoverBooks(
       continue;
     }
 
-    let names: string[];
-    try {
-      names = await deps.files.listDir(`${BOOK_DIR}/${bookId}`);
-    } catch {
+    let sawListing = false;
+    let matches: ReturnType<typeof matchTrackFiles> = [];
+    let pathFor: ((trackId: number, extension: string) => string) | null = null;
+    for (const candidate of adoptionLayouts(sourceServer, bookId)) {
+      let listing: string[];
+      try {
+        listing = await deps.files.listDir(candidate.dir);
+      } catch {
+        continue;
+      }
+      const found = matchTrackFiles(book, listing);
+      sawListing = true;
+      matches = found;
+      pathFor = candidate.pathFor;
+      if (found.length > 0) break;
+      // A readable folder with nothing recognisable: fall through to legacy,
+      // but remember it was readable even if legacy is not.
+    }
+
+    if (!sawListing || pathFor === null) {
       result.unreadable.push(bookId);
       continue;
     }
-
-    const matches = matchTrackFiles(book, names);
     if (matches.length === 0) {
       result.unmatched.push(bookId);
       continue;
@@ -173,10 +252,10 @@ export async function recoverBooks(
     // Adopt: the metadata row first, then the matched tracks against it. The
     // adoption is tagged with the server it ran against (spec 30), so the audio
     // now lives in that server's shelf.
-    await putReplicaBook(deps.db, book, {}, deps.sourceServer ?? "");
+    await putReplicaBook(deps.db, book, {}, sourceServer);
     const downloadedAt = now().toISOString();
     for (const match of matches) {
-      const path = trackPath(bookId, match.trackId, match.extension);
+      const path = pathFor(match.trackId, match.extension);
       let bytes = 0;
       try {
         bytes = await deps.files.stat(path);
@@ -185,7 +264,7 @@ export async function recoverBooks(
         // abandon the book. It simply reports zero bytes until re-downloaded.
       }
       const track: DownloadedTrack = { trackId: match.trackId, path, bytes, downloadedAt };
-      await putDownloadedTrack(deps.db, bookId, track, deps.sourceServer ?? "");
+      await putDownloadedTrack(deps.db, bookId, track, sourceServer);
     }
 
     result.recovered.push({ bookId, title: book.title, tracks: matches.length });

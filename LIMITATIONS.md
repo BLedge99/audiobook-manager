@@ -140,13 +140,19 @@ made downloads look lost, and are now addressed:
   tap. **This restores the audio and catalogue metadata; it does not restore the
   old progress or favourites**, which were encrypted under the previous origin.
 
-**Cross-server offline library — fixed in progress (2026-10-30, spec 30).** The
+**Cross-server offline library — fixed in progress (2026-10-30, spec 30; file layer completed 2026-11-15, spec 41).** The
 offline library is now a set of per-server shelves (ADR 020): downloads and
-adoptions are tagged with their source server and keyed `<serverId>#<bookId>`, and
-the offline shelf is the union across shelves. The 2026-10-30 incident — audio
+adoptions are tagged with their source server and keyed `<serverId>#<bookId>`, and the
+offline shelf is the union across shelves. The 2026-10-30 incident — audio
 downloaded from the local server later being unrestorable after switching to the
 production server address — is the motivating case; see
 [`specs/30-offline-library-per-server.md`](specs/30-offline-library-per-server.md).
+**Since spec 41 the audio files are scoped the same way:** new downloads write
+`books/srv-<hash>/<bookId>/<trackId>.<ext>` (the hash is a truncated SHA-256 of the
+server address, never the address itself), so two servers that both number their
+books from 1 can no longer share a folder or overwrite each other's audio. The
+recovery scan reads both layouts; audio adopted from the pre-41 `books/<bookId>/`
+layout keeps its legacy paths — the files are never moved or rewritten.
 
 Device verification of these four items is still outstanding; the checklist is
 in `specs/29-offline-resilience.md`.
@@ -263,12 +269,15 @@ unavailable in that build; it does not delete it. Do not clear app data or
 uninstall while either origin may contain the only copy of downloaded-book
 metadata.
 
-**Recovery (spec 29, 2026-10-29) recovers files, not the old database.** The
-audio under `books/<bookId>/<trackId>.<ext>` survives an origin change, so the
-app can list those directories and re-adopt them from the server with **Find
-them** on the shelf. What it cannot recover is anything that lived only in the
-old origin's IndexedDB: progress positions, favourites, and library membership
-were encrypted under the previous origin's key. Recovery therefore restores
+**Recovery (spec 29, 2026-10-29; per-server layout since spec 41, 2026-11-15)
+recovers files, not the old database.** The audio survives an origin change, so
+the app can list those directories and re-adopt them from the server with **Find
+them** on the shelf. Since spec 41 the scan covers both layouts: per-server
+(`books/srv-<hash>/<id>/`) for the server the app is pointed at, and legacy
+(`books/<bookId>/<trackId>.<ext>`) against the union of everything the shelf
+claims. What it cannot recover is anything that lived only in the old origin's
+IndexedDB: progress positions, favourites, and library membership were encrypted
+under the previous origin's key. Recovery therefore restores
 "the book is on this phone and plays", not "where you were". Nothing is deleted
 by recovery; a folder the server does not recognise is reported and left alone.
 

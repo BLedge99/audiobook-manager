@@ -143,7 +143,7 @@ async function downloadTrack(
   now: () => Date,
   trace: DownloadTrace,
 ): Promise<void> {
-  const path = trackPath(book.id, track.id, extension);
+  const path = trackPath(deps.sourceServer ?? "", book.id, track.id, extension);
   const label = `track ${index + 1}/${total}`;
   const url = await deps.trackUrl(track.id);
 

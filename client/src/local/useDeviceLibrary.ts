@@ -143,12 +143,18 @@ export function useDeviceLibrary(
       // from a database that was cleared. Read after the rows so `known` is
       // exactly what the app can currently see.
       //
-      // The claimed set is the union across the device's shelves (spec 30): a
-      // file under `books/<id>/` belongs to whichever shelf holds a row for
-      // that id, even one whose server the app is no longer pointed at. Only
-      // when no row anywhere claims a folder is it orphan audio worth adopting.
-      const claimed = new Set(Object.values(next).map((row) => row.book.id));
-      setUnclaimed(await listUnclaimedOnDevice(files, claimed));
+      // Per-server audio (`books/srv-<hash>/`) is scanned only for the server
+      // the app is pointed at, against that shelf's claims -- another shelf's
+      // folder is never offered as unclaimed. Legacy audio (`books/<id>/`) is
+      // scanned against the union across shelves, because it cannot be
+      // attributed to one.
+      const values = Object.values(next);
+      const claimed = new Set(values.map((row) => row.book.id));
+      const currentServer = getServerUrl();
+      const serverClaimed = new Set(
+        values.filter((row) => (row.serverId ?? "") === currentServer).map((row) => row.book.id),
+      );
+      setUnclaimed(await listUnclaimedOnDevice(files, claimed, currentServer, serverClaimed));
     } catch (error) {
       // A replica that will not open must not break the app -- but it must not
       // be reported as an empty library either. Keep the server view usable and
