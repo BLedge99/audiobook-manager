@@ -23,7 +23,7 @@ export interface PersonalDataRow {
   erase: "deleteMany" | "delete";
 }
 
-export const PERSONAL_DATA_ROWS: ReadonlyArray<PersonalDataRow> = Object.freeze([
+export const PERSONAL_DATA_ROWS: ReadonlyArray<PersonalDataRow> = Object.freeze<PersonalDataRow[]>([
   { model: "oAuthHandoff", key: "oAuthHandoffs", find: "many", select: { id: true, createdAt: true, expiresAt: true, consumedAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
   { model: "webAuthnChallenge", key: "webAuthnChallenges", find: "many", select: { id: true, type: true, expiresAt: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
   { model: "webAuthnCredential", key: "webAuthnCredentials", find: "many", select: { credentialId: true, publicKey: true, counter: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
