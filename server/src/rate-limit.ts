@@ -44,6 +44,11 @@ export class RateLimiter {
     this.map.delete(key);
   }
 
+  /** Empty the whole table (test seams). */
+  clearAll(): void {
+    this.map.clear();
+  }
+
   /** Current bucket count — test hook. */
   get size(): number {
     return this.map.size;

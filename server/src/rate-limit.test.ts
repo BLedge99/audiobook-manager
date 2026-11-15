@@ -37,4 +37,13 @@ describe("RateLimiter", () => {
     // The newest key must still be tracked.
     expect(limiter.allow("ip-119", 1, now).allowed).toBe(false);
   });
+
+  it("clears every bucket with clearAll", () => {
+    const limiter = new RateLimiter(60_000);
+    limiter.record("a", 1_000);
+    limiter.record("b", 1_000);
+    limiter.clearAll();
+    expect(limiter.size).toBe(0);
+    expect(limiter.allow("a", 1, 1_000).allowed).toBe(true);
+  });
 });

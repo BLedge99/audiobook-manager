@@ -147,4 +147,28 @@ describe("GET /api/buy-context", () => {
     expect(last).toBe(429);
     expect(((await app.inject({ method: "GET", url: "/api/buy-context?title=Z&author=Wilde", headers })).json()).code).toBe("rate_limited");
   });
+
+  it("lets the counter reset once the window passes", async () => {
+    const nowSpy = vi.spyOn(Date, "now");
+    try {
+      nowSpy.mockReturnValue(1_700_000_000_000);
+      stubFetch(WILDE_PAGE);
+      const headers = { cookie: await householdCookie(), "x-profile-id": "9" };
+      for (let i = 0; i < 30; i += 1) {
+        await app.inject({
+          method: "GET",
+          url: `/api/buy-context?title=Book%20${i}&author=Wilde`,
+          headers,
+        });
+      }
+      const blocked = await app.inject({ method: "GET", url: "/api/buy-context?title=X&author=Wilde", headers });
+      expect(blocked.statusCode).toBe(429);
+
+      nowSpy.mockReturnValue(1_700_000_061_000);
+      const after = await app.inject({ method: "GET", url: "/api/buy-context?title=X&author=Wilde", headers });
+      expect(after.statusCode).toBe(200);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
 });

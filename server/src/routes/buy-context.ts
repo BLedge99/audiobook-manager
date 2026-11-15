@@ -13,6 +13,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { fail } from "../http-errors";
 import type { AccountExperience } from "../auth/demo-policy";
 import { findLibrivoxMatch } from "../metadata/buy-context";
+import { RateLimiter } from "../rate-limit";
 
 export interface BuyContextRouteDeps {
   accountExperience: AccountExperience;
@@ -21,11 +22,14 @@ export interface BuyContextRouteDeps {
 
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 30;
-const counters = new Map<number, { count: number; resetAt: number }>();
+// One bounded, self-sweeping table (see server/src/rate-limit.ts): entries
+// expire with the window, and a full table drops the oldest instead of
+// growing for the life of the process.
+const limiter = new RateLimiter(RATE_WINDOW_MS);
 
-/** Test seam. */
+/** Test seam: empty the per-profile rate buckets. */
 export function clearBuyContextRateCounters(): void {
-  counters.clear();
+  limiter.clearAll();
 }
 
 export async function registerBuyContextRoutes(
@@ -49,13 +53,10 @@ export async function registerBuyContextRoutes(
     if (profileId === null) return fail(reply, 400, "profile_required");
 
     const now = Date.now();
-    const slot = counters.get(profileId);
-    if (slot && now < slot.resetAt) {
-      if (slot.count >= RATE_LIMIT) return fail(reply, 429, "rate_limited");
-      slot.count += 1;
-    } else {
-      counters.set(profileId, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    }
+    const key = String(profileId);
+    const decision = limiter.allow(key, RATE_LIMIT, now);
+    if (!decision.allowed) return fail(reply, 429, "rate_limited");
+    limiter.record(key, now);
 
     const { title, author } = request.query;
     const match = await findLibrivoxMatch({ title: title.trim(), author: author?.trim() || undefined });
