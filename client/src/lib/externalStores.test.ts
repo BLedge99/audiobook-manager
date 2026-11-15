@@ -5,6 +5,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   EXTERNAL_STORES,
+  EXTRA_VENDORS,
   parseStoreUrl,
   deslug,
 } from "./externalStores";
@@ -233,5 +234,28 @@ describe("deslug", () => {
 
   it("lowercases and trims", () => {
     expect(deslug("The-Count-of-Monte-Cristo")).toBe("the count of monte cristo");
+  });
+});
+
+describe("EXTRA_VENDORS (spec 41 phase 2)", () => {
+  it("exposes exactly the two search-only vendors", () => {
+    expect(Object.keys(EXTRA_VENDORS).sort()).toEqual(["bn", "bookshop"]);
+  });
+
+  it("every extra vendor has a label, a search builder and an affiliate id", () => {
+    for (const [id, vendor] of Object.entries(EXTRA_VENDORS)) {
+      expect(vendor.label.length).toBeGreaterThan(0);
+      expect(vendor.searchUrl("a b & c")).toContain("a%20b%20%26%20c");
+      expect(vendor.affiliateId).toBe(id);
+    }
+  });
+
+  it("is frozen against accidental mutation", () => {
+    expect(Object.isFrozen(EXTRA_VENDORS)).toBe(true);
+  });
+
+  it("Barnes & Noble keys off the ISBN-13 when it has one", () => {
+    expect(EXTRA_VENDORS.bn.searchUrl("a b", "9780140328721")).toContain("ean=9780140328721");
+    expect(EXTRA_VENDORS.bn.searchUrl("a b")).not.toContain("ean=");
   });
 });

@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { buildBuyLinks } from "./buyLinks";
+import { EXTERNAL_STORES, EXTRA_VENDORS } from "./externalStores";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -121,5 +122,41 @@ describe("affiliate tags", () => {
     const audible = links.find((link) => link.id === "audible")!;
     expect(audible.commission).toBe(false);
     expect(audible.href).not.toContain("audible-20");
+  });
+});
+
+describe("buy links are derived from the registry (spec 41 phase 2)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("every store href equals the registry searchUrl for the same input, untagged", () => {
+    vi.stubEnv("VITE_AFFILIATE_LIBROFM", "");
+    vi.stubEnv("VITE_AFFILIATE_BOOKSHOP", "");
+    vi.stubEnv("VITE_AFFILIATE_KOBO", "");
+    vi.stubEnv("VITE_AFFILIATE_BN", "");
+    const isbn = "9780439023528";
+    const links = buildBuyLinks({ ...BASE, isbn });
+    expect(hrefOf(links, "librofm")).toBe(EXTERNAL_STORES.librofm.searchUrl(isbn));
+    expect(hrefOf(links, "kobo")).toBe(EXTERNAL_STORES.kobo.searchUrl(isbn));
+    expect(hrefOf(links, "audible")).toBe(EXTERNAL_STORES.audible.searchUrl(isbn));
+    expect(hrefOf(links, "playbooks")).toBe(EXTERNAL_STORES.playbooks.searchUrl(isbn));
+    expect(hrefOf(links, "bookshop")).toBe(EXTRA_VENDORS.bookshop.searchUrl(isbn));
+    expect(hrefOf(links, "bn")).toBe(EXTRA_VENDORS.bn.searchUrl(isbn, isbn));
+  });
+
+  it("every store href equals the registry searchUrl for title/author, untagged", () => {
+    vi.stubEnv("VITE_AFFILIATE_LIBROFM", "");
+    vi.stubEnv("VITE_AFFILIATE_BOOKSHOP", "");
+    vi.stubEnv("VITE_AFFILIATE_KOBO", "");
+    vi.stubEnv("VITE_AFFILIATE_BN", "");
+    const query = "The Picture of Dorian Gray Oscar Wilde";
+    const links = buildBuyLinks({ ...BASE });
+    expect(hrefOf(links, "librofm")).toBe(EXTERNAL_STORES.librofm.searchUrl(query));
+    expect(hrefOf(links, "kobo")).toBe(EXTERNAL_STORES.kobo.searchUrl(query));
+    expect(hrefOf(links, "audible")).toBe(EXTERNAL_STORES.audible.searchUrl(query));
+    expect(hrefOf(links, "playbooks")).toBe(EXTERNAL_STORES.playbooks.searchUrl(query));
+    expect(hrefOf(links, "bookshop")).toBe(EXTRA_VENDORS.bookshop.searchUrl(query));
+    expect(hrefOf(links, "bn")).toBe(EXTRA_VENDORS.bn.searchUrl(query, null));
   });
 });

@@ -160,6 +160,43 @@ const storeDefs: Record<ExternalStoreId, StoreDef> = {
   }),
 };
 
+/**
+ * The two search-only vendors the buy sheet offers that the main registry
+ * deliberately does not parse (spec 39 / ADR 034: never parse what we cannot
+ * canonicalise safely). One home for their search URLs so the buy-link
+ * builder never carries a host literal of its own.
+ *
+ * `searchUrl(query, isbn13?)` — `bn` appends `ean=` when an ISBN-13 is known;
+ * `bookshop` ignores it. The affiliate ids line up with
+ * `AffiliableVendor` in `affiliateConfig.ts`.
+ */
+export interface ExtraVendorDef {
+  label: string;
+  affiliateId: "bookshop" | "bn";
+  searchUrl(query: string, isbn13?: string | null): string;
+}
+
+const extraVendors: Record<"bookshop" | "bn", ExtraVendorDef> = {
+  bookshop: Object.freeze({
+    label: "Bookshop.org",
+    affiliateId: "bookshop",
+    searchUrl(query: string) {
+      return `https://bookshop.org/search?keywords=${encodeURIComponent(query)}`;
+    },
+  }),
+  bn: Object.freeze({
+    label: "Barnes & Noble",
+    affiliateId: "bn",
+    searchUrl(query: string, isbn13?: string | null) {
+      const base = `https://www.barnesandnoble.com/s/${encodeURIComponent(query)}`;
+      return isbn13 ? `${base}?ean=${isbn13}` : base;
+    },
+  }),
+};
+
+export const EXTRA_VENDORS: Readonly<Record<"bookshop" | "bn", ExtraVendorDef>> =
+  Object.freeze(extraVendors);
+
 export const EXTERNAL_STORES: Readonly<Record<ExternalStoreId, StoreDef>> = Object.freeze(storeDefs);
 
 /** Parse a pasted store URL. Never throws. */

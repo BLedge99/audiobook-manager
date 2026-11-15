@@ -15,6 +15,7 @@
  */
 import { getAffiliateTags, type AffiliableVendor } from "./affiliateConfig";
 import { normaliseIsbn } from "./isbn";
+import { EXTERNAL_STORES, EXTRA_VENDORS } from "./externalStores";
 
 export type BuyLinkId = "librivox" | AffiliableVendor | "audible" | "playbooks";
 
@@ -47,7 +48,8 @@ function withTag(href: string, tag: string | undefined): string {
 export function buildBuyLinks(input: BuyLinkInput): BuyLink[] {
   const isbn13 = normaliseIsbn(input.isbn);
   const query = isbn13 ?? `${input.title.trim()} ${(input.author ?? "").trim()}`.trim();
-  const q = encodeURIComponent(query);
+  // The registry encodes its queries itself; only the affiliate fragment
+  // rides on top, appended via withTag.
   const tags = getAffiliateTags();
 
   const links: BuyLink[] = [];
@@ -66,48 +68,45 @@ export function buildBuyLinks(input: BuyLinkInput): BuyLink[] {
     {
       id: "librofm",
       kind: "store",
-      label: "Libro.fm",
-      href: withTag(`https://libro.fm/?q=${q}`, tags.librofm),
+      label: EXTERNAL_STORES.librofm.label,
+      href: withTag(EXTERNAL_STORES.librofm.searchUrl(query), tags.librofm),
       commission: Boolean(tags.librofm),
     },
     {
       id: "bookshop",
       kind: "store",
-      label: "Bookshop.org",
-      href: withTag(`https://bookshop.org/search?keywords=${q}`, tags.bookshop),
+      label: EXTRA_VENDORS.bookshop.label,
+      href: withTag(EXTRA_VENDORS.bookshop.searchUrl(query), tags.bookshop),
       commission: Boolean(tags.bookshop),
     },
     {
       id: "bn",
       kind: "store",
-      label: "Barnes & Noble",
-      href: withTag(
-        isbn13
-          ? `https://www.barnesandnoble.com/s/${q}?ean=${isbn13}`
-          : `https://www.barnesandnoble.com/s/${q}`,
-        tags.bn,
-      ),
+      label: EXTRA_VENDORS.bn.label,
+      href: withTag(EXTRA_VENDORS.bn.searchUrl(query, isbn13), tags.bn),
       commission: Boolean(tags.bn),
     },
     {
       id: "kobo",
       kind: "store",
-      label: "Kobo",
-      href: withTag(`https://www.kobo.com/us/en/search?query=${q}`, tags.kobo),
+      label: EXTERNAL_STORES.kobo.label,
+      href: withTag(EXTERNAL_STORES.kobo.searchUrl(query), tags.kobo),
       commission: Boolean(tags.kobo),
     },
     {
       id: "audible",
       kind: "store",
-      label: "Audible",
-      href: `https://www.audible.com/search?keywords=${q}`,
+      label: EXTERNAL_STORES.audible.label,
+      // Deliberately not representable as a paid/affiliate row (ADR 034):
+      // no tag, ever, whatever the environment holds.
+      href: EXTERNAL_STORES.audible.searchUrl(query),
       commission: false,
     },
     {
       id: "playbooks",
       kind: "store",
-      label: "Google Play Books",
-      href: `https://play.google.com/store/search?q=${q}&c=books`,
+      label: EXTERNAL_STORES.playbooks.label,
+      href: EXTERNAL_STORES.playbooks.searchUrl(query),
       commission: false,
     },
   );
