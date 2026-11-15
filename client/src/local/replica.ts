@@ -8,6 +8,8 @@
  */
 
 import type { Audiobook } from "../types";
+import { sha256 } from "@noble/hashes/sha256";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
 import { type DownloadedTrack, type LocalLibraryDatabase, type ReplicaBook } from "./db";
 
 export interface FileSystemPort {
@@ -65,11 +67,30 @@ export function replicaScopedKey(serverId: string, name: string): string {
 }
 
 /**
+ * Directory segment for one server's downloaded audio.
+ *
+ * Keyed the same way the replica rows and the private cache are (spec 30):
+ * two different servers can both number their books from 1, so their audio
+ * must not share directories either. A serverId is a URL, which is neither
+ * filesystem-safe nor private -- it would leak the household's LAN hostname
+ * into cloud-synced app data -- so the directory name is a truncated SHA-256
+ * of it, never the URL itself. The same-origin browser base (empty serverId)
+ * shares one `local` directory.
+ */
+export function bookDir(serverId: string): string {
+  if (!serverId) return "local";
+  return `srv-${bytesToHex(sha256(utf8ToBytes(serverId))).slice(0, 16)}`;
+}
+
+/**
  * Where one track is stored.
  *
  * Keyed by book and track id rather than the track's filename: filenames come
  * from the media files and can collide or contain characters the filesystem
  * dislikes, whereas ids are stable and already safe.
+ *
+ * The per-server directory (bookDir) is wired in spec 41 step 1.2; this
+ * commit changes nothing about the paths on disk.
  */
 export function trackPath(bookId: number, trackId: number, extension = "mp3"): string {
   return `${BOOK_DIR}/${bookId}/${trackId}.${extension.replace(/^\./, "")}`;

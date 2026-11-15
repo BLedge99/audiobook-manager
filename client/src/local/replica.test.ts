@@ -3,6 +3,7 @@ import type { Audiobook } from "../types";
 import { LocalLibraryDatabase } from "./db";
 import {
   bookBytes,
+  bookDir,
   countReplicaBooks,
   downloadedTracks,
   extensionFor,
@@ -69,6 +70,32 @@ beforeEach(() => {
 
 afterEach(async () => {
   db.close();
+});
+
+describe("bookDir", () => {
+  it("is stable for the same serverId", () => {
+    expect(bookDir("https://a.example")).toBe(bookDir("https://a.example"));
+  });
+
+  it("differs between distinct serverIds", () => {
+    expect(bookDir("https://a.example")).not.toBe(bookDir("https://b.example"));
+  });
+
+  it("is filesystem-safe: no separators, colons, spaces or leading dot", () => {
+    for (const id of ["http://192.168.1.10:3000", "https://example.com/", ""]) {
+      const dir = bookDir(id);
+      expect(dir).toMatch(/^[a-z0-9-]+$/);
+      expect(dir.startsWith(".")).toBe(false);
+    }
+  });
+
+  it("maps the empty serverId (same-origin) to the shared local dir", () => {
+    expect(bookDir("")).toBe("local");
+  });
+
+  it("never embeds the serverId itself", () => {
+    expect(bookDir("https://books.home.arpa")).not.toContain("books.home.arpa");
+  });
 });
 
 describe("trackPath", () => {
