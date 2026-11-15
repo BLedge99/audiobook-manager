@@ -2,7 +2,7 @@
 
 **Last updated:** 12 November 2026  
 **Status:** Draft — implements Phase 6 of `docs/GDPR-REMEDIATION-PLAN.md`  
-**Automated cleanup:** `server/src/gdpr/personal-data.ts` is the enforcement point for the personal-data table list and the 24-month inactive-profile retention rule. `AuthService.cleanupExpired()` in `server/src/auth/service.ts` runs at server startup and after every login (best effort) and delegates the personal-data cleanup/purge to that module; `validate` already rejects expired rows.
+**Automated cleanup:** `server/src/gdpr/personal-data.ts` is the enforcement point for the personal-data table list and the 24-month inactive-profile retention rule, and since spec 41 Phase 5 the export and erasure executors are generated from the same `PERSONAL_DATA_ROWS` table (the schema-guard test enforces it). `AuthService.cleanupExpired()` in `server/src/auth/service.ts` runs at server startup and after every login (best effort) and delegates the personal-data cleanup/purge to that module; `validate` already rejects expired rows.
 
 This schedule maps each personal-data table in `server/prisma/schema.prisma` to a retention period and the mechanism that enforces it. No personal data is kept beyond its retention period without a legal basis.
 

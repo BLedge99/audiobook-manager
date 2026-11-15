@@ -1,26 +1,44 @@
 import type { PrismaClient } from "@prisma/client";
 
 /**
- * The personal-data tables owned by a profile, in one place (spec 37, step 6.1).
+ * The personal-data tables owned by a profile, in one place (spec 37, step 6.1;
+ * made fully declarative in spec 41 phase 5).
  *
- * The export, the erasure and the retention purge all read this module so they
- * cannot drift apart (they already disagreed: webAuthnChallenge was erased but
- * not exported). Ordered children-before-profile so deletion runs without FK
- * violations.
+ * The export, the erasure and the schema guard all derive from
+ * `PERSONAL_DATA_ROWS`, so they cannot drift apart: add a profile-id-bearing
+ * Prisma model without a row and the suite fails; add a row without an erase
+ * strategy and the suite fails. (They already disagreed once: webAuthnChallenge
+ * was erased but not exported.)
+ *
+ * `model` is the Prisma delegate name (camelCase of the model). `key` is the
+ * top-level key in the export payload. Ordered children-before-profile so
+ * erasure runs without FK violations.
  */
-export const PROFILE_PERSONAL_DATA_MODELS = [
-  "oAuthHandoff",
-  "webAuthnChallenge",
-  "webAuthnCredential",
-  "deviceCredential",
-  "session",
-  "listeningHistory",
-  "playSession",
-  "favourite",
-  "wishlistItem",
-  "profileLibraryEntry",
-  "profile",
-] as const;
+export interface PersonalDataRow {
+  model: string;
+  key: string;
+  find: "unique" | "many";
+  select: Record<string, true>;
+  orderBy?: Record<string, "asc" | "desc">;
+  erase: "deleteMany" | "delete";
+}
+
+export const PERSONAL_DATA_ROWS: ReadonlyArray<PersonalDataRow> = Object.freeze([
+  { model: "oAuthHandoff", key: "oAuthHandoffs", find: "many", select: { id: true, createdAt: true, expiresAt: true, consumedAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
+  { model: "webAuthnChallenge", key: "webAuthnChallenges", find: "many", select: { id: true, type: true, expiresAt: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
+  { model: "webAuthnCredential", key: "webAuthnCredentials", find: "many", select: { credentialId: true, publicKey: true, counter: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
+  { model: "deviceCredential", key: "deviceCredentials", find: "many", select: { label: true, deviceId: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
+  { model: "session", key: "sessions", find: "many", select: { id: true, expiresAt: true, userAgent: true, deviceLabel: true, deviceCredentialId: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
+  { model: "listeningHistory", key: "listeningHistory", find: "many", select: { id: true, mediaItemId: true, position: true, completed: true, lastPlayed: true, playedAt: true }, orderBy: { playedAt: "desc" }, erase: "deleteMany" },
+  { model: "playSession", key: "playSessions", find: "many", select: { id: true, mediaItemId: true, startedAt: true, endedAt: true, fromPosition: true, toPosition: true, speed: true }, orderBy: { startedAt: "desc" }, erase: "deleteMany" },
+  { model: "favourite", key: "favourites", find: "many", select: { mediaItemId: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
+  { model: "wishlistItem", key: "wishlistItems", find: "many", select: { id: true, title: true, author: true, seedMediaItemId: true, owned: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
+  { model: "profileLibraryEntry", key: "libraryEntries", find: "many", select: { mediaItemId: true }, orderBy: { mediaItemId: "asc" }, erase: "deleteMany" },
+  { model: "profile", key: "profile", find: "unique", select: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true, ageBand: true }, erase: "delete" },
+]);
+
+/** The delegate names, children-before-profile (deletion order). Derived. */
+export const PROFILE_PERSONAL_DATA_MODELS: string[] = PERSONAL_DATA_ROWS.map((row) => row.model);
 
 /** Inactive-profile retention: 24 months (approximated as 24 × 30 days). */
 export const INACTIVE_PROFILE_RETENTION_MS = 24 * 30 * 24 * 60 * 60 * 1000;
@@ -29,103 +47,58 @@ export function inactiveProfileCutoff(now: Date): Date {
   return new Date(now.getTime() - INACTIVE_PROFILE_RETENTION_MS);
 }
 
+/** A delegate with the four methods the executors use. */
+interface Delegate {
+  findUnique(args: unknown): Promise<unknown>;
+  findMany(args: unknown): Promise<unknown[]>;
+  deleteMany(args: unknown): Promise<unknown>;
+  delete(args: unknown): Promise<unknown>;
+}
+
+function delegateFor(prisma: PrismaClient, model: string): Delegate {
+  const delegate = (prisma as unknown as Record<string, Delegate | undefined>)[model];
+  if (!delegate) {
+    throw new Error(`personal-data: no Prisma delegate for model "${model}"`);
+  }
+  return delegate;
+}
+
 /**
  * All personal data for one profile (GDPR Art. 15/20). Session-only secrets
- * (token hashes, password hashes) are never included.
+ * (token hashes, password hashes) are never included — the selects simply
+ * do not name them.
  */
 export async function exportProfilePersonalData(prisma: PrismaClient, profileId: number) {
-  const [profile, sessions, listeningHistory, playSessions, favourites, wishlistItems, libraryEntries, deviceCredentials, webAuthnCredentials, webAuthnChallenges, oAuthHandoffs] = await Promise.all([
-    prisma.profile.findUnique({
-      where: { id: profileId },
-      select: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true, ageBand: true },
+  const data: Record<string, unknown> = {};
+  await Promise.all(
+    PERSONAL_DATA_ROWS.map(async (row) => {
+      const delegate = delegateFor(prisma, row.model);
+      data[row.key] =
+        row.find === "unique"
+          ? await delegate.findUnique({ where: { id: profileId }, select: row.select })
+          : await delegate.findMany({ where: { profileId }, select: row.select, orderBy: row.orderBy });
     }),
-    prisma.session.findMany({
-      where: { profileId },
-      select: { id: true, expiresAt: true, userAgent: true, deviceLabel: true, deviceCredentialId: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.listeningHistory.findMany({
-      where: { profileId },
-      select: { id: true, mediaItemId: true, position: true, completed: true, lastPlayed: true, playedAt: true },
-      orderBy: { playedAt: "desc" },
-    }),
-    prisma.playSession.findMany({
-      where: { profileId },
-      select: { id: true, mediaItemId: true, startedAt: true, endedAt: true, fromPosition: true, toPosition: true, speed: true },
-      orderBy: { startedAt: "desc" },
-    }),
-    prisma.favourite.findMany({
-      where: { profileId },
-      select: { mediaItemId: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.wishlistItem.findMany({
-      where: { profileId },
-      select: { id: true, title: true, author: true, seedMediaItemId: true, owned: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.profileLibraryEntry.findMany({
-      where: { profileId },
-      select: { mediaItemId: true },
-      orderBy: { mediaItemId: "asc" },
-    }),
-    prisma.deviceCredential.findMany({
-      where: { profileId },
-      select: { label: true, deviceId: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.webAuthnCredential.findMany({
-      where: { profileId },
-      select: { credentialId: true, publicKey: true, counter: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.webAuthnChallenge.findMany({
-      where: { profileId },
-      select: { id: true, type: true, expiresAt: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    // No code/state hashes: like token hashes, they are artefacts of a live
-    // flow, not data worth surfacing to the listener.
-    prisma.oAuthHandoff.findMany({
-      where: { profileId },
-      select: { id: true, createdAt: true, expiresAt: true, consumedAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  );
 
+  const profile = data.profile;
   if (!profile) return null;
 
   return {
     exportedAt: new Date().toISOString(),
-    profile,
-    sessions,
-    listeningHistory,
-    playSessions,
-    favourites,
-    wishlistItems,
-    libraryEntries,
-    deviceCredentials,
-    webAuthnCredentials,
-    webAuthnChallenges,
-    oAuthHandoffs,
+    ...data,
   };
 }
 
 /** Erase every personal-data row owned by one profile (GDPR Art. 17). */
 export async function eraseProfilePersonalData(prisma: PrismaClient, profileId: number): Promise<void> {
-  await prisma.$transaction([
-    prisma.oAuthHandoff.deleteMany({ where: { profileId } }),
-    prisma.webAuthnChallenge.deleteMany({ where: { profileId } }),
-    prisma.webAuthnCredential.deleteMany({ where: { profileId } }),
-    prisma.deviceCredential.deleteMany({ where: { profileId } }),
-    prisma.session.deleteMany({ where: { profileId } }),
-    prisma.listeningHistory.deleteMany({ where: { profileId } }),
-    prisma.playSession.deleteMany({ where: { profileId } }),
-    prisma.favourite.deleteMany({ where: { profileId } }),
-    prisma.wishlistItem.deleteMany({ where: { profileId } }),
-    prisma.profileLibraryEntry.deleteMany({ where: { profileId } }),
-    prisma.profile.delete({ where: { id: profileId } }),
-  ]);
+  await prisma.$transaction(
+    PERSONAL_DATA_ROWS.map((row) => {
+      const delegate = delegateFor(prisma, row.model);
+      return row.erase === "delete"
+        ? delegate.delete({ where: { id: profileId } })
+        : delegate.deleteMany({ where: { profileId } });
+    }) as never[],
+  );
 }
 
 /** Delete expired/revoked personal-data auth artifacts (best effort). */

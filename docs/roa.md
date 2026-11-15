@@ -19,10 +19,12 @@ spec 35 and ADR 026.
 
 **One definition of personal data.** The profile-owned personal-data table list,
 the 24-month inactive-profile retention rule, and the export/erasure/retention
-operations are defined in one module, `server/src/gdpr/personal-data.ts`; the
-API export and erasure routes and the retention purge read it, so they cannot
-drift apart (spec 37, Phase 6). The schema-guard test keeps that list aligned
-with `profileId`-bearing models in the schema.
+operations are generated from one declarative table in
+`server/src/gdpr/personal-data.ts` (`PERSONAL_DATA_ROWS`); the API export and
+erasure routes and the retention purge read it, so they cannot drift apart
+(spec 37, Phase 6; made fully declarative in spec 41, Phase 5). The schema-guard
+test keeps that table aligned with `profileId`-bearing models in the schema and
+fails if a row ever loses its erase strategy.
 
 ---
 
