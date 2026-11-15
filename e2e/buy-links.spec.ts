@@ -3,14 +3,16 @@
  *
  * Adult: Discover cards carry a Get button; the sheet renders the Free row
  * (server-intercepted LibriVox match), every paid row, and the untagged
- * disclosure; tapping a row launches in a popup. Child: no affordance exists.
+ * disclosure; tapping a row launches in a popup. Adult on a phone: the sheet
+ * keeps its close button inside the panel and within the viewport (the bug
+ * where the X scrolled away — spec 41-adjacent). Child: no affordance exists.
  * The /api/buy-context route is intercepted so the test never depends on a
  * live third-party call.
  */
 import { test, expect, request as playwrightRequest } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import { E2E_BASE_URL, login, pickAnyProfile } from "./helpers";
+import { E2E_BASE_URL, E2E_PASSWORD, login, pickAnyProfile } from "./helpers";
 
 const MATCH = {
   librivox: {
@@ -94,6 +96,68 @@ test.describe("buy links (spec 39)", () => {
     await popup.waitForLoadState("domcontentloaded");
     expect(popup.url()).toMatch(/audible\./); // geo-redirect may land on .co.uk etc.
     await popup.close();
+  });
+
+  test("adult on a phone: the sheet fits the screen and keeps its close button", async ({ page }) => {
+    await page.route("**/api/buy-context**", async (route) => {
+      await route.fulfill({ json: MATCH });
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    // Sign in deterministically — a fresh profile claimed via the API — so the
+    // test does not depend on which seeded profile is ready.
+    expect((await page.request.post("/api/auth/login", { data: { password: E2E_PASSWORD } })).ok()).toBeTruthy();
+    const profileName = `E2E Phone ${Date.now().toString(36)}`;
+    const created = await page.request.post("/api/profiles", { data: { name: profileName } });
+    expect(created.ok()).toBeTruthy();
+    const profile = (await created.json()) as { id: number };
+    const claim = await page.request.post("/api/auth/claim", {
+      data: { profileId: profile.id, householdPassword: E2E_PASSWORD, newPassword: "e2e-phone-test-9" },
+    });
+    expect(claim.ok()).toBeTruthy();
+
+    // Seed favourites before the UI loads so Discover has something to work
+    // with — the page reads them once at mount.
+    const headers = { "x-profile-id": String(profile.id) };
+    const library = await (await page.request.get("/api/server-library", { headers })).json();
+    for (const book of (library as { id: number }[]).slice(0, 3)) {
+      const favourite = await page.request.put(`/api/audiobooks/${book.id}/favourite`, { headers });
+      expect(favourite.ok()).toBeTruthy();
+    }
+
+    try {
+      await page.goto(E2E_BASE_URL);
+      await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible({ timeout: 60_000 });
+
+      await page.getByRole("button", { name: /^Discover$/ }).click();
+      const getButton = page.getByRole("button", { name: "Get this book" }).first();
+      await expect(getButton).toBeVisible({ timeout: 90_000 });
+      await getButton.click();
+
+      const sheet = page.getByRole("dialog");
+      await expect(sheet).toBeVisible();
+
+      // The panel stays inside the viewport and the close button stays inside
+      // the panel — the fix pins the header outside the scrolling rows.
+      const panelBox = await page.locator("#get-this-book").evaluate((el) => {
+        const r = (el.closest("div")!.parentElement as HTMLElement).getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      });
+      expect(panelBox.y).toBeGreaterThanOrEqual(0);
+      expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(844);
+
+      const closeButton = sheet.getByRole("button", { name: "Close" }).last();
+      const closeBox = await closeButton.boundingBox();
+      expect(closeBox).not.toBeNull();
+      expect(closeBox!.y).toBeGreaterThanOrEqual(panelBox.y);
+      expect(closeBox!.y + closeBox!.height).toBeLessThanOrEqual(panelBox.y + panelBox.height);
+
+      await closeButton.click();
+      await expect(sheet).not.toBeVisible();
+    } finally {
+      await page.request.delete(`/api/profiles/${profile.id}`).catch(() => undefined);
+    }
   });
 
   test("child: no buy link affordance anywhere", async ({ page }) => {
