@@ -128,7 +128,7 @@ describe("useBrowse", () => {
 
 
 describe("useBrowse refresh coalescing", () => {
-  it("coalesces concurrent refreshes into one trailing batch", async () => {
+  it("concurrent refreshes ride one shared batch", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     fetchMock.mockImplementation(async () => {
@@ -137,12 +137,12 @@ describe("useBrowse refresh coalescing", () => {
     });
     const view = mount("7");
     // The mount's initial refresh is stuck behind the gate. Two more requests
-    // arrive while it is in flight - they must collapse into ONE trailing run.
+    // arrive while it is in flight - they ride the same batch, one call per
+    // endpoint.
     void view.result.current.refresh();
     void view.result.current.refresh();
     release();
     await waitFor(() => expect(view.result.current.loaded).toBe(true));
-    // Five endpoints per batch; without coalescing this is 15 calls.
-    expect(fetchMock.mock.calls.length).toBe(10);
+    expect(fetchMock.mock.calls.length).toBe(5);
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   Audiobook,
   BookTagSuite,
@@ -10,6 +10,7 @@ import type {
   WishlistItem,
 } from "./types";
 import { request } from "./lib/request";
+import { coalesceRefresh } from "./lib/coalesceRefresh";
 import { getServerUrl } from "./lib/api";
 import { copy } from "./copy";
 import {
@@ -44,56 +45,49 @@ export function useBrowse(profileId: string | null = null) {
   const [reviewQueue, setReviewQueue] = useState<Audiobook[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  const inFlight = useRef(false);
-  const queued = useRef(false);
-
-  const refresh = useCallback(async () => {
-    // A tab toggle, a favourite edit and a reconnect can all ask for a refresh
-    // in quick succession; without this they each fire a 5-request batch.
-    // Requests arriving mid-batch collapse into ONE trailing run.
-    if (inFlight.current) {
-      queued.current = true;
-      return;
-    }
-    inFlight.current = true;
-    try {
-      while (true) {
-        queued.current = false;
-        // Each request settles on its own. The enrichment endpoints answer 404
-        // in the production demo (spec 37), and a batch that rejects wholesale
-        // used to lose the favourite ids with it -- the heart looked like it
-        // never saved. One failing surface must not blank the others.
-        const [genreTree, tagList, favIds, status, review] = await Promise.all([
-          request<GenreNode[]>("/api/genres").catch(() => undefined),
-          request<TagSummary[]>("/api/tags").catch(() => undefined),
-          request<number[]>("/api/favourites/ids").catch(() => undefined),
-          request<EnrichmentStatus>("/api/enrichment/status").catch(() => undefined),
-          request<Audiobook[]>("/api/enrichment/review-queue").catch(() => undefined),
-        ]);
-        if (genreTree) setGenres(genreTree);
-        if (tagList) setTags(tagList);
-        if (status) setEnrichment(status);
-        if (review) setReviewQueue(review);
-        if (favIds) {
-          setFavourites(favIds);
-          void cacheFavourites(favIds, getServerUrl());
-        } else {
-          // The profile key is unlocked (offline sign-in): show the last
-          // encrypted favourites rather than an empty heart set.
-          try {
-            const cached = await readFavourites(getServerUrl());
-            if (cached) setFavourites(cached);
-          } catch {
-            // Cache unreadable; keep whatever the screen has.
+  // A tab toggle, a favourite edit and a reconnect can all ask for a refresh
+  // in quick succession; concurrent callers ride one shared run (spec 41
+  // phase 6 — `lib/coalesceRefresh`). A caller that needs a post-run re-fetch
+  // asks for it by calling refresh() again, it does not hope for a trailing run.
+  const refresh = useMemo(
+    () =>
+      // Each request settles on its own. The enrichment endpoints answer 404
+      // in the production demo (spec 37), and a batch that rejects wholesale
+      // used to lose the favourite ids with it -- the heart looked like it
+      // never saved. One failing surface must not blank the others.
+      coalesceRefresh(async () => {
+        try {
+          const [genreTree, tagList, favIds, status, review] = await Promise.all([
+            request<GenreNode[]>("/api/genres").catch(() => undefined),
+            request<TagSummary[]>("/api/tags").catch(() => undefined),
+            request<number[]>("/api/favourites/ids").catch(() => undefined),
+            request<EnrichmentStatus>("/api/enrichment/status").catch(() => undefined),
+            request<Audiobook[]>("/api/enrichment/review-queue").catch(() => undefined),
+          ]);
+          if (genreTree) setGenres(genreTree);
+          if (tagList) setTags(tagList);
+          if (status) setEnrichment(status);
+          if (review) setReviewQueue(review);
+          if (favIds) {
+            setFavourites(favIds);
+            void cacheFavourites(favIds, getServerUrl());
+          } else {
+            // The profile key is unlocked (offline sign-in): show the last
+            // encrypted favourites rather than an empty heart set.
+            try {
+              const cached = await readFavourites(getServerUrl());
+              if (cached) setFavourites(cached);
+            } catch {
+              // Cache unreadable; keep whatever the screen has.
+            }
           }
+        } finally {
+          setLoaded(true);
         }
-        if (!queued.current) break;
-      }
-    } finally {
-      inFlight.current = false;
-      setLoaded(true);
-    }
-  }, [profileId]);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- profileId is the refresh trigger, read at call time by the requests themselves
+    [profileId],
+  );
 
   useEffect(() => {
     void refresh();

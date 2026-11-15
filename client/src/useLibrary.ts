@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Audiobook, LibraryRoot } from "./types";
 import { describeFailure, getServerUrl } from "./lib/api";
 import { request, requestConditional, type Conditional } from "./lib/request";
 import { copy } from "./copy";
+import { coalesceRefresh } from "./lib/coalesceRefresh";
 import { cacheLibraryPrivateState } from "./local/privateCache";
 
 /**
@@ -66,22 +67,20 @@ export function useLibrary(canManageLibrary = true) {
   const rootsEtagRef = useRef<string | null>(null);
 
   /**
-   * The request currently in flight, so concurrent callers share it.
-   *
-   * Five triggers fire refetches -- the player's final save, window focus,
-   * `visibilitychange`, the scan poller every 1.5s, and the refresh button -- and
-   * they overlap constantly. Without this, tapping refresh while a scan is
-   * polling puts five identical full-library requests on the wire at once, which
-   * is the slow network making itself slower.
+   * Concurrent refreshes collapse (spec 41 phase 6: one shared helper with
+   * `useBrowse`). Five triggers fire refetches -- the player's final save,
+   * window focus, `visibilitychange`, the scan poller every 1.5s, and the
+   * refresh button -- and they overlap constantly. Without this, tapping
+   * refresh while a scan is polling puts five identical full-library
+   * requests on the wire at once, which is the slow network making itself
+   * slower.
    */
-  const inFlightRef = useRef<Promise<void> | null>(null);
 
-  const refresh = useCallback((): Promise<void> => {
-    if (inFlightRef.current) return inFlightRef.current;
-
-    const run = (async () => {
-      setRefreshing(true);
-      try {
+  const refresh = useMemo(
+    () =>
+      coalesceRefresh(async () => {
+        setRefreshing(true);
+        try {
         // Both endpoints are conditional and independent: `library-roots`
         // carries scan state, which changes during a scan even when no book
         // does, so folding it into one payload would invalidate the library's
@@ -120,22 +119,18 @@ export function useLibrary(canManageLibrary = true) {
         // Only a fetch that has never produced rows may show "loading". After
         // that the shelf is never blanked, so this is a one-way latch.
         setLoading(false);
-        inFlightRef.current = null;
       }
-    })();
-
-    inFlightRef.current = run;
-    return run;
-  }, [canManageLibrary]);
+      }),
+    [canManageLibrary],
+  );
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const refreshForProfile = useCallback(async () => {
-    while (inFlightRef.current) {
-      await inFlightRef.current;
-    }
+    // Ride any in-flight run to completion, then invalidate and re-fetch fresh.
+    await refresh();
     booksEtagRef.current = null;
     rootsEtagRef.current = null;
     await refresh();
@@ -144,9 +139,7 @@ export function useLibrary(canManageLibrary = true) {
   const refreshAfterMembershipChange = useCallback(async () => {
     // A refresh started before the membership write may still be in flight.
     // Let it finish before invalidating its ETag and fetching the new shelf.
-    while (inFlightRef.current) {
-      await inFlightRef.current;
-    }
+    await refresh();
     booksEtagRef.current = null;
     await refresh();
   }, [refresh]);

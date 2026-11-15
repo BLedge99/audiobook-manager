@@ -386,15 +386,23 @@ strategy fails CI; the export payload is unchanged.
 
 ### Step 6.1 — the helper
 
-**Test first:** concurrent calls share one invocation; a call made during a run
-schedules exactly one trailing run; the returned promise settles when the
+> **Premise corrected during implementation (2026-11-15).** An earlier draft of
+> this step had the helper queue at most one trailing run. That broke the
+> pinned `useLibrary` contract — five triggers overlap constantly and the
+> suite pins one request per endpoint per burst — and would have re-stacked
+> requests on the hottest path in the app. The trailing run was removed from
+> `useBrowse` too (its refreshes are snapshot-friendly; mid-run callers now
+> ride the shared batch, and a caller that needs freshness after the run must
+> call `refresh()` again, like `refreshForProfile` does). `useBrowse.test.tsx`
+> now pins one shared batch (5 calls, not 10).
 
-trailing run finishes; a rejected run does not poison the next; callers never
-receive `undefined`.
+**Test first:** concurrent calls share one invocation; a call made after the
+run finishes starts a fresh run; a rejected run does not poison the next;
+callers never receive `undefined`.
 
 **Then:** `coalesceRefresh(fn: () => Promise<void>): () => Promise<void>` —
-share `inFlightRef` semantics (the `useLibrary` behaviour, which is strictly
-better than `useBrowse`'s drop), with at most one queued follow-up.
+share `inFlightRef` semantics (the `useLibrary` behaviour) exactly, with no
+trailing run. One test file pins the contract.
 
 ### Step 6.2 — `useLibrary` adopts it
 
