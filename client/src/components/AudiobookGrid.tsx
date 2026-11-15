@@ -12,6 +12,7 @@ import {
   totalDuration,
 } from "../lib/position";
 import { headingText, remainingLabel } from "../lib/segmentCopy";
+import { replicaBookKey } from "../local/replica";
 import { dispenseShakeThen } from "../lib/dispense";
 import { copy } from "../copy";
 import {
@@ -233,7 +234,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
           const isFeatured = index === 0;
           return (
             <button
-              key={`${book.serverId ?? ""}#${book.id}`}
+              key={replicaBookKey(book.serverId ?? "", book.id)}
               onClick={(event) => dispenseShakeThen(event.currentTarget, () => onSelect(book))}
               className={cn(
                 "capsule flex shrink-0 snap-start items-center gap-3 p-3 text-left",
@@ -318,7 +319,7 @@ export function AudiobookGrid({
         const showProgress = continuingIds.has(book.id);
         return (
           <LibraryCard
-            key={`${book.serverId ?? ""}#${book.id}`}
+            key={replicaBookKey(book.serverId ?? "", book.id)}
             book={book}
             onSelect={onSelect}
             showProgress={showProgress}

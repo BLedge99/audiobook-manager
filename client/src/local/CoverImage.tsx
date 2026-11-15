@@ -47,6 +47,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { localDb, type CoverRecord } from "./db";
 import { coverUrl } from "../lib/api";
+import { replicaBookKey } from "./replica";
 
 /**
  * How many covers may be held on the device.
@@ -110,7 +111,7 @@ const LOADING: CoverState = Object.freeze({ status: "loading" });
  * pass the book's own serverId.
  */
 export function bookCoverKey(bookId: number, serverId: string = ""): string {
-  return `book:${serverId}#${bookId}`;
+  return `book:${replicaBookKey(serverId, bookId)}`;
 }
 
 /** Cache key for a cover referenced by URL, which is what Discover and the wishlist carry. */
