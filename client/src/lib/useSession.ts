@@ -58,6 +58,10 @@ export function useSession(options: UseSessionOptions) {
     setBypassServerSetup,
   } = options;
 
+  // "demo" sessions carry no household profile id; everything else does.
+  const resolveSessionProfileId = () =>
+    getAccountExperience() === "demo" ? null : getActiveProfileId();
+
   const probeInFlight = useRef(false);
 
   const probeServer = useCallback(async (force = false): Promise<void> => {
@@ -80,7 +84,7 @@ export function useSession(options: UseSessionOptions) {
       }
       if (!probe.reachable) {
         setAuthed(false);
-        setProfileId(getAccountExperience() === "demo" ? null : getActiveProfileId());
+        setProfileId(resolveSessionProfileId());
         return;
       }
       if (!probe.authed) {
@@ -110,13 +114,13 @@ export function useSession(options: UseSessionOptions) {
         setProfileId(id);
         setActiveProfileId(id);
       } else if (info.via === "household") {
-        setProfileId(getAccountExperience() === "demo" ? null : getActiveProfileId());
+        setProfileId(resolveSessionProfileId());
       }
     } catch (error) {
       console.error("Could not complete server probe.", error);
       setServerReachable(false);
       setAuthed(false);
-      setProfileId(getAccountExperience() === "demo" ? null : getActiveProfileId());
+      setProfileId(resolveSessionProfileId());
     } finally {
       probeInFlight.current = false;
     }
