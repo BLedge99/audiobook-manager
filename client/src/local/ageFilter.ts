@@ -15,6 +15,8 @@
  */
 import type { Audiobook } from "../types";
 
+export const AGE_BANDS = ["under-6", "6-9", "10-13", "14-17"] as const;
+
 export const AGE_BAND_MAX: Readonly<Record<string, number>> = {
   "under-6": 5,
   "6-9": 9,

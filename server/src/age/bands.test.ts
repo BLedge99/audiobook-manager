@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   AGE_BANDS,
   MAX_AGE_BY_BAND,
@@ -6,6 +8,15 @@ import {
   isAgeBand,
   maxAgeForBand,
 } from "./bands";
+
+/**
+ * The client re-implements this ladder (it cannot import server code) and its
+ * fail-closed default decides what an offline kid sees. Both tiers assert
+ * against one checked-in fixture so the two can never drift apart silently.
+ */
+const fixture = JSON.parse(
+  readFileSync(path.resolve(__dirname, "../../../test/fixtures/age-ladder.json"), "utf8"),
+) as { bands: string[]; maxAgeByBand: Record<string, number>; strictestMaxAge: number };
 
 describe("bands (spec 38)", () => {
   it("knows exactly the four bands, in order", () => {
@@ -40,5 +51,24 @@ describe("bands (spec 38)", () => {
     for (const bad of ["adult", "", "12+", null, undefined, 9, NaN]) {
       expect(maxAgeForBand(bad)).toBe(STRICTEST_MAX_AGE);
     }
+  });
+});
+
+describe("the age ladder matches the shared fixture (spec 41 phase 3)", () => {
+  it("the band list matches the fixture", () => {
+    expect([...AGE_BANDS]).toEqual(fixture.bands);
+  });
+
+  it("every band ceiling matches the fixture", () => {
+    for (const band of fixture.bands) {
+      expect(MAX_AGE_BY_BAND[band as keyof typeof MAX_AGE_BY_BAND]).toBe(
+        fixture.maxAgeByBand[band],
+      );
+    }
+  });
+
+  it("the fail-closed ceiling matches the fixture", () => {
+    expect(STRICTEST_MAX_AGE).toBe(fixture.strictestMaxAge);
+    expect(maxAgeForBand("bogus")).toBe(fixture.strictestMaxAge);
   });
 });
