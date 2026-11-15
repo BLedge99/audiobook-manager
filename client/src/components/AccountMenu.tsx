@@ -4,6 +4,7 @@ import { copy } from "../copy";
 import { boundedFetch, lockSession, setActiveProfileId, setSessionToken, type SessionInfo } from "../lib/api";
 import { canOpenPrivacyNotice, onPrivacyNoticeClick, privacyNoticeUrl } from "../lib/privacyNotice";
 import { Btn } from "../ui/primitives";
+import { isKidsAccount } from "../local/kids";
 
 export function AccountMenu({ session }: { session: SessionInfo | null }) {
   const [open, setOpen] = useState(false);
@@ -60,7 +61,7 @@ export function AccountMenu({ session }: { session: SessionInfo | null }) {
       {open && (
         <div className="panel absolute right-0 top-full z-50 mt-2 grid min-w-48 gap-2 p-3">
           <p className="max-w-56 truncate px-2 py-1 text-sm font-bold text-ink" title={identity}>{identity}</p>
-          {session?.role === "child" && <p className="px-2 text-xs font-bold text-cobalt-ink">{copy.account.kidsAccount}</p>}
+          {isKidsAccount(session?.role) && <p className="px-2 text-xs font-bold text-cobalt-ink">{copy.account.kidsAccount}</p>}
           <Btn variant="quiet" size="sm" onClick={() => void signOut()}>
             <LogOut size={15} aria-hidden="true" />
             {copy.account.signOut}

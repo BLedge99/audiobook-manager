@@ -61,6 +61,7 @@ import { EXTERNAL_STORES } from "./lib/externalStores";
 import { launchStoreLink } from "./lib/externalIntent";
 import type { ExternalItem } from "./local/db";
 import { mergeShelves } from "./local/librarySource";
+import { isKidsAccount, canSeeBuySurfaces } from "./local/kids";
 import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
@@ -361,7 +362,7 @@ function App() {
         offline ? null : { books, serverId: getServerUrl() },
         { books: device.books },
         getServerUrl(),
-        session?.role === "child" ? { role: "child", ageBand: session?.profile?.ageBand ?? null } : undefined,
+        isKidsAccount(session?.role) ? { role: "child", ageBand: session?.profile?.ageBand ?? null } : undefined,
       ),
     [offline, books, device.books, session],
   );
@@ -957,7 +958,7 @@ function App() {
                 <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
               </div>
               {/* Spec 39: books the listener owns elsewhere — never the server, never playable */}
-              {session?.role !== "child" && (
+              {canSeeBuySurfaces(session?.role) && (
                 <Btn variant="quiet" size="sm" className="shrink-0" onClick={() => setAddExternalOpen(true)}>
                   <Link2 size={15} aria-hidden="true" /> {copy.external.addButton}
                 </Btn>
@@ -1026,7 +1027,7 @@ function App() {
             </section>
 
             {/* Spec 39 — the external shelf. Not searchable, not filterable, never on the server. */}
-            {session?.role !== "child" && search.trim().length === 0 && (
+            {canSeeBuySurfaces(session?.role) && search.trim().length === 0 && (
               <>
                 <ExternalBooks role={session?.role} items={externalItems} onLaunch={openExternal} onRemove={removeExternal} />
                 {externalLaunchFailed && (
@@ -1089,7 +1090,7 @@ function App() {
           </>
         )}
 
-        {shownTab === "discover" && <Discover discover={discover} hasFavourites={favouriteIds.size > 0} canBuy={session?.role !== "child"} />}
+        {shownTab === "discover" && <Discover discover={discover} hasFavourites={favouriteIds.size > 0} canBuy={canSeeBuySurfaces(session?.role)} />}
 
         {shownTab === "server-library" && (
           <ServerLibrary

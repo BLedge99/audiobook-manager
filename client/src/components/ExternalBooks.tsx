@@ -5,6 +5,7 @@ import { copy } from "../copy";
 import { EXTERNAL_STORES, parseStoreUrl, type ExternalStoreId } from "../lib/externalStores";
 import { Btn, cn } from "../ui/primitives";
 import { urlCoverKey, CoverImage } from "../local/CoverImage";
+import { isKidsAccount } from "../local/kids";
 
 /**
  * Spec 39 — Feature A. Books the listener owns in other stores, kept on this
@@ -125,7 +126,7 @@ export function ExternalBooks({
   onLaunch: (item: ExternalItem) => void;
   onRemove: (id: string) => Promise<void>;
 }) {
-  if (role === "child" || items.length === 0) return null;
+  if (isKidsAccount(role) || items.length === 0) return null;
   return (
     <section aria-labelledby="external-books" className="mt-8">
       <h2
@@ -188,7 +189,7 @@ export function AddExternalBookDialog({
     }
   }, [parsed]);
 
-  if (role === "child" || !open) return null;
+  if (isKidsAccount(role) || !open) return null;
 
   const ready = parsed?.ok === true;
   const storeLabel = parsed?.ok ? EXTERNAL_STORES[parsed.store].label : null;

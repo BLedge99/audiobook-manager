@@ -175,8 +175,12 @@ required.
 Replica rows carry `minimumAge` (the payload gains the field server-side).
 The offline library path (`local/replica.ts` → `local/librarySource.ts`)
 filters with a mirror of the same ladder in `client/src/local/ageFilter.ts`
-(pure module, unit-tested); `mergeShelves` applies it to the merged shelf
-when the session is a child. Online filtering remains authoritative; offline
+(pure module, unit-tested; both tiers assert one shared fixture,
+`test-fixtures/age-ladder.json`, since spec 41); `mergeShelves` applies it to
+the merged shelf when the session is a child. The client's buy-surface gate
+lives in `client/src/local/kids.ts` (`canSeeBuySurfaces`), checked at every
+affordance call site and swept by `client/src/local/kidsSurface.test.ts`
+(since spec 41). Online filtering remains authoritative; offline
 filtering applies the rating ladder only. Two gaps are deliberate: the
 household **genre blocklist is not evaluated offline** (the device does not
 carry the blocklist), and a download made **before** a book was re-rated

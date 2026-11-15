@@ -22,6 +22,31 @@ vi.mock("@capacitor/browser", () => ({ Browser: { open: mocks.browserOpen } }));
 
 import { AccountMenu } from "./AccountMenu";
 
+function sessionFor(role: "admin" | "member" | "child") {
+  return {
+    authDisabled: false,
+    profile: { id: 1, name: "Sam", role, ageBand: role === "child" ? "6-9" : null },
+    role,
+    via: "profile" as const,
+    expiresAt: null,
+    capabilities: { passkeys: false, devices: true },
+  };
+}
+
+describe("AccountMenu kids label (spec 41 phase 4)", () => {
+  it("labels a kids account", () => {
+    render(<AccountMenu session={sessionFor("child")} />);
+    fireEvent.click(screen.getByRole("button", { name: copy.account.accountMenu }));
+    expect(screen.getByText(copy.account.kidsAccount)).toBeInTheDocument();
+  });
+
+  it("does not label an adult account", () => {
+    render(<AccountMenu session={sessionFor("member")} />);
+    fireEvent.click(screen.getByRole("button", { name: copy.account.accountMenu }));
+    expect(screen.queryByText(copy.account.kidsAccount)).not.toBeInTheDocument();
+  });
+});
+
 function renderOpenMenu() {
   render(<AccountMenu session={null} />);
   fireEvent.click(screen.getByRole("button", { name: copy.account.accountMenu }));
