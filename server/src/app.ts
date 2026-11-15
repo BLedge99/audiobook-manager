@@ -2,7 +2,7 @@ import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import compress from "@fastify/compress";
-import { cacheControlForPath, isAssetRequest } from "./static-assets";
+import { collectApiDocs, registerClientDist, sharedCorsOrigins } from "./shared/listener";
 import { PrismaClient } from "@prisma/client";
 import path from "node:path";
 import { createScanManager } from "./scanner";
@@ -87,11 +87,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // :3000 (the Caddy front door adds its own where deployed). Bodies over
   // 1 KB are gzipped when the client accepts it.
   await app.register(compress, { threshold: 1024 });
-  const apiDocs: { method: string | string[]; url: string; schema: unknown }[] = [];
-  app.decorate("apiDocs", apiDocs);
-  app.addHook("onRoute", (route) => {
-    if (route.url.startsWith("/api/")) apiDocs.push({ method: route.method, url: route.url, schema: route.schema ?? {} });
-  });
+  collectApiDocs(app);
   const scanner = options.scanner ?? createScanManager(prisma);
   const enrichment = new EnrichmentManager(prisma);
   const recommendations = new RecommendationService(prisma);
@@ -157,27 +153,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(cors, {
     credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      // Capacitor's local WebView origin (Android).
-      //
-      // BOTH schemes are listed, and they are not interchangeable. Capacitor's
-      // default is `https`, but `capacitor.config.ts` sets `androidScheme:
-      // "http"` so that a plain-HTTP LAN address is same-scheme rather than
-      // mixed content (decisions/014). That moves the app's origin from
-      // `https://localhost` to `http://localhost`, and CORS compares the origin
-      // as a whole -- so dropping the https entry when the scheme changed breaks
-      // every API call on the device with a bare `TypeError: Failed to fetch`,
-      // while the cause is a CORS rejection that is invisible from inside a
-      // fetch() promise. Keeping both means either scheme works.
-      "https://localhost",
-      "http://localhost",
-      "https://books.home.arpa",
-      // Capacitor's iOS origin. Not a target platform, but the same app code
-      // would hit it, and the cost of allowing it is nil.
-      "capacitor://localhost",
-    ],
+    // Both schemes because capacitor.config.ts picks `http` for the LAN app
+    // origin (decisions/014); whatever the app's scheme, the phone must reach
+    // the API. The list lives in shared/listener.ts so the admin listener's
+    // status report names the same origins.
+    origin: sharedCorsOrigins(),
   });
   await app.register(cookie);
 
@@ -315,30 +295,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // Serve the built client (production single-origin). In dev the Vite dev
   // server runs separately on :5173, so this only kicks in when client/dist exists.
-  const { existsSync } = await import("node:fs");
   const clientDist = process.env.CLIENT_DIST || path.resolve(__dirname, "../../client/dist");
-  if (existsSync(clientDist)) {
-    const fastifyStatic = (await import("@fastify/static")).default;
-    await app.register(fastifyStatic, {
-      root: clientDist,
-      prefix: "/",
-      wildcard: false,
-      setHeaders: (reply, filePath) => {
-        reply.header("Cache-Control", cacheControlForPath(filePath));
-      },
-    });
-    app.setNotFoundHandler((request, reply) => {
-      if (request.url.startsWith("/api/")) {
-        return fail(reply, 404, "not_found");
-      }
-      // Spec 38 lesson (2026-11-13): index.html for a missing bundle turns a
-      // stale deploy into a silent blank page. Asset misses fail loudly.
-      if (isAssetRequest(request.url)) {
-        return fail(reply, 404, "not_found");
-      }
-      reply.sendFile("index.html");
-    });
-  }
+  await registerClientDist(app, {
+    distDir: clientDist,
+    apiNotFound: (_request, reply) => fail(reply, 404, "not_found"),
+  });
 
   const optionalProfileId = makeOptionalProfileId(accountExperience);
   const requireAccountProfileId = makeRequireAccountProfileId(accountExperience);

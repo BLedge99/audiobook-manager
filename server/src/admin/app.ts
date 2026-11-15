@@ -1,12 +1,10 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
 import compress from "@fastify/compress";
-import { cacheControlForPath, isAssetRequest } from "../static-assets";
 import type { PrismaClient } from "@prisma/client";
 import { AdminAuth, registerAdminAuth, requireAdminSession } from "./auth";
 import { fail } from "../http-errors";
 import path from "node:path";
-import { existsSync } from "node:fs";
 import { access } from "node:fs/promises";
 import { EnrichmentManager } from "../metadata/run";
 import type { ScanManager } from "../scanner";
@@ -22,6 +20,7 @@ import {
 } from "./supabase-storage";
 import { registerChildAccountRoutes } from "./child-accounts";
 import { registerAgeRatingRoutes } from "./age-ratings";
+import { collectApiDocs, registerClientDist, sharedCorsOrigins } from "../shared/listener";
 
 function routeDocs(app: FastifyInstance): { method: string | string[]; url: string; schema: unknown }[] {
   return ((app as FastifyInstance & { apiDocs?: { method: string | string[]; url: string; schema: unknown }[] }).apiDocs ?? []).map((route) => ({
@@ -69,11 +68,7 @@ export async function buildAdminApp(options: {
       readonlySqlite.close();
     });
   }
-  const apiDocs: { method: string | string[]; url: string; schema: unknown }[] = [];
-  app.decorate("apiDocs", apiDocs);
-  app.addHook("onRoute", (route) => {
-    if (route.url.startsWith("/api/")) apiDocs.push({ method: route.method, url: route.url, schema: route.schema ?? {} });
-  });
+  collectApiDocs(app);
   await app.register(cookie);
   await registerAdminAuth(app, options.auth, options.secureCookie ?? false);
   // Spec 38: kids accounts and age ratings are operator surfaces.
@@ -104,11 +99,9 @@ export async function buildAdminApp(options: {
     }));
     const databaseUrl = process.env.DATABASE_URL ?? "";
     const databaseType = databaseUrl.startsWith("file:") ? "SQLite" : "PostgreSQL";
-    const configuredOrigins = [
-      "http://localhost:5173", "http://localhost:3000", "https://localhost",
-      "http://localhost", "https://books.home.arpa",
-      ...(process.env.WEBAUTHN_ORIGIN ? [process.env.WEBAUTHN_ORIGIN] : []),
-    ].filter((origin, index, all) => all.indexOf(origin) === index);
+    const configuredOrigins = sharedCorsOrigins(
+      process.env.WEBAUTHN_ORIGIN ? [process.env.WEBAUTHN_ORIGIN] : [],
+    );
     const productionHost = process.env.RENDER === "true" || Boolean(process.env.RENDER_EXTERNAL_HOSTNAME);
     return {
       generatedAt: new Date(),
@@ -272,27 +265,12 @@ export async function buildAdminApp(options: {
   const clientDist = process.env.ADMIN_CLIENT_DIST ?? (process.env.NODE_ENV === "production"
     ? "/app/client/admin-dist"
     : path.resolve(process.cwd(), "../client/admin-dist"));
-  if (existsSync(path.join(clientDist, "index.html"))) {
-    const fastifyStatic = (await import("@fastify/static")).default;
-    await app.register(fastifyStatic, {
-      root: clientDist,
-      prefix: "/",
-      wildcard: false,
-      setHeaders: (reply, filePath) => {
-        reply.header("Cache-Control", cacheControlForPath(filePath));
-      },
-    });
-    app.setNotFoundHandler((request, reply) => {
-      if (request.url.startsWith("/api/")) return reply.code(404).send({ error: "not_found" });
-      // Spec 38 lesson (2026-11-13): serving index.html for a missing JS/CSS
-      // asset turns "stale bundle / unreadable file" into a silent blank page
-      // and costs an hour of debugging. Asset misses fail loudly.
-      if (isAssetRequest(request.url)) {
-        return reply.code(404).send({ error: "not_found" });
-      }
-      return reply.sendFile("index.html");
-    });
-  } else {
+  const served = await registerClientDist(app, {
+    distDir: clientDist,
+    requireIndexHtml: true,
+    apiNotFound: (_request, reply) => reply.code(404).send({ error: "not_found" }),
+  });
+  if (!served) {
     app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: "not_found" }));
   }
   return app;
