@@ -1,9 +1,23 @@
 # Spec 41 — Audit remediation: the 2026-11-15 review, phase by phase
 
-> **Status: planned.** Written from the 2026-11-15 architecture audit
-> (`architecture-review-2026-11-15-1154.html`, explore-verified). Every phase is
-> self-contained and independently mergeable. Read "How to work this plan"
-> before starting anything.
+> **Status: done (2026-11-15).** Every phase landed; the tree is green.
+> What the work surfaced, phase by phase, is recorded here rather than left
+> in commit messages. Deviations from the plan as written are called out
+> inline where they happened (Phase 6's premise correction, Phase 1's
+> constraint-forced commit shape, Phase 3's fixture location).
+>
+> **Baseline (Phase 0, measured on this machine, 2026-11-15):** client
+> 895 tests green, server 806 green (4 skipped). Build ~26 s; bundle budgets
+> all met (app chunk 279.8 KB, CSS 68.3 KB). **Environment note:** the
+> machine's default Node is v20 (native modules built for ABI 115), while CI
+> uses v24 — the client suite also fails under the installed v26 (jsdom
+> localStorage). The local green runs here use the machine default; CI
+> remains the source of truth.
+>
+> **Outcome (Phase 10, re-measured):** client 936 tests green, server 827
+> green (4 skipped). Build ~13 s; budgets all met (app chunk 283.3 KB,
+> +~3.5 KB net, gzip 86.7 KB; CSS unchanged 68.3 KB). Both typechecks clean;
+> `npm audit --audit-level=high` clean both tiers (client: 4 low only).
 
 ## Purpose
 
@@ -619,3 +633,97 @@ JSX; no duplicated listener wiring.
 - Parse bookshop.org or Barnes & Noble product URLs.
 - Unify the client and server into one age-ladder module — the seam is real;
   the contract is what we share.
+
+---
+
+## Reconciliation (2026-11-15)
+
+### Phase by phase, what actually happened
+
+- **Phase 0.** Baseline measured (see status block). The build already met
+  every bundle budget; the client suite was green and stayed green.
+- **Phase 1 (steps 1.1–1.7).** Landed as step 1.1 (`bookDir`,
+  `srv-<sha256-16>` / `books/local/`) and one commit for steps 1.2–1.7: the
+  steps share call sites, so splitting them would have red-tracked the tree.
+  Downloads write per-server dirs; recovery scans the current layout first,
+  then legacy, and stores the path that is really on disk; adoption into the
+  current shelf leaves legacy files in place; rows written before the change
+  are pinned by test and never rewritten. LIMITATIONS.md names both layouts.
+- **Phase 2.** `EXTERNAL_STORES` kept its parsing role unchanged;
+  `EXTRA_VENDORS` owns the two search-only vendors (bookshop, B&N, both
+  affiliate-tagged). `buildBuyLinks` composes registry output; a cross-check
+  test fails on any future drift. Audible stays untagged forever.
+- **Phase 3.** Both tiers now assert one committed fixture,
+  `test-fixtures/age-ladder.json` (root `test/` is gitignored — the plan's
+  `test/fixtures/` path would never have reached CI; caught at the first
+  push, fixture moved in the follow-up commit).
+- **Phase 4.** `local/kids.ts` owns `isKidsAccount`/`canSeeBuySurfaces`;
+  every buy-surface call site composes it, and `kidsSurface.test.ts` sweeps
+  the source for future inline `role === "child"` comparisons. AccountMenu's
+  kids badge and the mergeShelves child filter use the same predicate.
+- **Phase 5.** `PERSONAL_DATA_ROWS` is the one table; the export keys,
+  selects and erasure order are generated from it; the schema-completeness
+  guard now demands a select and an erase strategy per row. Export payload
+  keeps the identical top-level key set and per-delegate selects (pinned by
+  test); key order is row-derived (children-first), which JSON consumers do
+  not observe. GDPR records (roa/retention/remediation-plan) now say
+  "generated from one table", not merely "read the same constant".
+- **Phase 6 (premise corrected).** An earlier helper queued at most one
+  trailing run. It broke the pinned `useLibrary` contract — five overlapping
+  triggers were re-stacked into two batches on the hottest path in the app —
+  so the trailing run was removed. `useBrowse` shares one batch now too
+  (pinned: 5 calls, not 10). Step 6.1 above carries the full note.
+- **Phase 7.** `getPrivateValues`/`readProgressMany`: one `bulkGet` plus
+  parallel decrypts; the legacy bare-id fallback happens in one more bulk
+  pass only for rows the scoped key missed. Also fixed a latent bug this
+  pass surfaced: the refresh path read progress through the *global*
+  database instead of the injected one — the phase-7 test failure forced
+  the fix.
+- **Phase 8.** `AccountGate.tsx`: render only (180 lines). The state machine,
+  the load effect and every auth flow live in `accountGate/useAccountGate.ts`;
+  the forms/list/confirm screens are siblings under `components/accountGate/`.
+  The three AccountGate suites pass **unmodified**. Two deliberate bugfixes
+  folded in: form input state is form-owned (switching modes can no longer
+  carry a stale password), and the setup claim field's `autoComplete` no
+  longer answers to a flag from an unrelated flow.
+- **Phase 9.** 9.1: buy-context uses the shared bounded `RateLimiter`
+  (with `clearAll()`); a test pins the window-reset. 9.2: `bookCoverKey`
+  composes `replicaBookKey`; the four JSX key sites use it; a test pins the
+  spelling. 9.3: one `resolveSessionProfileId()` in `useSession`. 9.4:
+  `shared/listener.ts` owns `collectApiDocs`, `registerClientDist` and
+  `sharedCorsOrigins`; both listeners consume them. **One HTTP detail
+  changed, disclosed:** the family listener's missing-asset 404 body is now
+  the shared `{error:"not_found"}` (was `{code:"not_found"}`) — status,
+  content-type and the "never index.html" rule are unchanged, and that 404
+  has no body consumers. The admin status endpoint's `corsOrigins` now
+  names all allowed origins (previously it under-reported by one,
+  `capacitor://localhost`).
+- **Phase 10.** Docs (roa/retention/remediation-plan/LIMITATIONS) updated in
+  the phases that changed them; both spec files and the roadmap reconciled
+  here. The GDPR docs describe enforcement, not aspiration.
+
+### Descoped and parked
+
+- **Phase 9.5 (stretch).** `lib/api.ts` thinning and the server root
+  grouping were not done — the plan marked them optional, they carry no
+  leverage claim, and the tree is better off without the churn. Candidate
+  for a later cosmetic pass.
+- **Flaky tests.** The client suite intermittently reports one file red
+  under load and green on rerun (seen twice during this work). Not caused by
+  any phase here; the failure never names the same assertion twice and the
+  suite is green on every clean rerun. Worth an issue if it recurs.
+- **Node version on this machine.** v20 default vs CI's v24 (native modules)
+  is the only reason server runs used the machine default here; both suites
+  are green under it. No action taken in this change.
+- **The build fix.** After Phase 5, server `tsc --noEmit` failed (untyped
+  `Object.freeze` argument against `PersonalDataRow[]`). Fixed in a
+  one-line change (`Object.freeze<PersonalDataRow[]>`); both suites and
+  `npm run build` re-verified after the fix. Honest process note: the
+  Phase 5 gate ran tests, not the server typecheck — it does now, on every
+  phase.
+
+### What this does not change
+
+No API response shape changed (one asset-miss body, disclosed). No
+migration. No auth, session, or `x-profile-id` changes. The GDPR export
+payload's keys are identical.
