@@ -4,6 +4,7 @@ import type { Audiobook } from "../types";
 import { LocalLibraryDatabase } from "./db";
 import { useDeviceLibrary } from "./useDeviceLibrary";
 import { putReplicaBook, trackPath, type FileSystemPort } from "./replica";
+import { cacheProgress, lockOfflineCache, rememberProfileKey } from "./privateCache";
 import type { DownloadedTrack } from "./db";
 
 /**
@@ -56,6 +57,7 @@ beforeEach(() => {
 
 afterEach(() => {
   db.close();
+  lockOfflineCache();
   vi.unstubAllGlobals();
 });
 
@@ -114,6 +116,31 @@ describe("useDeviceLibrary", () => {
 
     await waitFor(() => expect(view.result.current.loading).toBe(false));
     expect(view.result.current.books).toEqual([]);
+  });
+
+  it("carries saved positions into the shelf in one pass", async () => {
+    await downloaded(book({ id: 1 }), SERVER);
+    await downloaded(
+      book({
+        id: 2,
+        title: "The Tombs of Atuan",
+        tracks: [{ id: 20, title: "Chapter 1", duration: 300, trackNumber: 1 }],
+      }),
+      SERVER,
+    );
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await cacheProgress(1, { position: 1234, completed: false, lastPlayed: "2026-11-15T00:00:00.000Z" }, SERVER, db);
+    await cacheProgress(2, { position: 5678, completed: false, lastPlayed: "2026-11-15T00:00:00.000Z" }, SERVER, db);
+
+    const view = mount();
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+
+    expect(
+      view.result.current.books.map((entry) => [entry.id, entry.progress?.position]),
+    ).toEqual([
+      [1, 1234],
+      [2, 5678],
+    ]);
   });
 
   it("says whether a book is downloaded, per shelf", async () => {

@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalLibraryDatabase } from "./db";
+import { replicaBookKey } from "./replica";
 import {
   activeCacheProfileId,
   cacheFavourites,
@@ -7,6 +8,7 @@ import {
   deleteProfileCache,
   exportActiveProfileKey,
   getPrivateValue,
+  readProgressMany,
   hasProfileCache,
   lockOfflineCache,
   offlineCacheState,
@@ -184,5 +186,84 @@ describe("the private cache is scoped to a server", () => {
     );
 
     expect((await readProgress(42, "https://a.example", db))?.position).toBe(1234);
+  });
+});
+
+describe("readProgressMany (spec 41 phase 7)", () => {
+  it("returns progress for many rows in one pass, keyed by replicaBookKey", async () => {
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await putPrivateValue("progress", replicaBookKey("https://a.example", 1), { position: 100 }, db);
+    await putPrivateValue("progress", replicaBookKey("https://a.example", 2), { position: 200 }, db);
+
+    const result = await readProgressMany(
+      [
+        { bookId: 1, serverId: "https://a.example" },
+        { bookId: 2, serverId: "https://a.example" },
+        { bookId: 3, serverId: "https://a.example" },
+      ],
+      db,
+    );
+
+    expect(result.get(replicaBookKey("https://a.example", 1))).toEqual({ position: 100 });
+    expect(result.get(replicaBookKey("https://a.example", 2))).toEqual({ position: 200 });
+    expect(result.has(replicaBookKey("https://a.example", 3))).toBe(false);
+  });
+
+  it("does the scoped read in a single bulkGet when every key is present", async () => {
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await putPrivateValue("progress", replicaBookKey("https://a.example", 1), { position: 100 }, db);
+    await putPrivateValue("progress", replicaBookKey("https://a.example", 2), { position: 200 }, db);
+    const bulkGet = vi.spyOn(db.privateRows, "bulkGet");
+
+    await readProgressMany(
+      [
+        { bookId: 1, serverId: "https://a.example" },
+        { bookId: 2, serverId: "https://a.example" },
+      ],
+      db,
+    );
+
+    expect(bulkGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the legacy bare-id key for rows the scoped key misses", async () => {
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await putPrivateValue("progress", "1", { position: 100 }, db);
+
+    const result = await readProgressMany([{ bookId: 1, serverId: "https://a.example" }], db);
+
+    expect(result.get(replicaBookKey("https://a.example", 1))).toEqual({ position: 100 });
+  });
+
+  it("scoped value wins over the legacy fallback", async () => {
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await putPrivateValue("progress", "1", { position: 999 }, db);
+    await putPrivateValue("progress", replicaBookKey("https://a.example", 1), { position: 111 }, db);
+
+    const result = await readProgressMany([{ bookId: 1, serverId: "https://a.example" }], db);
+
+    expect(result.get(replicaBookKey("https://a.example", 1))).toEqual({ position: 111 });
+  });
+
+  it("keeps shelves of different servers separate", async () => {
+    await rememberProfileKey(7, "correct-horse-9", db);
+    await putPrivateValue("progress", replicaBookKey("https://a.example", 1), { position: 100 }, db);
+    await putPrivateValue("progress", replicaBookKey("https://b.example", 1), { position: 200 }, db);
+
+    const result = await readProgressMany(
+      [
+        { bookId: 1, serverId: "https://a.example" },
+        { bookId: 1, serverId: "https://b.example" },
+      ],
+      db,
+    );
+
+    expect(result.get(replicaBookKey("https://a.example", 1))).toEqual({ position: 100 });
+    expect(result.get(replicaBookKey("https://b.example", 1))).toEqual({ position: 200 });
+  });
+
+  it("returns an empty map when the profile key is locked", async () => {
+    const result = await readProgressMany([{ bookId: 1, serverId: "https://a.example" }], db);
+    expect(result.size).toBe(0);
   });
 });

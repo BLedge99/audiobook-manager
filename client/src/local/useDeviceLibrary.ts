@@ -29,7 +29,7 @@ import {
 } from "./replica";
 import { listUnclaimedOnDevice, recoverBooks, type RecoveryResult } from "./recover";
 import { localErrorMessage } from "./errorMessage";
-import { readProgress } from "./privateCache";
+import { readProgressMany } from "./privateCache";
 import type { ReplicaBook, LocalLibraryDatabase } from "./db";
 import type { FileSystemPort } from "./replica";
 
@@ -127,15 +127,19 @@ export function useDeviceLibrary(
       // to. Rows are keyed by `<serverId>#<bookId>`, so shelves do not collide.
       const all = await listReplicaBooks(db);
       const next: Record<string, ReplicaBook> = {};
+      // The replica stores only shared metadata. Progress is private and
+      // comes back from the encrypted rows when the profile key is unlocked;
+      // without a key the book is still playable, just with no resume point.
+      //
+      // The rows' own servers scope the reads: two shelves can hold the same
+      // book number, and their positions are different books' positions. One
+      // batched read for the whole shelf, not a decrypt per book.
+      const progressMap = await readProgressMany(
+        all.map((row) => ({ bookId: row.book.id, serverId: row.serverId ?? getServerUrl() })),
+        db,
+      );
       for (const row of all) {
-        // The replica stores only shared metadata. Progress is private and
-        // comes back from the encrypted rows when the profile key is unlocked;
-        // without a key the book is still playable, just with no resume point.
-        //
-        // The row's own server is what scopes the read: two shelves can hold
-        // the same book number, and their positions are different books'
-        // positions.
-        const progress = await readProgress(row.book.id, row.serverId ?? getServerUrl());
+        const progress = progressMap.get(replicaBookKey(row.serverId ?? getServerUrl(), row.book.id));
         next[row.bookKey] = progress ? { ...row, book: { ...row.book, progress } } : row;
       }
       setRows(next);

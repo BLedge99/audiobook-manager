@@ -390,6 +390,28 @@ export async function deletePrivateValue(
   await db.privateRows.delete(profileRowId(profileId, table, rowKey));
 }
 
+interface PrivateRow {
+  profileId: number;
+  table: string;
+  rowKey: string;
+  iv: string;
+  ciphertext: string;
+}
+
+/** Decrypt one private-cache row. Shared by the single and bulk readers. */
+async function decryptPrivateRow<T>(row: PrivateRow, key: CryptoKey): Promise<T> {
+  const plaintext = await subtle().decrypt(
+    {
+      name: "AES-GCM",
+      iv: fromBase64(row.iv),
+      additionalData: rowAad(row.profileId, row.table, row.rowKey),
+    },
+    key,
+    fromBase64(row.ciphertext),
+  );
+  return JSON.parse(decoder.decode(plaintext)) as T;
+}
+
 /** Read and decrypt one private value. Returns undefined when the row is absent. */
 export async function getPrivateValue<T>(
   table: string,
@@ -403,16 +425,37 @@ export async function getPrivateValue<T>(
 
   const row = await db.privateRows.get(profileRowId(profileId, table, rowKey));
   if (!row) return undefined;
-  const plaintext = await subtle().decrypt(
-    {
-      name: "AES-GCM",
-      iv: fromBase64(row.iv),
-      additionalData: rowAad(row.profileId, row.table, row.rowKey),
-    },
-    key,
-    fromBase64(row.ciphertext),
+  return decryptPrivateRow<T>(row, key);
+}
+
+/**
+ * Bulk variant of `getPrivateValue`: ONE `bulkGet` for many keys, decrypts in
+ * parallel. Keys absent from the store are absent from the result.
+ */
+export async function getPrivateValues<T>(
+  table: string,
+  rowKeys: string[],
+  db: LocalLibraryDatabase = localDb,
+): Promise<Map<string, T>> {
+  const result = new Map<string, T>();
+  const profileId = activeCacheProfileId();
+  if (profileId === null) return result;
+  const key = activeKeys.get(profileId);
+  if (!key) return result;
+
+  const unique = [...new Set(rowKeys)];
+  if (unique.length === 0) return result;
+
+  const rows = await db.privateRows.bulkGet(
+    unique.map((rowKey) => profileRowId(profileId, table, rowKey)),
   );
-  return JSON.parse(decoder.decode(plaintext)) as T;
+  await Promise.all(
+    rows.map(async (row, index) => {
+      if (!row) return;
+      result.set(unique[index], await decryptPrivateRow<T>(row, key));
+    }),
+  );
+  return result;
 }
 
 /**
@@ -481,6 +524,40 @@ export async function readProgress(
   const scoped = await getPrivateValue<BookProgress>("progress", progressKey(serverId, bookId), db);
   if (scoped !== undefined) return scoped;
   return getPrivateValue<BookProgress>("progress", String(bookId), db);
+}
+
+/**
+ * Bulk progress read for the whole shelf: scoped rows in one `bulkGet`, the
+ * legacy bare-id fallback in one more `bulkGet` only for the rows it missed.
+ * Returns a map keyed by `replicaBookKey(serverId, bookId)`.
+ */
+export async function readProgressMany(
+  books: { bookId: number; serverId: string }[],
+  db: LocalLibraryDatabase = localDb,
+): Promise<Map<string, BookProgress>> {
+  const out = new Map<string, BookProgress>();
+  if (books.length === 0) return out;
+
+  const scoped = await getPrivateValues<BookProgress>(
+    "progress",
+    books.map(({ bookId, serverId }) => progressKey(serverId, bookId)),
+    db,
+  );
+  for (const [key, value] of scoped) out.set(key, value);
+
+  const missing = books.filter(({ bookId, serverId }) => !out.has(progressKey(serverId, bookId)));
+  if (missing.length === 0) return out;
+
+  const legacy = await getPrivateValues<BookProgress>(
+    "progress",
+    missing.map(({ bookId }) => String(bookId)),
+    db,
+  );
+  for (const { bookId, serverId } of missing) {
+    const value = legacy.get(String(bookId));
+    if (value !== undefined) out.set(progressKey(serverId, bookId), value);
+  }
+  return out;
 }
 
 /**
