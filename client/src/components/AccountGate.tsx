@@ -1,57 +1,15 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Fingerprint, KeyRound, LoaderCircle, UserRound } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { copy } from "../copy";
-import {
-  boundedFetch,
-  clearPendingProfileId,
-  fetchAppConfig,
-  getPendingProfileId,
-  setActiveProfileId,
-  setSessionToken,
-  apiUrl,
-} from "../lib/api";
-import { beginNativeOAuth, subscribeNativeOAuth, type NativeOAuthResult } from "../lib/oauthNative";
-import { errorSentenceForCode, responseErrorText } from "../lib/apiError";
-import { isNativeShell } from "../lib/platform";
-import { PasskeyError, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
-import { deviceName, getInstallationId } from "../lib/deviceIdentity";
 import { canOpenPrivacyNotice, onPrivacyNoticeClick, privacyNoticeUrl } from "../lib/privacyNotice";
-import { deleteProfileCache, fromBase64, lockOfflineCache, rememberProfileKey, unlockProfileCacheWithKey } from "../local/privateCache";
-import { biometricVault } from "../lib/biometricVault";
-import { toBase64, exportActiveProfileKey } from "../local/privateCache";
 import { ProfileRegistration } from "./ProfileRegistration";
-import {
-  biometricFailureMessage,
-  classifyBiometricFailure,
-  shouldClearSavedKey,
-  shouldRetryBiometricUnlock,
-} from "../lib/biometricFailure";
-import { Btn, Field, FullScreen, Wordmark, cn } from "../ui/primitives";
-
-interface Account {
-  id: number;
-  name: string;
-  color?: string | null;
-  role: "admin" | "member";
-  disabled: boolean;
-  hasPassword: boolean;
-  hasPasskey: boolean;
-  hasDeviceUnlock: boolean;
-}
-
-type Mode =
-  | { kind: "list" }
-  | { kind: "password"; account: Account }
-  | { kind: "setup"; account: Account }
-  | { kind: "household" }
-  | { kind: "register" }
-  | { kind: "email" };
-
-const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
-
-function errorSentence(error: unknown): string {
-  return error instanceof Error ? error.message : copy.login.unreachable;
-}
+import { GoogleOauthConfirm } from "./accountGate/GoogleOauthConfirm";
+import { GateList } from "./accountGate/GateList";
+import { PasswordForm } from "./accountGate/PasswordForm";
+import { SetupForm } from "./accountGate/SetupForm";
+import { HouseholdForm } from "./accountGate/HouseholdForm";
+import { EmailForm } from "./accountGate/EmailForm";
+import { useAccountGate } from "./accountGate/useAccountGate";
+import { Btn, FullScreen, Wordmark } from "../ui/primitives";
 
 /**
  * The account picker (spec 28).
@@ -62,6 +20,8 @@ function errorSentence(error: unknown): string {
  *
  * The household password is still reachable, but it is a separate mode with its
  * own explanation: it is for setup and recovery, not the daily sign-in.
+ *
+ * Everything interactive lives in `useAccountGate`; this file only renders it.
  */
 export function AccountGate({
   onSuccess,
@@ -73,539 +33,40 @@ export function AccountGate({
   /** Offered in the native shell so the listener is never soft-locked offline. */
   onContinueOffline?: () => void;
 }) {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [mode, setMode] = useState<Mode>({ kind: "list" });
-  const [loading, setLoading] = useState(true);
-  const [accountsLoadFailed, setAccountsLoadFailed] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  /** When the user chose "Sign in with Google", show a themed confirmation
-   *  before handing off to Google. Google's own page cannot be themed, so a
-   *  gentle on-ramp in our own visual language reduces the jarring color flip. */
-  const [confirmOauth, setConfirmOauth] = useState<"google" | null>(null);
+  const gate = useAccountGate({ onSuccess, accountExperience });
+  const {
+    accounts,
+    mode,
+    loading,
+    accountsLoadFailed,
+    finishing,
+    busy,
+    error,
+    confirmOauth,
+    oauthProviders,
+    passkeysAvailable,
+    biometricsAvailable,
+    heading,
+    intro,
+  } = gate;
 
-  const [password, setPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [emailSignup, setEmailSignup] = useState(false);
-  const [householdPassword, setHouseholdPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passkeysAvailable, setPasskeysAvailable] = useState(() => passkeysSupported());
-  const [biometricsAvailable, setBiometricsAvailable] = useState(false);
-  const [oauthProviders, setOAuthProviders] = useState<string[]>([]);
-  // True from a native deep-link result until the app's probe lands and this
-  // gate unmounts. The OAuth round trip completes server-side well before the
-  // listener sees any change; without this, the screen looks dead and people
-  // tap again (spec 32 / ADR 030).
-  const [finishing, setFinishing] = useState(false);
-
-  useEffect(() => { void biometricVault.available().then(setBiometricsAvailable); }, []);
-
-  // Spec 32 / ADR 023: the OAuth callback redirects home with `?auth_error=<code>`
-  // when the flow fails, so the listener sees it without a session.
-  useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("auth_error");
-    if (code) setError(errorSentenceForCode(code));
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      try {
-        if (accountExperience === "demo") {
-          if (alive) {
-            setAccounts([]);
-            const config = await fetchAppConfig();
-            setOAuthProviders(config.oauthProviders ?? []);
-            const authError = new URLSearchParams(window.location.search).get("auth_error");
-            const signup = new URLSearchParams(window.location.search).get("account_action") === "signup";
-            if (signup) setEmailSignup(true);
-            setMode(authError || signup ? { kind: "email" } : { kind: "list" });
-          }
-          return;
-        }
-        const res = await boundedFetch("/api/auth/accounts");
-        if (!res.ok) {
-          if (alive) {
-            setAccountsLoadFailed(true);
-            setError(copy.account.loadFailed(res.status));
-          }
-          return;
-        }
-        const list = (await res.json()) as Account[];
-        if (!alive) return;
-        setAccounts(list);
-        setAccountsLoadFailed(false);
-        const pending = getPendingProfileId();
-        if (pending) {
-          const match = list.find((account) => String(account.id) === pending);
-          if (match) {
-            setMode(match.hasPassword
-              ? { kind: "password", account: match }
-              : { kind: "setup", account: match });
-          }
-        }
-      } catch (loadError) {
-        if (alive) {
-          setAccountsLoadFailed(true);
-          setError(errorSentence(loadError));
-        }
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [accountExperience]);
-
-  const finish = async (profileId: number | null, token: string | undefined, offline = false) => {
-    setSessionToken(token);
-    setActiveProfileId(accountExperience === "demo" ? null : profileId);
-    if (profileId === null || accountExperience === "demo") lockOfflineCache();
-    clearPendingProfileId();
-    await onSuccess({ offline });
-  };
-
-  // Spec 32 / ADR 030: the native flow resolves out of process (Custom Tab →
-  // deep link). The ref keeps the latest `finish` so the subscription doesn't
-  // re-register or re-fire on every render; a cold-start result is parked in
-  // the module and delivered here once the gate mounts.
-  const finishRef = useRef(finish);
-  finishRef.current = finish;
-  useEffect(() => {
-    if (!isNativeShell()) return;
-    return subscribeNativeOAuth((result: NativeOAuthResult) => {
-      if (result.kind === "ok") {
-        // Keep the gate honest for the seconds the app takes to settle:
-        // the token is already in hand and the probe is what flips this
-        // screen away. If it never resolves, an 8-second timeout returns
-        // the buttons with the reviewed failure sentence.
-        setError(undefined);
-        setFinishing(true);
-        void finishRef.current(accountExperience === "demo" ? null : result.profileId, result.token);
-        return;
-      }
-      setFinishing(false);
-      setError(errorSentenceForCode(result.code));
-    });
-  }, [accountExperience]);
-
-  useEffect(() => {
-    if (!finishing) return undefined;
-    const timer = window.setTimeout(() => {
-      setFinishing(false);
-      setError(copy.login.oauthFailed);
-    }, 8000);
-    return () => window.clearTimeout(timer);
-  }, [finishing]);
-
-  /**
-   * Unwrap or create the offline key while the password is still in hand. A
-   * failure here must not fail the sign-in: the server session is valid, and
-   * the cache is a convenience until the next successful unlock.
-   */
-  const rememberKey = async (profileId: number, password: string) => {
-    try {
-      await rememberProfileKey(profileId, password);
-    } catch {
-      // Encryption unavailable (old WebView, private mode). Online still works.
-    }
-  };
-
-  /**
-   * Attach this device's bookkeeping to the sign-in, whatever the enrolment state.
-   *
-   * Two operations, both cheap:
-   *
-   *  1. **Adopt the session** into the device credential in the server (no
-   *     secret, no rotation). Without this, password sign-ins on a phone that
-   *     is already enrolled each mint a fresh browser-style row in the
-   *     "Signed-in devices" panel.
-   *  2. **Enrol when the Vault has no secret** — first sign-in, or a Keystore
-   *     that was invalidated and re-enrolled the wrong value. With a live
-   *     secret there is nothing to set up; the exchange at launch does it.
-   */
-  const enrollDeviceUnlock = async (profileId: number) => {
-    if (!biometricsAvailable || mode.kind !== "password") return;
-    let deviceId: string | undefined;
-    try {
-      // Adopt this sign-in into the phone's existing device credential, so
-      // the panel lists the phone once instead of one row per re-sign-in.
-      // No secret, no rotation: this is the bookkeeping only.
-      await boundedFetch("/api/auth/devices/link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId: getInstallationId() }),
-      }).catch(() => undefined);
-      if (biometricVault.hasSecret(profileId)) return;
-      const key = await exportActiveProfileKey(profileId);
-      if (!key) return;
-      const response = await boundedFetch("/api/auth/devices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // The phone names itself (spec 36): "Pixel 4a" rather than "Android
-        // device", so the signed-in devices panel can tell two phones apart.
-        // The device id also makes this a rotation of the phone's existing
-        // credential rather than a second one.
-        body: JSON.stringify({
-          label: deviceName(copy.security.thisDevice),
-          deviceId: getInstallationId(),
-        }),
-      });
-      if (!response.ok) return;
-      const created = (await response.json()) as { id: string; secret: string };
-      deviceId = created.id;
-      await biometricVault.save(profileId, {
-        profileId,
-        secret: created.secret,
-        key: toBase64(key),
-      });
-    } catch {
-      if (deviceId) {
-        await boundedFetch(`/api/auth/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" }).catch(() => undefined);
-      }
-    }
-  };
-
-  const signIn = async (event: FormEvent) => {
-    event.preventDefault();
-    if (mode.kind !== "password") return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const res = await boundedFetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId: mode.account.id, password }),
-      });
-      if (!res.ok) {
-        setError(await responseErrorText(res));
-        return;
-      }
-      const body = (await res.json()) as {
-        token?: string;
-        authDisabled?: boolean;
-        profile?: { id: number };
-      };
-      if (body.authDisabled || body.token === "disabled") {
-        // Development with no APP_PASSWORD: the header path still chooses the
-        // profile, and there is no password to collect.
-        await finish(mode.account.id, undefined);
-        return;
-      }
-      await rememberKey(mode.account.id, password);
-      if (isNativeShell()) await enrollDeviceUnlock(mode.account.id);
-      await finish(body.profile?.id ?? mode.account.id, body.token);
-    } catch (submitError) {
-      setError(errorSentence(submitError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const passkeySignIn = async () => {
-    if (mode.kind !== "password") return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const result = await signInWithPasskey(mode.account.id);
-      // No password is in hand, so the previous profile's key must not stay
-      // unlocked. Offline data asks for the password separately.
-      lockOfflineCache();
-      await finish(
-        result.profile?.id ?? mode.account.id,
-        result.authDisabled ? undefined : result.token,
-      );
-    } catch (error) {
-      if (error instanceof PasskeyError && error.code === "passkey_not_configured") {
-        setPasskeysAvailable(false);
-        setError(copy.login.passkeyUnavailable);
-      } else {
-        setError(copy.security.failed);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const biometricSignIn = async () => {
-    if (mode.kind !== "password") return;
-    const accountId = mode.account.id;
-    setBusy(true); setError(undefined);
-    try {
-      /*
-       * The first biometric prompt after launch can fail transiently on some
-       * devices (keystore / sensor warm-up), so a transient failure is retried
-       * once. Everything else is classified rather than guessed at
-       * (`lib/biometricFailure.ts`): the old table retried cancellation, which
-       * re-opened the prompt after someone had already chosen the password.
-       */
-      let saved: { profileId: number; secret?: string; key: string };
-      try {
-        for (let attempt = 0; ; attempt += 1) {
-          try {
-            saved = await biometricVault.unlock<{
-              profileId: number;
-              secret?: string;
-              key: string;
-            }>(accountId);
-            break;
-          } catch (promptError) {
-            if (attempt === 0 && shouldRetryBiometricUnlock(promptError)) continue;
-            throw promptError;
-          }
-        }
-      } catch (promptError) {
-        const failure = classifyBiometricFailure(promptError);
-        if (shouldClearSavedKey(failure)) {
-          /*
-           * The Keystore key can never open this value again (enrolling a new
-           * fingerprint invalidates it). Drop it so device sign-in can be set
-           * up again, and say so once -- this is self-healing, not an error the
-           * listener has to work around.
-           */
-          await biometricVault.clear(accountId).catch(() => undefined);
-        }
-        const sentence = biometricFailureMessage(failure, {
-          failed: copy.login.deviceFailed,
-          locked: copy.login.deviceLocked,
-          needsSetup: copy.login.deviceNeedsSetup,
-          unavailable: copy.login.deviceUnavailable,
-          transient: copy.login.deviceTransient,
-        });
-        // A cancellation is a choice, not a failure: stay silent and leave the
-        // password form exactly where it is.
-        if (sentence) setError(sentence);
-        return;
-      }
-
-      if (saved.profileId !== accountId) {
-        // The value is valid, just for another profile on this phone. Clearing
-        // it would destroy that profile's device sign-in.
-        setError(copy.login.deviceOtherProfile);
-        return;
-      }
-      if (!saved.secret) {
-        /*
-         * The Vault holds a value but no device secret.
-         *
-         * That happens when the phone was set up while the server was
-         * unreachable, or when the secret was lost with an invalidated
-         * Keystore key and the phone was set up again offline. Either way the
-         * fingerprint can open the profile *locally*, but the phone cannot
-         * sign in to the server on its own, and it cannot ask for a new
-         * secret either: enrolling a device needs a session, and the session
-         * is what the secret would buy.
-         *
-         * So the password is needed once. The password sign-in re-enrols the
-         * phone, which puts the secret back in the Vault.
-         */
-        setError(copy.login.deviceNeedsPasswordOnline);
-        return;
-      }
-
-      let token: string | undefined;
-      let offlineSignIn = false;
-      try {
-        const response = await boundedFetch("/api/auth/devices/session", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ secret: saved.secret }),
-        });
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 404) {
-            await biometricVault.clear(accountId);
-            await deleteProfileCache(saved.profileId);
-            setError(copy.login.deviceGone);
-            return;
-          }
-          setError(copy.login.deviceFailed);
-          return;
-        }
-        token = ((await response.json()) as { token?: string }).token;
-      } catch {
-        // The DEK can open this profile offline; no server session is invented.
-        offlineSignIn = true;
-      }
-      // Unlock with the saved key (works for both offline-only and online-registered modes)
-      await unlockProfileCacheWithKey(saved.profileId, fromBase64(saved.key));
-      await finish(saved.profileId, token, offlineSignIn);
-    } catch {
-      setError(copy.login.deviceFailed);
-    } finally { setBusy(false); }
-  };
-
-  const claim = async (event: FormEvent) => {
-    event.preventDefault();
-    if (mode.kind !== "setup") return;
-    if (newPassword !== confirmPassword) {
-      setError(copy.account.mismatch);
-      return;
-    }
-    setBusy(true);
-    setError(undefined);
-    try {
-      const res = await boundedFetch("/api/auth/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profileId: mode.account.id,
-          householdPassword,
-          newPassword,
-        }),
-      });
-      if (!res.ok) {
-        setError(await responseErrorText(res));
-        return;
-      }
-      const body = (await res.json()) as { token?: string; profile?: { id: number } };
-      await rememberKey(mode.account.id, newPassword);
-      await finish(body.profile?.id ?? mode.account.id, body.token);
-    } catch (submitError) {
-      setError(errorSentence(submitError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const emailSignIn = async (event: FormEvent) => {
-    event.preventDefault();
-    if (mode.kind !== "email") return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const res = await boundedFetch(emailSignup ? "/api/auth/signup" : "/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!res.ok) {
-        setError(await responseErrorText(res));
-        return;
-      }
-      const body = (await res.json()) as { token?: string; authDisabled?: boolean; profile?: { id?: number } };
-      if (body.authDisabled || body.token === "disabled") {
-        await finish(null, undefined);
-        return;
-      }
-      await finish(null, body.token);
-    } catch (submitError) {
-      setError(errorSentence(submitError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /** Spec 32 / ADR 030: native shells hand the consent page to Chrome Custom
-      Tabs and resume on a deep link; the browser navigates the WebView origin
-      (`https://localhost`), which cannot serve /api/auth/... — hence the absolute
-      `apiUrl`. The native branch never touches window.location. */
-  const startOAuth = (provider: "google" | "github") => {
-    if (isNativeShell()) {
-      beginNativeOAuth(provider).catch(() => {
-        setError(copy.login.oauthFailed);
-      });
-      return;
-    }
-    window.location.href = apiUrl(`/api/auth/${provider}/authorize`);
-  };
-
-  const household = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError(undefined);
-    try {
-      const res = await boundedFetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: householdPassword }),
-      });
-      if (!res.ok) {
-        setError(await responseErrorText(res));
-        return;
-      }
-      const body = (await res.json()) as { token?: string; authDisabled?: boolean };
-      await finish(null, body.authDisabled || body.token === "disabled" ? undefined : body.token);
-    } catch (submitError) {
-      setError(errorSentence(submitError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const back = () => {
-    clearPendingProfileId();
-    setMode({ kind: "list" });
-    setPassword("");
-    setEmail("");
-    setHouseholdPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setError(undefined);
-  };
-
-  const heading =
-    mode.kind === "setup"
-      ? copy.account.setupHeading(mode.account.name)
-      : mode.kind === "household"
-        ? copy.account.householdHeading
-      : mode.kind === "register"
-        ? copy.account.createProfile
-      : mode.kind === "email"
-          ? emailSignup ? copy.login.emailCreateHeading : copy.login.heading
-          : copy.profile.heading;
+  if (confirmOauth === "google") {
+    return (
+      <GoogleOauthConfirm
+        onContinue={() => gate.startOAuth("google")}
+        onBack={() => gate.setConfirmOauth(null)}
+      />
+    );
+  }
 
   return (
     <FullScreen>
-      {confirmOauth === "google" ? (
-        <div className="flex flex-col items-center">
-          <Wordmark title={copy.brand.name} subtitle={copy.brand.tagline} />
-          <div className="panel mt-8 w-full min-w-0 max-w-sm px-4 py-6 text-center sm:px-6 sm:py-7">
-            <svg viewBox="0 0 48 48" width="72" height="72" className="mx-auto drop-shadow-sm" aria-hidden="true">
-              <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.5-4.5H24v8.5h11.9c-.5 2.7-2.1 5-4.5 6.4v5.3h7.2c4.2-3.9 6.6-9.6 6.6-15.7z" />
-              <path fill="#34A853" d="M24 46c5.9 0 10.8-1.9 14.4-5.2l-7.2-5.3c-2 1.3-4.6 2.1-7.2 2.1-5.6 0-10.4-3.8-12.1-8.8H4.4v5.5C8 40.6 15.4 46 24 46z" />
-              <path fill="#FBBC05" d="M11.9 28.8c-1.1-2.6-1.1-5.3 0-7.9V15.5H4.4a22 22 0 0 0 0 17.8l7.5-4.5z" />
-              <path fill="#EA4335" d="M24 9.5c3 0 5.7 1 7.9 3.1l5.9-5.9C33.3 3 28.8 1 24 1 15.4 1 8 6.4 4.4 15.5l7.5 5.8c1.6-4.9 6.5-8.8 12.1-8.8z" />
-            </svg>
-            <h1 className="mt-5 font-display text-2xl font-semibold text-ink">{copy.login.oauthGoogleConfirmHeading}</h1>
-            <p className="mt-2 text-sm leading-relaxed text-ink2">{copy.login.oauthGoogleConfirmBody}</p>
-            <Btn
-              type="button"
-              variant="primary"
-              onClick={() => startOAuth("google")}
-              className="mt-6 w-full"
-            >
-              {copy.login.oauthGoogleContinue}
-            </Btn>
-            <button
-              type="button"
-              onClick={() => setConfirmOauth(null)}
-              className="mt-4 inline-flex items-center justify-center gap-1.5 text-sm font-bold text-ink3"
-            >
-              <ArrowLeft size={15} aria-hidden="true" />
-              {copy.account.back}
-            </button>
-          </div>
-        </div>
-      ) : (
       <div className="flex flex-col items-center">
         <Wordmark title={copy.brand.name} subtitle={copy.brand.tagline} />
 
         <div className="panel mt-8 w-full min-w-0 max-w-sm px-4 py-6 sm:px-6 sm:py-7">
           <h1 className="font-display text-2xl font-semibold text-ink">{heading}</h1>
-          <p className="mt-1.5 text-sm text-ink2">
-            {mode.kind === "setup"
-              ? copy.account.setupIntro
-              : mode.kind === "household"
-                ? copy.account.householdIntro
-                : mode.kind === "register"
-                  ? copy.account.registerIntro
-                : mode.kind === "password"
-                  ? copy.account.passwordLabel(mode.account.name)
-                  : mode.kind === "email"
-                    ? emailSignup ? copy.login.emailCreateHeading : copy.login.emailIntro
-                    : copy.account.intro}
-          </p>
+          <p className="mt-1.5 text-sm text-ink2">{intro}</p>
 
           {loading && (
             <p className="mt-5 flex items-center gap-2 text-sm font-bold text-ink2" role="status">
@@ -621,347 +82,67 @@ export function AccountGate({
             </p>
           )}
 
-          {!loading && !finishing && mode.kind === "list" && accountExperience === "demo" && (
-            <>
-              <div className="mt-5 grid min-w-0 gap-3">
-                <button type="button" onClick={() => setConfirmOauth("google")} className="btn btn--glass w-full text-left">
-                  {copy.login.oauthGoogleAction}
-                </button>
-                <button type="button" onClick={() => startOAuth("github")} className="btn btn--glass w-full text-left">
-                  {copy.login.oauthGithubAction}
-                </button>
-                <button type="button" onClick={() => { setError(undefined); setMode({ kind: "email" }); }} className="btn btn--glass w-full text-left">
-                  {copy.login.emailAction}
-                </button>
-                <button type="button" onClick={() => { setEmailSignup(true); setError(undefined); setMode({ kind: "email" }); }} className="btn btn--glass w-full text-left">
-                  {copy.login.emailCreateAction}
-                </button>
-              </div>
-            </>
-          )}
-
-          {!loading && !finishing && mode.kind === "list" && accountExperience === "household" && (
-            <>
-              <div className="mt-5 grid min-w-0 gap-3">
-                {accounts.map((account, index) => (
-                  <button
-                    key={account.id}
-                    type="button"
-                    disabled={account.disabled}
-                    onClick={() =>
-                      setMode(
-                        account.hasPassword
-                          ? { kind: "password", account }
-                          : { kind: "setup", account },
-                      )
-                    }
-                    className={cn(
-                      "capsule capsule--select flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left",
-                      index % 2 ? "capsule--alt" : "",
-                      account.disabled && "opacity-55",
-                    )}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="grid size-10 shrink-0 place-items-center rounded-full border-2 border-ink"
-                      style={{ background: account.color ?? CAPSULE_TINTS[index % CAPSULE_TINTS.length] }}
-                    >
-                      <UserRound size={18} className="text-white" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-display text-[1.0625rem] font-semibold text-ink">
-                      {account.name}
-                    </span>
-                    {account.disabled ? (
-                      <span className="shrink-0 text-[0.6875rem] font-bold text-ink3">
-                        {copy.account.disabled}
-                      </span>
-                    ) : !account.hasPassword ? (
-                      <span className="shrink-0 rounded-full border-2 border-ink bg-tan/40 px-2 py-0.5 text-[0.6875rem] font-bold text-ink">
-                        {copy.account.needsSetup}
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
-                {!accounts.length && !accountsLoadFailed && (
-                  <p className="panel panel--sunk px-4 py-5 text-center text-sm text-ink2">
-                    {copy.account.noProfiles}
-                  </p>
-                )}
-              </div>
-
-              {!accountsLoadFailed && (
-                <Btn
-                  type="button"
-                  variant="quiet"
-                  onClick={() => {
-                    setError(undefined);
-                    setMode({ kind: "register" });
-                  }}
-                  className="mt-4 w-full"
-                >
-                  {copy.account.createProfile}
-                </Btn>
-              )}
-              {accountsLoadFailed && error && (
-                <p role="alert" className="text-sm font-bold text-rasp-ink">{error}</p>
-              )}
-
-              <div className="mt-5 grid min-w-0 gap-3">
-                {oauthProviders.includes("google") && (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmOauth("google")}
-                    className="btn btn--glass w-full text-left"
-                  >
-                    {copy.login.oauthGoogleAction}
-                  </button>
-                )}
-                {oauthProviders.includes("github") && (
-                  <button
-                    type="button"
-                    onClick={() => startOAuth("github")}
-                    className="btn btn--glass w-full text-left"
-                  >
-                    {copy.login.oauthGithubAction}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(undefined);
-                    setMode({ kind: "email" });
-                  }}
-                  className="btn btn--glass w-full text-left"
-                >
-                  {copy.login.emailAction}
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setError(undefined);
-                  setMode({ kind: "household" });
-                }}
-                className="mt-5 text-sm font-bold text-cobalt-ink underline decoration-2 underline-offset-2"
-              >
-                {copy.account.useHousehold}
-              </button>
-            </>
+          {!loading && !finishing && mode.kind === "list" && (
+            <GateList
+              accountExperience={accountExperience}
+              accounts={accounts}
+              accountsLoadFailed={accountsLoadFailed}
+              error={error}
+              oauthProviders={oauthProviders}
+              onSelectAccount={gate.selectAccount}
+              onRegister={gate.register}
+              onHousehold={gate.householdMode}
+              onStartOAuth={gate.startOAuth}
+              onConfirmGoogle={() => gate.setConfirmOauth("google")}
+              onEmail={gate.emailMode}
+            />
           )}
 
           {!loading && mode.kind === "password" && (
-            <form onSubmit={signIn} className="mt-5 grid gap-3">
-              <label htmlFor="profile-password" className="sr-only">
-                {copy.account.passwordLabel(mode.account.name)}
-              </label>
-              <Field
-                id="profile-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder={copy.account.passwordPlaceholder}
-                autoComplete="current-password"
-                autoFocus
-              />
-              <Btn type="submit" variant="primary" disabled={busy} className="w-full">
-                {busy ? (
-                  <>
-                    <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
-                    {copy.login.checking}
-                  </>
-                ) : (
-                  <>
-                    <KeyRound size={17} aria-hidden="true" />
-                    {copy.login.submit}
-                  </>
-                )}
-              </Btn>
-              {passkeysAvailable && mode.account.hasPasskey && !isNativeShell() && (
-                <Btn
-                  type="button"
-                  variant="quiet"
-                  disabled={busy}
-                  onClick={() => void passkeySignIn()}
-                  className="w-full"
-                >
-                  <Fingerprint size={17} aria-hidden="true" />
-                  {busy ? copy.security.adding : copy.security.signIn}
-                </Btn>
-              )}
-              {biometricsAvailable && mode.account.hasDeviceUnlock && isNativeShell() && (
-                <Btn type="button" variant="quiet" disabled={busy} onClick={() => void biometricSignIn()} className="w-full">
-                  <Fingerprint size={17} aria-hidden="true" /> {copy.security.deviceSignIn}
-                </Btn>
-              )}
-              {/* Spec 29: a control that silently disappears teaches nobody why
-                  it is gone. This profile has device sign-in set up, so the one
-                  thing the listener can do about it is enrol a fingerprint. */}
-              {!biometricsAvailable && mode.account.hasDeviceUnlock && isNativeShell() && (
-                <p className="text-center text-[0.78125rem] leading-relaxed text-ink3">
-                  {copy.security.deviceUnavailable}
-                </p>
-              )}
-              {biometricsAvailable && !mode.account.hasDeviceUnlock && isNativeShell() && (
-                <p className="text-center text-[0.78125rem] leading-relaxed text-ink3">
-                  {copy.security.deviceNeedsPassword}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={back}
-                className="inline-flex items-center justify-center gap-1.5 text-sm font-bold text-ink3"
-              >
-                <ArrowLeft size={15} aria-hidden="true" />
-                {copy.account.back}
-              </button>
-            </form>
+            <PasswordForm
+              account={mode.account}
+              busy={busy}
+              passkeysAvailable={passkeysAvailable}
+              biometricsAvailable={biometricsAvailable}
+              onSignIn={gate.signIn}
+              onPasskey={gate.passkeySignIn}
+              onBiometric={gate.biometricSignIn}
+              onBack={gate.back}
+            />
           )}
 
           {!loading && mode.kind === "setup" && (
-            <form onSubmit={claim} className="mt-5 grid gap-3">
-              <p className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-tan/25 px-3 py-2 text-sm font-bold text-ink">
-                {copy.account.unclaimedHint}
-              </p>
-              <label htmlFor="claim-household" className="sr-only">
-                {copy.login.passwordLabel}
-              </label>
-              <Field
-                id="claim-household"
-                type="password"
-                value={householdPassword}
-                onChange={(event) => setHouseholdPassword(event.target.value)}
-                placeholder={copy.login.passwordPlaceholder}
-                autoComplete={emailSignup ? "new-password" : "current-password"}
-              />
-              <label htmlFor="claim-new" className="sr-only">
-                {copy.account.newPasswordLabel}
-              </label>
-              <Field
-                id="claim-new"
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                placeholder={copy.account.newPasswordLabel}
-                autoComplete="new-password"
-              />
-              <label htmlFor="claim-confirm" className="sr-only">
-                {copy.account.confirmPasswordLabel}
-              </label>
-              <Field
-                id="claim-confirm"
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder={copy.account.confirmPasswordLabel}
-                autoComplete="new-password"
-              />
-              <Btn type="submit" variant="primary" disabled={busy} className="w-full">
-                {busy ? copy.login.checking : copy.account.setupSubmit}
-              </Btn>
-              <button
-                type="button"
-                onClick={back}
-                className="inline-flex items-center justify-center gap-1.5 text-sm font-bold text-ink3"
-              >
-                <ArrowLeft size={15} aria-hidden="true" />
-                {copy.account.back}
-              </button>
-            </form>
+            <SetupForm
+              busy={busy}
+              onSetup={gate.claim}
+              onBack={gate.back}
+            />
           )}
 
           {!loading && mode.kind === "household" && (
-            <form onSubmit={household} className="mt-5 grid gap-3">
-              <label htmlFor="household-password" className="sr-only">
-                {copy.login.passwordLabel}
-              </label>
-              <Field
-                id="household-password"
-                type="password"
-                value={householdPassword}
-                onChange={(event) => setHouseholdPassword(event.target.value)}
-                placeholder={copy.login.passwordPlaceholder}
-                autoComplete="current-password"
-                autoFocus
-              />
-              <Btn type="submit" variant="primary" disabled={busy} className="w-full">
-                {busy ? copy.login.checking : copy.login.submit}
-              </Btn>
-              <button
-                type="button"
-                onClick={back}
-                className="inline-flex items-center justify-center gap-1.5 text-sm font-bold text-ink3"
-              >
-                <ArrowLeft size={15} aria-hidden="true" />
-                {copy.account.back}
-              </button>
-            </form>
+            <HouseholdForm
+              busy={busy}
+              onSignIn={gate.household}
+              onBack={gate.back}
+            />
           )}
 
           {!loading && mode.kind === "register" && (
             <ProfileRegistration
-              onRegistered={(profileId, token) => finish(profileId, token)}
-              onCancel={back}
+              onRegistered={(profileId, token) => gate.finish(profileId, token)}
+              onCancel={gate.back}
             />
           )}
 
           {!loading && mode.kind === "email" && (
-            <form onSubmit={emailSignIn} className="mt-5 grid gap-3">
-              <label htmlFor="email" className="sr-only">
-                {copy.login.emailLabel}
-              </label>
-              <Field
-                id="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder={copy.login.emailPlaceholder}
-                autoComplete="email"
-                autoFocus
-              />
-              <label htmlFor="email-password" className="sr-only">
-                {copy.login.passwordLabel}
-              </label>
-              <Field
-                id="email-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder={copy.login.passwordPlaceholder}
-                autoComplete="current-password"
-              />
-              <Btn type="submit" variant="primary" disabled={busy} className="w-full">
-                {busy ? (
-                  <>
-                    <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
-                    {copy.login.checking}
-                  </>
-                ) : (
-                  <>
-                    <KeyRound size={17} aria-hidden="true" />
-                    {emailSignup ? copy.login.emailCreateSubmit : copy.login.submit}
-                  </>
-                )}
-              </Btn>
-              {!emailSignup && accountExperience === "demo" && (
-                <button type="button" onClick={() => setEmailSignup(true)} className="text-sm font-bold text-cobalt-ink underline">
-                  {copy.login.emailCreateAction}
-                </button>
-              )}
-              {emailSignup && accountExperience === "demo" && (
-                <button type="button" onClick={() => setEmailSignup(false)} className="text-sm font-bold text-cobalt-ink underline">
-                  {copy.login.emailAction}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={back}
-                className="inline-flex items-center justify-center gap-1.5 text-sm font-bold text-ink3"
-              >
-                <ArrowLeft size={15} aria-hidden="true" />
-                {copy.account.back}
-              </button>
-            </form>
+            <EmailForm
+              signup={mode.signup}
+              accountExperience={accountExperience}
+              busy={busy}
+              onSignIn={gate.emailSignIn}
+              onToggleSignup={gate.emailMode}
+              onBack={gate.back}
+            />
           )}
 
           {error && !(mode.kind === "list" && accountsLoadFailed && accountExperience === "household") && (
@@ -994,7 +175,6 @@ export function AccountGate({
           )}
         </div>
       </div>
-      )}
     </FullScreen>
   );
 }
