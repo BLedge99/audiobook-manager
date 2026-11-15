@@ -223,12 +223,13 @@ registry URL changes the sheet; the suite proves it.
 
 ## Phase 3 — One age-ladder contract (audit card 3)
 
-**Files:** `test/fixtures/age-ladder.json`, `server/src/age/bands.test.ts`
+**Files:** `test-fixtures/age-ladder.json`, `server/src/age/bands.test.ts`
 (new contract describe block), `client/src/local/ageFilter.test.ts`.
 
 ### Step 3.1 — the fixture
 
-`test/fixtures/age-ladder.json`:
+`test-fixtures/age-ladder.json` (committed; the root `test/` dir is gitignored —
+it holds large sample media):
 
 ```json
 {

@@ -15,7 +15,7 @@ import {
  * against one checked-in fixture so the two can never drift apart silently.
  */
 const fixture = JSON.parse(
-  readFileSync(path.resolve(__dirname, "../../../test/fixtures/age-ladder.json"), "utf8"),
+  readFileSync(path.resolve(__dirname, "../../../test-fixtures/age-ladder.json"), "utf8"),
 ) as { bands: string[]; maxAgeByBand: Record<string, number>; strictestMaxAge: number };
 
 describe("bands (spec 38)", () => {
