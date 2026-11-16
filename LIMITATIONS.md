@@ -33,6 +33,12 @@ findings are fixed and live in the code with tests; the entries below are the
 ones deliberately left as accepted risks or operator decisions. See
 `docs/security-remediation-plan-2026-11-16.md` for the full list and the fixes.
 
+**Updated 2026-11-16** (again) with the production-readiness plan: specs
+[`43-production-readiness.md`](specs/43-production-readiness.md) and
+[`44-offline-progress-sync.md`](specs/44-offline-progress-sync.md). The audit
+that produced this update found two data-loss paths that were not previously
+recorded (§1.10, §1.11); they block the v0.2.0 household release.
+
 **Updated 2026-11-12** with the kids-accounts work (spec 38) — see §2.0.
 
 **Updated 2026-11-13** with the external-providers feature (spec 39) — see §3.
@@ -395,6 +401,34 @@ belongs to, so copying it forward on a device with two shelves would hand one
 server's position to another server's same-numbered book and make the mistake
 permanent. The first save writes the correctly-scoped key, and the legacy row
 is left behind.
+
+---
+
+### 1.10 Offline-listened progress never reaches the server
+**Status: BROKEN — data loss on reconnect.** Closing in
+[`specs/44-offline-progress-sync.md`](specs/44-offline-progress-sync.md).
+
+`saveProgress` (`ChapterPlayer.tsx`) writes the server first and the encrypted
+private cache second; offline, the server write fails and only the cache holds
+the position. Nothing pushes that position back on reconnect, and the next
+successful online refresh runs `cacheLibraryPrivateState`, which **deletes** the
+cached row whenever the server payload carries no progress — or overwrites it
+with the server's older position. The offline listening session disappears, and
+`README.md`'s "progress syncs after you reconnect" is not true of the code. The
+server-side monotonic rule (§1.5) would reject a stale backward push, but the
+client never makes one.
+
+### 1.11 An unmounted/renamed media root silently deletes the library and its history
+**Status: BROKEN — data loss.** Closing in
+[`specs/43-production-readiness.md`](specs/43-production-readiness.md) (phase 1.1).
+
+When a scan completes with the walk finding nothing — an unmounted NAS, a
+renamed/moved root, a network drive that answered but delivered zero files — the
+reconciliation in `scanner.ts` deletes the "stale" `mediaItem` rows **and their
+`ListeningHistory`** with no threshold, no warning and no override. Listening
+history is the irreplaceable record in this system. The fix refuses destructive
+reconciliation on a suspiciously empty walk (env-tunable threshold) and
+requires an explicit, confirm-the-count operator action for intentional wipes.
 
 ---
 
