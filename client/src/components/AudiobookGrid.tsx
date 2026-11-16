@@ -17,7 +17,6 @@ import { copy } from "../copy";
 import {
   CapsuleMarks,
   MachineHead,
-  ShellCover,
   StatusTag,
   Tube,
   cn,
@@ -25,6 +24,7 @@ import {
   statusFor,
   EmptyPanel,
 } from "../ui/primitives";
+import { ShellCover } from "../local/ShellCover";
 
 /**
  * One line describing where a book is: which chapter, how far in, and how much

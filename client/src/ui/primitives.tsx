@@ -2,8 +2,6 @@ import { type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, ty
 import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Sun, Moon, X } from "lucide-react";
-import { CoverImage, bookCoverKey } from "../local/CoverImage";
-import { shelfScopeOf } from "../lib/api";
 import { copy } from "../copy";
 import { useLightEffects, useTheme } from "./theme";
 
@@ -227,54 +225,6 @@ export function Tube({ percent, className }: { percent: number; className?: stri
       )}
     >
       <i className="fill-in" style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
-    </span>
-  );
-}
-
-/** Shell tints, picked deterministically so a given book always looks the same. */
-const SHELL_TINTS = ["var(--cobalt)", "var(--mint)", "var(--tan)", "var(--rasp)", "#7c5cff", "#2aa3c9"];
-
-function shellTint(seed: number) {
-  const picked = SHELL_TINTS[Math.abs(Math.round(seed * 2654435761)) % SHELL_TINTS.length];
-  return { "--tint-hue": picked } as CSSProperties;
-}
-
-/**
- * A cover read through tinted acrylic.
- *
- * The art is never simply scaled: the tint sits over it and the plastic gloss
- * sits over the tint, so the cover reads as being *inside* the shell. `alt` is
- * left empty on purpose -- the title is always set as text next to it, so a
- * screen reader hears the title once rather than twice.
- *
- * The bytes come from the device cover cache (spec 15b feature 1) rather than
- * from a live `<img src>`. Every surface in the app now resolves covers the same
- * way, so a cover that has been seen stays seen, and a fetch that fails shows
- * the placeholder instead of a half-painted image.
- */
-export function ShellCover({
-  bookId,
-  serverId,
-  className,
-  ratio = "2 / 3",
-}: {
-  bookId: number;
-  /** Which server the book lives on; defaults to the connected one. */
-  serverId?: string;
-  className?: string;
-  ratio?: string;
-}) {
-  return (
-    <span className={cn("shell-art block", className)} style={{ aspectRatio: ratio, ...shellTint(bookId) }}>
-      {/*
-        No `display: contents` here. `CoverImage` observes its own wrapper with
-        an IntersectionObserver to decide when to start fetching, and an element
-        with `display: contents` has no box at all -- so it never intersects and
-        no cover is ever fetched. The shell's own CSS fills this wrapper.
-      */}
-      <CoverImage cacheKey={bookCoverKey(bookId, shelfScopeOf(serverId))} />
-      <span className="shell-art__tint" aria-hidden="true" />
-      <span className="capsule__gloss" aria-hidden="true" />
     </span>
   );
 }

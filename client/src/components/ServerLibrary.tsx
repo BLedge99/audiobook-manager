@@ -4,7 +4,7 @@ import type { Audiobook } from "../types";
 import { copy } from "../copy";
 import { describeFailure } from "../lib/api";
 import { Btn, MachineHead, Notice, EmptyPanel, cn } from "../ui/primitives";
-import { ShellCover } from "../ui/primitives";
+import { ShellCover } from "../local/ShellCover";
 import { RemoveFromLibraryQuestion, useRemoveFromLibrary } from "./removeFromLibrary";
 
 /**

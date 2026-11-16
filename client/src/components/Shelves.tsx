@@ -6,7 +6,8 @@ import { isFromThisServer, shelfScopeOf } from "../lib/api";
 import { seriesPosition, type Shelf } from "../lib/browse";
 import { replicaBookKey } from "../local/replica";
 import { copy, plural } from "../copy";
-import { CapsuleMarks, EmptyPanel, MachineHead, ShellCover, cn } from "../ui/primitives";
+import { CapsuleMarks, EmptyPanel, MachineHead, cn } from "../ui/primitives";
+import { ShellCover } from "../local/ShellCover";
 
 /**
  * Spec 20 -- horizontally scrollable shelves.
