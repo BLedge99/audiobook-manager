@@ -27,7 +27,17 @@ export async function registerSecurityHeaders(app: FastifyInstance): Promise<voi
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         mediaSrc: ["'self'", "blob:", "https:"],
-        connectSrc: ["'self'"],
+        // The browser fetches provider covers directly from their CDNs (Discover,
+        // review queue): OpenLibrary (which redirects to archive.org), Audnexus and
+        // Google Books. Connect sources only; everything else stays same-origin.
+        connectSrc: [
+          "'self'",
+          "https://covers.openlibrary.org",
+          "https://*.archive.org",
+          "https://cdn.audnex.us",
+          "https://books.google.com",
+          "https://books.googleusercontent.com",
+        ],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],

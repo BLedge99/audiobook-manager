@@ -31,6 +31,15 @@ function expectSecurityHeaders(response: { headers: Record<string, unknown> }) {
   expect(String(response.headers["content-security-policy"])).toContain("default-src 'self'");
   expect(String(response.headers["content-security-policy"])).toContain("frame-ancestors 'none'");
   expect(String(response.headers["content-security-policy"])).toContain("object-src 'none'");
+  // Provider cover CDNs must stay reachable from the browser (Discover fetches them).
+  for (const host of [
+    "https://covers.openlibrary.org",
+    "https://cdn.audnex.us",
+    "https://books.google.com",
+    "https://books.googleusercontent.com",
+  ]) {
+    expect(String(response.headers["content-security-policy"])).toContain(host);
+  }
   expect(response.headers["referrer-policy"]).toBeTruthy();
 }
 

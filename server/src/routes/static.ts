@@ -138,6 +138,9 @@ export async function registerStaticRoutes(
   <p class="small">© ${now} Audiobook Manager. This notice is part of the GDPR remediation plan (docs/GDPR-REMEDIATION-PLAN.md).</p>
 </body>
 </html>`;
-    reply.type("text/html; charset=utf-8").send(html);
+    // Reply must be returned: a block-bodied handler that calls reply.send()
+    // without returning it double-fires the response pipeline (see the
+    // static.privacy regression test) and the client gets Content-Length: 0.
+    return reply.type("text/html; charset=utf-8").send(html);
   });
 }
