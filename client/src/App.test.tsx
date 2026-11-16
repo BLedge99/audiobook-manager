@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App from "./App";
 import { copy } from "./copy";
 import { probeServer } from "./lib/reachability";
@@ -220,5 +220,36 @@ describe("App — the two shelf modes", () => {
     render(<App />);
     expect(await screen.findByText(copy.offline.unlockHeading)).toBeInTheDocument();
     expect(screen.queryByText("Device Title")).not.toBeInTheDocument();
+  });
+});
+
+describe("App — the waking screen", () => {
+  it("re-probes the server when Retry is tapped while the wake probe is in flight", async () => {
+    // The audit's dead-button defect: Retry used to vanish into the in-flight
+    // guard. The phone shows the waking screen only while the patient probe is
+    // pending — so keep every patient probe pending here and make sure a tap
+    // starts a fresh fast probe rather than being dropped.
+    const patientResolvers: Array<(value: { reachable: boolean; authed: boolean }) => void> = [];
+    vi.mocked(probeServer).mockImplementation((timeoutMs?: number) =>
+      timeoutMs === undefined
+        ? Promise.resolve({ reachable: false, authed: false })
+        : new Promise<{ reachable: boolean; authed: boolean }>((resolve) => {
+            patientResolvers.push(resolve);
+          }),
+    );
+
+    render(<App />);
+    const retry = await screen.findByRole("button", { name: copy.waking.retry });
+    expect(probeServer).toHaveBeenCalledTimes(2); // fast probe + patient probe
+
+    fireEvent.click(retry);
+    await waitFor(() => expect(probeServer).toHaveBeenCalledTimes(4)); // and again
+
+    // Settle the dangling patient probes so nothing leaks past the test.
+    await act(async () => {
+      for (const resolve of patientResolvers.splice(0)) {
+        resolve({ reachable: false, authed: false });
+      }
+    });
   });
 });
