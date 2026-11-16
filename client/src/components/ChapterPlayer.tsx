@@ -28,6 +28,7 @@ import {
 } from "../lib/playback";
 import { usePlayerSource } from "../lib/usePlayerSource";
 import { WAKE_BACKOFF_MS } from "../lib/wakeBudget";
+import { setPlaybackActive } from "../lib/playbackSignal";
 
 /**
  * The audiobook player.
@@ -595,6 +596,7 @@ export function ChapterPlayer({
 
     const onPlay = () => {
       setPlaying(true);
+      setPlaybackActive(true);
       setError("");
       wakeRetryRef.current = 0;
       if (wakeTimerRef.current !== undefined) {
@@ -605,7 +607,10 @@ export function ChapterPlayer({
       actionsRef.current?.openSession(bookPosition());
     };
 
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      setPlaying(false);
+      setPlaybackActive(false);
+    };
 
     const onLoadedMetadata = () => {
       // A pending seek (cross-file) wins; otherwise fall back to the position
@@ -644,6 +649,7 @@ export function ChapterPlayer({
       setPosition(total);
       setIntent(false);
       setPlaying(false);
+      setPlaybackActive(false);
       actionsRef.current?.saveProgress(total, () => onProgressSavedRef.current?.(), true);
       actionsRef.current?.flushSession(total);
     };
@@ -653,6 +659,7 @@ export function ChapterPlayer({
       // 1 is MEDIA_ERR_ABORTED: us replacing the source, not a real failure.
       if (audio.error?.code === 1) return;
       setPlaying(false);
+      setPlaybackActive(false);
 
       // Escalate rather than give up: the downloaded file may have been removed
       // by the OS, and a media token may have expired. Each step has a real

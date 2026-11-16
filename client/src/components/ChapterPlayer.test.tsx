@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { copy } from "../copy";
+import { isPlaybackActive, setPlaybackActive } from "../lib/playbackSignal";
 import type { Audiobook } from "../types";
 
 const book: Audiobook = {
@@ -70,6 +71,7 @@ describe("ChapterPlayer", () => {
     playMock = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     pauseMock = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
+    setPlaybackActive(false);
     window.localStorage.clear();
   });
 
@@ -502,5 +504,26 @@ describe("ChapterPlayer", () => {
     expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore);
     // …and the ladder survived it: the listener still sees "waking".
     expect(screen.getByRole("status")).toHaveTextContent(copy.player.waking);
+  });
+
+  /**
+   * Spec 42, phase 2 — the SW update gate. The player publishes whether audio
+   * is audible; `swUpdate` defers the reload to the first stop. Pin the
+   * publish half here.
+   */
+  it("publishes playback state for the update gate", async () => {
+    window.localStorage.setItem("profileId", "42");
+    render(<ChapterPlayer book={chapterBook} />);
+    await waitForSource("/api/audiobooks/1/stream");
+
+    expect(isPlaybackActive()).toBe(false);
+    act(() => {
+      audioOf().dispatchEvent(new Event("play"));
+    });
+    expect(isPlaybackActive()).toBe(true);
+    act(() => {
+      audioOf().dispatchEvent(new Event("pause"));
+    });
+    expect(isPlaybackActive()).toBe(false);
   });
 });

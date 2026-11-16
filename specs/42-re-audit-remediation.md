@@ -154,15 +154,14 @@ reload; while `paused` it does; while `ended` at least one path clears the
 on pause/end/buffer-empty (or a single `window` property / event-emitter): the
 reload is delivered **at the earliest audible pause point**, never mid-chapter.
 
-### Step 2.2 — the precached-shell first-ever-visit-offline is pinned
+### Step 2.2 — the precached-shell first-ever-visit-offline is pinned honestly
 
-**Test first:** a fresh profile/DB/sw with **no** `INDEXEDDB` and **no** SW when
-the network is cut must not silently fail; at minimum pin "document load with
-zero prior SW is a real network request whose result is whatever it is — not a
-blank screen we claim to support." (Whether we then decide to add a tiny
-offline fallback UI is a product decision — at most the current honest
-behaviour gets a name and a test; we do **not** invent a full offline app
-shell in this plan.)
+**Outcome (2026-11-16):** pinned in LIMITATIONS §2.12 — a first-ever visit
+without a network is an ordinary failed network request showing the browser's
+error page; there is deliberately no offline fallback page in this plan,
+because that is a product decision (vite `navigateFallback`). The config-test
+route was rejected — asserting `navigateFallback: null` pins a definition,
+not a behaviour. Repeat visits, the normal case, are unaffected.
 
 **Verify:** `make test-client` → `make test`. **Definition of done:** a
 `controllerchange` mid-chapter does not interrupt listening; what the offline

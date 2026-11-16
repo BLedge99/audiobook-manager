@@ -573,6 +573,22 @@ enrichment free to change or clear non-overridden fields. Step 5.2 of spec 37
 moves the rule into the module that owns it; until then, this file records the
 current behaviour.
 
+### 2.12 A first-ever visit with no network renders the browser's error page
+**Status: LIMITED — deliberate, recorded trade-off of the wake/cold-start work (spec 42, phase 2).**
+
+The installed service worker serves documents NetworkFirst with a four-second
+timeout and **no** precached-shell fallback (`navigateFallback: null`). A repeat
+visitor with a primed precache gets the app shell quickly whether the server is
+hot, waking, or unreachable. A **first-ever** visit — nothing in the precache,
+nothing controlling the page, and the network unreachable (or a captive portal
+that blackholes) — is an ordinary failed network request, and the browser shows
+its own error page. There is no "offline for the first time" experience.
+
+**What to do about it:** run the app once while online so the precache exists.
+If the first visit must render without a network, that is a product decision —
+a small defer takes a deliberate offline fallback page via `navigateFallback` —
+and it is tracked here rather than silently added.
+
 ---
 
 ## 3. Deferred
