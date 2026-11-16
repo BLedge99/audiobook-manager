@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, rename, rm } from "node:fs/promises";
+import { Readable } from "node:stream";
 import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
 import type { ScanManager } from "../scanner";
@@ -200,7 +201,7 @@ function localObjectPath(cacheDir: string, objectPath: string): string {
   return destination;
 }
 
-async function downloadStorageAudio(config: SupabaseStorageConfig, cacheDir: string): Promise<number> {
+async function downloadStorageAudio(config: SupabaseStorageConfig, cacheDir: string, maxBytes: number = MAX_STORAGE_FILE_BYTES): Promise<number> {
   await mkdir(cacheDir, { recursive: true });
   const objects = await listStorageAudio(config);
   let downloaded = 0;
@@ -210,17 +211,42 @@ async function downloadStorageAudio(config: SupabaseStorageConfig, cacheDir: str
       config,
       `/object/${encodeURIComponent(config.bucket)}/${encodeObjectPath(object.path)}`,
     );
-    const data = Buffer.from(await response.arrayBuffer());
-    if (data.byteLength > MAX_STORAGE_FILE_BYTES) {
+    // Fail fast on an honestly-declared oversize object…
+    const declared = Number(response.headers.get("content-length") ?? "0");
+    if (Number.isFinite(declared) && declared > maxBytes) {
       throw new Error("A stored audio file exceeds the 50 MB upload limit");
     }
-    if (object.size !== undefined && data.byteLength !== object.size) {
-      throw new Error("Downloaded audio size did not match Supabase Storage metadata");
-    }
+    if (!response.body) throw new Error("Supabase Storage returned no body");
+    // …then stream to a temp file with a byte counter. The body is never
+    // buffered whole, so a dishonest or missing content-length cannot OOM
+    // the admin process.
     await mkdir(path.dirname(destination), { recursive: true });
     const temporaryPath = `${destination}.${randomUUID()}.partial`;
+    let received = 0;
+    let handle: import("node:fs/promises").FileHandle | undefined;
     try {
-      await writeFile(temporaryPath, data, { flag: "wx" });
+      handle = await open(temporaryPath, "wx");
+      const stream = Readable.fromWeb(response.body as import("node:stream/web").ReadableStream);
+      for await (const chunk of stream) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+        received += buffer.length;
+        if (received > maxBytes) {
+          throw new Error("A stored audio file exceeds the 50 MB upload limit");
+        }
+        await handle.write(buffer);
+      }
+      await handle.close();
+      handle = undefined;
+    } catch (error) {
+      if (handle) await handle.close().catch(() => {});
+      await rm(temporaryPath, { force: true });
+      throw error;
+    }
+    if (object.size !== undefined && received !== object.size) {
+      await rm(temporaryPath, { force: true });
+      throw new Error("Downloaded audio size did not match Supabase Storage metadata");
+    }
+    try {
       await rename(temporaryPath, destination);
     } catch (error) {
       await rm(temporaryPath, { force: true });
@@ -236,6 +262,8 @@ export function createSupabaseLibrarySync(options: {
   prisma: PrismaClient;
   scanner: ScanManager;
   onError?: (error: unknown) => void;
+  /** Test seam; production leaves the 50 MB default alone. */
+  maxStorageFileBytes?: number;
 }): StorageSync {
   let state: StorageSyncState = {
     status: "idle", filesDownloaded: 0, lastSyncAt: null, message: null,
@@ -248,7 +276,7 @@ export function createSupabaseLibrarySync(options: {
       running = true;
       state = { ...state, status: "syncing", message: null };
       void (async () => {
-        const filesDownloaded = await downloadStorageAudio(options.config, options.config.cacheDir);
+        const filesDownloaded = await downloadStorageAudio(options.config, options.config.cacheDir, options.maxStorageFileBytes);
         const resolvedCacheDir = path.resolve(options.config.cacheDir);
         const root = await options.prisma.libraryRoot.upsert({
           where: { path: resolvedCacheDir },

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
@@ -109,6 +109,41 @@ describe("Supabase library sync", () => {
       });
       expect(scanner.scanRoot).toHaveBeenCalledWith(7);
       expect(sync.state().filesDownloaded).toBe(1);
+    } finally {
+      await rm(cacheDir, { recursive: true, force: true });
+    }
+  });
+
+  it("aborts a download that streams past the byte cap and leaves no partial file", async () => {
+    const cacheDir = await mkdtemp(path.join(tmpdir(), "audiobook-storage-cap-"));
+    const syncConfig = { ...config, cacheDir };
+    const bigBody = "x".repeat(2048);
+    const onError = vi.fn();
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/bucket/")) return Response.json({ public: false });
+      if (url.includes("/object/list/")) {
+        const body = JSON.parse(String(init?.body)) as { prefix: string };
+        return Response.json(body.prefix === "books"
+          ? [{ name: "Book", id: null }]
+          : // Consistent metadata (2048 bytes) — only the stream cap can catch this.
+            [{ name: "01.mp3", id: "object-id", metadata: { size: 2048 } }]);
+      }
+      return new Response(bigBody);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const scanner = { scanRoot: vi.fn(async () => {}), getProgress: vi.fn() } as unknown as ScanManager;
+    const prisma = {
+      libraryRoot: { upsert: vi.fn(async () => ({ id: 7 })) },
+    } as unknown as PrismaClient;
+    const sync = createSupabaseLibrarySync({ config: syncConfig, prisma, scanner, onError, maxStorageFileBytes: 1024 });
+
+    try {
+      expect(sync.start()).toBe(true);
+      await vi.waitFor(() => expect(sync.state().status).toBe("error"));
+      expect(onError).toHaveBeenCalled();
+      const remaining = await readdir(path.join(cacheDir, "Book")).catch(() => [] as string[]);
+      expect(remaining).toEqual([]);
     } finally {
       await rm(cacheDir, { recursive: true, force: true });
     }
