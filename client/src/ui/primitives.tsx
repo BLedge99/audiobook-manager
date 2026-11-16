@@ -13,23 +13,18 @@ export function cn(...inputs: ClassValue[]) {
 
 /* ------------------------------------------------------------------ marks */
 
-/**
- * Status colours. Every use is paired with a text label somewhere visible, so
- * colour is never the only carrier of meaning -- see the legend row under the
- * library heading.
- *
- * The labels come from `copy.ts`, because they are user-facing strings like
- * any other and the whole point of feature 7 is that there is one place to
- * change them.
- */
-export const STATUS = {
+/** Colour plus its name. The name is the point; the colour is the reminder. */
+// Status colours. Every use is paired with a text label somewhere visible,
+// so colour is never the only carrier of meaning. The labels come from
+// copy.ts — one place to change them.
+const STATUS = {
   done: { label: copy.status.done, color: "var(--mint)" },
   reading: { label: copy.status.reading, color: "var(--tan)" },
   fresh: { label: copy.status.fresh, color: "var(--cobalt)" },
   changed: { label: copy.status.changed, color: "var(--rasp)" },
 } as const;
 
-export type StatusKey = keyof typeof STATUS;
+type StatusKey = keyof typeof STATUS;
 
 export function statusFor(percent: number): StatusKey {
   if (percent >= 100) return "done";
@@ -59,23 +54,6 @@ export function durationLabel(seconds: number) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   return hours ? copy.duration.hoursMinutes(hours, minutes) : copy.duration.minutes(minutes);
-}
-
-/* --------------------------------------------------------------- surfaces */
-
-export function Panel({
-  as: Tag = "div",
-  className,
-  sunk,
-  flat,
-  ...rest
-}: {
-  as?: "div" | "section" | "article" | "li" | "form";
-  className?: string;
-  sunk?: boolean;
-  flat?: boolean;
-} & React.HTMLAttributes<HTMLElement>) {
-  return <Tag className={cn("panel", sunk && "panel--sunk", flat && "panel--flat", className)} {...rest} />;
 }
 
 /* --------------------------------------------------------------- controls */
@@ -256,7 +234,7 @@ export function Tube({ percent, className }: { percent: number; className?: stri
 /** Shell tints, picked deterministically so a given book always looks the same. */
 const SHELL_TINTS = ["var(--cobalt)", "var(--mint)", "var(--tan)", "var(--rasp)", "#7c5cff", "#2aa3c9"];
 
-export function shellTint(seed: number) {
+function shellTint(seed: number) {
   const picked = SHELL_TINTS[Math.abs(Math.round(seed * 2654435761)) % SHELL_TINTS.length];
   return { "--tint-hue": picked } as CSSProperties;
 }
