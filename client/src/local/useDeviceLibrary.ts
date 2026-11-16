@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Audiobook } from "../types";
-import { getServerUrl } from "../lib/api";
+import { getServerUrl, shelfScopeOf } from "../lib/api";
 import { requestRaw } from "../lib/request";
 import { copy } from "../copy";
 import { deviceFiles, localDb } from "./device";
@@ -136,11 +136,11 @@ export function useDeviceLibrary(
       // book number, and their positions are different books' positions. One
       // batched read for the whole shelf, not a decrypt per book.
       const progressMap = await readProgressMany(
-        all.map((row) => ({ bookId: row.book.id, serverId: row.serverId ?? getServerUrl() })),
+        all.map((row) => ({ bookId: row.book.id, serverId: shelfScopeOf(row.serverId) })),
         db,
       );
       for (const row of all) {
-        const progress = progressMap.get(replicaBookKey(row.serverId ?? getServerUrl(), row.book.id));
+        const progress = progressMap.get(replicaBookKey(shelfScopeOf(row.serverId), row.book.id));
         next[row.bookKey] = progress ? { ...row, book: { ...row.book, progress } } : row;
       }
       setRows(next);
@@ -157,7 +157,7 @@ export function useDeviceLibrary(
       const claimed = new Set(values.map((row) => row.book.id));
       const currentServer = getServerUrl();
       const serverClaimed = new Set(
-        values.filter((row) => (row.serverId ?? "") === currentServer).map((row) => row.book.id),
+        values.filter((row) => shelfScopeOf(row.serverId) === currentServer).map((row) => row.book.id),
       );
       setUnclaimed(await listUnclaimedOnDevice(files, claimed, currentServer, serverClaimed));
     } catch (error) {
@@ -179,13 +179,13 @@ export function useDeviceLibrary(
 
   const isDownloaded = useCallback(
     (bookId: number, serverId?: string) =>
-      isFullyDownloaded(rows[replicaBookKey(serverId ?? getServerUrl(), bookId)]),
+      isFullyDownloaded(rows[replicaBookKey(shelfScopeOf(serverId), bookId)]),
     [rows],
   );
 
   const progressOf = useCallback(
     (bookId: number, serverId?: string) => {
-      const row = rows[replicaBookKey(serverId ?? getServerUrl(), bookId)];
+      const row = rows[replicaBookKey(shelfScopeOf(serverId), bookId)];
       if (!row) return 0;
       const expected = row.book.tracks?.length ?? 0;
       if (expected === 0) return 0;
@@ -205,7 +205,7 @@ export function useDeviceLibrary(
           // The book carries its shelf (spec 30); a book adopted or downloaded
           // from another server must land there, not in whatever shelf the app
           // is currently pointed at.
-          sourceServer: book.serverId ?? getServerUrl(),
+          sourceServer: shelfScopeOf(book.serverId),
         },
         onProgress,
       );
@@ -216,7 +216,7 @@ export function useDeviceLibrary(
 
   const remove = useCallback(
     async (bookId: number, serverId?: string) => {
-      const result = await removeDownloadedBook(db, files, bookId, serverId ?? getServerUrl());
+      const result = await removeDownloadedBook(db, files, bookId, shelfScopeOf(serverId));
       await refresh();
       return { failed: result.failed };
     },
@@ -251,7 +251,7 @@ export function useDeviceLibrary(
 
   const localUrlForTrack = useCallback(
     async (bookId: number, trackId: number, serverId?: string) => {
-      const row = rows[replicaBookKey(serverId ?? getServerUrl(), bookId)];
+      const row = rows[replicaBookKey(shelfScopeOf(serverId), bookId)];
       const track = row?.tracks[String(trackId)];
       if (!track) return undefined;
       try {
@@ -266,7 +266,7 @@ export function useDeviceLibrary(
   );
 
   const bytesFor = useCallback(
-    (bookId: number, serverId?: string) => bookBytes(rows[replicaBookKey(serverId ?? getServerUrl(), bookId)]),
+    (bookId: number, serverId?: string) => bookBytes(rows[replicaBookKey(shelfScopeOf(serverId), bookId)]),
     [rows],
   );
 
@@ -290,3 +290,4 @@ export function useDeviceLibrary(
 
 export { totalReplicaBytes };
 export type { DownloadProgress };
+

@@ -3,7 +3,7 @@ import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Sun, Moon, X } from "lucide-react";
 import { CoverImage, bookCoverKey } from "../local/CoverImage";
-import { getServerUrl } from "../lib/api";
+import { shelfScopeOf } from "../lib/api";
 import { copy } from "../copy";
 import { useLightEffects, useTheme } from "./theme";
 
@@ -294,7 +294,7 @@ export function ShellCover({
         with `display: contents` has no box at all -- so it never intersects and
         no cover is ever fetched. The shell's own CSS fills this wrapper.
       */}
-      <CoverImage cacheKey={bookCoverKey(bookId, serverId ?? getServerUrl())} />
+      <CoverImage cacheKey={bookCoverKey(bookId, shelfScopeOf(serverId))} />
       <span className="shell-art__tint" aria-hidden="true" />
       <span className="capsule__gloss" aria-hidden="true" />
     </span>

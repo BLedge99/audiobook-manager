@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Audiobook } from "../types";
-import { getActiveProfileId, getServerUrl } from "../lib/api";
+import { getActiveProfileId, shelfScopeOf } from "../lib/api";
 import { request } from "../lib/request";
 import { cacheProgress, readProgress } from "../local/privateCache";
 import { copy } from "../copy";
@@ -278,7 +278,7 @@ export function ChapterPlayer({
    * server's shelf, so its saved position belongs to that server too. A book
    * from the connected server has no `serverId` of its own.
    */
-  const bookServerId = book.serverId ?? getServerUrl();
+  const bookServerId = shelfScopeOf(book.serverId);
 
   const saveProgress = (at: number, onSettled?: () => void, completed = false) => {
     // `onSettled` lets the shell refetch the library once the *final* save has

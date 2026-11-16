@@ -318,6 +318,21 @@ export function getServerUrl(): string {
   return readStored();
 }
 
+/**
+ * The single answer to "which server does this shelf-scoped thing belong to",
+ * when its origin is not recorded on it.
+ *
+ * Spec 42, phase 7: rows with no serverId came from the server this app is
+ * pointed at — the same convention `isFromThisServer` applies — and the
+ * answer used to be spelled two ways at sixteen call sites:
+ * `serverId ?? getServerUrl()` at the functional reads and `serverId ?? ""`
+ * at the JSX-key sites, so a book's React key and its cache key disagreed.
+ * One helper, one answer, everywhere.
+ */
+export function shelfScopeOf(serverId: string | null | undefined): string {
+  return serverId ?? getServerUrl();
+}
+
 /** Persist the server URL. Throws if `url` is not a usable URL. */
 export function setServerUrl(url: string): void {
   const normalised = normaliseServerUrl(url);
@@ -352,7 +367,7 @@ export function apiUrl(path: string): string {
  * check this, not just the id.
  */
 export function isFromThisServer(book: { serverId?: string }): boolean {
-  return (book.serverId ?? getServerUrl()) === getServerUrl();
+  return shelfScopeOf(book.serverId) === getServerUrl();
 }
 
 /** True when the app has a server it could talk to. */

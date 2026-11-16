@@ -43,7 +43,8 @@ const DEVICE_BOOK: Audiobook = {
 // merge and the gate get whatever this test hands them.
 let deviceBooks: Audiobook[] = [{ ...DEVICE_BOOK, serverId: "https://a.example" } as Audiobook];
 
-vi.mock("./lib/api", () => ({
+vi.mock("./lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/api")>()),
   needsServerUrl: () => false,
   hasServerUrl: () => true,
   getServerUrl: () => "https://a.example",

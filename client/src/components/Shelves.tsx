@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
-import { isFromThisServer } from "../lib/api";
+import { isFromThisServer, shelfScopeOf } from "../lib/api";
 import { seriesPosition, type Shelf } from "../lib/browse";
 import { replicaBookKey } from "../local/replica";
 import { copy, plural } from "../copy";
@@ -118,7 +118,7 @@ export function ShelfRow({
         tabIndex={0}
       >
         {shelf.books.map((book, index) => (
-          <div key={replicaBookKey(book.serverId ?? "", book.id)} className="contents">
+          <div key={replicaBookKey(shelfScopeOf(book.serverId), book.id)} className="contents">
             <ShelfCard
               book={book}
               index={index}

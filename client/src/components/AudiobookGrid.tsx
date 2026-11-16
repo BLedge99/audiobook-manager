@@ -3,7 +3,7 @@ import { Compass, Headphones, Clock3 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Audiobook } from "../types";
 import { FavouriteButton } from "./FavouriteButton";
-import { isFromThisServer } from "../lib/api";
+import { isFromThisServer, shelfScopeOf } from "../lib/api";
 import {
   describePosition,
   hasProgress,
@@ -234,7 +234,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
           const isFeatured = index === 0;
           return (
             <button
-              key={replicaBookKey(book.serverId ?? "", book.id)}
+              key={replicaBookKey(shelfScopeOf(book.serverId), book.id)}
               onClick={() => onSelect(book)}
               className={cn(
                 "capsule flex shrink-0 snap-start items-center gap-3 p-3 text-left",
@@ -319,7 +319,7 @@ export function AudiobookGrid({
         const showProgress = continuingIds.has(book.id);
         return (
           <LibraryCard
-            key={replicaBookKey(book.serverId ?? "", book.id)}
+            key={replicaBookKey(shelfScopeOf(book.serverId), book.id)}
             book={book}
             onSelect={onSelect}
             showProgress={showProgress}

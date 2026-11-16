@@ -3,7 +3,7 @@ import { type ReactNode, useState } from "react";
 import type { Audiobook, GenreNode, TagSummary } from "../types";
 import { bookCoverKey, useCover } from "../local/CoverImage";
 import { replicaBookKey } from "../local/replica";
-import { isFromThisServer } from "../lib/api";
+import { isFromThisServer, shelfScopeOf } from "../lib/api";
 import { useTagSuite } from "../useBrowse";
 import { ChapterPlayer } from "./ChapterPlayer";
 import { TagSuiteEditor } from "./TagSuiteEditor";
@@ -285,7 +285,7 @@ export function AudiobookDetail({
           )}
           {deviceAction && <div className="mt-5">{deviceAction}</div>}
 
-          <ChapterPlayer key={replicaBookKey(book.serverId ?? "", book.id)} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} profileId={profileId} />
+          <ChapterPlayer key={replicaBookKey(shelfScopeOf(book.serverId), book.id)} book={book} onProgressSaved={onProgressSaved} localUrlForTrack={localUrlForTrack} profileId={profileId} />
 
           {/* Spec 18/19/20: favourite and find-more-like actions on the book.
               Above the fold, because both are things a listener does next. */}
