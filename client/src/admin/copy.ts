@@ -107,7 +107,7 @@ export const copyAdmin = {
     appliedReview: "Applied / review",
     failedSkipped: "Failed / skipped",
     lastFinished: "Last finished",
-    allowedOrigins: "Allowed client origins",
+    allowedOrigins: "Family listener's allowed client origins",
   },
 
   /**

@@ -43,8 +43,6 @@ export function collectApiDocs(app: FastifyInstance): void {
 
 export interface ClientDistOptions {
   distDir: string;
-  /** Check `<distDir>/index.html` rather than the directory itself. */
-  requireIndexHtml?: boolean;
   /** Answer /api/* misses — the two listeners keep their own error shapes. */
   apiNotFound(request: FastifyRequest, reply: FastifyReply): unknown;
 }
@@ -57,15 +55,15 @@ export interface ClientDistOptions {
  *
  * - hashed /assets: immutable for a year; index.html: must-revalidate;
  * - /api/* misses go to `apiNotFound`, never to the SPA;
- * - a missing asset answers 404 as JSON, never index.html (spec 38).
+ * - a missing asset answers 404 as JSON, never index.html (spec 38);
+ * - a `distDir` without `index.html` is no dist — both listeners 404 cleanly
+ *   (or register nothing) rather than 500ing on the front door.
  */
 export async function registerClientDist(
   app: FastifyInstance,
   options: ClientDistOptions,
 ): Promise<boolean> {
-  const ready = options.requireIndexHtml
-    ? existsSync(path.join(options.distDir, "index.html"))
-    : existsSync(options.distDir);
+  const ready = existsSync(path.join(options.distDir, "index.html"));
   if (!ready) return false;
 
   const fastifyStatic = (await import("@fastify/static")).default;

@@ -110,7 +110,10 @@ export async function buildAdminApp(options: {
       server: { nodeVersion: process.version, platform: process.platform, uptimeSeconds: Math.floor(process.uptime()), startedAt: options.startedAt ? new Date(options.startedAt) : null, health: "ok" },
       network: {
         port: Number(process.env.PORT ?? 3000), adminPort: Number(process.env.ADMIN_PORT ?? 3100),
-        corsOrigins: configuredOrigins,
+        // The family listener's allow-list — the browser calls it, this listener
+        // never serves cross-origin browser traffic, so it names the family list
+        // rather than implying the admin enforces one.
+        familyCorsOrigins: configuredOrigins,
         webauthn: { rpId: process.env.WEBAUTHN_RP_ID ?? null, origin: process.env.WEBAUTHN_ORIGIN ?? null },
         mediaTokenSecretConfigured: Boolean(process.env.MEDIA_TOKEN_SECRET && Buffer.byteLength(process.env.MEDIA_TOKEN_SECRET, "utf8") >= 32),
         tunnel: "not detected; remote access is not configured",
@@ -267,7 +270,6 @@ export async function buildAdminApp(options: {
     : path.resolve(process.cwd(), "../client/admin-dist"));
   const served = await registerClientDist(app, {
     distDir: clientDist,
-    requireIndexHtml: true,
     apiNotFound: (_request, reply) => reply.code(404).send({ error: "not_found" }),
   });
   if (!served) {

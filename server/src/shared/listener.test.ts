@@ -93,6 +93,19 @@ describe("registerClientDist (spec 41 step 9.4)", () => {
     await app.close();
   });
 
+  it("a dist missing index.html registers nothing, so the household 500s no more (spec 42 phase 9)", async () => {
+    writeDist({ withIndex: false }); // assets present, index.html missing
+    const app = Fastify();
+    const registered = await registerClientDist(app, {
+      distDir: dist,
+      apiNotFound: (_request, reply) => reply.code(404).send({ error: "not_found" }),
+    });
+    expect(registered).toBe(false);
+    const res = await app.inject({ method: "GET", url: "/" });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
   it("a missing asset answers 404 with JSON, never index.html (spec 38)", async () => {
     writeDist();
     const app = Fastify();

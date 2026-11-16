@@ -22,7 +22,7 @@ function statusPayload() {
     remoteAccess: "lan",
     server: { nodeVersion: "v24.0.0", platform: "linux", uptimeSeconds: 3600, startedAt: null, health: "ok" },
     network: {
-      port: 3000, adminPort: 3100, corsOrigins: ["http://books.home.arpa"],
+      port: 3000, adminPort: 3100, familyCorsOrigins: ["http://books.home.arpa"],
       webauthn: { rpId: null, origin: null }, mediaTokenSecretConfigured: false, tunnel: "none",
     },
     database: { type: "sqlite", configured: true },
