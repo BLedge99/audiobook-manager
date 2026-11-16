@@ -133,4 +133,10 @@ Source order: AGENTS.md → specs/ (esp. `11-security-hardening.md`) → this pl
 - `npm run typecheck` both packages; `npm --prefix client run build` (config change check).
 - `npm audit` before finishing dependency changes (adds `@fastify/helmet` only).
 - Production Render deploy: headers verified post-deploy (app-level, no Render config).
+
+---
+
+## 2026-11-16 (evening) — production-readiness plan closed the remainder
+
+Accepted-risk register now lives in [`docs/risk-register.md`](risk-register.md) (R1-R4 + smaller items A1-A6), written per spec 43. The residual hardening shipped with spec 43 phases 2.1-2.6: admin console credential denylist, OAuth auto-provision gated to demo mode, passkeys revoked on household reset, passkey login/options rate-limited, atomic failed-login counter, SECURITY.md rewritten. LIMITATIONS 1.5 corrected: the monotonic rule specced in spec 26 never landed.
 - Commits: one per finding group, `fix(security): …`, pushed to `master` per phase.
