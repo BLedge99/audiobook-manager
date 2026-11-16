@@ -266,7 +266,7 @@ export class SessionsService {
       token,
       session: updated,
       profile,
-      role: profile?.role === "admin" ? "admin" : profile ? "member" : "admin",
+      role: profile?.role === "admin" ? "admin" : profile?.role === "child" ? "child" : profile ? "member" : "admin",
     };
   }
 

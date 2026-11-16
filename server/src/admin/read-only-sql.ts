@@ -23,10 +23,13 @@ export function validateReadOnlySql(sql: string): string | null {
   // rejected as well; the console is for inspection, not scripting.
   if (trimmed.replace(/;\s*$/, "").includes(";")) return "Only one statement is allowed.";
   if (!/^(select|explain|pragma)\b/i.test(trimmed)) return "Only SELECT, EXPLAIN, or read-only PRAGMA statements are allowed.";
-  if (/\b(insert|update|delete|replace|create|alter|drop|attach|detach|vacuum|reindex|analyze|begin|commit|rollback|grant|revoke|truncate|copy|call|do|into|outfile|dumpfile|load_file|load_extension|set_config|pg_read_file|pg_read_binary_file|pg_ls_dir|dblink)\b/i.test(trimmed)) {
+  // Writes, admin operations and side-effecting server-side functions are all
+  // refused. The regex is not a parser — quoted strings containing these words
+  // are rejected too (use the console for inspection, not for crafting data).
+  if (/\b(insert|update|delete|replace|create|alter|drop|attach|detach|vacuum|reindex|analyze|begin|commit|rollback|grant|revoke|truncate|copy|call|do|into|outfile|dumpfile|load_file|load_extension|set_config|pg_read_file|pg_read_binary_file|pg_ls_dir|pg_ls_waldir|pg_ls_logdir|pg_ls_archive_statusdir|pg_stat_file|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_advisory_lock|pg_advisory_unlock|pg_advisory_xact_lock|lo_import|lo_export|lo_unlink|pg_backup_start|pg_backup_stop|pg_notify|pg_promote|pg_wal_replay_pause|pg_wal_replay_resume|nextval|setval|dblink)\b/i.test(trimmed)) {
     return "Write or administrative statements are not allowed.";
   }
-  if (/^pragma\s+(?!table_info\b|table_xinfo\b|foreign_key_list\b|index_list\b|index_info\b|database_list\b|compile_options\b)/i.test(trimmed)) {
+  if (/^pragma\s+(?!table_info\b|table_xinfo\b|foreign_key_list\b|index_list\b|index_info\b|compile_options\b)/i.test(trimmed)) {
     return "This PRAGMA is not in the read-only allowlist.";
   }
   if (/^pragma\b/i.test(trimmed) && /=/.test(trimmed)) {
@@ -72,6 +75,11 @@ export async function executeReadOnlyQuery(
       catch { filename = path.resolve(process.cwd(), decodeURIComponent(rawPath)); }
       return new Database(filename, { readonly: true, fileMustExist: true, timeout: 5_000 });
     })();
+    // LIMITATIONS: better-sqlite3 executes synchronously on the Node event
+    // loop; a hostile/accidental cross-join can starve the process. The 5s
+    // `timeout` is a busy timeout, not a compute deadline, and row-capping does
+    // not bound work. Accepted for the single-operator console; if this ever
+    // becomes multi-user, run queries in a worker with an interrupt.
     try {
       own.pragma("query_only = ON");
       const query = own.prepare(statement);

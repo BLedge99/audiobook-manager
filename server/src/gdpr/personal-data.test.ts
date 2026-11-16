@@ -59,7 +59,7 @@ function fakePrisma(fixture: Record<string, unknown>) {
 }
 
 const exportSelects: Record<string, unknown> = {
-  profile: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true, ageBand: true },
+  profile: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true, ageBand: true, email: true, oauthProvider: true, oauthProviderId: true, disabled: true, lastLoginAt: true, lastActiveAt: true, passwordUpdatedAt: true, failedLoginCount: true, lockedUntil: true },
   session: { id: true, expiresAt: true, userAgent: true, deviceLabel: true, deviceCredentialId: true, createdAt: true },
   listeningHistory: { id: true, mediaItemId: true, position: true, completed: true, lastPlayed: true, playedAt: true },
   playSession: { id: true, mediaItemId: true, startedAt: true, endedAt: true, fromPosition: true, toPosition: true, speed: true },

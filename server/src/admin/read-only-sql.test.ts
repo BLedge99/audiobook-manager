@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import Database from "better-sqlite3";
-import { executeReadOnlyQuery } from "./read-only-sql";
+import { executeReadOnlyQuery, validateReadOnlySql } from "./read-only-sql";
 
 /**
  * The console renders 500 rows; anything larger must be capped inside the
@@ -77,5 +77,45 @@ describe("executeReadOnlyQuery", () => {
     } finally {
       db.close();
     }
+  });
+});
+
+describe("validateReadOnlySql — server-side function blocklist", () => {
+  // BEGIN READ ONLY blocks writes, not these: signal/lock/config/side-effect
+  // functions that a SELECT can call. DATABASE_URL may be a managed role with
+  // broad rights (e.g. Supabase postgres), so the console must not rely on it.
+  const forbidden = [
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity",
+    "SELECT pg_cancel_backend(pid) FROM pg_stat_activity",
+    "SELECT pg_reload_conf()",
+    "SELECT pg_rotate_logfile()",
+    "SELECT pg_stat_file('/etc/passwd')",
+    "SELECT pg_advisory_lock(1)",
+    "SELECT lo_import('/etc/passwd')",
+    "SELECT lo_export(1, '/tmp/x')",
+    "SELECT lo_unlink(1)",
+    "SELECT pg_read_binary_file('/etc/passwd')",
+    "SELECT pg_ls_waldir()",
+    "SELECT pg_ls_logdir()",
+    "SELECT pg_backup_start('label')",
+    "SELECT pg_backup_stop()",
+    "SELECT pg_notify('channel', 'payload')",
+    "SELECT nextval('seq')",
+    "SELECT setval('seq', 1)",
+    "EXPLAIN ANALYZE SELECT nextval('seq')",
+  ];
+  for (const sql of forbidden) {
+    it(`rejects: ${sql.slice(7, 40)}…`, () => {
+      expect(validateReadOnlySql(sql)).toBeTruthy();
+    });
+  }
+
+  it("still allows an ordinary bounded read", () => {
+    expect(validateReadOnlySql("SELECT COUNT(*) FROM MediaItem")).toBeNull();
+    expect(validateReadOnlySql("PRAGMA table_info(t)")).toBeNull();
+  });
+
+  it("does not leak absolute file paths via PRAGMA database_list", () => {
+    expect(validateReadOnlySql("PRAGMA database_list")).toBeTruthy();
   });
 });

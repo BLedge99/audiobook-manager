@@ -103,7 +103,7 @@ export class AuthService {
       id: profile.id,
       name: profile.name,
       color: profile.color,
-      role: profile.role === "admin" ? "admin" : "member",
+      role: profile.role === "admin" ? "admin" : profile.role === "child" ? "child" : "member",
       disabled: profile.disabled,
       hasPassword: Boolean(profile.passwordHash),
       hasPasskey: profile._count.webauthnCredentials > 0,

@@ -34,7 +34,9 @@ export const PERSONAL_DATA_ROWS: ReadonlyArray<PersonalDataRow> = Object.freeze<
   { model: "favourite", key: "favourites", find: "many", select: { mediaItemId: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
   { model: "wishlistItem", key: "wishlistItems", find: "many", select: { id: true, title: true, author: true, seedMediaItemId: true, owned: true, createdAt: true }, orderBy: { createdAt: "desc" }, erase: "deleteMany" },
   { model: "profileLibraryEntry", key: "libraryEntries", find: "many", select: { mediaItemId: true }, orderBy: { mediaItemId: "asc" }, erase: "deleteMany" },
-  { model: "profile", key: "profile", find: "unique", select: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true, ageBand: true }, erase: "delete" },
+  // Everything held about the person except credential material (passwordHash).
+  // Art. 15/20: the subject gets all of it, including sign-in metadata.
+  { model: "profile", key: "profile", find: "unique", select: { id: true, name: true, color: true, role: true, createdAt: true, followsServerLibrary: true, ageBand: true, email: true, oauthProvider: true, oauthProviderId: true, disabled: true, lastLoginAt: true, lastActiveAt: true, passwordUpdatedAt: true, failedLoginCount: true, lockedUntil: true }, erase: "delete" },
 ]);
 
 /** The delegate names, children-before-profile (deletion order). Derived. */

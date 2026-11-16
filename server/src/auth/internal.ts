@@ -138,6 +138,6 @@ export async function createSessionCore(
     token,
     session,
     profile,
-    role: profile?.role === "admin" ? "admin" : profile ? "member" : "admin",
+    role: profile?.role === "admin" ? "admin" : profile?.role === "child" ? "child" : profile ? "member" : "admin",
   };
 }
