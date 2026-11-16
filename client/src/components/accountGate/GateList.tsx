@@ -1,7 +1,7 @@
 import { UserRound } from "lucide-react";
 import { copy } from "../../copy";
 import type { Account } from "./types";
-import { Btn, cn } from "../../ui/primitives";
+import { Btn, cn, EmptyPanel } from "../../ui/primitives";
 
 const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
 
@@ -95,9 +95,7 @@ export function GateList({
           </button>
         ))}
         {!accounts.length && !accountsLoadFailed && (
-          <p className="panel panel--sunk px-4 py-5 text-center text-sm text-ink2">
-            {copy.account.noProfiles}
-          </p>
+          <EmptyPanel className="px-4 py-5 text-sm">{copy.account.noProfiles}</EmptyPanel>
         )}
       </div>
 

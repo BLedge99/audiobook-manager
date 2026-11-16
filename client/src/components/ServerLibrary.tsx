@@ -3,7 +3,7 @@ import { Plus, Server, LoaderCircle, Trash2, HardDrive } from "lucide-react";
 import type { Audiobook } from "../types";
 import { copy } from "../copy";
 import { describeFailure } from "../lib/api";
-import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
+import { Btn, MachineHead, Notice, EmptyPanel, cn } from "../ui/primitives";
 import { ShellCover } from "../ui/primitives";
 import { RemoveFromLibraryQuestion, useRemoveFromLibrary } from "./removeFromLibrary";
 
@@ -130,10 +130,10 @@ export function ServerLibrary({
         {failed && <Notice tone="error" role="alert" className="mb-4">{failed}</Notice>}
 
         {loading && !books.length ? (
-          <div className="panel panel--sunk flex items-center justify-center gap-2 px-6 py-16 text-ink2">
+          <EmptyPanel className="flex items-center justify-center gap-2 py-16">
             <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
             {copy.serverLibrary.loading}
-          </div>
+          </EmptyPanel>
         ) : error && !books.length ? (
           /* The fetch failed, so we do not know what the server has. Saying
              "no audiobooks have been added yet" would be a lie -- it is the
@@ -141,9 +141,7 @@ export function ServerLibrary({
              is the whole of what is known. */
           null
         ) : books.length === 0 ? (
-          <div className="panel panel--sunk px-6 py-14 text-center text-ink2">
-            {copy.serverLibrary.empty}
-          </div>
+          <EmptyPanel>{copy.serverLibrary.empty}</EmptyPanel>
         ) : (
           <>
             <MachineHead
@@ -234,9 +232,7 @@ function OfflineServerLibrary({
         {failed && <Notice tone="error" role="alert" className="mb-4">{failed}</Notice>}
 
         {books.length === 0 ? (
-          <div className="panel panel--sunk px-6 py-14 text-center text-ink2">
-            {copy.serverLibrary.offlineEmpty}
-          </div>
+          <EmptyPanel>{copy.serverLibrary.offlineEmpty}</EmptyPanel>
         ) : (
           <>
             <MachineHead

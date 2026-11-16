@@ -6,7 +6,7 @@ import { isFromThisServer } from "../lib/api";
 import { seriesPosition, type Shelf } from "../lib/browse";
 import { replicaBookKey } from "../local/replica";
 import { copy, plural } from "../copy";
-import { CapsuleMarks, MachineHead, ShellCover, cn } from "../ui/primitives";
+import { CapsuleMarks, EmptyPanel, MachineHead, ShellCover, cn } from "../ui/primitives";
 
 /**
  * Spec 20 -- horizontally scrollable shelves.
@@ -149,9 +149,7 @@ export function Shelves({
 }) {
   if (shelves.length === 0) {
     return (
-      <div className="panel panel--sunk px-6 py-14 text-center text-ink2">
-        {emptyMessage ?? copy.browse.noShelves}
-      </div>
+      <EmptyPanel className="mt-3">{emptyMessage ?? copy.browse.noShelves}</EmptyPanel>
     );
   }
 

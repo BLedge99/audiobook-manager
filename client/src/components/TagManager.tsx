@@ -3,7 +3,7 @@ import { GitMerge, Plus, Tag as TagIcon, Trash2 } from "lucide-react";
 import type { TagSummary } from "../types";
 import { copy } from "../copy";
 import { request } from "../lib/request";
-import { Btn, Field, MachineHead, Notice } from "../ui/primitives";
+import { Btn, Field, MachineHead, Notice, EmptyPanel } from "../ui/primitives";
 
 /**
  * Spec 20 -- the tag manager.
@@ -72,7 +72,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
       {message && <Notice tone="info" role="status" className="mt-3">{message}</Notice>}
 
       {tags.length === 0 ? (
-        <p className="panel panel--sunk mt-4 px-4 py-5 text-center text-[0.84375rem] text-ink2">{copy.operator.tags.none}</p>
+    <EmptyPanel className="mt-5 px-4 py-5 text-sm">{copy.operator.tags.none}</EmptyPanel>
       ) : (
         <ul className="mt-4 grid gap-2">
           {tags.map((tag, index) => (

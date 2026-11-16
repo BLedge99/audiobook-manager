@@ -462,11 +462,15 @@ export function StatusLegend({ className }: { className?: string }) {
   );
 }
 
-export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
+/**
+ * One line or a short sentence in the bordered, sunk family — the quiet
+ * empty/loading state. One treatment everywhere, rather than re-padding
+ * `panel--sunk` at every call site.
+ */
+export function EmptyPanel({ children, className }: { children?: ReactNode; className?: string }) {
   return (
-    <div className="panel panel--sunk px-6 py-14 text-center">
-      <p className="font-display text-lg font-semibold text-ink">{title}</p>
-      {children ? <div className="mx-auto mt-2 max-w-md text-sm text-ink2">{children}</div> : null}
+    <div className={cn("panel panel--sunk px-6 py-14 text-center text-ink2", className)}>
+      {children}
     </div>
   );
 }

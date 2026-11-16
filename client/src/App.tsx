@@ -68,7 +68,7 @@ import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
 import { copy, plural } from "./copy";
-import { Specks, ThemeToggle, Notice, MachineMark, MachineHead, StatusLegend, Btn, IconBtn, cn } from "./ui/primitives";
+import { Specks, ThemeToggle, Notice, MachineMark, MachineHead, StatusLegend, Btn, IconBtn, EmptyPanel, cn } from "./ui/primitives";
 import type { Audiobook } from "./types";
 
 type Tab = "library" | "browse" | "discover" | "favourites" | "server-library";
@@ -1001,7 +1001,7 @@ function App() {
                 /* Only reachable before the first response has ever arrived: the
                    hook latches `loading` false once anything has loaded, so a
                    refresh can never get here. */
-                <div className="panel panel--sunk px-6 py-20 text-center text-ink2">{copy.shell.loadingLibrary}</div>
+                <EmptyPanel className="py-20">{copy.shell.loadingLibrary}</EmptyPanel>
               ) : (
                 <AudiobookGrid
                   books={searchedBooks}

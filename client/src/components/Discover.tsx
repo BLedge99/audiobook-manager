@@ -4,7 +4,7 @@ import type { DiscoverResult, Recommendation, WishlistItem } from "../types";
 import type { useDiscover } from "../useBrowse";
 import { copy } from "../copy";
 import { GetThisBookSheet } from "./GetThisBookSheet";
-import { Btn, MachineHead, Notice, cn } from "../ui/primitives";
+import { Btn, MachineHead, Notice, EmptyPanel, cn } from "../ui/primitives";
 import { CoverImage, urlCoverKey } from "../local/CoverImage";
 
 /**
@@ -351,9 +351,7 @@ export function Discover({
       <section aria-labelledby="wishlist">
         <MachineHead id="wishlist" title={copy.discover.wishlistHeading} count={`${wishlist.length}`} />
         {wishlist.length === 0 ? (
-          <p className="panel panel--sunk px-4 py-6 text-center text-[0.84375rem] text-ink2">
-            {copy.discover.wishlistEmpty}
-          </p>
+          <EmptyPanel className="py-6 text-[0.84375rem]">{copy.discover.wishlistEmpty}</EmptyPanel>
         ) : (
           <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
             {wishlist.map((item) => (

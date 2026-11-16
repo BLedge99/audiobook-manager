@@ -3,7 +3,7 @@ import { Plus, UserRound } from "lucide-react";
 import { copy } from "../copy";
 import { boundedFetch, setActiveProfileId } from "../lib/api";
 import { ProfileRegistration } from "./ProfileRegistration";
-import { Btn, Field, FullScreen, Wordmark, Notice, cn } from "../ui/primitives";
+import { Btn, Field, FullScreen, Wordmark, Notice, EmptyPanel, cn } from "../ui/primitives";
 
 interface Profile {
   id: number;
@@ -138,9 +138,7 @@ export function ProfileGate({
 
           {!loading && profiles.length === 0 && !error && (
             <>
-              <p className="panel panel--sunk mt-5 px-4 py-5 text-center text-sm text-ink2">
-                {copy.account.noProfiles}
-              </p>
+              <EmptyPanel className="mt-5 px-4 py-5 text-sm">{copy.account.noProfiles}</EmptyPanel>
               <p className="mt-3 text-sm text-ink2">{copy.account.registerIntro}</p>
               <ProfileRegistration onRegistered={() => onSuccess()} />
             </>

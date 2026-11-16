@@ -23,6 +23,7 @@ import {
   cn,
   durationLabel,
   statusFor,
+  EmptyPanel,
 } from "../ui/primitives";
 
 /**
@@ -301,10 +302,10 @@ export function AudiobookGrid({
 }) {
   if (!books.length) {
     return (
-      <div className="panel panel--sunk px-6 py-16 text-center text-ink2">
+      <EmptyPanel className="py-16">
         <p>{emptyMessage ?? copy.library.empty}</p>
         {emptyAction ? <div className="mt-4 flex justify-center">{emptyAction}</div> : null}
-      </div>
+      </EmptyPanel>
     );
   }
 
