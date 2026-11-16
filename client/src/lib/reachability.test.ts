@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { probeServer, PROBE_TIMEOUT_MS } from "./reachability";
+import { probeServer } from "./reachability";
+import { FAST_PROBE_MS } from "./wakeBudget";
 
 /**
  * The offline path, and the hang that used to break it.
@@ -66,7 +67,7 @@ describe("probeServer", () => {
     const pending = probeServer(5_000);
     // Ten seconds of nothing, and the app is still on the splash.
     await vi.advanceTimersByTimeAsync(4_999);
-    await expect(PROBE_TIMEOUT_MS).toBeGreaterThan(0);
+    await expect(FAST_PROBE_MS).toBeGreaterThan(0);
 
     // Then the timeout fires and the answer finally arrives.
     await vi.advanceTimersByTimeAsync(2);
@@ -94,7 +95,8 @@ describe("probeServer", () => {
   it("has a timeout short enough that a person does not think it is broken", () => {
     // Long enough for a slow home server on a phone, short enough that the
     // offline path is reached before anyone gives up.
-    expect(PROBE_TIMEOUT_MS).toBeLessThanOrEqual(15_000);
-    expect(PROBE_TIMEOUT_MS).toBeGreaterThanOrEqual(3_000);
+    expect(FAST_PROBE_MS).toBeLessThanOrEqual(15_000);
+    expect(FAST_PROBE_MS).toBeGreaterThanOrEqual(3_000);
   });
 });
+

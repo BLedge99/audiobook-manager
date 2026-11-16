@@ -21,9 +21,7 @@
 
 import { boundedFetch } from "./api";
 import { fetchWithDeadline } from "./bounded";
-
-/** How long to wait for the server before deciding it is not there. */
-export const PROBE_TIMEOUT_MS = 10_000;
+import { FAST_PROBE_MS } from "./wakeBudget";
 
 export interface ServerProbe {
   /** Did the server answer at all? */
@@ -55,7 +53,7 @@ export interface ServerProbe {
  */
 export async function probeCandidateUrl(
   candidate: string,
-  timeoutMs: number = PROBE_TIMEOUT_MS,
+  timeoutMs: number = FAST_PROBE_MS,
 ): Promise<Response> {
   return fetchWithDeadline(`${candidate}/api/health`, {}, timeoutMs);
 }
@@ -66,7 +64,7 @@ export async function probeCandidateUrl(
  * Resolves within `timeoutMs` whatever happens: an answered request, a
  * refused one, or one that never comes back.
  */
-export async function probeServer(timeoutMs: number = PROBE_TIMEOUT_MS): Promise<ServerProbe> {
+export async function probeServer(timeoutMs: number = FAST_PROBE_MS): Promise<ServerProbe> {
   try {
     const res = await boundedFetch("/api/audiobooks", {}, timeoutMs);
     return { reachable: true, authed: res.status !== 401 };

@@ -27,6 +27,7 @@ import {
   reachedSegmentEnd,
 } from "../lib/playback";
 import { usePlayerSource } from "../lib/usePlayerSource";
+import { WAKE_BACKOFF_MS } from "../lib/wakeBudget";
 
 /**
  * The audiobook player.
@@ -660,7 +661,6 @@ export function ChapterPlayer({
         sourceState.markLocalFailed();
         return;
       }
-      const WAKE_BACKOFF_MS = [1_000, 3_000, 8_000, 20_000, 45_000];
       if (wakeRetryRef.current < WAKE_BACKOFF_MS.length) {
         const delay = WAKE_BACKOFF_MS[wakeRetryRef.current];
         wakeRetryRef.current += 1;

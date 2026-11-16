@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { fetchAppConfig, fetchSession, getActiveProfileId, type SessionInfo } from "./api";
 import { probeServer as probeServerRequest } from "./reachability";
+import { WAKE_TIMEOUT_MS } from "./wakeBudget";
 
 export interface UseSessionOptions {
   /** The listener's explicit offline choice. */
@@ -61,10 +62,7 @@ export function useSession(options: UseSessionOptions) {
   } = options;
   const setServerWaking = options.setServerWaking ?? (() => undefined);
 
-  /** How long the patient probe may take before declaring the server gone. */
-const WAKE_TIMEOUT_MS = 75_000;
-
-// "demo" sessions carry no household profile id; everything else does.
+  // "demo" sessions carry no household profile id; everything else does.
   const resolveSessionProfileId = () =>
     getAccountExperience() === "demo" ? null : getActiveProfileId();
 
