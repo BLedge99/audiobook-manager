@@ -63,6 +63,7 @@ import { launchStoreLink } from "./lib/externalIntent";
 import type { ExternalItem } from "./local/db";
 import { mergeShelves } from "./local/librarySource";
 import { isKidsAccount, canSeeBuySurfaces } from "./local/kids";
+import { isDemoExperience } from "./local/experience";
 import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
@@ -760,7 +761,7 @@ function App() {
             handleContinueOffline(true);
             return;
           }
-          setProfileId(accountExperience === "demo" ? null : getActiveProfileId());
+          setProfileId(isDemoExperience(accountExperience) ? null : getActiveProfileId());
           void (async () => {
             // The mount-shaped refresh fired before sign-in had a session, so
             // its favourites batch came back 401 and the shelf rendered with
@@ -782,7 +783,7 @@ function App() {
   // saved or restored, so pick (or create) one before browsing. A normal
   // profile session always has one; this is the break-glass household path
   // during the migration.
-  if (serverReachable && authed && !activeProfileId && accountExperience !== "demo") {
+  if (serverReachable && authed && !activeProfileId && !isDemoExperience(accountExperience)) {
     return (
       <ProfileGate
         onSuccess={() => {
@@ -1091,7 +1092,7 @@ function App() {
               </>
             )}
 
-            {accountExperience !== "demo" && <div className="mt-10">
+            {!isDemoExperience(accountExperience) && <div className="mt-10">
               <TagManager tags={browse.tags} onChanged={() => void browse.refresh()} />
             </div>}
           </>

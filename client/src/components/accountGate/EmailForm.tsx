@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { ArrowLeft, KeyRound, LoaderCircle } from "lucide-react";
 import { copy } from "../../copy";
 import { Btn, Field } from "../../ui/primitives";
+import { isDemoExperience } from "../../local/experience";
 
 export interface EmailFormProps {
   /** True = create-account form; false = sign-in form. */
@@ -64,12 +65,12 @@ export function EmailForm({ signup, accountExperience, busy, onSignIn, onToggleS
           </>
         )}
       </Btn>
-      {!signup && accountExperience === "demo" && (
+      {!signup && isDemoExperience(accountExperience) && (
         <button type="button" onClick={() => onToggleSignup(true)} className="text-sm font-bold text-cobalt-ink underline">
           {copy.login.emailCreateAction}
         </button>
       )}
-      {signup && accountExperience === "demo" && (
+      {signup && isDemoExperience(accountExperience) && (
         <button type="button" onClick={() => onToggleSignup(false)} className="text-sm font-bold text-cobalt-ink underline">
           {copy.login.emailAction}
         </button>
@@ -85,3 +86,4 @@ export function EmailForm({ signup, accountExperience, busy, onSignIn, onToggleS
     </form>
   );
 }
+

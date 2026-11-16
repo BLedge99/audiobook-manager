@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { fetchAppConfig, fetchSession, getActiveProfileId, type SessionInfo } from "./api";
 import { probeServer as probeServerRequest } from "./reachability";
 import { WAKE_TIMEOUT_MS } from "./wakeBudget";
+import { isDemoExperience } from "../local/experience";
 
 export interface UseSessionOptions {
   /** The listener's explicit offline choice. */
@@ -64,7 +65,7 @@ export function useSession(options: UseSessionOptions) {
 
   // "demo" sessions carry no household profile id; everything else does.
   const resolveSessionProfileId = () =>
-    getAccountExperience() === "demo" ? null : getActiveProfileId();
+    isDemoExperience(getAccountExperience()) ? null : getActiveProfileId();
 
   const probeInFlight = useRef(false);
   // Incremented whenever a forced probe supersedes whatever is in flight, so
@@ -128,7 +129,7 @@ export function useSession(options: UseSessionOptions) {
       }
       setSession(info);
       setAuthed(true);
-      if (config.accountExperience === "demo") {
+      if (isDemoExperience(config.accountExperience)) {
         setProfileId(null);
         setActiveProfileId(null);
         if (info.profile) {

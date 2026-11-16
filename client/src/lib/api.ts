@@ -36,6 +36,7 @@ import { mediaProxyUrl } from "./mediaProxy";
 import { copy } from "../copy";
 import { responseErrorText } from "./apiError";
 import { fetchWithDeadline, REQUEST_TIMEOUT_MS } from "./bounded";
+import { isDemoExperience } from "../local/experience";
 import { isOfflineMode } from "./offlineMode";
 
 export const SERVER_URL_KEY = "serverUrl";
@@ -96,7 +97,7 @@ export async function fetchAppConfig(): Promise<AppConfig> {
     if (!response.ok) return { accountExperience: "household", oauthProviders: [] };
     const config = (await response.json()) as Partial<AppConfig>;
     return {
-      accountExperience: config.accountExperience === "demo" ? "demo" : "household",
+      accountExperience: isDemoExperience(config.accountExperience) ? "demo" : "household",
       oauthProviders: Array.isArray(config.oauthProviders) ? config.oauthProviders : [],
     };
   } catch {
@@ -511,7 +512,7 @@ function reportServerUnreachable() {
 /** The profile header the server scopes progress and favourites by. */
 export function profileHeaders(): Record<string, string> {
   const profileId = getActiveProfileId();
-  return profileId && accountExperience !== "demo" ? { "x-profile-id": profileId } : {};
+  return profileId && !isDemoExperience(accountExperience) ? { "x-profile-id": profileId } : {};
 }
 
 /**

@@ -16,7 +16,9 @@
  *    demo listener's progress is not scattered across per-session profiles.
  */
 
-export type AccountExperience = "household" | "demo";
+import { isDemoExperience, type AccountExperience } from "../local/experience";
+
+export type { AccountExperience };
 
 /** The session's profile, or null when there is none to resolve to. */
 export interface ProfileContextInput {
@@ -36,11 +38,11 @@ export interface ProfileContext {
 export function resolveProfileContext(input: ProfileContextInput): ProfileContext {
   const sessionId = input.sessionProfile?.id ? String(input.sessionProfile.id) : null;
   const activeProfileId =
-    input.accountExperience === "demo"
+    isDemoExperience(input.accountExperience)
       ? sessionId
       : sessionId ?? input.storedProfileId;
   const playerProfileId =
-    input.accountExperience === "demo"
+    isDemoExperience(input.accountExperience)
       ? (input.sessionProfile ? "demo-account" : null)
       : activeProfileId;
 

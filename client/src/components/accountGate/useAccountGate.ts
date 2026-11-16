@@ -9,6 +9,7 @@ import {
   apiUrl,
 } from "../../lib/api";
 import { requestRaw } from "../../lib/request";
+import { isDemoExperience } from "../../local/experience";
 import { beginNativeOAuth, subscribeNativeOAuth, type NativeOAuthResult } from "../../lib/oauthNative";
 import { errorSentenceForCode, responseErrorText } from "../../lib/apiError";
 import { isNativeShell } from "../../lib/platform";
@@ -74,7 +75,7 @@ export function useAccountGate({
     let alive = true;
     void (async () => {
       try {
-        if (accountExperience === "demo") {
+        if (isDemoExperience(accountExperience)) {
           if (alive) {
             setAccounts([]);
             const config = await fetchAppConfig();
@@ -122,8 +123,8 @@ export function useAccountGate({
 
   const finish = async (profileId: number | null, token: string | undefined, offline = false) => {
     setSessionToken(token);
-    setActiveProfileId(accountExperience === "demo" ? null : profileId);
-    if (profileId === null || accountExperience === "demo") lockOfflineCache();
+    setActiveProfileId(isDemoExperience(accountExperience) ? null : profileId);
+    if (profileId === null || isDemoExperience(accountExperience)) lockOfflineCache();
     clearPendingProfileId();
     await onSuccess({ offline });
   };
@@ -144,7 +145,7 @@ export function useAccountGate({
         // the buttons with the reviewed failure sentence.
         setError(undefined);
         setFinishing(true);
-        void finishRef.current(accountExperience === "demo" ? null : result.profileId, result.token);
+        void finishRef.current(isDemoExperience(accountExperience) ? null : result.profileId, result.token);
         return;
       }
       setFinishing(false);
@@ -559,3 +560,4 @@ export function useAccountGate({
     finish,
   };
 }
+

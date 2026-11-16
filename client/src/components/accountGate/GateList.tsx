@@ -2,6 +2,7 @@ import { UserRound } from "lucide-react";
 import { copy } from "../../copy";
 import type { Account } from "./types";
 import { Btn, cn, EmptyPanel } from "../../ui/primitives";
+import { isDemoExperience } from "../../local/experience";
 
 const CAPSULE_TINTS = ["var(--rasp)", "var(--tan)", "var(--cobalt)", "var(--mint)"];
 
@@ -39,7 +40,7 @@ export function GateList({
   onConfirmGoogle,
   onEmail,
 }: GateListProps) {
-  if (accountExperience === "demo") {
+  if (isDemoExperience(accountExperience)) {
     return (
       <div className="mt-5 grid min-w-0 gap-3">
         <Btn variant="glass" className="w-full text-left" onClick={onConfirmGoogle}>
