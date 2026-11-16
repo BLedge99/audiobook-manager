@@ -48,6 +48,8 @@ export interface AuthServiceOptions {
   appPassword?: string;
   /** External OAuth providers for the production demo (spec 32 / ADR 023). */
   oauth?: OAuthConfig;
+  /** Deployment account experience; open OAuth sign-up is a demo-mode feature (spec 43 phase 2.2). Defaults to household. */
+  accountExperience?: "household" | "demo";
   /** Test seam for expiry and lockout. */
   now?: () => Date;
 }
@@ -77,9 +79,12 @@ export class AuthService {
   private readonly accountSignups = new RateLimiter(IP_WINDOW_MS);
   private readonly sessions: SessionsService;
 
+  private readonly accountExperience: "household" | "demo";
+
   constructor(options: AuthServiceOptions) {
     this.prisma = options.prisma;
     this.appPassword = options.appPassword;
+    this.accountExperience = options.accountExperience ?? "household";
     this.oauth = options.oauth ?? { enabled: false, providers: [] };
     this.enabled = Boolean(options.appPassword);
     this.now = options.now ?? (() => new Date());
@@ -469,6 +474,17 @@ export class AuthService {
       // Do not silently attach a provider identity to an existing account.
       // Account-linking UX and proof of control for a second credential are deferred.
       throw new AuthFailure(409, "account_linking_required");
+    }
+
+    // Spec 43 phase 2.2: open OAuth sign-up is a demo-mode feature. A
+    // household deployment keeps claim/invite-only semantics — an unknown
+    // verified identity gets no profile, unless the operator explicitly
+    // opted in with ALLOW_OAUTH_AUTO_PROVISION=true.
+    const autoProvisionAllowed =
+      this.accountExperience === "demo" ||
+      process.env.ALLOW_OAUTH_AUTO_PROVISION === "true";
+    if (!autoProvisionAllowed) {
+      throw new AuthFailure(403, "oauth_signup_disabled");
     }
 
     const baseName = (identity.name ?? "").trim() || identity.email?.split("@")[0] || `Listener ${provider.id}`;

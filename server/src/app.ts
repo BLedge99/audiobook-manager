@@ -91,8 +91,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const enrichment = new EnrichmentManager(prisma);
   const recommendations = new RecommendationService(prisma);
   const appPassword = options.appPassword ?? process.env.APP_PASSWORD;
-  const auth = new AuthService({ prisma, appPassword, oauth: options.oauth ?? oauthConfigFromEnv(), now: options.now });
   const accountExperience = options.accountExperience ?? accountExperienceFromEnv();
+  const auth = new AuthService({ prisma, appPassword, oauth: options.oauth ?? oauthConfigFromEnv(), accountExperience, now: options.now });
   const passkeys = new PasskeyService({
     prisma,
     config: options.passkeyConfig ?? passkeyConfigFromEnv(),

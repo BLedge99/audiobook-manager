@@ -67,6 +67,8 @@ export function apiErrorText(status: number, body: unknown): string {
       return copy.login.oauthFailed;
     case "oauth_email_not_verified":
       return copy.login.oauthEmailNotVerified;
+    case "oauth_signup_disabled":
+      return copy.login.oauthSignupDisabled;
     case "account_linking_required":
       return copy.login.oauthFailed;
     case "oauth_rate_limited":

@@ -64,7 +64,7 @@ fails if a row ever loses its erase strategy.
 | **Recipients** | Server only; session token in HttpOnly cookie (browser) or memory (Android) |
 | **Cross-border transfer** | None |
 | **Automated decision-making** | None |
-| **System** | `server/src/auth/service.ts`, `routes.ts`, `session.ts`, `oauth.ts`, `passkeys.ts`; native handoff: `routes.ts` (`POST /api/auth/oauth/handoff`), `server/prisma/schema.prisma` model `OAuthHandoff` (ADR 036) |
+| **System** | `server/src/auth/service.ts`, `routes.ts`, `session.ts`, `oauth.ts`, `passkeys.ts`; native handoff: `routes.ts` (`POST /api/auth/oauth/handoff`), `server/prisma/schema.prisma` model `OAuthHandoff` (ADR 036). Auto-provisioning is enforced server-side (spec 43 phase 2.2): an unknown OAuth identity gets a profile only when `ACCOUNT_EXPERIENCE=demo` or `ALLOW_OAUTH_AUTO_PROVISION=true`; household deployments reject unknown identities and keep claim/invite-only semantics |
 
 ---
 

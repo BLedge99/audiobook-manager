@@ -555,6 +555,7 @@ export const copy = {
     oauthFailed: "Sign-in with the provider didn't complete. Try again.",
     oauthEmailNotVerified: "That email couldn't be verified. Try again with the provider.",
     oauthRateLimited: "Too many sign-in attempts. Wait a moment and try again.",
+    oauthSignupDisabled: "This server only has profiles the household created. Ask the person who runs it to create yours first.",
     oauthGoogleAction: "Sign in with Google",
     oauthGithubAction: "Sign in with GitHub",
     oauthGoogleConfirmHeading: "Continue to Google?",

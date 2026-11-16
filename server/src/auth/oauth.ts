@@ -56,6 +56,7 @@ const CLIENT_SAFE_AUTH_ERRORS = new Set([
   "account_disabled",
   "account_creation_unavailable",
   "account_linking_required",
+  "oauth_signup_disabled",
 ]);
 
 export function clientSafeAuthError(code: string): string {

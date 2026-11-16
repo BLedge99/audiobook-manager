@@ -55,6 +55,7 @@ export type ApiErrorCode =
   | "oauth_identity_invalid"
   | "oauth_identity_unavailable"
   | "account_linking_required"
+  | "oauth_signup_disabled"
   | "media_token_not_configured"
   | "not_found"
   | "profile_required"
