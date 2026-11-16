@@ -947,7 +947,7 @@ export function ChapterPlayer({
           <p className="truncate font-display text-[0.9375rem] font-semibold text-ink">
             {described.title || heading}
           </p>
-          <p className="text-[0.75rem] text-ink3 tnum">
+          <p className="t-faint tnum">
             {segments.length > 1 ? `${heading} of ${segments.length}` : heading}
           </p>
         </div>

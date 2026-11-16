@@ -52,7 +52,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
       <MachineHead id="tag-manager" title={copy.operator.tags.heading} count={`${tags.length}`}>
         <TagIcon size={20} className="shrink-0 text-rasp" aria-hidden="true" />
       </MachineHead>
-      <p className="text-[0.84375rem] text-ink2">{copy.operator.tags.intro}</p>
+      <p className="t-body">{copy.operator.tags.intro}</p>
 
       <form onSubmit={create} className="mt-4 flex flex-wrap gap-2">
         <Field

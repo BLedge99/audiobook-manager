@@ -256,7 +256,7 @@ function OfflineServerLibrary({
                       >
                         {book.title}
                       </button>
-                      <span className="block truncate text-[0.78125rem] text-ink2">{book.author}</span>
+                      <span className="block truncate t-meta">{book.author}</span>
                     </span>
                     {/* The trash can, because this one really does delete: the
                         file goes with it. The book page says the same thing in
@@ -352,7 +352,7 @@ function ServerLibraryRow({
           >
             {book.title}
           </button>
-          <span className="block truncate text-[0.78125rem] text-ink2">{book.author}</span>
+          <span className="block truncate t-meta">{book.author}</span>
         </span>
         {inLibrary ? (
           <Btn

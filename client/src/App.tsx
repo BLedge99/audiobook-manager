@@ -1133,7 +1133,7 @@ function App() {
         )}
       </main>
 
-      <footer className="relative z-10 px-5 pb-28 pt-6 text-center text-[0.75rem] text-ink3 sm:pb-10">
+      <footer className="relative z-10 px-5 pb-28 pt-6 text-center t-faint sm:pb-10">
         {copy.brand.footer}
       </footer>
       {selectedBook && <AudiobookDetail

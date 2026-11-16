@@ -145,9 +145,9 @@ const LibraryCard = memo(function LibraryCard({
           <h3 className="line-clamp-2 min-h-[2.3em] font-display text-[0.9375rem] font-semibold leading-tight text-ink">
             {book.title}
           </h3>
-          <p className="mt-0.5 truncate text-[0.78125rem] text-ink2">{book.author}</p>
+          <p className="mt-0.5 truncate t-meta">{book.author}</p>
           {narrators.length > 0 && (
-            <p className="mt-0.5 truncate text-[0.71875rem] text-ink3">
+            <p className="mt-0.5 truncate t-caption">
               {narrators.length === 1
                 ? copy.narratedBy(narrators[0].name)
                 : copy.narratedByCount(narrators.length)}
@@ -247,7 +247,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
                 <h3 className={cn("truncate font-display font-semibold text-ink", isFeatured ? "text-[1.0625rem]" : "text-[0.9375rem]")}>
                   {book.title}
                 </h3>
-                <span className="mt-0.5 block truncate text-[0.78125rem] text-ink2">{book.author}</span>
+                <span className="mt-0.5 block truncate t-meta">{book.author}</span>
                 <span className="mt-2 block">
                   <Tube percent={percent} />
                 </span>

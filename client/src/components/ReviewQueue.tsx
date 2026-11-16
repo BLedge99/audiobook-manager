@@ -107,10 +107,10 @@ function CandidateRow({
           </span>
         </div>
         <p className="mt-1.5 truncate font-display text-[0.9375rem] font-semibold text-ink">{candidate.title}</p>
-        <p className="truncate text-[0.78125rem] text-ink2">{candidate.author ?? copy.unknownAuthor}</p>
-        {narrators.length > 0 && <p className="mt-0.5 truncate text-[0.71875rem] text-ink3">{copy.narratedBy(narrators.slice(0, 3).join(", "))}</p>}
-        {genres.length > 0 && <p className="mt-0.5 truncate text-[0.71875rem] text-ink3">{genres.join(", ")}</p>}
-        {candidate.seriesName && <p className="mt-0.5 text-[0.71875rem] text-ink3">{copy.operator.review.series(candidate.seriesName)}</p>}
+        <p className="truncate t-meta">{candidate.author ?? copy.unknownAuthor}</p>
+        {narrators.length > 0 && <p className="mt-0.5 truncate t-caption">{copy.narratedBy(narrators.slice(0, 3).join(", "))}</p>}
+        {genres.length > 0 && <p className="mt-0.5 truncate t-caption">{genres.join(", ")}</p>}
+        {candidate.seriesName && <p className="mt-0.5 t-caption">{copy.operator.review.series(candidate.seriesName)}</p>}
 
         {error && <p role="alert" className="mt-1.5 text-[0.75rem] font-bold text-rasp-ink">{error}</p>}
 
@@ -159,7 +159,7 @@ export function ReviewQueue({ books, onResolved }: { books: Audiobook[]; onResol
       style={{ background: "color-mix(in srgb, var(--tan) 10%, var(--surface))" }}
     >
       <MachineHead id="review-queue" title={copy.operator.review.heading} />
-      <p className="text-[0.84375rem] text-ink2">{copy.operator.review.intro(books.length)}</p>
+      <p className="t-body">{copy.operator.review.intro(books.length)}</p>
 
       <div className="mt-4 space-y-3">
         {books.map((book) => (
@@ -196,7 +196,7 @@ function ReviewRow({ book, onResolved }: { book: Audiobook; onResolved: () => vo
   return (
     <div className={cn("rounded-[18px_14px_18px_14px/14px_18px_14px_18px] border-2 border-ink/25 bg-surface p-3")}>
       <h3 className="font-display text-[0.9375rem] font-semibold text-ink">{book.title}</h3>
-      <p className="mt-0.5 text-[0.75rem] text-ink3">{copy.operator.review.currentlyShownAs(book.title, book.author)}</p>
+      <p className="mt-0.5 t-faint">{copy.operator.review.currentlyShownAs(book.title, book.author)}</p>
       {candidates.map((candidate) => (
         <CandidateRow
           key={candidate.id}

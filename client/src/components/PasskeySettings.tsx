@@ -89,7 +89,7 @@ export function PasskeySettings() {
         <Fingerprint size={17} className="text-rasp" aria-hidden="true" />
         {copy.security.heading}
       </h3>
-      <p className="mt-1.5 text-[0.84375rem] text-ink2">{copy.security.intro}</p>
+      <p className="mt-1.5 t-body">{copy.security.intro}</p>
 
       {passkeys === null ? (
         <p className="mt-3 flex items-center gap-2 text-sm text-ink2" role="status">
@@ -109,7 +109,7 @@ export function PasskeySettings() {
                 <span className="block truncate text-[0.875rem] font-bold text-ink">
                   {passkey.label ?? copy.security.heading}
                 </span>
-                <span className="block text-[0.75rem] text-ink3">
+                <span className="block t-faint">
                   {passkey.lastUsedAt
                     ? copy.security.lastUsed(new Date(passkey.lastUsedAt).toLocaleDateString())
                     : copy.security.neverUsed}

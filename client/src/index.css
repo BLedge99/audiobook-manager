@@ -474,6 +474,14 @@ button:focus {
  * rail sat under the header instead of at the bottom of the screen. Both were
  * invisible in review and obvious on screen.
  */
+@layer utilities {
+  /* Semantic text sizes — each is the exact Tailwind arbitrary value it
+     replaces, so the change is a naming one, not a visual change. */
+  .t-meta    { font-size: 0.78125rem; color: var(--ink-2); }
+  .t-caption { font-size: 0.71875rem; color: var(--ink-3); }
+  .t-faint   { font-size: 0.75rem;    color: var(--ink-3); }
+  .t-body    { font-size: 0.84375rem; color: var(--ink-2); }
+}
 @layer components {
 
 /* ---- the machine ---- */

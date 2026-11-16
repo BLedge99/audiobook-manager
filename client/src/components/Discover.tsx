@@ -63,14 +63,14 @@ function RecommendationCard({
       </span>
       <div className="min-w-0 flex-1">
         <h3 className="truncate font-display text-[0.9375rem] font-semibold text-ink">{recommendation.title}</h3>
-        <p className="truncate text-[0.78125rem] text-ink2">{recommendation.author ?? copy.unknownAuthor}</p>
+        <p className="truncate t-meta">{recommendation.author ?? copy.unknownAuthor}</p>
         {recommendation.narrators.length > 0 && (
-          <p className="mt-0.5 truncate text-[0.71875rem] text-ink3">
+          <p className="mt-0.5 truncate t-caption">
             {copy.narratedBy(recommendation.narrators.slice(0, 3).join(", "))}
           </p>
         )}
         {recommendation.description && (
-          <p className="mt-1.5 line-clamp-2 text-[0.71875rem] text-ink3">{recommendation.description}</p>
+          <p className="mt-1.5 line-clamp-2 t-caption">{recommendation.description}</p>
         )}
       <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-ink/25 bg-sunk px-2.5 py-0.5 text-[0.6875rem] font-bold text-ink2">
@@ -127,9 +127,9 @@ function WishlistRow({
     <article className="panel flex items-start gap-3 p-3">
       <div className="min-w-0 flex-1">
         <h3 className="truncate font-display text-[0.9375rem] font-semibold text-ink">{item.title}</h3>
-        <p className="truncate text-[0.78125rem] text-ink2">{item.author ?? copy.unknownAuthor}</p>
+        <p className="truncate t-meta">{item.author ?? copy.unknownAuthor}</p>
         {/* Wishlist books are metadata-only; there is deliberately no play control. */}
-        <p className="mt-1 text-[0.71875rem] text-ink3">{copy.discover.notInLibrary}</p>
+        <p className="mt-1 t-caption">{copy.discover.notInLibrary}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <Btn
@@ -338,7 +338,7 @@ export function Discover({
                   )}
                 </Btn>
                 {typeof result.total === "number" && (
-                  <p className="text-[0.75rem] text-ink3 tnum">
+                  <p className="t-faint tnum">
                     {copy.discover.showing(result.recommendations.length, result.total)}
                   </p>
                 )}

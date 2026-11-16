@@ -192,7 +192,7 @@ export function Settings({
               <p className="text-[0.75rem] font-bold uppercase tracking-wide text-ink3">
                 {copy.operator.settings.recentHeading}
               </p>
-              <p className="mt-0.5 text-[0.75rem] text-ink3">{copy.operator.settings.recentHelp}</p>
+              <p className="mt-0.5 t-faint">{copy.operator.settings.recentHelp}</p>
               <ul className="mt-2 grid grid-cols-[minmax(0,1fr)] gap-1.5">
                 {recent.map((address) => {
                   const isCurrent = address === getServerUrl();
@@ -202,7 +202,7 @@ export function Settings({
                         type="button"
                         onClick={() => switchTo(address)}
                         disabled={status === "checking"}
-                        className="min-w-0 flex-1 truncate rounded-[10px] border-2 border-ink/15 bg-sunk px-2.5 py-1.5 text-left font-mono text-[0.78125rem] text-ink2 transition-colors hover:border-ink hover:text-ink disabled:opacity-60"
+                        className="min-w-0 flex-1 truncate rounded-[10px] border-2 border-ink/15 bg-sunk px-2.5 py-1.5 text-left font-mono t-meta transition-colors hover:border-ink hover:text-ink disabled:opacity-60"
                       >
                         {address}
                       </button>
@@ -235,7 +235,7 @@ export function Settings({
 
           {/* Which build is this? Every APK reports versionName 1.0, so
               without this the phone cannot answer "did my change take?". */}
-          <p className="mt-2 text-[0.75rem] text-ink3 tnum">
+          <p className="mt-2 t-faint tnum">
             {copy.operator.settings.build}: {builtAt}
           </p>
 
@@ -244,7 +244,7 @@ export function Settings({
           <p className="mt-2 font-display text-[2rem] font-semibold leading-none text-ink tnum">
             {formatBytes(usedBytes)}
           </p>
-          <p className="mt-1 text-[0.84375rem] text-ink2">
+          <p className="mt-1 t-body">
             {copy.operator.settings.booksDownloaded(downloadedCount)}
           </p>
           <Tube percent={downloadedCount > 0 ? 100 : 0} className="mt-3" />
@@ -278,7 +278,7 @@ export function Settings({
                 around a styled run. `tnum` on the line keeps the figures
                 aligned.
               */}
-              <p className="text-[0.84375rem] text-ink2 tnum">
+              <p className="t-body tnum">
                 {copy.operator.settings.coversCached(formatBytes(coverBytes))}
               </p>
               {coversCleared ? (
