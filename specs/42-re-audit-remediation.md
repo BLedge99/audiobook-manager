@@ -1,9 +1,9 @@
 # Spec 42 — Re-audit remediation: the 2026-11-16 review
 
-> **Status: planned.** Written from the 2026-11-16 architecture re-audit
-> (`architecture-review-2026-11-16-1147.html`, fresh-context explore). Every
-> phase below is self-contained and independently mergeable. Read "How to work
-> this plan" before starting anything.
+> **Status: done 2026-11-16.** Written from the 2026-11-16 architecture
+> re-audit (`architecture-review-2026-11-16-1147.html`, fresh-context explore).
+> Every phase below is executed and merged to master. Read "How to work this
+> plan" before starting anything.
 
 ## Purpose
 
@@ -463,3 +463,37 @@ to do it is recorded with a load-bearing reason; the kids sweep stays green.
 | 9 | S | The admin status field is display-only; the family default is guarded by the 404 test |
 | 10 | S | A rename or a documented decision; one or the other |
 | 11 | S | Bookkeeping |
+
+## Close-out (2026-11-16)
+
+All phases landed on master. Verification record, in the order this plan
+required:
+
+- Server suite: 828 passed, 4 skipped (832). One full run showed the known
+  load flake (`scanner.integration.test.ts`, ~10 s timeout); it passes alone
+  and on re-run. Documented in LIMITATIONS §5.
+- Client suite: 989/989 across 94 files (~66–85 s). Two files failed once
+  under full-suite load (`Settings.test.tsx`, `PasskeySettings.test.tsx`) —
+  both pass in isolation and on re-run; LIMITATIONS §5.
+- Both typechecks green. Client build ~15–20 s.
+- Bundle: app chunk 289.68 kB (gzip 87.34) against the 2026-11-16 Phase-0
+  baseline of 289.70 kB — the phases added no net weight to the hot chunk;
+  CSS 70.46 kB. The `/privacy` notice ships as its own precached lazy chunk
+  (9.93 kB, 3.21 gzip), so shell-fallback navigations render it offline.
+- `npm audit --audit-level=high`: server clean; client 4 low-severity, all
+  inside the build toolchain (deepmerge in `@rollup/plugin-node-resolve`
+  via workbox-build/vite-plugin-pwa — fix requires a breaking downgrade;
+  not taken).
+- GDPR: household `/api/me/export`, self-erasure and the Art. 16 PATCH now
+  carry `x-profile-id` via the request interface; the bypass class is closed
+  by the `noBypassFetch` sweep; the privacy notice is reachable with the
+  server hot, waking and cold; specs 29/30 and ADR 020 document the
+  `books/srv-<hash>/` file layer.
+- Re-audit report: `architecture-review-2026-11-16-1147.html`, kept in %TEMP%
+  as a working artefact; not committed. Phase 4's live verification of the
+  in-app `/privacy` route was exercised against the dev stack (a browser
+  renders the notice); a production check — navigate to `/privacy` with the
+  server cold or waking — is the deployer's final smoke test.
+- One process note: commit 8ebf932 pushed red (`tsc -b` error in
+  `experience.test.ts`; vitest does not typecheck). Fixed in 3126529 and
+  pushed immediately; HEAD verified green end to end (build, both suites).

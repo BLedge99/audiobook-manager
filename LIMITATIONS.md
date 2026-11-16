@@ -1191,6 +1191,18 @@ Neither was changed in this step: hiding them is a policy decision for the demo 
   `gradlew --stop`, then remove the directory, then assemble. This is the
   equivalent of `clean` and is what the "never skip clean" rule was protecting.
 
+- **Two suites flake under full-suite load.** Spec 41 noted an intermittently
+  red client test under load, "worth an issue if it recurs". It recurred on
+  2026-11-16, twice, in the same hour as spec 42 landed: `Settings.test.tsx`
+  ("saves the server, reports connected") and `PasskeySettings.test.tsx`
+  ("renders nothing when the server has passkeys turned off") each failed in
+  a full `vitest` run and passed in isolation and on immediate re-run. The
+  server has the same shape: `scanner.integration.test.ts` timed out at
+  ~10 s inside a full run and passed alone. Not a code regression — timing
+  pressure on shared workers. Until someone finds the real cause, treat a
+  red of *exactly* those tests under a full run as load noise: re-run alone
+  before touching code. Do not "fix" it by bumping timeouts silently.
+
 ---
 
 ## 6. Suggested order of work
