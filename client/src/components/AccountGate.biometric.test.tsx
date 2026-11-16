@@ -74,7 +74,7 @@ describe("AccountGate biometric sign-in", () => {
     mocks.exportKey.mockResolvedValue(new Uint8Array(32));
     mocks.fetch.mockImplementation(async (path: string) => {
       if (path === "/api/auth/accounts") return response(200, [{
-        id: 7, name: "Ben", role: "member", disabled: false,
+        id: 7, name: "Ben", disabled: false,
         hasPassword: true, hasPasskey: false, hasDeviceUnlock: true,
       }]);
       return response(200, { token: "device-session", profile: { id: 7 } });
@@ -101,7 +101,7 @@ describe("AccountGate biometric sign-in", () => {
   it("reports local biometric unlock as offline when the server session cannot be exchanged", async () => {
     mocks.fetch.mockImplementation(async (path: string) => {
       if (path === "/api/auth/accounts") return response(200, [{
-        id: 7, name: "Ben", role: "member", disabled: false,
+        id: 7, name: "Ben", disabled: false,
         hasPassword: true, hasPasskey: false, hasDeviceUnlock: true,
       }]);
       throw new Error("server unreachable");
@@ -162,7 +162,7 @@ describe("AccountGate biometric sign-in", () => {
 
   it("explains device setup when the account has no enrolled credential", async () => {
     mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"
-      ? response(200, [{ id: 7, name: "Ben", role: "member", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: false }])
+      ? response(200, [{ id: 7, name: "Ben", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: false }])
       : response(200, {}));
     render(<AccountGate onSuccess={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));
@@ -196,7 +196,7 @@ describe("AccountGate biometric sign-in", () => {
   });
 
   it("clears a revoked device secret and its stale offline private data", async () => {    mocks.fetch.mockImplementation(async (path: string) => path === "/api/auth/accounts"
-      ? response(200, [{ id: 7, name: "Ben", role: "member", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: true }])
+      ? response(200, [{ id: 7, name: "Ben", disabled: false, hasPassword: true, hasPasskey: false, hasDeviceUnlock: true }])
       : response(401, { code: "device_auth_failed" }));
     render(<AccountGate onSuccess={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /Ben/ }));

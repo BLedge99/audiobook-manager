@@ -10,7 +10,6 @@ export interface Account {
   id: number;
   name: string;
   color?: string | null;
-  role: "admin" | "member";
   disabled: boolean;
   hasPassword: boolean;
   hasPasskey: boolean;

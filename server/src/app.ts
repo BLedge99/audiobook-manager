@@ -4,6 +4,7 @@ import cookie from "@fastify/cookie";
 import compress from "@fastify/compress";
 import { collectApiDocs, registerClientDist, sharedCorsOrigins } from "./shared/listener";
 import { registerSecurityHeaders } from "./security-headers";
+import { parseTrustProxy } from "./trust-proxy";
 import { PrismaClient } from "@prisma/client";
 import path from "node:path";
 import { createScanManager } from "./scanner";
@@ -68,11 +69,7 @@ function accountExperienceFromEnv(value = process.env.ACCOUNT_EXPERIENCE): "hous
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const prisma = options.prisma ?? new PrismaClient();
   const configuredProxy = process.env.TRUST_PROXY?.trim();
-  const trustProxy = options.trustProxy ?? (
-    configuredProxy === "true" ? true
-      : configuredProxy ? configuredProxy.split(",").map((value) => value.trim()).filter(Boolean)
-        : false
-  );
+  const trustProxy = options.trustProxy ?? parseTrustProxy(configuredProxy);
   const app = Fastify({
     // Media URLs carry short-lived bearer tokens in their query string. Keep
     // request URLs and session cookies out of routine request logs.

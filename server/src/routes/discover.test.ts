@@ -134,6 +134,50 @@ describe("wishlist", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it("rejects a wishlist seeded from a book a child may not see", async () => {
+    const child = await prisma.profile.create({ data: { name: `discover-kid-${Date.now()}`, role: "child", ageBand: "6-9" } });
+    const root = await prisma.libraryRoot.findFirstOrThrow();
+    const mature = await prisma.mediaItem.create({
+      data: {
+        title: "Very Adult History",
+        author: "Scholar",
+        filePath: "/discover-test-root/mature.mp3",
+        fileFormat: "mp3",
+        libraryRootId: root.id,
+        minimumAge: 16,
+      },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/wishlist",
+      headers: { "x-profile-id": String(child.id) },
+      payload: { title: "Sapien", author: "A", provider: "openlibrary", providerKey: "OL1W", seedMediaItemId: mature.id },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("allows a wishlist seeded from a book a child may see", async () => {
+    const child = await prisma.profile.create({ data: { name: `discover-kid2-${Date.now()}`, role: "child", ageBand: "6-9" } });
+    const root = await prisma.libraryRoot.findFirstOrThrow();
+    const picture = await prisma.mediaItem.create({
+      data: {
+        title: "Picture Start",
+        author: "A",
+        filePath: "/discover-test-root/picture.mp3",
+        fileFormat: "mp3",
+        libraryRootId: root.id,
+        minimumAge: 4,
+      },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/wishlist",
+      headers: { "x-profile-id": String(child.id) },
+      payload: { title: "Sapien", author: "A", provider: "openlibrary", providerKey: "OL2W", seedMediaItemId: picture.id },
+    });
+    expect(response.statusCode).toBe(201);
+  });
+
   it("404s deleting another profile's wishlist item", async () => {
     const other = await prisma.profile.create({ data: { name: "discover-other", role: "member" } });
     const row = await prisma.wishlistItem.create({

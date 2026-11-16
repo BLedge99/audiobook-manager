@@ -200,6 +200,16 @@ export async function registerDiscoverRoutes(
     if (profileId === null) return fail(reply, 400, "profile_required");
     const body = request.body;
 
+    // Spec 38: a child must not seed Discover (or dwell time) from a book
+    // they were not shown. (The wishlist stores only the seed's id today;
+    // this gate is what keeps that from becoming a leak tomorrow.)
+    if (
+      body.seedMediaItemId !== undefined &&
+      !(await visibleForAge(prisma, request.auth?.role, profileId, body.seedMediaItemId))
+    ) {
+      return fail(reply, 404, "audiobook_not_found");
+    }
+
     const item = await recommendations.saveToWishlist(
       profileId,
       { ...body, narrators: body.narrators ?? [], genres: (body.genres ?? []).slice(0, 20), score: 0, reason: { code: "related" } },

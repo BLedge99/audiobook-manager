@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   OAUTH_STATE_COOKIE,
   buildAuthorizeUrl,
+  clientSafeAuthError,
   createPkcePair,
   exchangeAuthorizationCode,
   oauthConfigFromEnv,
@@ -53,6 +54,63 @@ describe("oauthConfigFromEnv", () => {
       GITHUB_CLIENT_SECRET: "secret",
     } as NodeJS.ProcessEnv);
     expect(config.providers.map((provider) => provider.id)).toEqual(["google", "github"]);
+  });
+
+  it("throws in production when an enabled provider has no fixed redirect URI", () => {
+    expect(() =>
+      oauthConfigFromEnv({
+        NODE_ENV: "production",
+        OAUTH_ENABLED: "true",
+        GOOGLE_CLIENT_ID: "id",
+        GOOGLE_CLIENT_SECRET: "secret",
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/GOOGLE_REDIRECT_URI/);
+  });
+
+  it("does not throw in production when the redirect URIs are configured", () => {
+    const config = oauthConfigFromEnv({
+      NODE_ENV: "production",
+      OAUTH_ENABLED: "true",
+      GOOGLE_CLIENT_ID: "id",
+      GOOGLE_CLIENT_SECRET: "secret",
+      GOOGLE_REDIRECT_URI: "https://books.example.com/api/auth/google/callback",
+    } as NodeJS.ProcessEnv);
+    expect(config.providers[0]?.redirectUri).toBe("https://books.example.com/api/auth/google/callback");
+  });
+
+  it("does not throw outside production when redirect URIs are missing", () => {
+    const config = oauthConfigFromEnv({
+      NODE_ENV: "test",
+      OAUTH_ENABLED: "true",
+      GOOGLE_CLIENT_ID: "id",
+      GOOGLE_CLIENT_SECRET: "secret",
+    } as NodeJS.ProcessEnv);
+    expect(config.enabled).toBe(true);
+  });
+});
+
+describe("clientSafeAuthError", () => {
+  it("passes through the reviewed client-facing codes", () => {
+    for (const code of [
+      "oauth_state_mismatch",
+      "oauth_not_configured",
+      "oauth_code_exchange_failed",
+      "oauth_identity_unavailable",
+      "oauth_identity_invalid",
+      "oauth_email_not_verified",
+      "oauth_rate_limited",
+      "account_disabled",
+      "account_creation_unavailable",
+      "account_linking_required",
+    ]) {
+      expect(clientSafeAuthError(code)).toBe(code);
+    }
+  });
+
+  it("collapses anything else to internal_error", () => {
+    expect(clientSafeAuthError("pg_connection_failed")).toBe("internal_error");
+    expect(clientSafeAuthError("")).toBe("internal_error");
+    expect(clientSafeAuthError("<script>alert(1)</script>")).toBe("internal_error");
   });
 });
 

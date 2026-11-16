@@ -65,7 +65,9 @@ describe("account list", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ id: number; name: string; hasPassword: boolean }[]>();
     const row = body.find((entry) => entry.id === profile.id);
-    expect(row).toMatchObject({ name: profile.name, hasPassword: true, role: "member" });
+    // Unset role: the picker renders nothing role-dependent.
+    expect(row).toMatchObject({ name: profile.name, hasPassword: true });
+    expect(row).not.toHaveProperty("role");
     expect(JSON.stringify(body)).not.toContain("passwordHash");
     expect(JSON.stringify(body)).not.toContain("scrypt$");
   });

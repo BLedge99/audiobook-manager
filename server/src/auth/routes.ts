@@ -14,6 +14,7 @@ import {
   OAUTH_APP_STATE_COOKIE,
   OAUTH_STATE_COOKIE,
   buildAuthorizeUrl,
+  clientSafeAuthError,
   createPkcePair,
   oauthProviderById,
 } from "./oauth";
@@ -668,8 +669,8 @@ export async function registerAuthRoutes(
       ? request.cookies[OAUTH_APP_STATE_COOKIE]
       : null;
     const failureRedirect = (code: string) => appState !== null
-      ? `${NATIVE_OAUTH_CALLBACK}?auth_error=${encodeURIComponent(code)}`
-      : `/?auth_error=${encodeURIComponent(code)}`;
+      ? `${NATIVE_OAUTH_CALLBACK}?auth_error=${encodeURIComponent(clientSafeAuthError(code))}`
+      : `/?auth_error=${encodeURIComponent(clientSafeAuthError(code))}`;
     if (appState !== null) reply.clearCookie(OAUTH_APP_STATE_COOKIE, { path: "/" });
 
     if (!provider || !code || !state || !codeVerifier) {

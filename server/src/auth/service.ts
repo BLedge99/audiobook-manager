@@ -103,7 +103,8 @@ export class AuthService {
       id: profile.id,
       name: profile.name,
       color: profile.color,
-      role: profile.role === "admin" ? "admin" : profile.role === "child" ? "child" : "member",
+      // No role: the picker renders nothing role-dependent, and the field
+      // only hands an attacker a target map ("which account is the admin?").
       disabled: profile.disabled,
       hasPassword: Boolean(profile.passwordHash),
       hasPasskey: profile._count.webauthnCredentials > 0,
@@ -378,6 +379,10 @@ export class AuthService {
     const email = input.email.trim().toLowerCase();
     const profile = email ? await this.prisma.profile.findFirst({ where: { email } }) : null;
     if (!profile) {
+      // Same work as a real sign-in (scrypt is the expensive part), so an
+      // unknown email is not a cheap timing oracle. The answer is identical
+      // to a wrong password.
+      await hashPassword(input.password);
       this.recordIpFailure(input.ip);
       throw new AuthFailure(401, "incorrect_password");
     }

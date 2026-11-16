@@ -50,10 +50,13 @@ describe("child role propagation", () => {
     expect(res.json<{ role: string }>().role).toBe("child");
   });
 
-  it("the account picker reports the child role", async () => {
+  it("the account picker reports no role at all", async () => {
+    // The picker renders nothing role-dependent; the field would only hand
+    // an attacker a target map. Role comes from /api/auth/session instead.
     const res = await app.inject({ method: "GET", url: "/api/auth/accounts" });
-    const row = res.json<{ id: number; role: string }[]>().find((entry) => entry.id === child.id);
-    expect(row?.role).toBe("child");
+    const row = res.json<{ id: number; role?: string }[]>().find((entry) => entry.id === child.id);
+    expect(row).toBeDefined();
+    expect(row).not.toHaveProperty("role");
   });
 
   it("GET /api/auth/session still reports child via the session", async () => {

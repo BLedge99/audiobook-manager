@@ -39,6 +39,29 @@ export interface OAuthConfig {
   providers: OAuthProvider[];
 }
 
+/**
+ * Error codes that may appear in the client-facing `auth_error` query param.
+ * Anything else becomes "internal_error" — internal failure names are not a
+ * useful thing to hand to a browser URL (and it keeps the surface to the
+ * client's reviewed copy catalog).
+ */
+const CLIENT_SAFE_AUTH_ERRORS = new Set([
+  "oauth_state_mismatch",
+  "oauth_not_configured",
+  "oauth_code_exchange_failed",
+  "oauth_identity_unavailable",
+  "oauth_identity_invalid",
+  "oauth_email_not_verified",
+  "oauth_rate_limited",
+  "account_disabled",
+  "account_creation_unavailable",
+  "account_linking_required",
+]);
+
+export function clientSafeAuthError(code: string): string {
+  return CLIENT_SAFE_AUTH_ERRORS.has(code) ? code : "internal_error";
+}
+
 export function oauthConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): OAuthConfig {
@@ -75,7 +98,20 @@ export function oauthConfigFromEnv(
     });
   }
 
-  return { enabled: env.OAUTH_ENABLED === "true", providers };
+  const enabled = env.OAUTH_ENABLED === "true";
+  // In production the redirect URI is part of the provider's registered
+  // config; falling back to the request Host here would let a forged Host
+  // header steer `redirect_uri` to an attacker's callback. Fail closed.
+  if (enabled && env.NODE_ENV === "production") {
+    for (const provider of providers) {
+      if (!provider.redirectUri) {
+        const envKey = provider.id === "google" ? "GOOGLE_REDIRECT_URI" : "GITHUB_REDIRECT_URI";
+        throw new Error(`${envKey} must be set in production when the ${provider.id} provider is configured`);
+      }
+    }
+  }
+
+  return { enabled, providers };
 }
 
 export function oauthProviderById(
