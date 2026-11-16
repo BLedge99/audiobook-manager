@@ -771,6 +771,9 @@ describe("native oauth flow", () => {
     nativeApp = await buildApp({
       logger: false,
       appPassword: "household",
+      // The native round trip signs in an unknown Google identity, which is a
+      // demo-mode provisioning flow (spec 43 phase 2.2).
+      accountExperience: "demo",
       prisma,
       oauth: {
         enabled: true,

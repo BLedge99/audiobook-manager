@@ -20,6 +20,7 @@ import {
   setSessionCookie,
   type RegisterAuthOptions,
 } from "./routes";
+import { RateLimiter } from "../rate-limit";
 
 /** Five minutes, per spec 28. */
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -434,6 +435,14 @@ export async function registerPasskeyRoutes(
   options: RegisterAuthOptions,
 ): Promise<void> {
   const demoMode = () => isDemoMode(options.accountExperienceResolver?.() ?? options.accountExperience);
+  // Spec 43 phase 2.5: the login/options endpoint is public sign-in, so it is
+  // rate-limited per IP and per profile. Without this, anyone can mint
+  // WebAuthnChallenge rows as fast as the database accepts them. 30 per 15
+  // minutes is generous for a real phone and tight for a scraper.
+  const challengeLimiter = new RateLimiter(15 * 60 * 1000);
+  const CHALLENGE_MAX = 30;
+  const challengeCheck = (key: string) =>
+    challengeLimiter.allow(key, CHALLENGE_MAX, Date.now());
   app.post<{ Body: { profileId?: number } }>("/api/auth/passkeys/login/options", {
     schema: {
       body: {
@@ -445,6 +454,17 @@ export async function registerPasskeyRoutes(
   }, async (request, reply) => {
     if (demoMode()) return fail(reply, 404, "not_found");
     if (!passkeys.enabled) return fail(reply, 503, "passkey_not_configured");
+    const ipCheck = challengeCheck(`ip:${request.ip}`);
+    const profileCheck = request.body?.profileId
+      ? challengeCheck(`profile:${request.body.profileId}`)
+      : { allowed: true, retryAfterSeconds: 0 };
+    const blocked = !ipCheck.allowed ? ipCheck : !profileCheck.allowed ? profileCheck : null;
+    if (blocked) {
+      // Dropped without counting: a spray cannot extend its own window by retrying.
+      return fail(reply, 429, "account_locked", { retryAfterSeconds: blocked.retryAfterSeconds });
+    }
+    challengeLimiter.record(`ip:${request.ip}`, Date.now());
+    if (request.body?.profileId) challengeLimiter.record(`profile:${request.body.profileId}`, Date.now());
     try {
       return await passkeys.loginOptions(request.body?.profileId ?? null);
     } catch (error) {

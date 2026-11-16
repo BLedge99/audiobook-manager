@@ -397,3 +397,22 @@ describe("passkey management", () => {
     expect(again.statusCode).toBe(404);
   });
 });
+
+describe("passkey login/options are rate limited (spec 43 phase 2.5)", () => {
+  it("returns 429 account_locked with a retry-after after 30 challenges", async () => {
+    // A dedicated app instance: its limiter starts empty, unlike the shared
+    // app this file signs into.
+    const limited = await buildApp({ logger: false, appPassword: "household", passkeyConfig: CONFIG, prisma });
+    try {
+      for (let i = 0; i < 30; i += 1) {
+        const res = await limited.inject({ method: "POST", url: "/api/auth/passkeys/login/options", payload: {} });
+        expect(res.statusCode).toBe(200);
+      }
+      const blocked = await limited.inject({ method: "POST", url: "/api/auth/passkeys/login/options", payload: {} });
+      expect(blocked.statusCode).toBe(429);
+      expect(blocked.json()).toEqual({ code: "account_locked", params: { retryAfterSeconds: expect.any(Number) } });
+    } finally {
+      await limited.close();
+    }
+  });
+});

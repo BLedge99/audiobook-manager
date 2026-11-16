@@ -740,17 +740,24 @@ export class AuthService {
   }
 
   private async recordProfileFailure(profile: Profile): Promise<Date | null> {
-    const count = profile.failedLoginCount + 1;
+    // Atomic increment: the post-increment count comes back from the database,
+    // so concurrent failures cannot undercount and weaken lockout (spec 43 phase 2.5).
+    const updated = await this.prisma.profile.update({
+      where: { id: profile.id },
+      data: { failedLoginCount: { increment: 1 } },
+      select: { failedLoginCount: true },
+    });
+    const count = updated.failedLoginCount;
     let lockedUntil: Date | null = null;
     if (count >= LOCK_AFTER) {
       const exponent = Math.min(count - LOCK_AFTER, 5);
       const seconds = Math.min(30 * 2 ** exponent, 900);
       lockedUntil = new Date(this.now().getTime() + seconds * 1000);
+      await this.prisma.profile.update({
+        where: { id: profile.id },
+        data: { lockedUntil },
+      });
     }
-    await this.prisma.profile.update({
-      where: { id: profile.id },
-      data: { failedLoginCount: count, lockedUntil },
-    });
     return lockedUntil;
   }
 
