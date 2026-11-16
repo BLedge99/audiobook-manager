@@ -98,6 +98,46 @@ describe("useBrowse", () => {
     expect(cacheMocks.cacheFavourites).toHaveBeenCalledWith([4, 5], getServerUrl());
   });
 
+  it("drops the previous profile's late favourites write after the switch", async () => {
+    // The hoisted cache mock keeps its call history across tests; start clean
+    // so the assertion only sees this generation's calls.
+    cacheMocks.cacheFavourites.mockClear();
+    // The favourites call for profile A parks; the switch to B completes; then A's
+    // answer finally arrives. A's write — the heart set and the offline-cache
+    // snapshot — belongs to a generation nobody is browsing any more.
+    let releaseAFavourites: (value: unknown) => void = () => undefined;
+    let currentProfile: string | null = "7";
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/api/favourites/ids")) {
+        if (currentProfile === "7") {
+          return (new Promise((resolve) => {
+            releaseAFavourites = resolve;
+          })) as never;
+        }
+        return fakeResponse([4, 5]);
+      }
+      return fakeResponse([]);
+    });
+
+    const view = renderHook(({ id }: { id: string | null }) => useBrowse(id), {
+      initialProps: { id: "7" as string | null },
+    });
+
+    currentProfile = "8";
+    act(() => {
+      view.rerender({ id: "8" });
+    });
+    await waitFor(() => expect(view.result.current.favourites).toEqual([4, 5]));
+
+    // A's answer lands, late. It must write nothing.
+    await act(async () => {
+      releaseAFavourites(fakeResponse([1, 2, 3]));
+      await Promise.resolve();
+    });
+    expect(view.result.current.favourites).toEqual([4, 5]);
+    expect(cacheMocks.cacheFavourites).not.toHaveBeenCalledWith([1, 2, 3], getServerUrl());
+  });
+
   it("keeps the favourites when the enrichment endpoints answer 404 (production demo)", async () => {
     // The demo hides /api/enrichment/status and /api/enrichment/review-queue.
     // The batch used to reject wholesale and the favourite ids were lost with

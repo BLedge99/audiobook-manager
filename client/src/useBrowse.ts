@@ -49,14 +49,16 @@ export function useBrowse(profileId: string | null = null) {
   // in quick succession; concurrent callers ride one shared run (spec 41
   // phase 6 — `lib/coalesceRefresh`). A caller that needs a post-run re-fetch
   // asks for it by calling refresh() again, it does not hope for a trailing run.
-  const refresh = useMemo(
-    () =>
-      // Each request settles on its own. The enrichment endpoints answer 404
-      // in the production demo (spec 37), and a batch that rejects wholesale
-      // used to lose the favourite ids with it -- the heart looked like it
-      // never saved. One failing surface must not blank the others.
-      coalesceRefresh(async () => {
-        try {
+  //
+  // The coalescer is minted per profile generation: a switch re-mints it, so
+  // the new profile's refresh never queues behind the old profile's in-flight
+  // batch — and this generation's writes are gated on its own `cancelled`
+  // flag, which the effect cleanup flips when the generation is retired. A
+  // late batch from the previous profile lands nowhere.
+  const refreshHandle = useMemo(() => {
+    const generation = { cancelled: false };
+    const fn = coalesceRefresh(async () => {
+      try {
           const [genreTree, tagList, favIds, status, review] = await Promise.all([
             request<GenreNode[]>("/api/genres").catch(() => undefined),
             request<TagSummary[]>("/api/tags").catch(() => undefined),
@@ -64,6 +66,7 @@ export function useBrowse(profileId: string | null = null) {
             request<EnrichmentStatus>("/api/enrichment/status").catch(() => undefined),
             request<Audiobook[]>("/api/enrichment/review-queue").catch(() => undefined),
           ]);
+          if (generation.cancelled) return; // the profile switched; write nothing
           if (genreTree) setGenres(genreTree);
           if (tagList) setTags(tagList);
           if (status) setEnrichment(status);
@@ -76,22 +79,26 @@ export function useBrowse(profileId: string | null = null) {
             // encrypted favourites rather than an empty heart set.
             try {
               const cached = await readFavourites(getServerUrl());
-              if (cached) setFavourites(cached);
+              if (!generation.cancelled && cached) setFavourites(cached);
             } catch {
               // Cache unreadable; keep whatever the screen has.
             }
           }
         } finally {
-          setLoaded(true);
+          if (!generation.cancelled) setLoaded(true);
         }
-      }),
+    });
+    return { fn, generation };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- profileId is the refresh trigger, read at call time by the requests themselves
-    [profileId],
-  );
+  }, [profileId]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh, profileId]);
+    void refreshHandle.fn();
+    return () => {
+      // Retiring this profile's generation: its in-flight batch writes nothing.
+      refreshHandle.generation.cancelled = true;
+    };
+  }, [refreshHandle, profileId]);
 
   /** Keep the favourite heart in sync with the card it belongs to. */
   const setFavourite = useCallback((bookId: number, favourited: boolean) => {
@@ -126,7 +133,7 @@ export function useBrowse(profileId: string | null = null) {
     enrichment,
     reviewQueue,
     loaded,
-    refresh,
+    refresh: refreshHandle.fn,
     toggleFavourite,
     isFavourite: (bookId: number) => favourites.includes(bookId),
   };
