@@ -37,7 +37,7 @@ The product targets a non-technical household: one shared password gates entry, 
 - **Enrichment:** provider chain matches books to Open Library, Google Books, LibriVox, and Audnexus. Matches are applied with a manual confirm step; user corrections win. Auto-apply uses a score floor with an author-agreement guard in the 0.7–0.9 band.
 - **Library API:** serves books, tracks, chapters, cover art, search, genre/series shelves, and per-profile membership.
 - **Playback API:** media-token-protected streaming (`/api/audiobooks/:id/stream`), bounded range requests with 416 on invalid ranges.
-- **Progress & history:** per-profile per-book listening position, completed state, sessions, speed, timestamps. Monotonic progress (forward pushes apply silently; backward moves beyond 5 minutes are blocked and surfaced as conflicts).
+- **Progress & history:** per-profile per-book listening position, completed state, sessions, speed, timestamps. The server is last-write-wins; the client pushes only a strictly-newer cached position on reconnect (spec 44).
 - **Auth:** household-password-protected profile registration, profile sessions, passkeys (web), and biometrics (Android Vault). Explicit offline mode is local-only and reconnects only by request. OAuth (Google/GitHub, production demo) runs on the web; the Android app uses the native Custom Tabs round trip with a one-time, state-bound handoff (spec 32 / ADR 036) — no embedded WebView consent page, no token at rest.
 - **Admin panel:** second Fastify listener on `ADMIN_PORT` (3100), separate `ADMIN_PANEL_PASSWORD` credential/session, operator mini-app, read-only status dashboard, library controls, read-only DB explorer with allowlisted tables and query policy, API docs generated from live Fastify route schemas.
 - **Security:** all route inputs validated with Fastify schemas; filesystem reads confined to configured `LibraryRoot`s via `safePath`; rejects `..`, `%2e%2e`, absolute client paths, and symlinks escaping the library root; CORS restricted to known origins; absolute server paths never leaked in responses or errors.
@@ -117,7 +117,7 @@ This is an honest list of what does not work yet, why, and what is planned. Full
 
 - **Google Books** is non-functional without an API key; the mapping code is written and tested but the credential is missing. This is the biggest single coverage gap for publisher, ISBN, and categories.
 - **Audnexus** is architecturally blocked: it has no book-search endpoint and is ASIN-keyed, but the fixture library carries no ASINs. Only chapter-title lookup (`chaptersByAsin`) is live.
-- **Listening progress** is last-write-wins and can silently regress (a stale device can overwrite a fresher bookmark). Monotonic progress is specified but not yet fully shipped.
+- **Listening progress** is last-write-wins and can silently regress (a stale device can overwrite a fresher bookmark). The server has no monotonic rule (spec 26's was never implemented); the client-side spec 44 comparison is the guard.
 - **Android WebView** reaches the home server over plain HTTP on the LAN; credentials and sessions on that path lack transport encryption. Do not use on untrusted networks or expose to the internet. Production web has Caddy TLS at `books.home.arpa` but it is not yet deployed with Windows CA trust/Hello.
 - **Discover** suggests print books from Open Library, not audiobooks; cards are labelled "BOOK — NOT AN AUDIOBOOK YET." There is no free key-less audiobook-to-audiobook similarity service.
 - **Narrator coverage** is capped at 8/12 by what files carry locally (`composer` atom → `Read By X` comment → bracketed folder name). No online narrator fallback exists.
@@ -158,7 +158,7 @@ The server exposes a REST API over HTTP. All route inputs are validated with Fas
 - `GET /api/audiobooks/:id/stream` — media-token-protected audio stream; bounded range requests, 416 on invalid ranges.
 
 **Progress**
-- `PUT /api/audiobooks/:id/progress` — update listening position (monotonic rules apply).
+- `PUT /api/audiobooks/:id/progress` — update listening position (last-write-wins; spec 44).
 
 **Enrichment**
 - `POST /api/enrichment/run` — run a forced enrichment pass over the library.

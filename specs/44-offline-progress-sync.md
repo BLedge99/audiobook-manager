@@ -42,9 +42,10 @@ Appendix A option B) — this is the smallest behaviour that honours the README.
 - **S1 (push on reconnect).** After any successful online library/progress
   refresh, for each book where `cached` is newer than `server`, issue
   `PUT /api/audiobooks/:id/progress` with the cached `position`, `completed`
-  and `lastPlayed`. The server's monotonic rule (spec 26,
-  [`specs/26-android-app.md`](26-android-app.md)) still applies: the push is a
-  normal forward (or explicitly flagged rewind) save.
+  and `lastPlayed`. Note there is **no server-side monotonic rule today** —
+  spec 26 specced one (forward applies, backwards-clamped, `allowRewind`) but
+  it never landed, so the client comparison in this spec is the only guard
+  against a stale push.
 - **S2 (server wins, cache follows).** If `server` is newer, the cache is
   updated from the server payload exactly as today — the offline shelf shows
   the server's truth on the next read.
@@ -67,30 +68,30 @@ Appendix A option B) — this is the smallest behaviour that honours the README.
 ### Non-goals
 
 - No conflict UI, no merge, no per-field granularity.
-- No change to the monotonic server rule; if the server rejects the push as a
-  backward move (e.g. the user rewound on another device), the response keeps
-  the server's position and **the cache is updated to it** — the push is a
-  best-effort hint, the server is the referee.
+- No server-side monotonic/clamping rule: spec 26 specced one and it never
+  landed. This spec does not implement it — a clamp would break ordinary
+  backward seeks, and the client-side comparison (S1) already prevents the
+  reconnect flow from rewinding the server.
 - No new network round-trips beyond the single `PUT` per stale book.
 - No change to favourites/wishlist/membership sync (out of scope; Appendix A
   option B covers those one day).
 
 ## Files
 
-- `client/src/lib/request.ts` — no change.
+- `client/src/local/pushProgress.ts` (new) — the pure decide function
+  (`decidePush`) and the server-supersede predicate (`serverStrictlyNewer`);
+  unit-tested in isolation.
+- `client/src/local/pushStaleProgress.ts` (new) — the I/O: reads the cache,
+  PUTs the stale rows, keeps failures silent. Locked cache = no push, no
+  loss (password sign-in remembers the key via `useAccountGate`).
 - `client/src/local/privateCache.ts` — `cacheLibraryPrivateState` implements
-  S3 (conditional supersede instead of unconditional delete); a new
-  `pushStaleProgress(cached, server)` pure helper decides per book (S1/S2) and
-  is unit-tested in isolation.
+  S3 (conditional supersede instead of unconditional delete).
 - `client/src/useLibrary.ts` — after a successful online refresh, calls the
-  push helper for the merged library (S1/S4); failure leaves the cache (S5).
-- `client/src/components/ChapterPlayer.tsx` — unchanged except where it
-  already triggers refresh after the final save.
-- Tests: `client/src/local/privateCache.test.ts` (S3),
-  `client/src/lib/pushStaleProgress.test.ts` or colocated in
-  `privateCache.test.ts` (S1/S2 matrix), `client/src/useLibrary.test.tsx`
-  (reconnect flow), Playwright `e2e/` offline-recovery scenario if the rig
-  supports it, otherwise a documented manual pass on the Android shell.
+  push for the merged library (S1/S4); failure leaves the cache (S5).
+- `client/src/components/ChapterPlayer.tsx` — unchanged.
+- Tests: `client/src/local/pushProgress.test.ts` (decision matrix + S3 cache
+  rules), `client/src/useLibrary.test.tsx` (reconnect flow via stubbed
+  fetch), Playwright or documented manual pass on the Android shell.
 
 ## Acceptance criteria
 
@@ -104,8 +105,11 @@ Appendix A option B) — this is the smallest behaviour that honours the README.
 5. Unparseable cached `lastPlayed` → no push; logged; nothing deleted.
 6. Push fails (server 500/unreachable) → cache unchanged; next good refresh
    retries the push; no rows lost after any number of failures.
-7. Server monotonic rule rejects the push (user rewound on another device) →
-   client adopts the server position into the cache; no retry loop.
+7. A stale cache never reaches the server: the S1 comparison refuses the
+   push. (The server is last-writer-wins — the monotonic rule specced in
+   spec 26 never landed. A concurrent online listen mid-push is accepted as
+   last-writer-wins, as it has always been; full mitigation is spec 43
+   Appendix A option B.)
 8. `cacheLibraryPrivateState` unit tests cover: server missing + newer cache
    (kept), newer server (superseded), tie (kept).
 9. Client suite green; `make test` green; no API response-shape change; no

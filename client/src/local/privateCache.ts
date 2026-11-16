@@ -34,6 +34,7 @@ import { scryptAsync } from "@noble/hashes/scrypt";
 import type { BookProgress, WishlistItem } from "../types";
 import { localDb, type LocalLibraryDatabase } from "./db";
 import { replicaBookKey, replicaScopedKey } from "./replica";
+import { serverStrictlyNewer } from "./pushProgress";
 
 export const CACHE_VERSION = 1;
 /** 16 bytes, per spec. */
@@ -462,8 +463,13 @@ export async function getPrivateValues<T>(
  * Cache the private fields carried by the library payload.
  *
  * The shared metadata stays in `ReplicaBook`; only these values move into
- * encrypted rows. Called after every successful online library refresh, so a
+ * encrypted rows. Called after every successful online refresh, so that a
  * later offline session has the same progress and favourites it last saw.
+ *
+ * Spec 44 (S3): a cached progress row is **never deleted** just because the
+ * server payload lacks progress — that row is a book listened to offline
+ * whose push may still be pending. A cached row is superseded only when the
+ * server's `lastPlayed` is strictly newer (server wins ties and garbage).
  */
 export async function cacheLibraryPrivateState(
   books: { id: number; progress?: BookProgress | null }[],
@@ -473,11 +479,14 @@ export async function cacheLibraryPrivateState(
   const profileId = activeCacheProfileId();
   if (profileId === null) return;
   for (const book of books) {
+    const key = replicaBookKey(serverId, book.id);
     if (book.progress) {
-      await putPrivateValue("progress", replicaBookKey(serverId, book.id), book.progress, db);
-    } else {
-      await deletePrivateValue("progress", replicaBookKey(serverId, book.id), db);
+      const cached = await getPrivateValue<BookProgress>("progress", key, db);
+      if (serverStrictlyNewer(book.progress, cached)) {
+        await putPrivateValue("progress", key, book.progress, db);
+      }
     }
+    // No server progress: keep whatever the cache holds. Never delete.
   }
 }
 

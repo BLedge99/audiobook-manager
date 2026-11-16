@@ -5,6 +5,7 @@ import { request, requestConditional, type Conditional } from "./lib/request";
 import { copy } from "./copy";
 import { coalesceRefresh } from "./lib/coalesceRefresh";
 import { cacheLibraryPrivateState } from "./local/privateCache";
+import { pushStaleProgress } from "./local/pushStaleProgress";
 
 /**
  * Library state, spec 15b feature 4.
@@ -97,6 +98,10 @@ export function useLibrary(canManageLibrary = true) {
         if (books.changed) {
           setAudiobooks(books.data.map((book) => ({ ...book, serverId: getServerUrl() })));
           booksEtagRef.current = books.etag;
+          // Spec 44 (S1): on reconnect, push whatever the device listened to
+          // offline before the server payload overwrites anything. Runs before
+          // the cache refresh so a server-older payload never wins by default.
+          void pushStaleProgress(books.data, getServerUrl());
           // Keep the encrypted offline copy in step with the last successful
           // online view. No-op until the profile key is unlocked.
           //

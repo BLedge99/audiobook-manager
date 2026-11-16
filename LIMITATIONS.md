@@ -209,18 +209,22 @@ position restore); IPv6-literal LAN hosts are rejected by the proxy allowlist
 (plain IPv4/DNS only); and offline downloaded playback is unchanged.
 
 ### 1.5 Listening progress is last-write-wins and can silently regress
-**Status: BROKEN — data loss.**
+**Status: BROKEN — data loss; the previously advertised fix never landed.**
 
 `PUT /api/audiobooks/:id/progress` accepts any position, so a stale or buggy
 client can overwrite a bookmark that is hours further ahead — with no warning.
 The concrete failure: a phone dies offline at 1h 30m, another device listens to
 2h 14m, the phone reconnects and pushes its older position.
 
-Fixed in `specs/26-android-app.md`: progress becomes **monotonic** — forward
-pushes apply silently, a backward move beyond 5 minutes is blocked and surfaced
-as a conflict for the user to resolve, and an explicit `allowRewind` flag exists
-for the deliberate case. Because the rule is monotonic, clock skew stops being a
-correctness problem.
+**Correction (2026-11-16):** this file previously claimed spec 26 made progress
+monotonic ("forward pushes apply silently, a backward move beyond 5 minutes is
+blocked … an explicit `allowRewind` flag exists"). None of that is in the code:
+the PUT route is a plain upsert, handoff.md records `allowRewind` as
+"still not implemented", and there is no conflict UI or backward clamp. The
+mitigation is a client-side comparison in spec
+[`44-offline-progress-sync.md`](specs/44-offline-progress-sync.md) (push only a
+strictly-newer cached `lastPlayed`; ties/unparseable → server wins); a
+server-side monotonic rule remains unscheduled.
 
 ---
 
