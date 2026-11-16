@@ -114,7 +114,12 @@ export async function registerMediaRoutes(
     } catch {
       return fail(reply, 404, "cover_not_found");
     }
-    reply.type(`image/${path.extname(item.coverImagePath).slice(1) || "jpeg"}`);
+    // Content-Type from a whitelist, never from the filename alone: a file
+    // saved with an unexpected extension (or an SVG planted beside the
+    // media) must not be served as an active image MIME type.
+    const coverType = COVER_CONTENT_TYPES[path.extname(item.coverImagePath).toLowerCase()];
+    if (!coverType) return fail(reply, 404, "cover_not_found");
+    reply.type(coverType);
     // Spec 15b feature 1 — conditional cover delivery.
     let match: string;
     try {
@@ -157,7 +162,6 @@ export async function registerMediaRoutes(
   app.get<{ Params: { id: string } }>("/api/tracks/:id/stream", async (request, reply) => {
     const id = parseIdParam(request.params.id);
     if (id === null) return fail(reply, 400, "invalid_id");
-    if (!Number.isInteger(id) || id < 1) return fail(reply, 400, "invalid_track_id");
     const track = await prisma.track.findUnique({
       where: { id },
       include: { mediaItem: { include: { libraryRoot: true } } },
@@ -174,6 +178,14 @@ export async function registerMediaRoutes(
     }
   });
 }
+
+const COVER_CONTENT_TYPES: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
 
 const AUDIO_CONTENT_TYPES: Record<string, string> = {
   ".mp3": "audio/mpeg",

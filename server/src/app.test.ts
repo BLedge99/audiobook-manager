@@ -1260,3 +1260,120 @@ describe("media streaming content types and caching", () => {
     expect(res.headers["cache-control"]).toBe("private, max-age=3600");
   });
 });
+
+describe("media streaming range and cover hardening (spec 43 phase 1.4)", () => {
+  async function authed() {
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    return { cookie: login.cookies.map((c) => `${c.name}=${c.value}`).join("; ") };
+  }
+
+  async function seedAudio(bytes: number) {
+    const dir = mkdtempSync(path.join(tmpdir(), "stream-ranges-"));
+    const filePath = path.join(dir, "book.mp3");
+    writeFileSync(filePath, Buffer.alloc(bytes, 0x61));
+    const root = await prisma.libraryRoot.create({ data: { path: dir, label: "Range root" } });
+    const item = await prisma.mediaItem.create({
+      data: {
+        libraryRootId: root.id,
+        filePath,
+        title: "Range book",
+        author: "Unknown",
+        fileFormat: "mp3",
+        duration: 10,
+      },
+    });
+    return { item };
+  }
+
+  it.each([
+    ["bytes=abc", "unparseable"],
+    ["bytes=9-2", "start after end"],
+    ["bytes=99-100", "start past EOF"],
+    ["bytes=0-1,5-6", "multi-range is not supported"],
+    ["bytes=-", "no bounds at all"],
+  ])("answers 416 for %s (%s) with a correct Content-Range", async (range) => {
+    const { cookie } = await authed();
+    const { item } = await seedAudio(16);
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/stream`, headers: { cookie, range } });
+    expect(res.statusCode).toBe(416);
+    expect(res.headers["content-range"]).toBe("bytes */16");
+  });
+
+  it("serves a suffix range (bytes=-500) from the start when the file is smaller", async () => {
+    const { cookie } = await authed();
+    const { item } = await seedAudio(16);
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/stream`, headers: { cookie, range: "bytes=-500" } });
+    expect(res.statusCode).toBe(206);
+    expect(res.headers["content-range"]).toBe("bytes 0-15/16");
+    expect(res.headers["content-length"]).toBe("16");
+  });
+
+  it("serves a suffix range (bytes=-10) with the tail of the file", async () => {
+    const { cookie } = await authed();
+    const { item } = await seedAudio(16);
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/stream`, headers: { cookie, range: "bytes=-10" } });
+    expect(res.statusCode).toBe(206);
+    expect(res.headers["content-range"]).toBe("bytes 6-15/16");
+  });
+
+  it("refuses to stream a file whose stored path escapes its library root", async () => {
+    const { cookie } = await authed();
+    const outer = mkdtempSync(path.join(tmpdir(), "root-escape-out-"));
+    const inner = mkdtempSync(path.join(tmpdir(), "root-escape-in-"));
+    const filePath = path.join(outer, "outside.mp3");
+    writeFileSync(filePath, Buffer.from("not yours"));
+    const root = await prisma.libraryRoot.create({ data: { path: inner, label: "Confined" } });
+    const item = await prisma.mediaItem.create({
+      data: {
+        libraryRootId: root.id,
+        filePath,
+        title: "Escape attempt",
+        author: "Unknown",
+        fileFormat: "mp3",
+        duration: 1,
+      },
+    });
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/stream`, headers: { cookie } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  async function seedBookWithCover(ext: string) {
+    const dir = mkdtempSync(path.join(tmpdir(), `cover-${ext.slice(1)}-`));
+    const filePath = path.join(dir, `cover${ext}`);
+    writeFileSync(filePath, Buffer.from("fake image bytes"));
+    const root = await prisma.libraryRoot.create({ data: { path: dir, label: `Cover ${ext}` } });
+    const item = await prisma.mediaItem.create({
+      data: {
+        libraryRootId: root.id,
+        filePath: path.join(dir, `cover-book${ext}.mp3`),
+        title: `Cover ${ext}`,
+        author: "Unknown",
+        fileFormat: "mp3",
+        duration: 1,
+        coverImagePath: filePath,
+      },
+    });
+    return { item };
+  }
+
+  it.each([
+    [".jpg", "image/jpeg"],
+    [".jpeg", "image/jpeg"],
+    [".png", "image/png"],
+    [".webp", "image/webp"],
+    [".gif", "image/gif"],
+  ])("serves a %s cover as %s", async (ext, expected) => {
+    const { cookie } = await authed();
+    const { item } = await seedBookWithCover(ext);
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/cover`, headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe(expected);
+  });
+
+  it.each([".svg", ".html", ".bmp", ".tif", ".svgz"])("refuses an out-of-whitelist cover extension %s", async (ext) => {
+    const { cookie } = await authed();
+    const { item } = await seedBookWithCover(ext);
+    const res = await app.inject({ method: "GET", url: `/api/audiobooks/${item.id}/cover`, headers: { cookie } });
+    expect(res.statusCode).toBe(404);
+  });
+});
