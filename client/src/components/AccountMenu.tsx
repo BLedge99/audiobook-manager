@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { LogOut, UserRound } from "lucide-react";
 import { copy } from "../copy";
-import { boundedFetch, lockSession, setActiveProfileId, setSessionToken, type SessionInfo } from "../lib/api";
+import { lockSession, setActiveProfileId, setSessionToken, type SessionInfo } from "../lib/api";
+import { requestRaw } from "../lib/request";
 import { canOpenPrivacyNotice, onPrivacyNoticeClick, privacyNoticeUrl } from "../lib/privacyNotice";
 import { Btn } from "../ui/primitives";
 import { isKidsAccount } from "../local/kids";
@@ -17,7 +18,7 @@ export function AccountMenu({ session }: { session: SessionInfo | null }) {
 
   const exportMyData = async () => {
     try {
-      const res = await boundedFetch("/api/me/export");
+      const res = await requestRaw("/api/me/export");
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -36,7 +37,7 @@ export function AccountMenu({ session }: { session: SessionInfo | null }) {
   const deleteMyAccount = async () => {
     if (!window.confirm("Deleting your account erases all your data — progress, favourites, wishlist, library — and cannot be undone. Continue?")) return;
     try {
-      const res = await boundedFetch("/api/me", { method: "DELETE" });
+      const res = await requestRaw("/api/me", { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
     } catch {
       // Even if the server call fails, clear local state so the account is gone from this device.
