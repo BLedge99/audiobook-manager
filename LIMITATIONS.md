@@ -28,6 +28,11 @@ in "Signed-in devices" — the panel was listing sign-ins, not devices. A sessio
 now belongs to a device. See §3 and
 [`specs/36-device-identity-and-sessions.md`](specs/36-device-identity-and-sessions.md).
 
+**Updated 2026-11-16** with the security-audit remediation pass. Most audit
+findings are fixed and live in the code with tests; the entries below are the
+ones deliberately left as accepted risks or operator decisions. See
+`docs/security-remediation-plan-2026-11-16.md` for the full list and the fixes.
+
 **Updated 2026-11-12** with the kids-accounts work (spec 38) — see §2.0.
 
 **Updated 2026-11-13** with the external-providers feature (spec 39) — see §3.
@@ -690,6 +695,61 @@ The genuinely correct fix — terminate TLS on the server and trust the CA on ea
 - `POST /api/auth/accounts/:id/unlock` — unlocks a locked profile without admin scope beyond the caller's own session.
 
 Neither was changed in this step: hiding them is a policy decision for the demo operator, and silently changing what authenticated users can do is not acceptable. Until the operator decides (gate both behind the admin listener, or hide them in demo), treat them as reachable in the demo by any signed-in account. Both are covered by the household auth boundary (a session is required), just not by the demo policy.
+
+**Accepted risks from the 2026-11-16 security audit remediation.** Everything
+else in the audit is fixed in code; these are deliberate, documented
+trade-offs — not oversights:
+
+- **Cover-download DNS is check-then-connect.** The SSRF guard validates
+  scheme, literal IP ranges (every IPv4 spelling the WHATWG parser
+  normalises, bracketed/IPv4-mapped IPv6, ULA/link-local/CGNAT/multicast) and
+  DNS answers per redirect hop, and fails closed. It does not pin the
+  connection to the resolved address, so a DNS rebinding race between
+  validation and connect remains theoretically open. The complete fix (a
+  pinned lookup feeding a custom `undici` dispatcher) is deferred; redirects
+  are followed manually with per-hop revalidation, which is the hard half.
+- **The admin read-only SQL console (SQLite) executes synchronously on the
+  Node event loop** with no compute deadline — a pathological cross-join can
+  starve the process. `query_only = ON` and the driver's reader check still
+  bound it to reads, and it is a single-operator surface behind the separate
+  admin password. Accepted; if the console ever becomes multi-user, queries
+  must move to a worker thread with an interrupt.
+- **Household "break-glass" sessions** (sign-in with the household password
+  rather than a profile) carry the admin role for their 30-day sliding TTL,
+  are not bound to a profile, and survive `APP_PASSWORD` rotation. Accepted
+  as the documented recovery path; rotate `APP_PASSWORD` to cut new
+  break-glass sessions, and revoke other profiles' sessions for the rest.
+- **Media tokens ride in query strings on native** (5-minute TTL, scoped to
+  one item and one profile, redacted from logs) — the WebView and file
+  transfer paths cannot send the session header everywhere yet. Mitigated by
+  the short TTL and scoping; cookie/header auth everywhere is the fix if the
+  APK ever gets the media proxy.
+- **The account picker (`/api/auth/accounts`) in household mode is public**
+  by design — anyone who can reach the port can list profile names, colours
+  and disabled flags. `role` is no longer included, and password hashes never
+  were. Do not expose the household deployment beyond the LAN without
+  `APP_PASSWORD` (production now refuses to boot without it) — and note the
+  DPIA already assesses this exposure.
+- **`/api/auth/accounts/:id/unlock` and `POST /api/metadata/reset-all`**
+  remain demo-reachable, unchanged by this pass (see the 2026-11-11 entry
+  above); the operator decision is still open.
+- **Family-app `CORP` is `cross-origin` and `COEP` is off** so the Android
+  WebView (origin `https://localhost`) can load media/covers and the browser
+  can render provider CDN images. `frame-ancestors 'none'`, `nosniff`, CSP
+  and `X-Frame-Options: DENY` are enforced on both listeners.
+- **Dev/no-auth mode has no age enforcement** — with `APP_PASSWORD` unset,
+  every caller is treated as an unrestricted member. Never deploy a
+  kids-account household without `APP_PASSWORD`; in production the server now
+  fails to boot without it.
+- **Play sessions can be fabricated for age-visible books** (the age gate is
+  enforced; shelf membership is not required for the write). No information
+  is disclosed by doing so; enforcing shelf membership is a product decision,
+  deferred.
+- **Benign admin-plane residuals**: `PRAGMA database_list` was removed from
+  the read-only allowlist; `SUPABASE` uploads stream under a 50 MB cap;
+  the admin listener binds loopback by default (`ADMIN_HOST`) — the operator
+  panel is reached through the loopback proxy, with the admin cookie required
+  and `COOKIE_SECURE` honoured.
 
 ## 5. Developer-experience friction
 

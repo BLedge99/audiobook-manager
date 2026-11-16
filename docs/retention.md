@@ -1,7 +1,8 @@
 # Retention & Storage Limitation Schedule — GDPR Art. 5(1)(e)
 
-**Last updated:** 12 November 2026  
+**Last updated:** 16 November 2026  
 **Status:** Draft — implements Phase 6 of `docs/GDPR-REMEDIATION-PLAN.md`  
+**Export scope:** since 2026-11-16 the Art. 15/20 export includes every self-held field (`email`, OAuth identity, `disabled`, `lastLoginAt`, `lastActiveAt`, `passwordUpdatedAt`, `failedLoginCount`, `lockedUntil`); only `passwordHash` is withheld. Admin-driven deletion (`DELETE /api/profiles/:id`, kids-account delete) now erases through the same declarative `PERSONAL_DATA_ROWS` table as self-service erasure, so the retention guarantees above cannot drift between paths.
 **Automated cleanup:** `server/src/gdpr/personal-data.ts` is the enforcement point for the personal-data table list and the 24-month inactive-profile retention rule, and since spec 41 Phase 5 the export and erasure executors are generated from the same `PERSONAL_DATA_ROWS` table (the schema-guard test enforces it). `AuthService.cleanupExpired()` in `server/src/auth/service.ts` runs at server startup and after every login (best effort) and delegates the personal-data cleanup/purge to that module; `validate` already rejects expired rows.
 
 This schedule maps each personal-data table in `server/prisma/schema.prisma` to a retention period and the mechanism that enforces it. No personal data is kept beyond its retention period without a legal basis.

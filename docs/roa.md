@@ -2,8 +2,17 @@
 
 **Controller:** audiobook-manager (household / production demo)  
 **Contact:** See `docs/gdpr-governance.md`  
-**Last updated:** 2026-11-12  
+**Last updated:** 2026-11-16  
 **Status:** Draft — aligns with `server/prisma/schema.prisma` and `server/prisma/sqlite/schema.prisma`
+
+**2026-11-16 update (security audit remediation).** The Art. 15/20 export
+(`GET /api/me/export`) now carries the complete self-held field set: in
+addition to the identity fields previously exported, it includes `email`,
+`oauthProvider`/`oauthProviderId`, `disabled`, `lastLoginAt`, `lastActiveAt`,
+`passwordUpdatedAt`, `failedLoginCount` and `lockedUntil`. The only withheld
+fields remain the credential material itself (`passwordHash`) and security
+telemetry that is not about the person. Erasure behaviour is unchanged
+(`PERSONAL_DATA_ROWS` still drives both). Art. 6 basis unchanged — see §1.
 
 This RoPA maps every processing activity that involves personal data, its purpose, the personal-data categories, the lawful basis, retention, and recipients. It is the authoritative record referenced by `docs/gdpr-governance.md` and the GDPR audit (`GDPR-AUDIT.md`).
 

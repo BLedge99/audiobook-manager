@@ -89,6 +89,30 @@ Authorities → Certificates**, and remove the `Caddy Local Authority` entry.
   does not invalidate profile sessions.
 - Caddy's configuration is in `Caddyfile`; the API is not exposed through any
   other Caddy route.
+- Since 2026-11-16, the **app sends the security headers itself** (CSP,
+  `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, HSTS without
+  `includeSubDomains`) on both listeners. The Caddyfile still sets its own on
+  the web path; they no longer differ in kind, and a direct-Node deployment
+  (e.g. Render) is covered without any edge rules.
+- To restrict the admin panel to operator machines only, add a matcher in the
+  Caddyfile and answer 403 outside it (the admin listener itself binds
+  loopback; this is belt-and-braces on the proxied `/admin` and
+  `/api/admin` paths):
+
+  ```caddyfile
+  books.home.arpa {
+      @admin_block {
+          path /admin /admin/* /api/admin /api/admin/*
+          not remote_ip 192.168.1.10 192.168.1.11   # operator machines
+      }
+      respond @admin_block 403
+      reverse_proxy app:3000
+  }
+  ```
+
+  (Adjust the range to the operator machines; or front `/admin` with your
+  VPN instead. Cookie `path=/` is required because `/api/admin/*` shares the
+  port, so path-scoping the session cookie is not available as a control.)
 - To refresh containers after an update, run
   `docker compose -f docker-compose.prod.yml up -d --build`.
 - A local CA is not publicly trusted and is not remote access. Do not expose

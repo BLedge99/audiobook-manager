@@ -1,5 +1,10 @@
 # Security Remediation Plan — 2026-11-16
 
+**Status 2026-11-16: Phases 0–3 implemented and pushed to `master`** (commits
+b28bdbf → 1ab9b63+docs). Items are labelled with what shipped vs. what is
+accepted-risk/deployment-only (Phase 4, below). All server and client suites
+pass; see the final report for the per-phase detail.
+
 From the security audit of 2026-11-16 (see chat report / `SECURITY.md`). Findings are
 implemented on `master` in phases, TDD (failing test → fix → green), one logical commit
 per finding or finding group, pushed at the end of each phase.
