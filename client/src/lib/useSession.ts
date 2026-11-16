@@ -25,6 +25,8 @@ export interface UseSessionOptions {
   getAccountExperience: () => "household" | "demo";
   /** Write the server-reachable state. */
   setServerReachable: (value: boolean | undefined) => void;
+  /** A slow-wake probe is in flight. Absent callers tolerate a no-op. */
+  setServerWaking?: (value: boolean) => void;
   /** Write the authed state. */
   setAuthed: (value: boolean | undefined) => void;
   /** Write the session. */
@@ -57,8 +59,12 @@ export function useSession(options: UseSessionOptions) {
     setApiAccountExperience,
     setBypassServerSetup,
   } = options;
+  const setServerWaking = options.setServerWaking ?? (() => undefined);
 
-  // "demo" sessions carry no household profile id; everything else does.
+  /** How long the patient probe may take before declaring the server gone. */
+const WAKE_TIMEOUT_MS = 75_000;
+
+// "demo" sessions carry no household profile id; everything else does.
   const resolveSessionProfileId = () =>
     getAccountExperience() === "demo" ? null : getActiveProfileId();
 
@@ -76,7 +82,17 @@ export function useSession(options: UseSessionOptions) {
       if (offlineModeRef.current && !force) return;
       setAccountExperience(config.accountExperience);
       setApiAccountExperience(config.accountExperience);
-      const probe = await probeServerRequest();
+      let probe = await probeServerRequest();
+      // The fast probe has failed: the server may be asleep rather
+      // than absent. On a free tier, the wake takes the better part of a
+      // minute, so there is a second, patient probe — and while it runs the
+      // UI shows "waking", because the listener's tap must not look like it
+      // went nowhere.
+      if (!probe.reachable) {
+        setServerWaking(true);
+        probe = await probeServerRequest(WAKE_TIMEOUT_MS);
+        setServerWaking(false);
+      }
       if (offlineModeRef.current && !force) return;
       setServerReachable(probe.reachable);
       if (probe.reachable) {
@@ -128,6 +144,18 @@ export function useSession(options: UseSessionOptions) {
 
   useEffect(() => {
     void probeServer();
+  }, [probeServer]);
+
+  // Unlocking the phone is the moment the sleeping instance needs waking: the
+  // tap is not user-visible, but the server was asleep while the screen was
+  // off and must spin up before anything else can work. The probe honours
+  // offline mode and reports truthfully either way.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void probeServer();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [probeServer]);
 
   return { probeServer };

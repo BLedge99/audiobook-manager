@@ -81,11 +81,33 @@ export default defineConfig(({ mode }) => ({
               ],
             },
             workbox: {
-              navigateFallback: '/index.html',
-              // OAuth authorize/callback are top-level navigations, not SPA routes.
-              navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/admin(?:\/|$)/],
+              // vite-plugin-pwa defaults navigateFallback to "index.html", which
+              // would register a NavigationRoute serving the precached shell for
+              // every navigation — the stale-UI bug. Documents must hit the
+              // network first instead.
+              navigateFallback: null,
+              // Documents must never be served stale: the network copy wins,
+              // and only a genuinely unreachable server falls back to the
+              // precached shell. Precaching index.html and serving it for
+              // navigations forever would freeze the app at whatever version
+              // the listener last opened.
+              cleanupOutdatedCaches: true,
+              clientsClaim: true,
+              skipWaiting: true,
               runtimeCaching: [
+                // API calls go straight to the network, always.
                 { urlPattern: /^\/api\//, handler: 'NetworkOnly' },
+                // Navigations: fresh shell when the server answers (so updates
+                // roll out on the next load), cached shell when it doesn't.
+                {
+                  urlPattern: /^\/(?!api\/|admin\/|assets\/|fonts\/|.*\.(js|mjs|css|map|png|jpe?g|svg|webp|ico|woff2?|json|txt|xml|webmanifest)$).*$/,
+                  handler: 'NetworkFirst',
+                  options: {
+                    cacheName: 'app-documents',
+                    networkTimeoutSeconds: 4,
+                    expiration: { maxEntries: 2 },
+                  },
+                },
               ],
             },
           }) as PluginOption,

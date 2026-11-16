@@ -219,7 +219,16 @@ export function ChapterPlayer({
   // Set when a failure means the element must be reloaded even though the
   // resolved identity has not changed (a renewed media token).
   const forceReloadRef = useRef(false);
-  const tokenRetriedRef = useRef(false);
+  /**
+   * Wake-retry ladder for stream failures: a sleeping instance (Render free
+   * tier) takes the better part of a minute to answer, and one media-token
+   * retry is not enough for that. Backoff caps at roughly the wake budget;
+   * landing on any of these peaks means the instance came up.
+   */
+  const wakeRetryRef = useRef(0);
+  const wakeTimerRef = useRef<number | undefined>(undefined);
+  // Shown while we wait for the attempt to finish — transient, not an error.
+  const [waking, setWaking] = useState(false);
   // Which segment "end of chapter" stops playback at, kept as the segment
   // so the check can use reachedSegmentEnd (which guards zero-duration segs).
   const stopSegmentRef = useRef<Segment | null>(null);
@@ -586,7 +595,12 @@ export function ChapterPlayer({
     const onPlay = () => {
       setPlaying(true);
       setError("");
-      tokenRetriedRef.current = false;
+      wakeRetryRef.current = 0;
+      if (wakeTimerRef.current !== undefined) {
+        window.clearTimeout(wakeTimerRef.current);
+        wakeTimerRef.current = undefined;
+      }
+      setWaking(false);
       actionsRef.current?.openSession(bookPosition());
     };
 
@@ -646,12 +660,21 @@ export function ChapterPlayer({
         sourceState.markLocalFailed();
         return;
       }
-      if (!tokenRetriedRef.current) {
-        tokenRetriedRef.current = true;
-        forceReloadRef.current = true;
-        sourceState.retry();
+      const WAKE_BACKOFF_MS = [1_000, 3_000, 8_000, 20_000, 45_000];
+      if (wakeRetryRef.current < WAKE_BACKOFF_MS.length) {
+        const delay = WAKE_BACKOFF_MS[wakeRetryRef.current];
+        wakeRetryRef.current += 1;
+        setWaking(true);
+        setError("");
+        // The instance may not be up yet: the same reload, spaced and kept
+        // alive until the wake budget is spent.
+        wakeTimerRef.current = window.setTimeout(() => {
+          forceReloadRef.current = true;
+          sourceState.retry();
+        }, delay);
         return;
       }
+      setWaking(false);
       setIntent(false);
       setError(copy.player.audioLoadFailed);
     };
@@ -663,6 +686,10 @@ export function ChapterPlayer({
     audio.addEventListener("error", onError);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
     return () => {
+      if (wakeTimerRef.current !== undefined) {
+        window.clearTimeout(wakeTimerRef.current);
+        wakeTimerRef.current = undefined;
+      }
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
@@ -696,7 +723,9 @@ export function ChapterPlayer({
       base: targetPlan.base,
       index: targetPlan.index,
     };
-    tokenRetriedRef.current = false;
+    // Fresh source: give the wake-retry ladder a clean slate.
+    wakeRetryRef.current = 0;
+    setWaking(false);
     setError("");
 
     audio.src = resolved.url;
@@ -966,6 +995,12 @@ export function ChapterPlayer({
         />
       </div>
 
+      {waking && !error && (
+        <p role="status" className="panel panel--flat mt-3 px-3 py-2 text-[0.8125rem] font-bold text-cobalt-ink">
+          {copy.player.waking}
+          <span className="mt-1 block font-normal text-ink3">{copy.player.wakingDetail}</span>
+        </p>
+      )}
       {error && (
         <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[0.8125rem] font-bold text-rasp-ink">{error}</p>
       )}

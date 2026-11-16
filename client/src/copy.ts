@@ -491,7 +491,16 @@ export const copy = {
     needsProfile: "Select a profile to start listening — your position is saved per profile.",
     audioLoadFailed: "This audio file could not be loaded.",
     playbackCouldNotStart: "Playback could not start. Try again.",
+    waking: "The server is waking up — this can take the better part of a minute.",
+    wakingDetail: "We're waiting for it to answer; nothing has been lost.",
     intoThis: (kind: "track" | "chapter") => `into this ${kind}`,
+  },
+
+  waking: {
+    title: "Waking the server…",
+    body: "It's asleep, which is normal — but it takes the better part of a minute to come back. The app will reconnect by itself; meanwhile the books you've downloaded stay available to listen with.",
+    retry: "Try again",
+    continueOffline: "Listen with the books on this device",
   },
 
   login: {

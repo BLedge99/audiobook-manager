@@ -19,6 +19,7 @@ import {
 import { isOfflineMode, setOfflineMode as persistOfflineMode } from "./lib/offlineMode";
 import { AccountGate } from "./components/AccountGate";
 import { OfflineNotice, Splash } from "./components/OfflineNotice";
+import { WakingServer } from "./components/WakingServer";
 import { OfflineUnlock } from "./components/OfflineUnlock";
 import {
   activeCacheProfileId,
@@ -164,6 +165,13 @@ function App() {
    * was locked out of it by the very feature that let them download it.
    */
   const [serverReachable, setServerReachable] = useState<boolean | undefined>(() => offlineMode ? false : undefined);
+  /**
+   * A slow probe is in flight — the fast probe failed and the patient one
+   * hasn't answered yet, which on the free tier means "waking up", not
+   * "absent". While this is true the app renders the waking screen rather
+   * than the unlock-offline gate it would otherwise fall through to.
+   */
+  const [serverWaking, setServerWaking] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(() => getActiveProfileId());
   /**
    * The session profile is authoritative; localStorage is the break-glass hint.
@@ -239,6 +247,7 @@ function App() {
     setAccountExperience,
     setApiAccountExperience,
     setBypassServerSetup,
+    setServerWaking,
   });
 
   useEffect(() => {
@@ -675,6 +684,17 @@ function App() {
   }
 
   // Still deciding whether the server is there. Rendering the login form now
+  // Waking: the fast probe failed and the server is answering slowly (Render
+  // free tier). Show that instead of the offline gate or a stuck splash.
+  if (!offlineMode && serverWaking) {
+    return (
+      <WakingServer
+        onRetry={() => probeServer(true)}
+        onContinueOffline={() => handleContinueOffline(true)}
+      />
+    );
+  }
+
   // would flash a password box at someone who is simply on a slow connection.
   if (!offlineMode && serverReachable === undefined) return <Splash />;
 
