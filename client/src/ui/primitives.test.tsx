@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { ThemeToggle } from "./primitives";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { ThemeToggle, Notice, EmptyPanel, Btn, Backdrop, CloseButton, PageHead, MachineMark } from "./primitives";
+import { copy } from "../copy";
 
 /**
  * The theme toggle is two states, not three.
@@ -70,5 +71,89 @@ describe("the theme toggle", () => {
     button.click();
     // And the preference is now an explicit choice, not "auto".
     expect(window.localStorage.getItem("bookle-theme")).toBe("dark");
+  });
+});
+
+/**
+ * Spec 42, step 8.2 — direct contracts for the absorbing primitives.
+ *
+ * These surfaces carry 75+ call-site references between them and had no
+ * direct pins of their own; every incidental coverage went through the
+ * screens. The contracts pinned here are the ones the rest of the app
+ * depends on: Notice's role switching, the glass variant's class, the
+ * backdrop/close-button pair, PageHead's heading shape, MachineMark's
+ * aria-hidden mark.
+ */
+
+describe("Notice", () => {
+  it("announces politely by default and assertively on demand", () => {
+    const { rerender } = render(<Notice>All good.</Notice>);
+    expect(screen.getByRole("status")).toHaveTextContent("All good.");
+    rerender(<Notice role="alert" tone="error">It broke.</Notice>);
+    expect(screen.getByRole("alert")).toHaveTextContent("It broke.");
+  });
+
+  it("colours the border family by tone", () => {
+    const { rerender, container } = render(<Notice tone="error">nope</Notice>);
+    expect((container.firstElementChild as HTMLElement).style.background).toContain("--rasp");
+    rerender(<Notice tone="warn">careful</Notice>);
+    expect((container.firstElementChild as HTMLElement).style.background).toContain("--tan");
+    rerender(<Notice tone="info">fyi</Notice>);
+    expect((container.firstElementChild as HTMLElement).style.background).toContain("--cobalt");
+  });
+});
+
+describe("EmptyPanel", () => {
+  it("renders its children in the sunk empty-state treatment", () => {
+    const { container } = render(<EmptyPanel>Nothing here yet.</EmptyPanel>);
+    expect(screen.getByText("Nothing here yet.")).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveClass("panel--sunk");
+  });
+});
+
+describe("Btn variant=\"glass\"", () => {
+  it("applies the glass class, and only that family of extras", () => {
+    render(<Btn variant="glass">Continue</Btn>);
+    const button = screen.getByRole("button", { name: "Continue" });
+    expect(button).toHaveClass("btn", "btn--glass");
+    expect(button).not.toHaveClass("btn--primary");
+  });
+
+  it("pairs with the small size without leaking other variants", () => {
+    render(<Btn variant="glass" size="sm">Go</Btn>);
+    expect(screen.getByRole("button", { name: "Go" })).toHaveClass("btn", "btn--glass", "btn--sm");
+  });
+});
+
+describe("Backdrop and CloseButton", () => {
+  it("the backdrop closes on click and names the action for screen readers", () => {
+    const onClose = vi.fn();
+    render(<Backdrop onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: copy.buyLinks.close }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("the close button closes on click and names the action for screen readers", () => {
+    const onClose = vi.fn();
+    render(<CloseButton onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: copy.buyLinks.close }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PageHead", () => {
+  it("renders the title as a heading and the intro only when given", () => {
+    const { rerender } = render(<PageHead title="Discover" />);
+    expect(screen.getByRole("heading", { name: "Discover" })).toBeInTheDocument();
+    expect(screen.queryByText(/some intro/)).not.toBeInTheDocument();
+    rerender(<PageHead title="Discover">some intro text</PageHead>);
+    expect(screen.getByText("some intro text")).toBeInTheDocument();
+  });
+});
+
+describe("MachineMark", () => {
+  it("renders the mark as decorative (aria-hidden)", () => {
+    const { container } = render(<MachineMark />);
+    expect(container.firstElementChild).toHaveAttribute("aria-hidden", "true");
   });
 });
