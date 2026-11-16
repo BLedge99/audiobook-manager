@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import compress from "@fastify/compress";
 import { collectApiDocs, registerClientDist, sharedCorsOrigins } from "./shared/listener";
+import { registerSecurityHeaders } from "./security-headers";
 import { PrismaClient } from "@prisma/client";
 import path from "node:path";
 import { createScanManager } from "./scanner";
@@ -83,6 +84,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     trustProxy,
   });
+  await registerSecurityHeaders(app);
   // The only compression in the stack when the app is reached directly on
   // :3000 (the Caddy front door adds its own where deployed). Bodies over
   // 1 KB are gzipped when the client accepts it.

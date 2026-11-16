@@ -18,27 +18,7 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f2f6" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#100e15" />
     <title>Audiobook Manager</title>
-    <script>
-      /*
-       * Apply the saved theme before first paint.
-       *
-       * Without this, a listener who chose dark mode gets a white flash every
-       * time the app opens -- the CSS is only applied once the bundle runs, and
-       * on the APK that is visible as a flash before the splash. "auto" is left
-       * unset on purpose so the stylesheet's prefers-color-scheme block handles
-       * it without JavaScript.
-       */
-      (function () {
-        try {
-          var choice = localStorage.getItem("bookle-theme");
-          if (choice === "light" || choice === "dark") {
-            document.documentElement.setAttribute("data-theme", choice);
-          }
-        } catch (error) {
-          /* private mode or storage disabled: fall back to the system theme. */
-        }
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>
