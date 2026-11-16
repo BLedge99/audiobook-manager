@@ -146,10 +146,14 @@ describe("scanner reconciliation", () => {
     ).resolves.toBeUndefined();
 
     expect(await prisma.mediaItem.findUnique({ where: { id: item.id } })).toBeNull();
-    // And its children went with it rather than dangling.
+    // And its children went with it rather than dangling — including the
+    // personal rows (spec 43 phase 5.2: the scan-delete path must not leave
+    // listening history or candidates behind).
     expect(await prisma.track.count({ where: { mediaItemId: item.id } })).toBe(0);
     expect(await prisma.contributorMediaItem.count({ where: { mediaItemId: item.id } })).toBe(0);
     expect(await prisma.favourite.count({ where: { mediaItemId: item.id } })).toBe(0);
+    expect(await prisma.listeningHistory.count({ where: { mediaItemId: item.id } })).toBe(0);
+    expect(await prisma.metadataCandidate.count({ where: { mediaItemId: item.id } })).toBe(0);
   });
 
   it.skipIf(!HAS_FIXTURES)("marks the scan complete and records the file count", async () => {

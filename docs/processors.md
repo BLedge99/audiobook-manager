@@ -20,12 +20,13 @@
 | 4 | **Google Books** (books.google.com) | Optional catalogue enrichment (requires API key) | **No** | Book identifiers only (ISBN/title/author) | Google API Terms of Service; no DPA required (no personal data) | Only enabled when `GOOGLE_BOOKS_API_KEY` is configured; key is server-side only |
 | 5 | **LM Studio** (local) | Optional local AI — metadata match assistant, description summary | **No** | Book metadata + folder names only | Local instance only; not a third-party processor | Runs on the user's own hardware; degrades gracefully offline; user confirms before applying suggestions |
 | 6 | **Supabase Storage** (supabase.com) | Optional server-side audiobook file sync (private bucket) | **No** | Audiobook files and catalogue metadata only | Supabase DPA applies if enabled | Server-side service-role key only; private bucket; not enabled by default; see `.env.production.example` |
+| 7 | **Google / GitHub OAuth** (accounts.google.com, github.com/login) | Demo sign-in only (`ACCOUNT_EXPERIENCE=demo` or explicit opt-in, spec 43 phase 2.2) | **Partial** — the browser sends the user to the provider; the server exchanges the one-time authorization code (pseudonymous) and receives verified name/email/id back; the password never crosses our systems | Authorization code (single-use, 60 s handler window), client credentials, returned verified identity (sub, email, name) | Google API ToS / GitHub ToS; Art. 6(1)(a) consent basis for demo sign-up | Not engaged at all in household deployments (OAuth is disabled there); whether the demo keeps open sign-up is the deployment's ACCOUNT_EXPERIENCE decision |
 
 ---
 
 ## Sub-processors
 
-No sub-processors are engaged. The six processors listed above are the only external recipients, and none receive personal data.
+No sub-processors are engaged. The seven processors listed above are the only external recipients; none receives personal data in normal operation. Row 7 (OAuth) receives no personal data beyond the one-time, pseudonymous authorization code and the verified identity it returns, and is engaged only in the demo's open sign-up.
 
 ---
 
