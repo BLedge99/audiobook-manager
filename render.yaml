@@ -1,0 +1,73 @@
+# Render blueprint for the hosted demo (spec 43 phase 4.1).
+#
+# This file is the source of truth for how the demo is built and run. The
+# dashboard carries only the secrets (sync: false values) and any
+# out-of-band tweaks — if you change something here and something in the
+# dashboard, they will drift, so land config changes here, not by clicking.
+#
+# Secrets are never committed here. After first deploy (or after changing a
+# value) set each sync:false variable in the Render dashboard, then trigger a
+# redeploy so the blueprint picks them up.
+
+services:
+  - type: web
+    name: audiobook-manager
+    runtime: node
+    # starter or above is required for the persistent disk. On the free plan
+    # the disk below cannot exist; drop it and the cover cache becomes
+    # ephemeral (covers re-fetch on every deploy — acceptable, but say so).
+    plan: starter
+    region: frankfurt
+    rootDir: .
+    buildCommand: >-
+      npm --prefix client ci && npm --prefix client run build &&
+      npm --prefix client run build:admin &&
+      npm --prefix server ci && npm --prefix server run build
+    startCommand: npm --prefix server run start
+    healthCheckPath: /api/health
+    disk:
+      name: bookle-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # --- required secrets (dashboard) ---
+      - key: APP_PASSWORD
+        sync: false
+      - key: MEDIA_TOKEN_SECRET
+        sync: false
+      - key: ADMIN_PANEL_PASSWORD
+        sync: false
+      # Managed Supabase Postgres (project database). Connect as the table
+      # OWNER (postgres); RLS is on every table and anon/authenticated hold no
+      # grants (spec 35).
+      - key: DATABASE_URL
+        sync: false
+      # Seed of the enrichment providers; the demo needs a Google Books key to
+      # reach its best coverage.
+      - key: GOOGLE_BOOKS_API_KEY
+        sync: false
+      # --- demo sign-in (spec 32/33) ---
+      - key: ACCOUNT_EXPERIENCE
+        value: demo
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: OAUTH_ENABLED
+        value: "false" # flip to "true" only with the dashboard redirect URIs registered
+      - key: ADMIN_PROXY
+        value: "true"  # hosted single-port deployment: family port proxies /admin (ADR 029)
+      # --- non-secret config ---
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"   # Render edge → app is one hop; never the legacy bare "true"
+      - key: COVER_DIR
+        value: /data/covers
+      - key: WEBAUTHN_RP_ID
+        value: audiobook-manager.onrender.com
+      - key: WEBAUTHN_ORIGIN
+        value: https://audiobook-manager.onrender.com
+      - key: WEBAUTHN_RP_NAME
+        value: Bookle
+      # Optional, dashboard-only: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+      # SUPABASE_STORAGE_BUCKET (spec 34 uploads), SUPABASE_CACHE_DIR, and
+      # the OAUTH_* / GOOGLE_*/GITHUB_* set when turning sign-in on.
