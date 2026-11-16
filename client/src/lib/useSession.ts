@@ -20,6 +20,9 @@ import { probeServer as probeServerRequest } from "./reachability";
 import { WAKE_TIMEOUT_MS } from "./wakeBudget";
 import { isDemoExperience } from "../local/experience";
 
+/** Stable identity for the setServerWaking default argument. */
+const STABLE_NOOP_SETTER = () => undefined;
+
 export interface UseSessionOptions {
   /** The listener's explicit offline choice. */
   offlineModeRef: { current: boolean };
@@ -61,11 +64,18 @@ export function useSession(options: UseSessionOptions) {
     setApiAccountExperience,
     setBypassServerSetup,
   } = options;
-  const setServerWaking = options.setServerWaking ?? (() => undefined);
+  const setServerWaking = options.setServerWaking ?? STABLE_NOOP_SETTER;
 
   // "demo" sessions carry no household profile id; everything else does.
-  const resolveSessionProfileId = () =>
-    isDemoExperience(getAccountExperience()) ? null : getActiveProfileId();
+  const resolveSessionProfileId = useCallback(
+    () => (isDemoExperience(getAccountExperience()) ? null : getActiveProfileId()),
+    // getAccountExperience is an inline arrow over a ref in App.tsx, and it is
+    // called at resolution time precisely so it sees the *current* value.
+    // Excluded from deps on purpose: including it would recreate probeServer
+    // every render and re-fire the mount effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const probeInFlight = useRef(false);
   // Incremented whenever a forced probe supersedes whatever is in flight, so
@@ -151,7 +161,20 @@ export function useSession(options: UseSessionOptions) {
     } finally {
       if (stillCurrent()) probeInFlight.current = false;
     }
-  }, []);
+  }, [
+    offlineModeRef,
+    resolveSessionProfileId,
+    setServerWaking,
+    setAuthed,
+    setSession,
+    setSessionToken,
+    setProfileId,
+    setActiveProfileId,
+    setAccountExperience,
+    setApiAccountExperience,
+    setBypassServerSetup,
+    setServerReachable,
+  ]);
 
   useEffect(() => {
     void probeServer();

@@ -59,6 +59,8 @@ jobs:
       # be broken by a one-line edit.
       - run: npm run check:copy
         working-directory: client
+      - run: npm run lint
+        working-directory: client
       - run: npm test
         working-directory: client
       - run: npm run typecheck

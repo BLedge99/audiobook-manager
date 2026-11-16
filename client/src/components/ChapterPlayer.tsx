@@ -498,6 +498,7 @@ export function ChapterPlayer({
       applyResume(saved);
     })();
     return () => { cancelled = true; };
+    // Keyed on book.id only: applyResume/bookServerId read current values at call time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book.id]);
 
@@ -507,6 +508,7 @@ export function ChapterPlayer({
     openSession(bookPosition());
     const timer = window.setInterval(() => saveProgress(bookPosition()), 10_000);
     return () => window.clearInterval(timer);
+    // saveProgress reads the live position via refs; depending on it would reset the interval.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
@@ -548,6 +550,7 @@ export function ChapterPlayer({
       window.removeEventListener("pagehide", onHidden);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
+    // Mount-once wiring: listeners read live refs; the cleanup removes exactly these.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -704,6 +707,7 @@ export function ChapterPlayer({
       audio.removeEventListener("error", onError);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
+    // Bind handlers when the segment mapping changes; they read live refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segments, kind, total]);
 
@@ -750,6 +754,7 @@ export function ChapterPlayer({
     if (playIntentRef.current) {
       void audio.play().catch(reportPlayFailure);
     }
+    // Adopt the resolved source only when its key/url or attempt changes; targetPlan is current each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved?.key, resolved?.url, sourceState.attempt, book, segments, kind]);
 
@@ -779,6 +784,7 @@ export function ChapterPlayer({
       audio.removeAttribute("src");
       audio.load();
     };
+    // Unmount cleanup only; reads refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

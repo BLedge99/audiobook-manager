@@ -264,7 +264,7 @@ function App() {
       return;
     }
     void refresh();
-  }, [offlineMode, serverReachable, probeServer, refresh, device.refresh]);
+  }, [offlineMode, serverReachable, probeServer, refresh, device]);
 
   /**
    * A request failed because the server could not be reached.
@@ -635,7 +635,7 @@ function App() {
     // button was pressed.
     probeServer();
     void device.refresh();
-  }, [probeServer, device.refresh]);
+  }, [probeServer, device]);
 
   // Spec 29 recovery: adopt audio that outlived its database row.
   const [recovering, setRecovering] = useState(false);
@@ -659,7 +659,7 @@ function App() {
     } finally {
       setRecovering(false);
     }
-  }, [device.recover]);
+  }, [device]);
 
   if ((needsServerUrl() || showServerSetup) && !bypassServerSetup) {
     return (

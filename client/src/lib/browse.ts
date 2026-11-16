@@ -45,7 +45,7 @@ export function facetValues(book: Audiobook, facet: FacetKey): string[] {
       return (book.genres ?? []).map((genre) => genre.slug);
     case "author":
       return book.author ? [book.author] : [];
-    case "narrator":
+    case "narrator": {
       // Prefer the reconciled contributor rows (spec 17); fall back to the
       // legacy comma-joined string so older rows still filter correctly.
       const narrators = (book.contributors ?? []).filter((entry) => entry.role === "narrator").map((entry) => entry.name);
@@ -53,6 +53,7 @@ export function facetValues(book: Audiobook, facet: FacetKey): string[] {
       return book.narrator
         ? book.narrator.split(",").map((name) => name.trim()).filter(Boolean)
         : [];
+    }
     case "series":
       return book.series ? [book.series.name] : [];
     case "tag":

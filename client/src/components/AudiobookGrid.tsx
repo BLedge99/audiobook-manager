@@ -300,6 +300,13 @@ export function AudiobookGrid({
   /** The next useful action, offered alongside the message. */
   emptyAction?: ReactNode;
 }) {
+  // Hooks must run unconditionally on every render, so they live above the
+  // empty-state early return. `inProgressBooks([])` is empty, which is what
+  // the early return wants anyway.
+  const continuingBooks = useMemo(() => inProgressBooks(books), [books]);
+  const continuingIds = useMemo(() => new Set(continuingBooks.map((book) => book.id)), [continuingBooks]);
+  const reviewIds = useMemo(() => new Set(changedIds ?? []), [changedIds]);
+
   if (!books.length) {
     return (
       <EmptyPanel className="py-16">
@@ -308,10 +315,6 @@ export function AudiobookGrid({
       </EmptyPanel>
     );
   }
-
-  const continuingBooks = useMemo(() => inProgressBooks(books), [books]);
-  const continuingIds = useMemo(() => new Set(continuingBooks.map((book) => book.id)), [continuingBooks]);
-  const reviewIds = useMemo(() => new Set(changedIds ?? []), [changedIds]);
 
   return (
     <div className={cardGrid}>

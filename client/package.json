@@ -14,7 +14,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "check:copy": "node ../scripts/check-copy.mjs src/copy.ts src/admin/copy.ts --profile consumer-plain --operator-profile professional-b2b --scan src --fail-on-scan --config ../scripts/copy.config.json"
+    "check:copy": "node ../scripts/check-copy.mjs src/copy.ts src/admin/copy.ts --profile consumer-plain --operator-profile professional-b2b --scan src --fail-on-scan --config ../scripts/copy.config.json",
+    "lint": "eslint . --report-unused-disable-directives",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -45,10 +47,13 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^25.0.1",
     "tailwindcss": "^4.1.11",
     "typescript": "~5.8.3",
+    "typescript-eslint": "^8.73.0",
     "vite": "^6.4.5",
     "vite-plugin-pwa": "^1.1.0",
     "vitest": "^4.1.12"

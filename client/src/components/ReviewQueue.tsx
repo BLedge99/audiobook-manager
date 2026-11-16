@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import type { Audiobook } from "../types";
 import { copy } from "../copy";
@@ -175,19 +175,19 @@ function ReviewRow({ book, onResolved }: { book: Audiobook; onResolved: () => vo
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     void request<Candidate[]>(`/api/audiobooks/${book.id}/candidates`)
       .then(setCandidates)
       .catch((requestError) => setError(requestError instanceof Error ? requestError.message : copy.operator.review.loadFailed))
       .finally(() => setLoading(false));
-  };
+  }, [book.id]);
 
   // Fetched on mount rather than in bulk with the queue: a household may have
   // dozens queued, and most operators only look at one at a time.
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   if (loading) return <p className={cn("py-2 text-sm text-ink2")}>{copy.operator.review.checking(book.title)}</p>;
   if (error) return <p role="alert" className="py-2 text-sm font-bold text-rasp-ink">{error}</p>;

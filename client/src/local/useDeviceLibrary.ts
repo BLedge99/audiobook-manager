@@ -171,7 +171,7 @@ export function useDeviceLibrary(
     } finally {
       setLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, db, files]);
 
   useEffect(() => {
     void refresh();
@@ -211,7 +211,7 @@ export function useDeviceLibrary(
       );
       await refresh();
     },
-    [refresh],
+    [refresh, db, files],
   );
 
   const remove = useCallback(
@@ -220,7 +220,7 @@ export function useDeviceLibrary(
       await refresh();
       return { failed: result.failed };
     },
-    [refresh],
+    [refresh, db, files],
   );
 
   /**
@@ -247,7 +247,7 @@ export function useDeviceLibrary(
     });
     await refresh();
     return result;
-  }, [unclaimed, refresh]);
+  }, [unclaimed, refresh, db, files]);
 
   const localUrlForTrack = useCallback(
     async (bookId: number, trackId: number, serverId?: string) => {
@@ -262,7 +262,7 @@ export function useDeviceLibrary(
         return undefined;
       }
     },
-    [rows],
+    [rows, files],
   );
 
   const bytesFor = useCallback(
