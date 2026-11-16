@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compass, Heart, Library, LayoutGrid, RefreshCw, WifiOff, Server, Settings as GearIcon, Link2 } from "lucide-react";
 import { AudiobookDetail } from "./components/AudiobookDetail";
 import { AudiobookGrid, ContinueListening, inProgressBooks } from "./components/AudiobookGrid";
@@ -10,7 +10,6 @@ import {
   isFromThisServer,
   setAccountExperience as setApiAccountExperience,
   getActiveProfileId,
-  getActiveProfileIdNumber,
   setActiveProfileId,
   setSessionToken,
   lockLocal,
@@ -18,17 +17,11 @@ import {
 } from "./lib/api";
 import { isOfflineMode, setOfflineMode as persistOfflineMode } from "./lib/offlineMode";
 import { AccountGate } from "./components/AccountGate";
-import { OfflineNotice, Splash } from "./components/OfflineNotice";
+import { Splash } from "./components/OfflineNotice";
+import { OfflineGateView } from "./components/OfflineGateView";
 import { WakingServer } from "./components/WakingServer";
-import { OfflineUnlock } from "./components/OfflineUnlock";
-import {
-  activeCacheProfileId,
-  hasProfileCache,
-  listCachedProfileIds,
-  offlineCacheState,
-} from "./local/privateCache";
-import { offlineScreen, type CacheState } from "./lib/offlineGate";
-import { biometricVault } from "./lib/biometricVault";
+
+import { offlineScreen } from "./lib/offlineGate";
 import { ConnectionStatus } from "./components/ConnectionStatus";
 import { ProfileGate } from "./components/ProfileGate";
 import { ServerSetup } from "./components/ServerSetup";
@@ -39,30 +32,25 @@ import { ServerLibrary } from "./components/ServerLibrary";
 import { Shelves } from "./components/Shelves";
 import { TagManager } from "./components/TagManager";
 import {
-  applyFilters,
-  buildGenreShelves,
-  buildSeriesShelves,
   filtersFromQuery,
   filtersToQuery,
   isFilterActive,
   type Filters,
 } from "./lib/browse";
-import { applySearch, searchFromQueryParam, searchToQueryParam } from "./lib/search";
+import { searchFromQueryParam, searchToQueryParam } from "./lib/search";
 import { isNativeShell } from "./lib/platform";
+import { useDerivedLibrary } from "./lib/useDerivedLibrary";
 import { resolveProfileContext } from "./lib/profiles";
-import { refreshTriggered, type RefreshTrigger } from "./lib/refreshPolicy";
+import { useShelfRefresh } from "./lib/useShelfRefresh";
+import { useProfileCache } from "./lib/useProfileCache";
 import { useBackgroundLock } from "./lib/backgroundLock";
 import { useSession } from "./lib/useSession";
 import { getServerUrl } from "./lib/api";
 import { clearCoverCache, coverCacheBytes, warmCoverCache } from "./local/CoverImage";
 import { useDeviceLibrary } from "./local/useDeviceLibrary";
-import { useExternalItems } from "./local/useExternalItems";
+import { useExternalSheet } from "./lib/useExternalSheet";
 import { ExternalBooks, AddExternalBookDialog } from "./components/ExternalBooks";
-import { EXTERNAL_STORES } from "./lib/externalStores";
-import { launchStoreLink } from "./lib/externalIntent";
-import type { ExternalItem } from "./local/db";
-import { mergeShelves } from "./local/librarySource";
-import { isKidsAccount, canSeeBuySurfaces } from "./local/kids";
+import { canSeeBuySurfaces } from "./local/kids";
 import { isDemoExperience } from "./local/experience";
 import { Settings } from "./components/Settings";
 import { DownloadButton } from "./components/DownloadButton";
@@ -84,7 +72,7 @@ const TABS: { id: Tab; label: string; icon: typeof Library }[] = [
 
 /**
  * The machine's mark comes from the shared primitives (`ui/primitives`), the
- * same one the gates and the wordmark use — one drawing, everywhere.
+ * same one the gates and the wordmark use â€” one drawing, everywhere.
  */
 
 function App() {
@@ -105,29 +93,13 @@ function App() {
   const device = useDeviceLibrary(isNativeShell());
   const {
     items: externalItems,
-    add: addExternalRaw,
-    remove: removeExternalRaw,
-  } = useExternalItems();
-  const [addExternalOpen, setAddExternalOpen] = useState(false);
-  /** Set when every launch rung failed — the listener deserves an answer, not silence. */
-  const [externalLaunchFailed, setExternalLaunchFailed] = useState(false);
-  const openExternal = useCallback((item: ExternalItem) => {
-    const def = EXTERNAL_STORES[item.store];
-    void launchStoreLink(item.httpsUrl, { packageName: def.packageName }).then((ok) => {
-      setExternalLaunchFailed(!ok);
-    });
-  }, []);
-  const removeExternal = useCallback(
-    async (id: string) => {
-      await removeExternalRaw(id);
-    },
-    [removeExternalRaw],
-  );
-  const addExternal = useCallback(
-    (url: string, overrides: { title?: string; author?: string | null }) =>
-      addExternalRaw(url, overrides),
-    [addExternalRaw],
-  );
+    addExternalOpen,
+    setAddExternalOpen,
+    externalLaunchFailed,
+    openExternal,
+    removeExternal,
+    addExternal,
+  } = useExternalSheet();
   const discover = useDiscover();
   // Read the device cover cache into memory once, before the grid renders its
   // first card (spec 15b feature 1). Without this a cold start asks IndexedDB
@@ -157,7 +129,7 @@ function App() {
    */
   const [serverReachable, setServerReachable] = useState<boolean | undefined>(() => offlineMode ? false : undefined);
   /**
-   * A slow probe is in flight — the fast probe failed and the patient one
+   * A slow probe is in flight â€” the fast probe failed and the patient one
    * hasn't answered yet, which on the free tier means "waking up", not
    * "absent". While this is true the app renders the waking screen rather
    * than the unlock-offline gate it would otherwise fall through to.
@@ -181,24 +153,6 @@ function App() {
   // meant it polled a global to notice a change it should have been told
   // about.
   const browse = useBrowse(activeProfileId);
-  /**
-   * Offline cache state (spec 29). `unknown` means "still checking";
-   * `absent` means neither an envelope nor a fingerprint key exists, which is a
-   * different explanation from "nothing downloaded" -- and a different screen.
-   */
-  const [cacheState, setCacheState] = useState<CacheState>("unknown");
-  /**
-   * The listener chose "listen without progress" on the offline unlock screen.
-   *
-   * This is the escape that screen used to lack. It is deliberately not
-   * persisted: a cold start should offer the key once more, because unlocking
-   * is what restores progress. What it must never do is nag mid-session.
-   */
-  const [skippedUnlock, setSkippedUnlock] = useState(false);
-  const [offlineUnlocked, setOfflineUnlocked] = useState<boolean>(() => {
-    const id = getActiveProfileIdNumber();
-    return id !== null && activeCacheProfileId() === id;
-  });
   // Spec 20: both the tab and the filters live in the URL, so a shared or
   // bookmarked link restores the whole view. Persisting filters alone was not
   // enough -- reloading a filtered link landed on the Library tab and looked
@@ -244,6 +198,12 @@ function App() {
   useEffect(() => {
     void probeServer();
   }, [probeServer]);
+
+  // Offline cache discovery and the offline-unlock state (spec 29). The
+  // implementation lives in lib/useProfileCache.ts (spec 43 phase 6.2);
+  // the offline screen decision stays in lib/offlineGate.ts.
+  const { cacheState, offlineUnlocked, setOfflineUnlocked, skippedUnlock, setSkippedUnlock } =
+    useProfileCache({ serverReachable, activeProfileId, setProfileId });
 
   /**
    * The refresh button.
@@ -311,7 +271,7 @@ function App() {
     // is what left every request failing with a 401.
     setAuthed(false);
     setSession(null);
-  }, []);
+  }, [setOfflineUnlocked]);
 
   useBackgroundLock({ enabled: isNativeShell(), lock: lockToGate });
 
@@ -342,73 +302,33 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   /**
-   * Which books to show.
-   *
-   * Normally the live server library. But when the server cannot be reached,
-   * fall back to the replica rather than showing an error over an empty shelf --
-   * being away from home is the case the whole feature exists for, so it must
-   * not look like a failure. Offline with nothing downloaded is still the app:
-   * the library tab shows an honest empty state (spec 29).
-   *
-   * The merge itself is in `local/librarySource.ts`, with the key format it
-   * uses. It used to be written out here, which meant the format was in two
-   * places -- and a change to one would silently produce a duplicate shelf
-   * entry, or make one server's book disappear behind another's.
+   * Which books to show â€” the derived-library bundle moved to
+   * lib/useDerivedLibrary.ts (spec 43 phase 6.2). Offline with nothing
+   * downloaded is still the app: the shelf shows an honest empty state.
    */
   const offline = offlineMode || serverReachable === false;
-  const libraryBooks = useMemo(
-    () =>
-      mergeShelves(
-        offline ? null : { books, serverId: getServerUrl() },
-        { books: device.books },
-        getServerUrl(),
-        isKidsAccount(session?.role) ? { role: "child", ageBand: session?.profile?.ageBand ?? null } : undefined,
-      ),
-    [offline, books, device.books, session],
-  );
-
-  const favouriteIds = useMemo(() => new Set(browse.favourites), [browse.favourites]);
-  // Search narrows the chip-filtered result rather than replacing it, so both
-  // layers apply and neither can widen the other.
-  const filteredBooks = useMemo(
-    () => applySearch(applyFilters(libraryBooks, filters), search),
-    [libraryBooks, filters, search],
-  );
-  // The Library tab applies the typed search but not the chip filters: the
-  // chips only exist on Browse, so applying them here would silently hide
-  // books when the user just switched tabs.
-  const searchedBooks = useMemo(() => applySearch(libraryBooks, search), [libraryBooks, search]);
-  const favouriteBooks = useMemo(
-    // Favourites name ids on the server this app is talking to; a merged shelf
-    // can hold the same id belonging to another server's book.
-    () => libraryBooks.filter((book) => isFromThisServer(book) && favouriteIds.has(book.id)),
-    [libraryBooks, favouriteIds],
-  );
-
-  /**
-   * Books waiting on a metadata decision. These keep a mark on their capsule in
-   * every grid until someone actually looks at them, rather than blending back
-   * into the shelf the moment the tab is re-rendered.
-   */
-  const reviewIds = useMemo(
-    () => new Set((browse.reviewQueue ?? []).map((book) => book.id)),
-    [browse.reviewQueue],
-  );
-
-  const genreLabels = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const parent of browse.genres) {
-      map.set(parent.slug, parent.name);
-      for (const child of parent.children ?? []) map.set(child.slug, child.name);
-    }
-    return map;
-  }, [browse.genres]);
-
-  const genreShelves = useMemo(
-    () => buildGenreShelves(filteredBooks, { labels: { genres: genreLabels } }),
-    [filteredBooks, genreLabels],
-  );
-  const seriesShelves = useMemo(() => buildSeriesShelves(filteredBooks), [filteredBooks]);
+  const {
+    libraryBooks,
+    favouriteIds,
+    filteredBooks,
+    searchedBooks,
+    favouriteBooks,
+    reviewIds,
+    genreShelves,
+    seriesShelves,
+  } = useDerivedLibrary({
+    offline,
+    books,
+    deviceBooks: device.books,
+    sessionRole: session?.role,
+    ageBand: session?.profile?.ageBand,
+    favourites: browse.favourites,
+    reviewQueue: browse.reviewQueue ?? [],
+    genres: browse.genres,
+    filters,
+    search,
+    serverUrl: getServerUrl(),
+  });
 
   const findSimilar = useCallback((bookId: number) => {
     setSelectedBook(undefined);
@@ -435,7 +355,7 @@ function App() {
     // Favourites live on the connected server; a foreign book with this id is
     // not the book the listener tapped, and favouriting it would toggle someone
     // else's catalogue entry. The components hide the heart for these books
-    // already — this is the belt to that braces.
+    // already â€” this is the belt to that braces.
     if (!libraryBooks.some((book) => book.id === bookId && isFromThisServer(book))) return;
     void browse.toggleFavourite(bookId);
   }, [browse, libraryBooks]);
@@ -454,161 +374,17 @@ function App() {
   );
 
   /**
-   * Progress saved while a book was open has to reach the library grid, which
-   * otherwise keeps whatever `progress` it fetched at page load. This fires
-   * from the player's final save, so the refetch happens *after* the write
-   * rather than racing it.
-   *
-   * Also refetch when the tab is focused or becomes visible again: the same
-   * staleness appears when listening happened on another device.
-   *
-   * A refetch no longer blanks the shelf, so none of these need a "silent"
-   * variant any more -- that flag existed only to suppress the empty state, and
-   * the empty state is now correct in every case.
+   * The shelf's refresh triggers (progress saved, server recovered, profile
+   * changed, window focus). The implementation lives in
+   * `lib/useShelfRefresh.ts` (spec 43 phase 6.2); the rules live in
+   * `lib/refreshPolicy.ts`.
    */
-  const [libraryTick, setLibraryTick] = useState(0);
-  const wasOffline = useRef(false);
-  const lastProfileIdRef = useRef<string | null>(null);
-  const lastBackgroundRefresh = useRef(0);
-  // Window focus and visibilitychange both fire on every alt-tab; the shelf
-  // does not go stale that fast, so collapse them to one refresh per half
-  // minute (the fetch is ETag'd, but two requests beat none).
-  const BACKGROUND_REFRESH_MIN_MS = 30_000;
-
-  /**
-   * One effect owns the shelf's refresh triggers. It asks the refresh policy
-   * what the current situation owes, and acts on the answer; the rules live in
-   * `lib/refreshPolicy.ts` so they are testable without the App.
-   */
-  useEffect(() => {
-    const ask = (trigger: RefreshTrigger) => {
-      if (!refreshTriggered(trigger)) return;
-      switch (trigger.kind) {
-        case "library-tick":
-          void refresh();
-          return;
-        case "server-recovered":
-          void refresh();
-          return;
-        case "window-focus":
-        case "visibility-visible": {
-          if (!profileId) return;
-          const now = Date.now();
-          if (now - lastBackgroundRefresh.current < BACKGROUND_REFRESH_MIN_MS) return;
-          lastBackgroundRefresh.current = now;
-          void refresh();
-          return;
-        }
-        case "profile-changed":
-          if (profileId) void refreshForProfile();
-          return;
-      }
-    };
-
-    // What the current state says is owed.
-    const owed: RefreshTrigger[] = [];
-    if (libraryTick > 0) owed.push({ kind: "library-tick", tick: libraryTick });
-    const profileChanged = profileId !== null && profileId !== lastProfileIdRef.current;
-    lastProfileIdRef.current = profileId;
-    if (profileId && profileChanged) owed.push({ kind: "profile-changed", profileId });
-    if (serverReachable === true && wasOffline.current) {
-      wasOffline.current = false;
-      owed.push({ kind: "server-recovered" });
-    }
-    if (serverReachable === false) wasOffline.current = true;
-    for (const trigger of owed) ask(trigger);
-
-    // Events the shelf cannot see from state: window focus and visibility.
-    const onWindowFocus = () => ask({ kind: "window-focus" });
-    const onVisibility = () => {
-      if (document.visibilityState !== "visible") return;
-      ask({ kind: "visibility-visible", becameVisible: true });
-    };
-    window.addEventListener("focus", onWindowFocus);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("focus", onWindowFocus);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [libraryTick, profileId, serverReachable, refresh, refreshForProfile]);
-
-  /**
-   * Decide whether offline can be opened at all.
-   *
-   * Downloads without an envelope are not private data we can show. The app
-   * says so instead of falling through on a stale localStorage profile.
-   */
-  useEffect(() => {
-    if (activeProfileId) return;
-    let alive = true;
-    void listCachedProfileIds().then((ids) => {
-      if (!alive) return;
-      if (ids.length === 1) {
-        const id = String(ids[0]);
-        setActiveProfileId(id);
-        setProfileId(id);
-      }
-    });
-    return () => {
-      alive = false;
-    };
-  }, [activeProfileId]);
-
-  /**
-   * What this device can prove it holds for the active profile (spec 29).
-   *
-   * Two things count: the password-wrapped envelope in `keyEnvelopes`, or the
-   * native biometric Vault, which stores the DEK itself and therefore never
-   * writes an envelope. Checking only the envelope told a listener who signed
-   * in with a fingerprint that there was "no protected profile data" while the
-   * books *and* the key were both on the phone.
-   */
-  useEffect(() => {
-    if (serverReachable !== false || !activeProfileId) {
-      setCacheState("unknown");
-      return;
-    }
-    const id = Number(activeProfileId);
-    if (!Number.isInteger(id) || id < 1) {
-      setCacheState("absent");
-      setOfflineUnlocked(false);
-      return;
-    }
-    // The key is already in memory: no need to ask IndexedDB or the Vault.
-    if (activeCacheProfileId() === id) {
-      setCacheState("present");
-      setOfflineUnlocked(true);
-      return;
-    }
-
-    let alive = true;
-    void Promise.all([
-      hasProfileCache(id),
-      // `hasSavedValue` is a plain `contains()` on SharedPreferences, so it
-      // stays true even for a value the Keystore can no longer decrypt. That is
-      // still enough to *offer* the unlock screen: OfflineUnlock classifies the
-      // failure and offers two exits, so a stale value is recoverable there.
-      biometricVault.hasSavedValue(id).catch(() => false),
-    ]).then(([hasEnvelope, vaultSaved]) => {
-      if (!alive) return;
-      setCacheState(offlineCacheState(hasEnvelope, vaultSaved));
-      setOfflineUnlocked(false);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [serverReachable, activeProfileId]);
-
-  // A skip lasts for this offline session only. Reconnecting, or switching who
-  // is listening, is a fresh decision -- and a fresh opportunity to save
-  // progress.
-  useEffect(() => {
-    if (serverReachable !== false) setSkippedUnlock(false);
-  }, [serverReachable]);
-
-  useEffect(() => {
-    setSkippedUnlock(false);
-  }, [activeProfileId]);
+  const { bumpLibraryTick } = useShelfRefresh({
+    profileId,
+    serverReachable,
+    refresh,
+    refreshForProfile,
+  });
 
   const handleContinueOffline = useCallback((preserveUnlockedCache = false) => {
     offlineModeRef.current = true;
@@ -621,7 +397,7 @@ function App() {
     setSession(null);
     setOfflineUnlocked(preserveUnlockedCache);
     if (!preserveUnlockedCache) void lockLocal();
-  }, []);
+  }, [setOfflineUnlocked]);
 
   /** Leave for the server-address screen; shared by every offline exit. */
   const openServerSetup = useCallback(() => {
@@ -709,40 +485,25 @@ function App() {
       })
     : null;
 
-  if (offline && screen) {
-    // The ladder in `offlineGate` picked the screen; render what it picked.
-    // The precedence lives there, not here.
-    switch (screen.kind) {
-      case "waiting":
-        return <Splash />;
-      case "libraryReadFailed":
-        return (
-          <OfflineNotice
-            hasBooks={device.books.length > 0}
-            libraryReadFailed
-            onRetry={retryOffline}
-            onChangeServer={openServerSetup}
-          />
-        );
-      case "unlock":
-        return (
-          <OfflineUnlock
-            onUnlocked={() => {
-              setOfflineUnlocked(true);
-              // Re-read the replica now that the key is in memory, so cached
-              // progress appears on the shelf immediately.
-              void device.refresh();
-              void browse.refresh();
-            }}
-            onChangeServer={openServerSetup}
-            onListenWithoutProgress={() => setSkippedUnlock(true)}
-          />
-        );
-      case "browserNotice":
-        return <OfflineNotice hasBooks={false} onRetry={retryOffline} onChangeServer={openServerSetup} />;
-      case "shell":
-        break;
-    }
+  if (offline && screen && screen.kind !== "shell") {
+    // The ladder in `offlineGate` picked the screen; the precedence lives
+    // there, not here. "shell" falls through to the normal shelf.
+    return (
+      <OfflineGateView
+        screen={screen}
+        hasBooks={device.books.length > 0}
+        onRetry={retryOffline}
+        onChangeServer={openServerSetup}
+        onUnlocked={() => {
+          setOfflineUnlocked(true);
+          // Re-read the replica now that the key is in memory, so cached
+          // progress appears on the shelf immediately.
+          void device.refresh();
+          void browse.refresh();
+        }}
+        onListenWithoutProgress={() => setSkippedUnlock(true)}
+      />
+    );
   }
 
   /** Whether progress and favourites can actually be read on this screen. */
@@ -968,7 +729,7 @@ function App() {
               <div className="min-w-0 flex-1">
                 <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
               </div>
-              {/* Spec 39: books the listener owns elsewhere — never the server, never playable */}
+              {/* Spec 39: books the listener owns elsewhere â€” never the server, never playable */}
               {canSeeBuySurfaces(session?.role) && (
                 <Btn variant="quiet" size="sm" className="shrink-0" onClick={() => setAddExternalOpen(true)}>
                   <Link2 size={15} aria-hidden="true" /> {copy.external.addButton}
@@ -1037,7 +798,7 @@ function App() {
               )}
             </section>
 
-            {/* Spec 39 — the external shelf. Not searchable, not filterable, never on the server. */}
+            {/* Spec 39 â€” the external shelf. Not searchable, not filterable, never on the server. */}
             {canSeeBuySurfaces(session?.role) && search.trim().length === 0 && (
               <>
                 <ExternalBooks role={session?.role} items={externalItems} onLaunch={openExternal} onRemove={removeExternal} />
@@ -1141,7 +902,7 @@ function App() {
         book={selectedBook}
         onClose={() => setSelectedBook(undefined)}
         onProgressSaved={() => {
-          setLibraryTick((tick) => tick + 1);
+          bumpLibraryTick();
           // Offline the server refetch fails, so the replica's cached progress
           // is what refreshes the shelf.
           void device.refresh();
@@ -1208,3 +969,7 @@ function App() {
 }
 
 export default App;
+
+
+
+
