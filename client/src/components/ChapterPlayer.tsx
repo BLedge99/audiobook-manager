@@ -723,10 +723,14 @@ export function ChapterPlayer({
       base: targetPlan.base,
       index: targetPlan.index,
     };
-    // Fresh source: give the wake-retry ladder a clean slate.
-    wakeRetryRef.current = 0;
-    setWaking(false);
-    setError("");
+    // A fresh source gives the wake-retry ladder a clean slate; a reload of
+    // the *same* source does not — resetting on every run hid the waking
+    // notice and made the give-up path unreachable.
+    if (loadedRef.current?.key !== resolved.key) {
+      wakeRetryRef.current = 0;
+      setWaking(false);
+      setError("");
+    }
 
     audio.src = resolved.url;
     audio.load();

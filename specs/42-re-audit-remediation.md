@@ -90,7 +90,10 @@ Out of scope:
 
 **Test first** (`wakeBudget.test.ts`): `FAST_PROBE_MS === 10_000`,
 `WAKE_TIMEOUT_MS === 75_000`, `WAKE_BACKOFF_MS` is the exact tuple
-`[1_000, 3_000, 8_000, 20_000, 45_000]`, `isWithinWakeBudget(now, openedAt)`.
+`[1_000, 3_000, 8_000, 20_000, 45_000]`, and the ladder's total spend is at
+least the patient probe's budget (the invariant the audit flagged as
+"roughly" written). No `isWithinWakeBudget` helper: nothing calls it, and
+speculative API is how the wake budget fragmented in the first place.
 
 **Then:** create `lib/wakeBudget.ts` exporting the three constants and the test
 contract. `reachability.ts` and `useSession.ts` import from it; `ChapterPlayer`
@@ -124,11 +127,14 @@ come from `wakeBudget`; a stream failure later in a chapter triggers the same
 probe ladder, not a separate one.
 
 **Then:** wire `WAKE_BACKOFF_MS` from `wakeBudget`; delete the local constant;
-typecheck confirms.
+typecheck confirms. While wiring this, fix the defect the test exposes: the
+load effect resets the ladder on *every* run — including the reload each
+rung schedules — so the give-up path was unreachable; reset the ladder only
+when the resolved source changes identity.
 
 **Verify:** `make test-client` → `make test`. **Definition of done:** one source
 of truth; WakingServer's Retry starts a real re-probe; the wake path has
-coverage.
+coverage; the wake ladder cannot reset itself mid-climb.
 
 ---
 

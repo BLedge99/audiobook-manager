@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, act, fireEvent } from "@testing-library/react";
 import { ChapterPlayer } from "./ChapterPlayer";
+import { copy } from "../copy";
 import type { Audiobook } from "../types";
 
 const book: Audiobook = {
@@ -469,5 +470,37 @@ describe("ChapterPlayer", () => {
     });
 
     await waitFor(() => expect(audio.currentTime).toBeCloseTo(310, 0));
+  });
+
+  /**
+   * Spec 42, step 1.4 — the wake-retry ladder. A stream failure shows the
+   * transient waking notice and climbs WAKE_BACKOFF_MS rungs until the
+   * instance answers or the ladder is spent. The reload each rung schedules
+   * must not reset the ladder — resetting it on every load effect run made
+   * the give-up path unreachable and looped the first rung forever.
+   */
+  it("keeps the wake ladder up across its own retry of the same source", async () => {
+    window.localStorage.setItem("profileId", "42");
+    const loadSpy = vi.mocked(HTMLMediaElement.prototype.load);
+
+    render(<ChapterPlayer book={chapterBook} />);
+    await waitForSource("/api/audiobooks/1/stream");
+    const loadsBefore = loadSpy.mock.calls.length;
+
+    // The instance died mid-listen.
+    await act(async () => {
+      audioOf().dispatchEvent(new Event("error"));
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(copy.player.waking);
+
+    // Wait out the first rung (WAKE_BACKOFF_MS[0] = 1s): the ladder retries.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
+    });
+
+    // The reload happened…
+    expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore);
+    // …and the ladder survived it: the listener still sees "waking".
+    expect(screen.getByRole("status")).toHaveTextContent(copy.player.waking);
   });
 });
