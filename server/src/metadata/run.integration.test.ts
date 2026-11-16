@@ -129,6 +129,35 @@ describe("EnrichmentManager queue selection", () => {
     expect(items.length).toBeGreaterThan(0);
   });
 
+  it("stops re-enqueuing a coverless book at the retry cap (spec 43 phase 7.3)", async () => {
+    const book = await makeBook(`Coverless Cap ${nextId + 1}`, "applied");
+    await prisma.mediaItem.update({
+      where: { id: book.id },
+      data: { coverImagePath: null, coverRetryCount: 3 },
+    });
+    await prisma.enrichmentItem.deleteMany({});
+    const manager = new EnrichmentManager(prisma);
+
+    await manager.enqueue();
+
+    const items = await prisma.enrichmentItem.findMany({
+      where: { mediaItem: { id: book.id } },
+    });
+    expect(items).toHaveLength(0);
+
+    // The cap is configurable per deployment.
+    process.env.ENRICH_COVER_MAX_RETRIES = "10";
+    try {
+      await manager.enqueue();
+      const again = await prisma.enrichmentItem.findMany({
+        where: { mediaItem: { id: book.id }, status: "pending" },
+      });
+      expect(again.length).toBeGreaterThan(0);
+    } finally {
+      delete process.env.ENRICH_COVER_MAX_RETRIES;
+    }
+  });
+
   it("re-enqueues an applied book when forced", async () => {
     const book = await makeBook(`Force Me ${nextId + 1}`, "applied");
     await prisma.enrichmentItem.deleteMany({});

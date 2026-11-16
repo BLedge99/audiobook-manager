@@ -66,4 +66,13 @@ describe("sendConditional with a produce thunk", () => {
     const produced = sendConditional({ headers: {} }, res.reply as never, { ok: true }, { match: "plain" });
     expect(produced).toEqual({ ok: true });
   });
+
+  it("hands back the pre-serialised JSON bytes and an application/json content type (spec 43 phase 7.1)", () => {
+    const res = fakeReply();
+    const body = { ok: true, n: 1n };
+    const produced = sendConditional({ headers: {} }, res.reply as never, body, {});
+    expect(produced).toBe(JSON.stringify(body, (_key, value) => (typeof value === "bigint" ? value.toString() : value)));
+    expect(res.headers["content-type"]).toBe("application/json");
+    expect(res.headers.etag).toMatch(/^"[0-9a-f]{40}"$/);
+  });
 });

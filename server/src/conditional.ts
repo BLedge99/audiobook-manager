@@ -1,7 +1,12 @@
 /**
  * Conditional requests (spec 15b feature 1). `match` is what the tag hashes.
+ * JSON callers get an exact-match-and-reuse optimisation (spec 43 phase 7.1):
+ * the body and the ETag come from one serialisation.
  */
 import { createHash } from "node:crypto";
+
+const BIGINT_REPLACER = (_key: string, value: unknown) =>
+  typeof value === "bigint" ? value.toString() : value;
 
 export function sendConditional<T>(
   request: { headers: Record<string, unknown> },
@@ -14,9 +19,7 @@ export function sendConditional<T>(
   // and a hand-picked set of `updatedAt` columns would silently miss a genre
   // applied after the last rescan. A stream cannot be serialised at all, so
   // the cover route passes the file's mtime and size instead.
-  const serialised = options.match ?? JSON.stringify(payload, (_key, value) =>
-    typeof value === "bigint" ? value.toString() : value,
-  );
+  const serialised = options.match ?? JSON.stringify(payload, BIGINT_REPLACER);
   const tag = `"${createHash("sha1").update(serialised).digest("hex")}"`;
   reply.header("etag", tag);
   reply.header("cache-control", "private, no-cache");
@@ -31,6 +34,14 @@ export function sendConditional<T>(
   // The 304 path must not materialise a deferred payload (e.g. an open file
   // stream); callers with expensive payloads pass `produce` for that reason.
   if (options.produce) return options.produce();
+  // Reuse the serialisation we already did for the tag: hand the client the
+  // same bytes instead of paying to stringify twice. Fastify's preSerialization
+  // walk is a no-op on a string, and `content-type: application/json` tells it
+  // to send the body verbatim.
+  if (!options.match) {
+    reply.header("content-type", "application/json");
+    return serialised;
+  }
   return payload;
 }
 

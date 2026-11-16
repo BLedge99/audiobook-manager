@@ -47,6 +47,23 @@ which is exempt from RLS; Supabase's `postgres` role also carries `BYPASSRLS`.
 The optional Storage sync keeps working because the service-role key bypasses
 RLS.
 
+## Connection pool (spec 43 phase 7.4)
+
+Prisma opens its own pool per process. Against Supabase:
+
+- Prefer the **direct connection** (`:5432`) over the pooler when the app is the
+  only client — Prisma has its own pool, and stacking PgBouncer transaction
+  pooling on top of it adds latency for no benefit at household scale.
+- Cap Prisma’s pool to the tier’s connection ceiling: Supabase free tiers cap
+  at ~60 project-wide connections. On the Render demo the service is one
+  process; `connection_limit` in the `DATABASE_URL` (`?connection_limit=10`)
+  leaves headroom for migrations, the admin console’s one-off client and
+  bursty enrichment runs. Raise deliberately, not by default.
+- The admin read-only console opens **one** shared SQLite handle or, for
+  PostgreSQL, a one-off `Client` per query capped at `connectionTimeoutMillis:
+  5_000, statement_timeout: 5_000` — it is not part of the Prisma pool and
+  does not need to be.
+
 ## Applying it
 
 The production image runs `prisma migrate deploy` before the server starts, so

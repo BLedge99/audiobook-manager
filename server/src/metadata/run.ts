@@ -3,6 +3,7 @@ import { applyCandidate, storeCandidates } from "./apply";
 import { AudnexusAsin, extractAsin } from "./audnexus";
 import { applyChapterTitles } from "./chapters";
 import { DEFAULT_CONFIDENCE_THRESHOLD, runChain, selectCoverSource, UNKNOWN_AUTHOR } from "./chain";
+import { recordCoverOutcome } from "./cover-retry";
 import { fetchOpenLibraryDescription } from "./openlibrary";
 import { upsertSeries } from "./taxonomy-service";
 import type { EnrichmentQuery, ProviderId } from "./types";
@@ -219,11 +220,17 @@ export class EnrichmentManager {
     // never-enriched book (enrichmentStatus IS NULL) would be silently
     // excluded and the pass would queue nothing. Nullability has to be
     // enumerated explicitly.
+    // Spec 43 phase 7.3: a book whose cover keeps failing stops being
+    // re-queued for cover after ENRICH_COVER_MAX_RETRIES passes. The cap is
+    // per process run state (read per call), not a module constant.
+    const maxRaw = Number.parseInt(process.env.ENRICH_COVER_MAX_RETRIES ?? "", 10);
+    const coverMax = Number.isFinite(maxRaw) && maxRaw >= 0 ? maxRaw : 3;
     const needsEnrichment = {
       OR: [
         { enrichmentStatus: null },
         { enrichmentStatus: { in: ["pending", "review", "skipped", "failed", ""] } },
-        { coverImagePath: null },
+        // A cover re-fetch only while under the retry cap.
+        { coverImagePath: null, coverRetryCount: { lt: coverMax } },
       ],
     };
 
@@ -513,6 +520,10 @@ export class EnrichmentManager {
         .update({ where: { id: mediaItemId }, data: { enrichmentStatus: "failed" } })
         .catch(() => undefined);
       await bump("failed");
+    } finally {
+      // Spec 43 phase 7.3: every pass that ends coverless counts toward the
+      // retry cap; a pass that ends with a cover resets it.
+      await recordCoverOutcome(this.prisma, mediaItemId);
     }
   }
 }

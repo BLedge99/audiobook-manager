@@ -67,6 +67,14 @@ export async function registerLibraryRoutes(
     const blocked = ctx.role === "child" ? await blockedGenreIds(prisma) : new Set<number>();
     const visibility = visibilityWhere(ctx, blocked);
     const membership = profileId === null ? undefined : libraryEntriesFor(profileId);
+    // Spec 43 phase 7.1: a hard, documented cap for the household shelf —
+    // the endpoint returns the whole library, and at some point that is a
+    // bandwidth problem for the weakest client on the weakest host. The cap
+    // is generous (1000 by default, MAX_LIBRARY_ITEMS to raise), and when it
+    // bites the response carries x-library-truncated: 1 + a warning log, so a
+    // shelf that is silently short is never mistaken for the whole library.
+    const capRaw = Number.parseInt(process.env.MAX_LIBRARY_ITEMS ?? "", 10);
+    const CAP = Number.isFinite(capRaw) && capRaw > 0 ? capRaw : 1000;
     const items = await prisma.mediaItem.findMany({
       where: membership ? andVisibility(membership, visibility) : visibility ?? undefined,
       include: {
@@ -76,7 +84,14 @@ export async function registerLibraryRoutes(
         customTags: { include: { tag: true } },
         contributors: { include: { contributor: true } },
       },
+      take: CAP + 1,
     });
+    const truncated = items.length > CAP;
+    if (truncated) items.length = CAP;
+    if (truncated) {
+      request.log.warn({ cap: CAP, total: CAP + 1 }, "/api/audiobooks truncated at MAX_LIBRARY_ITEMS; raise the cap deliberately");
+      reply.header("x-library-truncated", "1");
+    }
     // One query for the whole library's progress rather than one per book.
     const history = profileId === null
       ? []

@@ -1380,3 +1380,36 @@ describe("media streaming range and cover hardening (spec 43 phase 1.4)", () => 
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("library list cap (spec 43 phase 7.1)", () => {
+  it("returns MAX_LIBRARY_ITEMS books and a truncation header when the cap bites", async () => {
+    const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { password: "household" } });
+    const cookie = login.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    const dir = mkdtempSync(path.join(tmpdir(), "cap-test-"));
+    const root = await prisma.libraryRoot.create({ data: { path: dir, label: "Cap root" } });
+    for (let i = 0; i < 3; i += 1) {
+      writeFileSync(path.join(dir, `cap-${i}.mp3`), Buffer.from("fake audio bytes"));
+      await prisma.mediaItem.create({
+        data: {
+          libraryRootId: root.id,
+          filePath: path.join(dir, `cap-${i}.mp3`),
+          title: `Cap ${i}`,
+          author: "Unknown",
+          fileFormat: "mp3",
+          duration: 10,
+        },
+      });
+    }
+    const prev = process.env.MAX_LIBRARY_ITEMS;
+    process.env.MAX_LIBRARY_ITEMS = "2";
+    try {
+      const res = await app.inject({ method: "GET", url: "/api/audiobooks", headers: { cookie } });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["x-library-truncated"]).toBe("1");
+      expect(res.json()).toHaveLength(2);
+    } finally {
+      if (prev === undefined) delete process.env.MAX_LIBRARY_ITEMS;
+      else process.env.MAX_LIBRARY_ITEMS = prev;
+    }
+  });
+});

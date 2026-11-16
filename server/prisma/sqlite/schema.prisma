@@ -36,6 +36,10 @@ model MediaItem {
   metadataSource    String?  // provenance: embedded, librivox, audnexus, googlebooks, openlibrary, manual
   metadataConfidence Float?  // 0-1 confidence score
   enrichmentStatus  String?  // null | pending | applied | review | skipped | failed (spec 16)
+  // Spec 43 phase 7.3: counts enrichment passes that ended with no cover.
+  // The selection queue stops re-enqueuing a book for cover retry after
+  // ENRICH_COVER_MAX_RETRIES passes (default 3).
+  coverRetryCount   Int      @default(0)
   enrichedAt        DateTime?
   subtitle          String?  // spec 17
   seriesId          Int?
