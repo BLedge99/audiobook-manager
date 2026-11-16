@@ -26,6 +26,13 @@ lawful basis, no retention period and no data-subject right. See
 [`docs/production-database-access-control.md`](production-database-access-control.md),
 spec 35 and ADR 026.
 
+**Backups.** The database is also copied weekly via `pg_dump`, encrypted with
+`age`, retained as the 7 newest dumps on the same host (accepted risk R2,
+[`docs/risk-register.md`](risk-register.md)). Erased rows age out of rotation
+within ~28 days; a restore must re-apply any erasures granted since the dump
+was taken. See [`docs/retention.md`](retention.md) (Backups) and
+[`docs/backup-restore.md`](backup-restore.md).
+
 **One definition of personal data.** The profile-owned personal-data table list,
 the 24-month inactive-profile retention rule, and the export/erasure/retention
 operations are generated from one declarative table in

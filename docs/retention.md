@@ -59,6 +59,27 @@ Profiles with no `lastActiveAt` at all (created but never used) are evaluated ag
 
 ---
 
+## Backups (added 2026-11-16, spec 43 phase 3)
+
+The only backups of personal data are **weekly `pg_dump`s of the database**,
+encrypted with `age` (`scripts/backup-db.sh`), retained as the 7 newest files
+on the **same host/NAS** as the application (accepted risk R2 in
+`docs/risk-register.md`). An erasure removes rows from the live database
+immediately; erased rows then age out of the 7-dump rotation within ~28 days.
+Consequences:
+
+1. An erasure request honoured on date D is guaranteed absent from backups by
+   roughly D + 28 days. Say so in the response to the data subject.
+2. **Restoring a backup resurrects recently-erased data.** Before pointing a
+   live or replacement deployment at a restored database, re-apply any
+   erasures granted since that backup was taken. The drill log
+   (`docs/drills.md`) exists to keep this step visible; do not skip it.
+3. Media files are not backed up. Cover images are cache and re-fetch.
+4. Backup encryption keys are operator-held; a backup file leaving the host is
+   ciphertext.
+
+---
+
 ## Cross-reference
 
 - RoPA: `docs/roa.md` — maps each activity to lawful basis and retention.
