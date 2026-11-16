@@ -45,6 +45,21 @@ function withTag(href: string, tag: string | undefined): string {
   return `${href}${glue}${tag.replace(/^[?&]/, "")}`;
 }
 
+/** The scheme we will render into an href. Anything else (javascript:, data:, ...) is dropped. */
+function safeExternalHref(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "https:") return url.toString();
+    if (url.protocol === "http:") {
+      url.protocol = "https:";
+      return url.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildBuyLinks(input: BuyLinkInput): BuyLink[] {
   const isbn13 = normaliseIsbn(input.isbn);
   const query = isbn13 ?? `${input.title.trim()} ${(input.author ?? "").trim()}`.trim();
@@ -54,12 +69,15 @@ export function buildBuyLinks(input: BuyLinkInput): BuyLink[] {
 
   const links: BuyLink[] = [];
 
-  if (input.librivoxUrl) {
+  // The LibriVox URL originates server-side and ultimately from LibriVox
+  // metadata; render it only if it is a plain web URL (never javascript:/data:).
+  const freeHref = input.librivoxUrl ? safeExternalHref(input.librivoxUrl) : null;
+  if (freeHref) {
     links.push({
       id: "librivox",
       kind: "free",
       label: "LibriVox — Free",
-      href: input.librivoxUrl,
+      href: freeHref,
       commission: false,
     });
   }

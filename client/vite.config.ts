@@ -29,6 +29,13 @@ export default defineConfig(({ mode }) => ({
   define: {
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
+  // No console/debugger in the shipped bundle: it logs profile ids and device
+  // traces in production otherwise (biometricVault, device download traces).
+  // console.error/warn are kept for real failures.
+  esbuild: {
+    pure: ['console.log', 'console.debug', 'console.info', 'console.trace'],
+    drop: ['debugger'],
+  },
   build: {
     rollupOptions: {
       output: {

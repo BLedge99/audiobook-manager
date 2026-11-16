@@ -59,6 +59,12 @@ describe("normaliseServerUrl", () => {
     expect(normaliseServerUrl("http://")).toBe("");
     expect(normaliseServerUrl("::::")).toBe("");
   });
+
+  it("rejects non-http(s) schemes instead of storing them", () => {
+    expect(normaliseServerUrl("ftp://home.lan:3000")).toBe("");
+    expect(normaliseServerUrl("file:///etc/passwd")).toBe("");
+    expect(normaliseServerUrl("javascript:alert(1)")).toBe("");
+  });
 });
 
 describe("apiUrl", () => {

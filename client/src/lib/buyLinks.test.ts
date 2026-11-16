@@ -125,6 +125,25 @@ describe("affiliate tags", () => {
   });
 });
 
+describe("librivoxUrl sanitisation", () => {
+  it("renders an https LibriVox link", () => {
+    const links = buildBuyLinks({ ...BASE, librivoxUrl: "https://librivox.org/x/" });
+    expect(links.find((link) => link.id === "librivox")?.href).toBe("https://librivox.org/x/");
+  });
+
+  it("upgrades plain http LibriVox links to https", () => {
+    const links = buildBuyLinks({ ...BASE, librivoxUrl: "http://librivox.org/x/" });
+    expect(links.find((link) => link.id === "librivox")?.href).toBe("https://librivox.org/x/");
+  });
+
+  it("drops non-web schemes entirely instead of rendering them", () => {
+    for (const bad of ["javascript:alert(1)", "data:text/html;base64,PGI+", "file:///etc/passwd", "not a url"]) {
+      const ids = buildBuyLinks({ ...BASE, librivoxUrl: bad }).map((link) => link.id);
+      expect(ids).not.toContain("librivox");
+    }
+  });
+});
+
 describe("buy links are derived from the registry (spec 41 phase 2)", () => {
   afterEach(() => {
     vi.unstubAllEnvs();

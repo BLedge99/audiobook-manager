@@ -320,7 +320,9 @@ async function enqueueRevalidate(key: string, stored: CoverRecord): Promise<void
 async function fetchCover(url: string, etag: string | null): Promise<{ blob: Blob; etag: string | null } | undefined> {
   const headers: Record<string, string> = {};
   if (etag) headers["If-None-Match"] = etag;
-  const response = await fetch(url, { headers });
+  // Third-party cover hosts (Discover renders provider covers straight from
+  // their CDN): don't hand them the app's referrer URL.
+  const response = await fetch(url, { headers, referrerPolicy: "no-referrer" });
   if (response.status === 304) return undefined;
   if (!response.ok) throw new Error(`Cover request failed (${response.status})`);
   const blob = await response.blob();

@@ -290,10 +290,13 @@ export function normaliseServerUrl(raw: string | null | undefined): string {
   const trimmed = (raw ?? "").trim();
   if (!trimmed) return "";
 
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
 
   try {
     const url = new URL(withScheme);
+    // Only http(s) servers are meaningful; other schemes (ftp:, file:, ...)
+    // would be stored and fail later, confusingly.
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
     // `new URL("http://")` parses but has no host, which would produce
     // requests to "http:///api/audiobooks" that fail confusingly later.
     if (!url.hostname) return "";

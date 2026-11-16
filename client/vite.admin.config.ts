@@ -10,5 +10,9 @@ export default defineConfig({
   base: "./",
   resolve: { alias: { "/src": path.join(clientRoot, "src") } },
   plugins: [react()],
+  esbuild: {
+    pure: ['console.log', 'console.debug', 'console.info', 'console.trace'],
+    drop: ['debugger'],
+  },
   build: { outDir: "../admin-dist", emptyOutDir: true },
 });
