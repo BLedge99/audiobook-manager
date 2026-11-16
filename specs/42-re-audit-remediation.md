@@ -359,14 +359,19 @@ handler resolves); `PageHead` (title, intro); `MachineMark` renders the mark.
 
 ### Step 8.3 — the two spellings of "small quiet text" pick one
 
-**Test first:** grep count of `t-*` occurrences vs equivalent arbitrary values
-still wins the count; the t-* test suite from the UI audit still passes; build
-bytes budget green.
-
-**Then:** decide — either enforce via `check-copy.mjs`/eslint (a new
-"ui-tone" rule paired with the existing one) or keep the mixed spellings with
-an explicit note in `docs/display-atlas.md` (or spec). The decision, whatever
-it is, is written down.
+**Decision (2026-11-16): keep the mixed spellings, deliberately.** The four
+t-\* classes name *specific* sizes (0.78125/0.71875/0.75/0.84375 rem); the
+~100 remaining `text-[…]` values across 23 files are real, different sizes
+(0.6875, 0.8125, 0.875, 1.0625 …). Converging them repaints the type scale —
+a visual redesign this plan excludes — and minting one class per size is
+class inflation with no caller discipline behind it. No gate is added for
+the same reason: `check:copy`'s scan has no whitelist mode for "arbitrary
+but legitimate Tailwind", so a regex rule would only teach people to
+suppress it. The t-\* classes remain the default for the four sizes they
+name; the audit's EmptyPanel case was audited in detail — the wishlist row
+uses `EmptyPanel` and Discover's big-icon empty state (Compass mark plus
+prose, the common case on a fresh install) is the intentional second
+library, kept as is.
 
 ### Step 8.4 — ui/primitives.tsx stops being a non-leaf
 
