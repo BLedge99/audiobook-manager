@@ -4,7 +4,7 @@ import { getServerUrl, setServerUrl } from "../lib/api";
 import { recordRecentServer } from "../lib/recentServers";
 import { probeCandidateUrl } from "../lib/reachability";
 import { copy } from "../copy";
-import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
+import { Btn, Field, FullScreen, Wordmark, Notice } from "../ui/primitives";
 
 /**
  * First-run setup: ask for the home server's address.
@@ -110,9 +110,9 @@ export function ServerSetup({
           />
 
           {message && (
-            <p role="alert" className="mt-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-rasp/12 px-3 py-2 text-sm font-bold text-rasp-ink">
+            <Notice tone="error" role="alert" className="mt-3">
               {message}
-            </p>
+            </Notice>
           )}
 
           <Btn type="submit" variant="primary" disabled={status === "checking"} className="mt-4 w-full">

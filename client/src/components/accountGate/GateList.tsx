@@ -42,18 +42,18 @@ export function GateList({
   if (accountExperience === "demo") {
     return (
       <div className="mt-5 grid min-w-0 gap-3">
-        <button type="button" onClick={onConfirmGoogle} className="btn btn--glass w-full text-left">
+        <Btn variant="glass" className="w-full text-left" onClick={onConfirmGoogle}>
           {copy.login.oauthGoogleAction}
-        </button>
-        <button type="button" onClick={() => onStartOAuth("github")} className="btn btn--glass w-full text-left">
+        </Btn>
+        <Btn variant="glass" className="w-full text-left" onClick={() => onStartOAuth("github")}>
           {copy.login.oauthGithubAction}
-        </button>
-        <button type="button" onClick={() => onEmail(false)} className="btn btn--glass w-full text-left">
+        </Btn>
+        <Btn variant="glass" className="w-full text-left" onClick={() => onEmail(false)}>
           {copy.login.emailAction}
-        </button>
-        <button type="button" onClick={() => onEmail(true)} className="btn btn--glass w-full text-left">
+        </Btn>
+        <Btn variant="glass" className="w-full text-left" onClick={() => onEmail(true)}>
           {copy.login.emailCreateAction}
-        </button>
+        </Btn>
       </div>
     );
   }
@@ -112,30 +112,18 @@ export function GateList({
 
       <div className="mt-5 grid min-w-0 gap-3">
         {oauthProviders.includes("google") && (
-          <button
-            type="button"
-            onClick={onConfirmGoogle}
-            className="btn btn--glass w-full text-left"
-          >
+          <Btn variant="glass" className="w-full text-left" onClick={onConfirmGoogle}>
             {copy.login.oauthGoogleAction}
-          </button>
+          </Btn>
         )}
         {oauthProviders.includes("github") && (
-          <button
-            type="button"
-            onClick={() => onStartOAuth("github")}
-            className="btn btn--glass w-full text-left"
-          >
+          <Btn variant="glass" className="w-full text-left" onClick={() => onStartOAuth("github")}>
             {copy.login.oauthGithubAction}
-          </button>
+          </Btn>
         )}
-        <button
-          type="button"
-          onClick={() => onEmail(false)}
-          className="btn btn--glass w-full text-left"
-        >
+        <Btn variant="glass" className="w-full text-left" onClick={() => onEmail(false)}>
           {copy.login.emailAction}
-        </button>
+        </Btn>
       </div>
 
       <button

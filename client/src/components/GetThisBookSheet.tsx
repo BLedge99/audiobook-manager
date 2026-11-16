@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { copy } from "../copy";
 import { EXTERNAL_STORES, type ExternalStoreId } from "../lib/externalStores";
 import { launchStoreLink } from "../lib/externalIntent";
 import { buildBuyLinks, type BuyLink } from "../lib/buyLinks";
-import { Btn, cn } from "../ui/primitives";
+import { Btn, Backdrop, CloseButton, cn } from "../ui/primitives";
 import { requestRaw } from "../lib/request";
 
 /**
@@ -91,15 +91,13 @@ export function GetThisBookSheet({ open, onClose, isChild, title, author, isbn }
   // behind the header and the header ate the clicks.
   return createPortal(
     <div role="dialog" aria-modal="true" aria-labelledby="get-this-book" className="fixed inset-0 z-50">
-      <button type="button" aria-label={copy.buyLinks.close} className="absolute inset-0 cursor-default bg-ink/45" onClick={onClose} />
+      <Backdrop onClose={onClose} label={copy.buyLinks.close} />
       <div className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col overflow-hidden rounded-t-[22px] border border-ink/20 bg-surface shadow-[0_-6px_30px_rgba(0,0,0,0.25)] sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:max-h-[80vh] sm:w-[30rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[22px]">
         <div className="flex items-start justify-between gap-3 p-5 pb-3">
           <h2 id="get-this-book" className="font-display text-lg font-semibold leading-snug text-ink">
             {copy.buyLinks.sheetTitle}
           </h2>
-          <button type="button" onClick={onClose} aria-label={copy.buyLinks.close} className="grid size-9 place-items-center rounded-full text-ink3 hover:bg-sunk">
-            <X size={18} aria-hidden="true" />
-          </button>
+          <CloseButton onClose={onClose} label={copy.buyLinks.close} />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">

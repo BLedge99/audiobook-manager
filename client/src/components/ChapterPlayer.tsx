@@ -6,7 +6,7 @@ import { request } from "../lib/request";
 import { cacheProgress, readProgress } from "../local/privateCache";
 import { copy } from "../copy";
 import { ProgressTimeline } from "./ProgressTimeline";
-import { Btn, Dome } from "../ui/primitives";
+import { Btn, Dome, Notice } from "../ui/primitives";
 import { publishPlaybackState, publishPosition, registerMediaSessionHandlers, setMediaMetadata } from "./mediaSession";
 import {
   clamp,
@@ -954,9 +954,9 @@ export function ChapterPlayer({
       </div>
 
       {!activeProfileId && (
-        <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[0.8125rem] font-bold text-tan-ink">
+        <Notice tone="warn" role="alert" className="mt-3">
           {copy.player.needsProfile}
-        </p>
+        </Notice>
       )}
 
       {/* Spec 14. Not an aria-live region on purpose: this text changes several
@@ -996,13 +996,15 @@ export function ChapterPlayer({
       </div>
 
       {waking && !error && (
-        <p role="status" className="panel panel--flat mt-3 px-3 py-2 text-[0.8125rem] font-bold text-cobalt-ink">
+        <Notice tone="info" role="status" className="mt-3">
           {copy.player.waking}
           <span className="mt-1 block font-normal text-ink3">{copy.player.wakingDetail}</span>
-        </p>
+        </Notice>
       )}
       {error && (
-        <p role="alert" className="panel panel--flat mt-3 px-3 py-2 text-[0.8125rem] font-bold text-rasp-ink">{error}</p>
+        <Notice tone="error" role="alert" className="mt-3">
+          {error}
+        </Notice>
       )}
 
       {segments.length > 1 && (

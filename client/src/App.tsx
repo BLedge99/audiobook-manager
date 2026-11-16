@@ -68,7 +68,7 @@ import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
 import { copy, plural } from "./copy";
-import { Specks, ThemeToggle, Notice, MachineHead, StatusLegend, Btn, IconBtn, cn } from "./ui/primitives";
+import { Specks, ThemeToggle, Notice, MachineMark, MachineHead, StatusLegend, Btn, IconBtn, cn } from "./ui/primitives";
 import type { Audiobook } from "./types";
 
 type Tab = "library" | "browse" | "discover" | "favourites" | "server-library";
@@ -82,19 +82,9 @@ const TABS: { id: Tab; label: string; icon: typeof Library }[] = [
 ];
 
 /**
- * The machine's mark: a canted capsule with a play dome, matching favicon.svg.
- * Inline so it inherits the theme tokens rather than shipping two copies of the
- * same drawing.
+ * The machine's mark comes from the shared primitives (`ui/primitives`), the
+ * same one the gates and the wordmark use — one drawing, everywhere.
  */
-function Mark() {
-  return (
-    <span aria-hidden="true" className="grid size-11 shrink-0 -rotate-6 place-items-center rounded-[15px_12px_15px_12px/12px_15px_12px_15px] border-2 border-ink bg-surface shadow-[0_3px_0_-1px_color-mix(in_srgb,var(--ink)_80%,transparent)]">
-      <span className="grid size-7 place-items-center rounded-full border-2 border-ink bg-rasp">
-        <span className="h-0 w-0 border-y-[5px] border-l-[8px] border-y-transparent border-l-white" />
-      </span>
-    </span>
-  );
-}
 
 function App() {
   /** The server-derived identity (spec 28); null until the probe resolves. */
@@ -813,7 +803,7 @@ function App() {
       <header className="bar">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <Mark />
+            <MachineMark />
             {/* `min-w-0` is load-bearing: the title sits beside a fixed-width
                 control group, and without it the wordmark refuses to shrink and
                 the row blows past a 360px phone. `e2e/phone-layout` asserts the

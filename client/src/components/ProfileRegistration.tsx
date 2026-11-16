@@ -4,7 +4,7 @@ import { copy } from "../copy";
 import { boundedFetch, setActiveProfileId, setSessionToken } from "../lib/api";
 import { responseErrorText } from "../lib/apiError";
 import { rememberProfileKey } from "../local/privateCache";
-import { Btn, Field } from "../ui/primitives";
+import { Btn, Field, Notice } from "../ui/primitives";
 
 export function ProfileRegistration({
   onRegistered,
@@ -98,9 +98,9 @@ export function ProfileRegistration({
         required
       />
       {error && (
-        <p role="alert" className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-rasp/12 px-3 py-2 text-sm font-bold text-rasp-ink">
+        <Notice tone="error" role="alert" className="mt-1">
           {error}
-        </p>
+        </Notice>
       )}
       <Btn type="submit" variant="primary" disabled={busy} className="w-full">
         {busy ? (

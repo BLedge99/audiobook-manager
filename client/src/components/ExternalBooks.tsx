@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link2, Trash2, X } from "lucide-react";
+import { Link2, Trash2 } from "lucide-react";
 import type { ExternalItem } from "../local/db";
 import { copy } from "../copy";
 import { EXTERNAL_STORES, parseStoreUrl, type ExternalStoreId } from "../lib/externalStores";
-import { Btn, cn } from "../ui/primitives";
+import { Btn, Backdrop, CloseButton, cn } from "../ui/primitives";
 import { urlCoverKey, CoverImage } from "../local/CoverImage";
 import { isKidsAccount } from "../local/kids";
 
@@ -205,15 +205,13 @@ export function AddExternalBookDialog({
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="add-external-title" className="fixed inset-0 z-50">
-      <button type="button" aria-label={copy.buyLinks.close} className="absolute inset-0 cursor-default bg-ink/45" onClick={onClose} />
+      <Backdrop onClose={onClose} label={copy.buyLinks.close} />
       <div className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto rounded-t-[22px] border border-ink/20 bg-surface p-5 shadow-[0_-6px_30px_rgba(0,0,0,0.25)] sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:max-h-none sm:w-[30rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[22px]">
         <div className="flex items-start justify-between gap-3">
           <h2 id="add-external-title" className="font-display text-lg font-semibold leading-snug text-ink">
             {copy.external.addTitle}
           </h2>
-          <button type="button" onClick={onClose} aria-label={copy.buyLinks.close} className="grid size-9 place-items-center rounded-full text-ink3 hover:bg-sunk">
-            <X size={18} aria-hidden="true" />
-          </button>
+          <CloseButton onClose={onClose} label={copy.buyLinks.close} />
         </div>
         <p className="mt-1.5 text-[0.8125rem] leading-snug text-ink2">{copy.external.addBody}</p>
 

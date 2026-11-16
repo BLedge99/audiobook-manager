@@ -9,7 +9,7 @@ import { SetupForm } from "./accountGate/SetupForm";
 import { HouseholdForm } from "./accountGate/HouseholdForm";
 import { EmailForm } from "./accountGate/EmailForm";
 import { useAccountGate } from "./accountGate/useAccountGate";
-import { Btn, FullScreen, Wordmark } from "../ui/primitives";
+import { Btn, FullScreen, Wordmark, Notice } from "../ui/primitives";
 
 /**
  * The account picker (spec 28).
@@ -146,12 +146,9 @@ export function AccountGate({
           )}
 
           {error && !(mode.kind === "list" && accountsLoadFailed && accountExperience === "household") && (
-            <p
-              role="alert"
-              className="mt-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-rasp/12 px-3 py-2 text-sm font-bold text-rasp-ink"
-            >
+            <Notice tone="error" role="alert" className="mt-3">
               {error}
-            </p>
+            </Notice>
           )}
 
           {onContinueOffline && (

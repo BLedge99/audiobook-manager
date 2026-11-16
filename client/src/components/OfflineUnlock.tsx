@@ -15,7 +15,7 @@ import {
   classifyBiometricFailure,
   shouldRetryBiometricUnlock,
 } from "../lib/biometricFailure";
-import { Btn, Field, FullScreen, Wordmark } from "../ui/primitives";
+import { Btn, Field, FullScreen, Wordmark, Notice } from "../ui/primitives";
 
 /**
  * Offline sign-in for the downloaded library (spec 28, phase 4; spec 29).
@@ -191,12 +191,9 @@ export function OfflineUnlock({
           </Btn>}
 
           {error && (
-            <p
-              role="alert"
-              className="mt-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-rasp/12 px-3 py-2 text-sm font-bold text-rasp-ink"
-            >
+            <Notice tone="error" role="alert" className="mt-3">
               {error}
-            </p>
+            </Notice>
           )}
 
           {/* The two exits. Quiet, but always present: an offline screen with no

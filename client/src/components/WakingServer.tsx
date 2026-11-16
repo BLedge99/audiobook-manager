@@ -1,5 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { copy } from "../copy";
+import { Btn } from "../ui/primitives";
 
 /**
  * The cold-start screen (Render free tier, mostly).
@@ -32,9 +33,9 @@ export function WakingServer({
         <p className="mt-3 text-sm leading-relaxed text-ink2">{copy.waking.body}</p>
       </div>
       <div className="grid w-full gap-3">
-        <button type="button" onClick={onRetry} className="btn btn--glass w-full">
+        <Btn variant="glass" className="w-full" onClick={onRetry}>
           {copy.waking.retry}
-        </button>
+        </Btn>
         <button
           type="button"
           onClick={onContinueOffline}

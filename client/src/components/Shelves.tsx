@@ -5,7 +5,6 @@ import { FavouriteButton } from "./FavouriteButton";
 import { isFromThisServer } from "../lib/api";
 import { seriesPosition, type Shelf } from "../lib/browse";
 import { replicaBookKey } from "../local/replica";
-import { dispenseShakeThen } from "../lib/dispense";
 import { copy, plural } from "../copy";
 import { CapsuleMarks, MachineHead, ShellCover, cn } from "../ui/primitives";
 

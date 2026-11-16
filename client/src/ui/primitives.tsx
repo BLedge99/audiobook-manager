@@ -1,7 +1,7 @@
 import { type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type CSSProperties } from "react";
 import clsx, { type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, X } from "lucide-react";
 import { CoverImage, bookCoverKey } from "../local/CoverImage";
 import { getServerUrl } from "../lib/api";
 import { copy } from "../copy";
@@ -81,9 +81,33 @@ export function Panel({
 /* --------------------------------------------------------------- controls */
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "plain" | "primary" | "mint" | "quiet";
+  variant?: "plain" | "primary" | "mint" | "quiet" | "glass";
   size?: "md" | "sm";
 };
+
+export function Backdrop({ onClose, label }: { onClose: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label ?? copy.buyLinks.close}
+      className="absolute inset-0 cursor-default bg-ink/45"
+      onClick={onClose}
+    />
+  );
+}
+
+export function CloseButton({ onClose, className, label }: { onClose: () => void; className?: string; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label={label ?? copy.buyLinks.close}
+      className={cn("grid size-9 place-items-center rounded-full text-ink3 hover:bg-sunk", className)}
+    >
+      <X size={18} aria-hidden="true" />
+    </button>
+  );
+}
 
 export function Btn({ variant = "plain", size = "md", className, type = "button", ...rest }: BtnProps) {
   return (
@@ -94,6 +118,7 @@ export function Btn({ variant = "plain", size = "md", className, type = "button"
         variant === "primary" && "btn--primary",
         variant === "mint" && "btn--mint",
         variant === "quiet" && "btn--quiet",
+        variant === "glass" && "btn--glass",
         size === "sm" && "btn--sm",
         className,
       )}

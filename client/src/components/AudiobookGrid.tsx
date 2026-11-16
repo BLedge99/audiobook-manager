@@ -13,7 +13,6 @@ import {
 } from "../lib/position";
 import { headingText, remainingLabel } from "../lib/segmentCopy";
 import { replicaBookKey } from "../local/replica";
-import { dispenseShakeThen } from "../lib/dispense";
 import { copy } from "../copy";
 import {
   CapsuleMarks,
