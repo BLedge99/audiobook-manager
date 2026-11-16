@@ -29,7 +29,7 @@ export type StartScanResult =
  */
 export async function startScanWithEnrichment(
   deps: ScanDeps,
-  options: { rootId?: number },
+  options: { rootId?: number; confirmDelete?: string },
 ): Promise<StartScanResult> {
   const { prisma, scanner, enrichment, logger } = deps;
   const roots = options.rootId !== undefined
@@ -39,7 +39,7 @@ export async function startScanWithEnrichment(
 
   for (const root of roots) {
     void scanner
-      .scanRoot(root.id)
+      .scanRoot(root.id, { confirmDelete: options.confirmDelete })
       .then(async () => {
         // Spec 16: completing a scan automatically kicks off a background
         // enrichment pass. Failures here must never affect the scan result.

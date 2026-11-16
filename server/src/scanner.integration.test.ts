@@ -135,8 +135,15 @@ describe("scanner reconciliation", () => {
     rmSync(bookFolder, { recursive: true, force: true });
     expect(existsSync(bookFolder), `fixture folder should be gone: ${bookFolder}`).toBe(false);
 
-    // The scan must complete rather than throw.
+    // Spec 43 phase 1.1: the guard refuses first. The walk found nothing, so
+    // the deletion must not happen and the scan completes as incomplete.
     await expect(createScanManager(prisma).scanRoot(libraryRootId)).resolves.toBeUndefined();
+    expect(await prisma.mediaItem.findUnique({ where: { id: item.id } })).not.toBeNull();
+
+    // The explicit operator override deletes it (the destructive path).
+    await expect(
+      createScanManager(prisma).scanRoot(libraryRootId, { confirmDelete: "delete 1 books" }),
+    ).resolves.toBeUndefined();
 
     expect(await prisma.mediaItem.findUnique({ where: { id: item.id } })).toBeNull();
     // And its children went with it rather than dangling.
@@ -294,5 +301,93 @@ describe("scanner transaction safety (spec 43 phase 1.2)", () => {
 
     // A clean scan of the same root completes normally afterwards.
     await expect(createScanManager(prisma).scanRoot(root.id)).resolves.toBeUndefined();
+  });
+});
+
+describe("scanner reconciliation guard (spec 43 phase 1.1)", () => {
+  const HAS = HAS_FIXTURES;
+
+  async function seedTwoBookRoot(name: string) {
+    const rootPath = path.join(db.dir, name);
+    const source = sampleLibrary()!;
+    const mp3s = readdirSync(source).filter((file) => file.toLowerCase().endsWith(".mp3"));
+    for (const bookName of ["BookA", "BookB"]) {
+      const folder = path.join(rootPath, bookName);
+      mkdirSync(folder, { recursive: true });
+      cpSync(path.join(source, mp3s[0]), path.join(folder, mp3s[0]));
+    }
+    const root = await prisma.libraryRoot.create({ data: { path: rootPath, label: "Guard" } });
+    return { root, rootPath };
+  }
+
+  it.skipIf(!HAS)("refuses to delete anything when the walk finds nothing (unmounted root)", async () => {
+    const { root, rootPath } = await seedTwoBookRoot("guard-unmounted");
+    await createScanManager(prisma).scanRoot(root.id);
+    expect(await prisma.mediaItem.count({ where: { libraryRootId: root.id } })).toBe(2);
+
+    // The "unmounted drive": the mount point answers with an empty listing.
+    for (const entry of readdirSync(rootPath)) rmSync(path.join(rootPath, entry), { recursive: true, force: true });
+
+    await createScanManager(prisma).scanRoot(root.id);
+    expect(await prisma.mediaItem.count({ where: { libraryRootId: root.id } })).toBe(2);
+    expect(await prisma.listeningHistory.count({ where: { mediaItem: { libraryRootId: root.id } } })).toBe(0);
+    const state = await prisma.scanState.findUniqueOrThrow({ where: { libraryRootId: root.id } });
+    expect(state.status).toBe("incomplete");
+    expect(state.message).toMatch(/Reconciliation refused/);
+  });
+
+  it.skipIf(!HAS)("refuses the mass delete when half the library vanishes", async () => {
+    const { root, rootPath } = await seedTwoBookRoot("guard-partial");
+    await createScanManager(prisma).scanRoot(root.id);
+    rmSync(path.join(rootPath, "BookA"), { recursive: true, force: true });
+
+    await createScanManager(prisma).scanRoot(root.id);
+    // 50% missing meets the default guard: nothing is deleted.
+    expect(await prisma.mediaItem.count({ where: { libraryRootId: root.id } })).toBe(2);
+    const state = await prisma.scanState.findUniqueOrThrow({ where: { libraryRootId: root.id } });
+    expect(state.status).toBe("incomplete");
+  });
+
+  it.skipIf(!HAS)("proceeds with deletion when the missing share is below the guard threshold", async () => {
+    const { root, rootPath } = await seedTwoBookRoot("guard-below-threshold");
+    const previous = process.env.SCAN_DELETE_GUARD_PERCENT;
+    process.env.SCAN_DELETE_GUARD_PERCENT = "75";
+    try {
+      await createScanManager(prisma).scanRoot(root.id);
+      rmSync(path.join(rootPath, "BookA"), { recursive: true, force: true });
+      await createScanManager(prisma).scanRoot(root.id);
+      expect(await prisma.mediaItem.count({ where: { libraryRootId: root.id } })).toBe(1);
+      const state = await prisma.scanState.findUniqueOrThrow({ where: { libraryRootId: root.id } });
+      expect(state.status).toBe("complete");
+    } finally {
+      if (previous === undefined) delete process.env.SCAN_DELETE_GUARD_PERCENT;
+      else process.env.SCAN_DELETE_GUARD_PERCENT = previous;
+    }
+  });
+
+  it.skipIf(!HAS)("honours the explicit confirmDelete override and restates the count", async () => {
+    const { root, rootPath } = await seedTwoBookRoot("guard-confirm");
+    await createScanManager(prisma).scanRoot(root.id);
+    for (const entry of readdirSync(rootPath)) rmSync(path.join(rootPath, entry), { recursive: true, force: true });
+
+    // First the guard refuses; only then does the explicit override take effect.
+    await createScanManager(prisma).scanRoot(root.id);
+    const refused = await prisma.scanState.findUniqueOrThrow({ where: { libraryRootId: root.id } });
+    expect(refused.status).toBe("incomplete");
+    expect(refused.message).toMatch(/confirmDelete "delete 2 books"/);
+
+    await createScanManager(prisma).scanRoot(root.id, { confirmDelete: "delete 2 books" });
+    expect(await prisma.mediaItem.count({ where: { libraryRootId: root.id } })).toBe(0);
+    const state = await prisma.scanState.findUniqueOrThrow({ where: { libraryRootId: root.id } });
+    expect(state.status).toBe("complete");
+  });
+
+  it("completes normally when the library starts out empty", async () => {
+    const emptyRoot = path.join(db.dir, "guard-empty");
+    mkdirSync(emptyRoot, { recursive: true });
+    const root = await prisma.libraryRoot.create({ data: { path: emptyRoot, label: "Empty" } });
+    await createScanManager(prisma).scanRoot(root.id);
+    const state = await prisma.scanState.findUniqueOrThrow({ where: { libraryRootId: root.id } });
+    expect(state.status).toBe("complete");
   });
 });

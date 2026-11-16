@@ -224,12 +224,16 @@ export async function registerLibraryRoutes(
     return publicBookPayload(item);
   });
 
-  app.post<{ Body: { rootId?: number } }>("/api/scan", {
+  app.post<{ Body: { rootId?: number; confirmDelete?: string } }>("/api/scan", {
     schema: {
       body: {
         type: "object",
         properties: {
           rootId: { type: "integer" },
+          // Spec 43 phase 1.1: explicit destructive-intent override for the
+          // reconciliation guard. Must restate the count the operator expects
+          // to lose, e.g. "delete 37 books".
+          confirmDelete: { type: "string", maxLength: 100 },
         },
       },
     },
@@ -237,7 +241,7 @@ export async function registerLibraryRoutes(
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const result = await startScanWithEnrichment(
       { prisma, scanner, enrichment, logger },
-      { rootId: request.body?.rootId },
+      { rootId: request.body?.rootId, confirmDelete: request.body?.confirmDelete },
     );
     if (!result.started) return fail(reply, 400, "library_root_required");
     return reply.code(202).send({ status: "started", rootIds: result.rootIds });

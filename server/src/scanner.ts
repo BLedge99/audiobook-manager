@@ -33,7 +33,7 @@ type AudioFile = {
 };
 
 type ScanProgress = {
-  status: "idle" | "scanning" | "complete" | "error";
+  status: "idle" | "scanning" | "complete" | "incomplete" | "error";
   filesFound: number;
   message?: string;
   lastScanAt?: Date;
@@ -51,6 +51,12 @@ async function parseAudioFile(filePath: string) {
 }
 
 export type ScanManager = ReturnType<typeof createScanManager>;
+
+/** Spec 43 phase 1.1: the missing-share percentage that trips the deletion guard. */
+function deleteGuardPercent(): number {
+  const raw = Number.parseInt(process.env.SCAN_DELETE_GUARD_PERCENT ?? "", 10);
+  return Number.isFinite(raw) && raw >= 0 && raw <= 100 ? raw : 50;
+}
 
 async function walkAudioFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -289,14 +295,14 @@ export function createScanManager(prisma: PrismaClient, options: ScanManagerOpti
   const progress = new Map<number, ScanProgress>();
   const activeScans = new Map<number, Promise<void>>();
 
-  async function scanRoot(rootId: number): Promise<void> {
+  async function scanRoot(rootId: number, scanOptions: { confirmDelete?: string } = {}): Promise<void> {
     if (activeScans.has(rootId)) return activeScans.get(rootId);
-    const task = runScan(rootId).finally(() => activeScans.delete(rootId));
+    const task = runScan(rootId, scanOptions).finally(() => activeScans.delete(rootId));
     activeScans.set(rootId, task);
     return task;
   }
 
-  async function runScan(rootId: number): Promise<void> {
+  async function runScan(rootId: number, scanOptions: { confirmDelete?: string } = {}): Promise<void> {
     const root = await prisma.libraryRoot.findUnique({ where: { id: rootId } });
     if (!root) throw new Error("Library root not found");
     progress.set(rootId, { status: "scanning", filesFound: 0 });
@@ -457,7 +463,30 @@ export function createScanManager(prisma: PrismaClient, options: ScanManagerOpti
         },
         select: { id: true },
       });
-      if (stale.length > 0) {
+      // Spec 43 phase 1.1 — never destroy on ambiguous evidence.
+      //
+      // If the walk itself found nothing (unmounted NAS, renamed root) or the
+      // missing share of previously-known books crosses a threshold, the scan
+      // refuses the deletion phase entirely: rows stay, the run is marked
+      // incomplete, and the log says exactly why. An operator who
+      // *intentionally* removed the library confirms with
+      // confirmDelete = `delete <N> books`, restating the count.
+      const existingCount = await prisma.mediaItem.count({ where: { libraryRootId: rootId } });
+      const guardPercent = deleteGuardPercent();
+      const confirm = scanOptions.confirmDelete === `delete ${stale.length} books`;
+      const missingPercent = existingCount === 0 ? 0 : Math.floor((stale.length / existingCount) * 100);
+      const refuseDeletion =
+        stale.length > 0 &&
+        !confirm &&
+        (audioFiles.length === 0 || missingPercent >= guardPercent);
+      let refusalMessage: string | undefined;
+      if (refuseDeletion) {
+        refusalMessage =
+          `Reconciliation refused: the walk found ${audioFiles.length} file(s), ` +
+          `${stale.length} of ${existingCount} book(s) are missing (>= ${guardPercent}%). ` +
+          `Nothing was deleted. Re-run with confirmDelete "delete ${stale.length} books" to remove them anyway.`;
+        console.warn(`[scanner] ${refusalMessage} (root ${rootId})`);
+      } else if (stale.length > 0) {
         const staleIds = stale.map((entry) => entry.id);
         // Only tables that actually reference MediaItem need clearing; the rest
         // cascade on their own.
@@ -469,6 +498,15 @@ export function createScanManager(prisma: PrismaClient, options: ScanManagerOpti
       }
 
       const completedAt = new Date();
+      if (refusalMessage) {
+        progress.set(rootId, { status: "incomplete", filesFound: audioFiles.length, lastScanAt: completedAt, message: refusalMessage });
+        await prisma.scanState.upsert({
+          where: { libraryRootId: rootId },
+          create: { libraryRootId: rootId, status: "incomplete", filesFound: audioFiles.length, lastScanAt: completedAt, message: refusalMessage },
+          update: { status: "incomplete", filesFound: audioFiles.length, lastScanAt: completedAt, message: refusalMessage },
+        });
+        return;
+      }
       progress.set(rootId, { status: "complete", filesFound: audioFiles.length, lastScanAt: completedAt });
       await prisma.scanState.upsert({
         where: { libraryRootId: rootId },
