@@ -102,6 +102,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     now: options.now,
   });
   const authEnabled = auth.enabled;
+  // Fail closed at boot: an unauthenticated production deployment is open to
+  // anyone who can reach the port. Household auth (APP_PASSWORD) is mandatory
+  // outside of tests, and demo mode always required it.
+  if (process.env.NODE_ENV === "production" && !authEnabled) {
+    throw new Error("APP_PASSWORD must be set in production");
+  }
   if (isDemoMode(accountExperience) && !authEnabled) {
     throw new Error("APP_PASSWORD must be configured when ACCOUNT_EXPERIENCE=demo");
   }
