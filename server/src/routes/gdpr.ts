@@ -52,11 +52,21 @@ export async function registerGdprRoutes(
     if (name !== undefined && (!name || !name.trim())) return fail(reply, 400, "profile_name_required");
     const existing = name !== undefined ? await prisma.profile.findUnique({ where: { name: name.trim() } }) : null;
     if (existing && existing.id !== profileId) return fail(reply, 409, "profile_name_taken");
-    const profile = await prisma.profile.update({
-      where: { id: profileId },
-      data: { name: name !== undefined ? name.trim() : undefined, color: color !== undefined ? (color.trim() || null) : undefined },
-      select: { id: true, name: true, color: true },
-    });
+    let profile;
+    try {
+      profile = await prisma.profile.update({
+        where: { id: profileId },
+        data: { name: name !== undefined ? name.trim() : undefined, color: color !== undefined ? (color.trim() || null) : undefined },
+        select: { id: true, name: true, color: true },
+      });
+    } catch (error) {
+      // The check above races with concurrent updates; the unique constraint
+      // is the real arbiter.
+      if (typeof error === "object" && error !== null && "code" in error && (error as { code: unknown }).code === "P2002") {
+        return fail(reply, 409, "profile_name_taken");
+      }
+      throw error;
+    }
     return reply.send(profile);
   });
 

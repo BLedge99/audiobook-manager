@@ -105,7 +105,6 @@ export async function registerDiscoverRoutes(
       querystring: {
         type: "object",
         properties: {
-          limit: { type: "integer", minimum: 1, maximum: 50 },
           page: { type: "integer", minimum: 1, maximum: 100 },
           pageSize: { type: "integer", minimum: 1, maximum: 20 },
         },

@@ -97,8 +97,10 @@ export async function registerMediaRoutes(
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/cover", async (request, reply) => {
+    const mediaId = parseIdParam(request.params.id);
+    if (mediaId === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({
-      where: { id: parseIdParam(request.params.id) ?? -1 },
+      where: { id: mediaId },
       include: { libraryRoot: true },
     });
     if (!item?.coverImagePath) return fail(reply, 404, "cover_not_found");
@@ -125,13 +127,19 @@ export async function registerMediaRoutes(
     // open stream here opened an fd that a 304 response never consumed.
     return sendConditional(request, reply, undefined, {
       match,
-      produce: () => createReadStream(item.coverImagePath as string),
+      produce: () => {
+        const stream = createReadStream(item.coverImagePath as string);
+        stream.on("error", () => reply.raw.destroy());
+        return stream;
+      },
     });
   });
 
   app.get<{ Params: { id: string } }>("/api/audiobooks/:id/stream", async (request, reply) => {
+    const mediaId = parseIdParam(request.params.id);
+    if (mediaId === null) return fail(reply, 400, "invalid_id");
     const item = await prisma.mediaItem.findUnique({
-      where: { id: parseIdParam(request.params.id) ?? -1 },
+      where: { id: mediaId },
       include: { libraryRoot: true },
     });
     if (!item) return fail(reply, 404, "audiobook_not_found");
@@ -188,9 +196,16 @@ async function streamAudioFile(filePath: string, range: string | undefined, repl
   // Private, hour-long cache: it is the household's own media, and repeated
   // range requests (seeking) should not revalidate every hit.
   reply.header("Accept-Ranges", "bytes").type(audioContentType(filePath)).header("cache-control", "private, max-age=3600");
+  // If the file vanishes or becomes unreadable between stat() and open(), the
+  // stream errors asynchronously — destroy the response instead of leaving an
+  // unhandled stream error behind.
+  const sendStream = (stream: ReturnType<typeof createReadStream>) => {
+    stream.on("error", () => reply.raw.destroy());
+    return reply.send(stream);
+  };
   if (!range) {
     reply.header("Content-Length", details.size);
-    return reply.send(createReadStream(filePath));
+    return sendStream(createReadStream(filePath));
   }
 
   const match = /^bytes=(\d*)-(\d*)$/.exec(range);
@@ -202,5 +217,5 @@ async function streamAudioFile(filePath: string, range: string | undefined, repl
   }
   const boundedEnd = Math.min(end, details.size - 1);
   reply.code(206).headers({ "Content-Range": `bytes ${start}-${boundedEnd}/${details.size}`, "Content-Length": boundedEnd - start + 1 });
-  return reply.send(createReadStream(filePath, { start, end: boundedEnd }));
+  return sendStream(createReadStream(filePath, { start, end: boundedEnd }));
 }

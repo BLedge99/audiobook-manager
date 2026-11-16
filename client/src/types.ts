@@ -93,7 +93,8 @@ export interface Audiobook {
 
 export interface LibraryRoot {
   id: number;
-  path: string;
+  /** Server never sends absolute paths on the family API (operator data lives on /api/admin/*). */
+  path?: string;
   label?: string;
   scanState?: { status: string; filesFound: number; message?: string };
 }

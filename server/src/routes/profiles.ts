@@ -11,6 +11,7 @@ import { blockedGenreIds } from "../age/blocklist";
 import { canProfileSeeBook } from "../age/policy";
 import { isDemoMode, type AccountExperience } from "../auth/demo-policy";
 import { publicBookPayload } from "../book-payload";
+import { eraseProfilePersonalData } from "../gdpr/personal-data";
 
 export interface ProfilesRouteDeps {
   prisma: PrismaClient;
@@ -48,9 +49,11 @@ export async function registerProfilesRoutes(
       body: {
         type: "object",
         properties: {
-          name: { type: "string" },
-          color: { type: "string" },
+          name: { type: "string", minLength: 1, maxLength: 80 },
+          color: { type: "string", maxLength: 40 },
         },
+        required: ["name"],
+        additionalProperties: false,
       },
     },
   }, async (request, reply) => {
@@ -82,7 +85,13 @@ export async function registerProfilesRoutes(
   }, async (request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     if (authEnabled && request.auth?.role !== "admin") return fail(reply, 403, "forbidden");
-    await prisma.profile.delete({ where: { id: parseIdParam(request.params.id) ?? -1 } });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return fail(reply, 400, "invalid_id");
+    // Declarative erasure (sessions, devices, favourites, history, ...), same
+    // table as self-service GDPR deletion — one path, so they cannot drift.
+    const exists = await prisma.profile.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) return fail(reply, 404, "not_found");
+    await eraseProfilePersonalData(prisma, id);
     return reply.code(204).send();
   });
 

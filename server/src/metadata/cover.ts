@@ -162,25 +162,36 @@ function isRedirect(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
-function sniffImageType(buffer: Buffer): "jpeg" | "png" | "webp" | null {
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+function sniffImageType(buffer: Buffer | Uint8Array): "jpeg" | "png" | "webp" | null {
+  const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
     return "jpeg";
   }
   if (
-    buffer.length >= 8 &&
-    buffer.readUInt32BE(0) === 0x89504e47 &&
-    buffer.readUInt32BE(4) === 0x0d0a1a0a
+    buf.length >= 8 &&
+    buf.readUInt32BE(0) === 0x89504e47 &&
+    buf.readUInt32BE(4) === 0x0d0a1a0a
   ) {
     return "png";
   }
   if (
-    buffer.length >= 12 &&
-    buffer.toString("latin1", 0, 4) === "RIFF" &&
-    buffer.toString("latin1", 8, 12) === "WEBP"
+    buf.length >= 12 &&
+    buf.toString("latin1", 0, 4) === "RIFF" &&
+    buf.toString("latin1", 8, 12) === "WEBP"
   ) {
     return "webp";
   }
   return null;
+}
+
+/**
+ * Map image bytes to a file extension from a fixed whitelist. Used to name
+ * stored covers — never trust the format string from a tag (it can be a
+ * path/MIME-type mix, or name an extension the bytes do not match).
+ */
+export function imageExtensionFromBytes(buffer: Buffer | Uint8Array): "jpg" | "png" | "webp" | null {
+  const type = sniffImageType(buffer);
+  return type === "jpeg" ? "jpg" : type === "png" ? "png" : type === "webp" ? "webp" : null;
 }
 
 /**

@@ -13,6 +13,7 @@ import { AGE_BANDS, isAgeBand } from "../age/bands";
 import { ageContextFor } from "../age/facts";
 import { blockedGenreIds } from "../age/blocklist";
 import { visibilityWhere } from "../age/visibility";
+import { eraseProfilePersonalData } from "../gdpr/personal-data";
 import { hashPassword, validatePassword } from "../auth/password";
 import { resetProfilePasswordCore } from "../auth/profile-admin";
 import { AuthFailure } from "../auth/service";
@@ -169,7 +170,8 @@ export function registerChildAccountRoutes(
       if (!Number.isInteger(id) || id < 1) return fail(reply, 400, "invalid_id");
       const child = await prisma.profile.findUnique({ where: { id }, select: { id: true, role: true } });
       if (!child || child.role !== "child") return fail(reply, 404, "not_found");
-      await prisma.profile.delete({ where: { id } });
+      // Declarative erasure, same table as self-service GDPR deletion.
+      await eraseProfilePersonalData(prisma, id);
       return reply.code(204).send();
     },
   );

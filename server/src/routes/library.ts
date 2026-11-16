@@ -246,9 +246,12 @@ export async function registerLibraryRoutes(
   app.get("/api/scan/status", async (_request, reply) => {
     if (isDemoMode(accountExperience)) return fail(reply, 404, "not_found");
     const roots = await prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { id: "asc" } });
+    // The path never leaves the server: the client renders the label (or a
+    // generic name) only — absolute paths are operator data, and this is an
+    // admin-gated route.
     return roots.map((root) => ({
       rootId: root.id,
-      path: root.path,
+      label: root.label,
       status: scanner.getProgress(root.id) || root.scanState || { status: "idle", filesFound: 0 },
     }));
   });
@@ -259,7 +262,12 @@ export async function registerLibraryRoutes(
     // state changes during a scan even when no book does, so sharing one tag
     // with `/api/audiobooks` would hide a running scan.
     const roots = await prisma.libraryRoot.findMany({ include: { scanState: true }, orderBy: { createdAt: "asc" } });
-    return sendConditional(request, reply, roots);
+    // Paths are operator data; the client renders labels only.
+    return sendConditional(
+      request,
+      reply,
+      roots.map((root) => ({ id: root.id, label: root.label, scanState: root.scanState })),
+    );
   });
 
   app.post<{ Body: { path?: string; label?: string } }>("/api/library-roots", {

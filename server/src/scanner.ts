@@ -11,6 +11,7 @@ import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./sc
 import { addBookToFollowingProfiles } from "./library-membership";
 import { stripTrackNumberPrefix, parseTrackTitleOverrides, resolveTrackTitle } from "./metadata/chapters";
 import { resolveLocalNarrator } from "./narrator";
+import { imageExtensionFromBytes } from "./metadata/cover";
 
 type AudioFile = {
   filePath: string;
@@ -190,8 +191,13 @@ async function readAudioFile(filePath: string): Promise<AudioFile> {
 
 async function saveCover(file: AudioFile, coverDirectory: string): Promise<string | undefined> {
   if (!file.cover) return undefined;
+  // The extension comes from the image bytes, not the tag's format string: a
+  // hostile or corrupt file can put any string there (e.g. "image/html"), and
+  // the stored file is served back by the cover route.
+  const extension = imageExtensionFromBytes(file.cover.data);
+  if (!extension) return undefined; // not a recognisable JPEG/PNG/WEBP — skip the cover
   await mkdir(coverDirectory, { recursive: true });
-  const filename = `${createHash("sha1").update(file.filePath).digest("hex")}.${file.cover.format.split("/").pop() || "jpg"}`;
+  const filename = `${createHash("sha1").update(file.filePath).digest("hex")}.${extension}`;
   const coverPath = path.join(coverDirectory, filename);
   await new Promise<void>((resolve, reject) => {
     const stream = createWriteStream(coverPath);

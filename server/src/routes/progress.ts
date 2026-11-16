@@ -33,7 +33,9 @@ export async function registerProgressRoutes(
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
-    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return fail(reply, 400, "invalid_id");
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
     if (request.auth?.role === "child" && !(await visibleForAge(prisma, request.auth.role, profileId, item.id))) {
       return fail(reply, 404, "audiobook_not_found");
@@ -63,7 +65,9 @@ export async function registerProgressRoutes(
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
-    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return fail(reply, 400, "invalid_id");
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
     if (request.auth?.role === "child" && !(await visibleForAge(prisma, request.auth.role, profileId, item.id))) {
       return fail(reply, 404, "audiobook_not_found");
@@ -106,12 +110,15 @@ export async function registerProgressRoutes(
           startedAt: { type: "string" },
           endedAt: { type: "string" },
         },
+        additionalProperties: false,
       },
     },
   }, async (request, reply) => {
     const profileId = requireProfileId(request);
     if (profileId === null) return fail(reply, 400, "profile_required");
-    const item = await prisma.mediaItem.findUnique({ where: { id: parseIdParam(request.params.id) ?? -1 } });
+    const id = parseIdParam(request.params.id);
+    if (id === null) return fail(reply, 400, "invalid_id");
+    const item = await prisma.mediaItem.findUnique({ where: { id } });
     if (!item) return fail(reply, 404, "audiobook_not_found");
     if (request.auth?.role === "child" && !(await visibleForAge(prisma, request.auth.role, profileId, item.id))) {
       return fail(reply, 404, "audiobook_not_found");
@@ -127,6 +134,18 @@ export async function registerProgressRoutes(
     const safeFrom = Math.min(Math.max(fromPosition, 0), safeTo);
     const speed = Number(request.body?.speed);
     const safeSpeed = Number.isFinite(speed) && speed > 0 ? Math.min(speed, 10) : 1;
+    // Dates, when given, must parse — `new Date("garbage")` would otherwise
+    // reach Prisma as an Invalid Date and 500 the request.
+    const parseDate = (raw: string | undefined): Date | "invalid" => {
+      if (raw === undefined) return new Date();
+      const parsed = new Date(raw);
+      return Number.isNaN(parsed.getTime()) ? "invalid" : parsed;
+    };
+    const startedAt = parseDate(request.body?.startedAt);
+    const endedAt = parseDate(request.body?.endedAt);
+    if (startedAt === "invalid" || endedAt === "invalid") {
+      return fail(reply, 400, "request_invalid");
+    }
     const session = await prisma.playSession.create({
       data: {
         profileId,
@@ -134,8 +153,8 @@ export async function registerProgressRoutes(
         fromPosition: safeFrom,
         toPosition: safeTo,
         speed: safeSpeed,
-        startedAt: request.body?.startedAt ? new Date(request.body.startedAt) : new Date(),
-        endedAt: request.body?.endedAt ? new Date(request.body.endedAt) : new Date(),
+        startedAt,
+        endedAt,
       },
     });
     const { profileId: _profileId, ...publicSession } = session;
