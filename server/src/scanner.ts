@@ -6,6 +6,7 @@ import ffmpeg from "fluent-ffmpeg";
 import { execFile } from "node:child_process";
 import * as musicMetadata from "music-metadata";
 import { PrismaClient } from "@prisma/client";
+import type { PrismaLike } from "./prisma-like";
 import { canScannerWrite } from "./metadata/precedence";
 import { groupFiles, audiobookTitle, titleFromFilename, isAudioFile } from "./scan-utils";
 import { addBookToFollowingProfiles } from "./library-membership";
@@ -219,7 +220,7 @@ async function coverFileExists(filePath: string): Promise<boolean> {
 }
 
 async function syncContributors(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   mediaItemId: number,
   author: string | undefined,
   narrator: string | undefined,
@@ -275,7 +276,16 @@ async function syncContributors(
   }
 }
 
-export function createScanManager(prisma: PrismaClient) {
+export interface ScanManagerOptions {
+  /**
+   * Test seam: throw after the track rows are deleted but before they are
+   * recreated, inside the same transaction. Verifies the rollback path —
+   * the book must keep its previous tracks, never zero.
+   */
+  crashAfterTrackDelete?: boolean;
+}
+
+export function createScanManager(prisma: PrismaClient, options: ScanManagerOptions = {}) {
   const progress = new Map<number, ScanProgress>();
   const activeScans = new Map<number, Promise<void>>();
 
@@ -358,64 +368,60 @@ export function createScanManager(prisma: PrismaClient) {
         if (scannerCanWrite("coverImagePath") || staleCover) {
           embedded.coverImagePath = staleCover ? null : (scannerCanWrite("coverImagePath") ? coverImagePath : existingRow?.coverImagePath ?? coverImagePath);
         }
-        const item = await prisma.mediaItem.upsert({
-          where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
-          create: {
-            libraryRootId: rootId,
-            title: audiobookTitle(group),
-            author: primary.author,
-            narrator: primary.narrator,
-            filePath: primary.filePath,
-            fileFormat: primary.format,
-            duration: group.reduce((total, file) => total + file.duration, 0),
-            coverImagePath,
-            releaseDate: primary.releaseDate,
-            genre: primary.genre,
-            chapters: group.length === 1 && primary.chapters ? JSON.stringify(primary.chapters) : null,
-            metadataSource: "embedded",
-          },
-          update: {
-            ...embedded,
-            fileFormat: primary.format,
-            duration: group.reduce((total, file) => total + file.duration, 0),
-            chapters: group.length === 1 && primary.chapters ? JSON.stringify(primary.chapters) : null,
-          },
-        });
+        // The track delete/recreate and the book upsert are one unit of
+        // work: a crash here must never leave a book whose tracks are gone
+        // (or half-written). Slow I/O (tag parsing, ffprobe, cover writes)
+        // happened before this point, outside the transaction.
+        const item = await prisma.$transaction(async (tx) => {
+          const item = await tx.mediaItem.upsert({
+            where: { libraryRootId_filePath: { libraryRootId: rootId, filePath: primary.filePath } },
+            create: {
+              libraryRootId: rootId,
+              title: audiobookTitle(group),
+              author: primary.author,
+              narrator: primary.narrator,
+              filePath: primary.filePath,
+              fileFormat: primary.format,
+              duration: group.reduce((total, file) => total + file.duration, 0),
+              coverImagePath,
+              releaseDate: primary.releaseDate,
+              genre: primary.genre,
+              chapters: group.length === 1 && primary.chapters ? JSON.stringify(primary.chapters) : null,
+              metadataSource: "embedded",
+            },
+            update: {
+              ...embedded,
+              fileFormat: primary.format,
+              duration: group.reduce((total, file) => total + file.duration, 0),
+              chapters: group.length === 1 && primary.chapters ? JSON.stringify(primary.chapters) : null,
+            },
+          });
 
-        await syncContributors(prisma, item.id, primary.author, primary.narrator, primary.narrators);
+          await syncContributors(tx, item.id, primary.author, primary.narrator, primary.narrators);
 
-        // Spec 27: a newly scanned book joins the library of every profile
-        // that follows the server library. A profile the household curated on
-        // purpose does not get it -- that is the whole point of the feature.
-        await addBookToFollowingProfiles(prisma, item.id);
+          // Spec 27: a newly scanned book joins the library of every profile
+          // that follows the server library. A profile the household curated on
+          // purpose does not get it -- that is the whole point of the feature.
+          await addBookToFollowingProfiles(tx, item.id);
 
-        await prisma.track.deleteMany({ where: { mediaItemId: item.id } });
-        // Always create the track rows, **even for a book that is one file**.
-        //
-        // A single-file book (an M4B) used to get no Track rows at all: the
-        // book was its own file, and the client knew to stream it from
-        // /api/audiobooks/:id/stream. But everything that *stores* audio is per
-        // track -- the download, the replica, "is this book on the device?" --
-        // so a single-file book could be streamed and never downloaded. That
-        // is not a corner case: one file is the normal shape of a commercial
-        // audiobook.
-        //
-        // One row per file makes the list of playable files uniform. The
-        // chapter list is unaffected, because only a single-file book has
-        // embedded chapters and the client prefers those over the track.
-        {
-          // Spec 21: a hand-set track title outranks the embedded tag. Read
-          // before the delete so the override survives the recreation -- this
-          // is the only place a user's chapter name can be resurrected, since
-          // the rows it lived on were just dropped.
+          // Spec 21 overrides are read inside the transaction, before the
+          // delete, so they cannot observe the missing rows.
           const trackTitleOverrides = parseTrackTitleOverrides(
-            await prisma.fieldOverride.findMany({
+            await tx.fieldOverride.findMany({
               where: { mediaItemId: item.id, field: { startsWith: "trackTitle:" } },
               select: { field: true, value: true },
             }),
           );
 
-          await prisma.track.createMany({
+          await tx.track.deleteMany({ where: { mediaItemId: item.id } });
+          if (options.crashAfterTrackDelete) {
+            throw new Error("test crash after track delete");
+          }
+          // Always create the track rows, **even for a book that is one
+          // file**. One row per file makes the list of playable files uniform:
+          // downloads, the replica and "is this book on the device?" all key
+          // off Track rows, so a single-file M4B needs one too.
+          await tx.track.createMany({
             data: group.map((file, index) => {
               const trackNumber = index + 1;
               return {
@@ -428,7 +434,8 @@ export function createScanManager(prisma: PrismaClient) {
               };
             }),
           });
-        }
+          return item;
+        });
       }
 
       const currentItemPaths = groupFiles(audioFiles).map((group) => group[0].filePath);

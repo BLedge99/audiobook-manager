@@ -13,6 +13,22 @@ const ADMIN_PORT = parseInt(process.env.ADMIN_PORT || "3100", 10);
 
 async function main() {
   const prisma = new PrismaClient();
+  // Spec 43 phase 1.2: WAL persists per database file and gives single-writer
+  // SQLite real reader/writer concurrency while a scan holds a transaction.
+  // Postgres is unaffected. Best effort — the server comes up either way.
+  // (Prisma's SQLite engine has no per-connection busy_timeout knob; short
+  // transactions are the primary control, WAL is the file-level win.)
+  if ((process.env.DATABASE_URL ?? "").startsWith("file:")) {
+    try {
+      const { default: Database } = await import("better-sqlite3");
+      const db = new Database((process.env.DATABASE_URL ?? "").replace(/^file:/, "").split("?")[0]);
+      db.pragma("journal_mode = WAL");
+      db.pragma("busy_timeout = 5000");
+      db.close();
+    } catch (err) {
+      console.warn("[server] could not set SQLite pragmas (continuing):", err);
+    }
+  }
   const scanner = createScanManager(prisma);
   const storage = supabaseStorageConfigFromEnv();
   const storageSync = storage ? createSupabaseLibrarySync({

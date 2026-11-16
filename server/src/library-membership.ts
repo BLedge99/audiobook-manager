@@ -1,5 +1,5 @@
-/**
- * Spec 27 — per-profile library membership.
+﻿/**
+ * Spec 27 â€” per-profile library membership.
  *
  * The server holds every book it has ever scanned. A **profile** holds a
  * subset of those, and this module is the only place that knows how the two
@@ -17,7 +17,7 @@
  * has the app, while a profile created later is a fresh start.
  *
  * **Removing a book does not clear the flag.** "Archie should not have that
- * one book" is not "Archie should stop getting new books" — those are two
+ * one book" is not "Archie should stop getting new books" â€” those are two
  * different requests, and conflating them would silently change what the
  * household means.
  *
@@ -27,13 +27,13 @@
  * library root, and two profiles can hold the same book. Only the download to
  * a device is per device, and that was already true.
  */
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaLike } from "./prisma-like";
 
 /**
  * The rows that make up a profile's library.
  *
  * Used as the `where` clause on the library query, so a profile with no
- * membership rows genuinely sees nothing — the empty state is real, not a
+ * membership rows genuinely sees nothing â€” the empty state is real, not a
  * special case.
  */
 export function libraryEntriesFor(profileId: number) {
@@ -49,7 +49,7 @@ export function libraryEntriesFor(profileId: number) {
  * on a catch.
  */
 export async function addBookToProfile(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   profileId: number,
   mediaItemId: number,
 ): Promise<boolean> {
@@ -73,7 +73,7 @@ export async function addBookToProfile(
  * appears in nobody's shelf.
  */
 export async function removeBookFromProfile(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   profileId: number,
   mediaItemId: number,
 ): Promise<boolean> {
@@ -92,7 +92,7 @@ export async function removeBookFromProfile(
  * Used by the migration (as SQL) and by the profile seeding, so the two can
  * never disagree about what "every book" means.
  */
-export async function giveProfileEveryBook(prisma: PrismaClient, profileId: number): Promise<number> {
+export async function giveProfileEveryBook(prisma: PrismaLike, profileId: number): Promise<number> {
   const books = await prisma.mediaItem.findMany({ select: { id: true } });
   if (!books.length) return 0;
   const existing = await prisma.profileLibraryEntry.findMany({
@@ -116,7 +116,7 @@ export async function giveProfileEveryBook(prisma: PrismaClient, profileId: numb
  * curated it on purpose.
  */
 export async function addBookToFollowingProfiles(
-  prisma: PrismaClient,
+  prisma: PrismaLike,
   mediaItemId: number,
 ): Promise<number> {
   const followers = await prisma.profile.findMany({

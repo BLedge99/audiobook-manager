@@ -16,6 +16,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
+import Database from "better-sqlite3";
 
 const serverRoot = process.cwd();
 const sqliteSchema = path.join(serverRoot, "prisma", "sqlite", "schema.prisma");
@@ -58,6 +59,18 @@ export function setup(): void {
   // against a schema production would never create.
   prisma(`generate --schema "${sqliteSchema}"`, templateUrl);
   prisma(`migrate deploy --schema "${sqliteSchema}"`, templateUrl);
+
+  // WAL mode persists in the database file and is copied into every test
+  // database, giving readers/writers the concurrent access they need while
+  // one transaction holds the write lock (the scanner-in-transaction path,
+  // spec 43 phase 1.2). busy_timeout is per-connection and is applied here
+  // for this handle so `PRAGMA busy_timeout` answers 5000 on direct SQLite
+  // connections; Prisma's SQLite engine exposes no per-connection knob,
+  // so the transaction staying short remains the primary control.
+  const sqlite = new Database(TEST_DATABASE_TEMPLATE);
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("busy_timeout = 5000");
+  sqlite.close();
 }
 
 export function teardown(): void {

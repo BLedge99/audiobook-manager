@@ -255,3 +255,44 @@ describe("scanner: a book with corrupt embedded chapter data", () => {
     }
   });
 });
+
+describe("scanner transaction safety (spec 43 phase 1.2)", () => {
+  it.skipIf(!HAS_FIXTURES)("a crash between track delete and recreate keeps the previous tracks", async () => {
+    const crashRoot = path.join(db.dir, "crash-rollback");
+    const bookFolder = path.join(crashRoot, "CrashBook");
+    mkdirSync(bookFolder, { recursive: true });
+    const source = sampleLibrary()!;
+    const mp3s = readdirSync(source).filter((file) => file.toLowerCase().endsWith(".mp3"));
+    // A single-file copy keeps the track count deterministic.
+    cpSync(path.join(source, mp3s[0]), path.join(bookFolder, mp3s[0]));
+
+    const root = await prisma.libraryRoot.create({ data: { path: crashRoot, label: "Crash" } });
+
+    // Baseline: a healthy scan establishes the track rows to protect.
+    await createScanManager(prisma).scanRoot(root.id);
+    const before = await prisma.track.findMany({
+      where: { mediaItem: { libraryRootId: root.id } },
+      orderBy: { trackNumber: "asc" },
+    });
+    expect(before.length).toBeGreaterThan(0);
+
+    // Sabotaged scan: dies after the delete, before the recreate. The
+    // interactive transaction must roll the whole thing back.
+    await expect(
+      createScanManager(prisma, { crashAfterTrackDelete: true }).scanRoot(root.id),
+    ).rejects.toThrow("test crash after track delete");
+
+    const after = await prisma.track.findMany({
+      where: { mediaItem: { libraryRootId: root.id } },
+      orderBy: { trackNumber: "asc" },
+    });
+    expect(after.length).toBe(before.length);
+    expect(after.map((track) => track.filePath)).toEqual(before.map((track) => track.filePath));
+    // And the book itself survived, with the same identity.
+    const item = await prisma.mediaItem.findFirstOrThrow({ where: { libraryRootId: root.id } });
+    expect(item.id).toBe(before[0].mediaItemId);
+
+    // A clean scan of the same root completes normally afterwards.
+    await expect(createScanManager(prisma).scanRoot(root.id)).resolves.toBeUndefined();
+  });
+});
