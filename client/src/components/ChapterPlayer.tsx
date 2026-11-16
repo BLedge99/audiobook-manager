@@ -926,7 +926,7 @@ export function ChapterPlayer({
           aria-label={copy.player.speed}
           value={speed}
           onChange={(event) => changeSpeed(Number(event.target.value))}
-          className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[0.8125rem] font-bold text-ink"
+          className="rounded-[var(--r-pod-sm)] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[0.8125rem] font-bold text-ink"
         >
           {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((rate) => <option key={rate} value={rate}>{rate}x</option>)}
         </select>
@@ -934,7 +934,7 @@ export function ChapterPlayer({
           aria-label={copy.player.sleepTimer}
           value={sleepMinutes ?? "off"}
           onChange={(event) => setSleepTimer(event.target.value === "off" ? null : Number(event.target.value))}
-          className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[0.8125rem] font-bold text-ink"
+          className="rounded-[var(--r-pod-sm)] border-2 border-ink/30 bg-surface px-2.5 py-1.5 text-[0.8125rem] font-bold text-ink"
         >
           <option value="off">{copy.player.sleepOff}</option>
           <option value="15">{copy.player.sleepMinutes(15)}</option>

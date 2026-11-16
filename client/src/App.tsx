@@ -68,7 +68,7 @@ import { DownloadButton } from "./components/DownloadButton";
 import { useBrowse, useDiscover } from "./useBrowse";
 import { useLibrary } from "./useLibrary";
 import { copy, plural } from "./copy";
-import { Specks, ThemeToggle, Notice, MachineMark, MachineHead, StatusLegend, Btn, IconBtn, EmptyPanel, cn } from "./ui/primitives";
+import { Specks, ThemeToggle, Notice, MachineMark, MachineHead, PageHead, StatusLegend, Btn, IconBtn, EmptyPanel, cn } from "./ui/primitives";
 import type { Audiobook } from "./types";
 
 type Tab = "library" | "browse" | "discover" | "favourites" | "server-library";
@@ -1065,10 +1065,7 @@ function App() {
 
         {shownTab === "browse" && (
           <>
-            <section className="mb-7">
-              <h2 className="text-[1.875rem] leading-[1.05] sm:text-4xl">{copy.browse.heading}</h2>
-              <p className="mt-2 max-w-xl text-ink2">{copy.browse.intro}</p>
-            </section>
+            <PageHead title={copy.browse.heading}>{copy.browse.intro}</PageHead>
 
             <SearchBar value={search} onChange={onSearchChange} resultCount={filteredBooks.length} />
             <FilterBar books={libraryBooks} filters={filters} onChange={onFiltersChange} genres={browse.genres} />
@@ -1124,10 +1121,9 @@ function App() {
 
         {shownTab === "favourites" && (
           <section>
-            <h2 className="text-[1.875rem] leading-[1.05] sm:text-4xl">{copy.favourites.heading}</h2>
-            <p className="mb-6 mt-2 max-w-xl text-ink2">
+            <PageHead title={copy.favourites.heading}>
               {favouriteIds.size === 0 ? copy.favourites.empty : copy.favourites.count(favouriteIds.size)}
-            </p>
+            </PageHead>
             <AudiobookGrid
               books={favouriteBooks}
               emptyMessage={copy.library.noFavourites}

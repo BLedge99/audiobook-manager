@@ -96,13 +96,24 @@ export function Backdrop({ onClose, label }: { onClose: () => void; label?: stri
   );
 }
 
-export function CloseButton({ onClose, className, label }: { onClose: () => void; className?: string; label?: string }) {
+export function CloseButton({
+  onClose,
+  className,
+  label,
+}: {
+  onClose: () => void;
+  className?: string;
+  label?: string;
+}) {
   return (
     <button
       type="button"
       onClick={onClose}
       aria-label={label ?? copy.buyLinks.close}
-      className={cn("grid size-9 place-items-center rounded-full text-ink3 hover:bg-sunk", className)}
+      className={cn(
+        "grid size-9 place-items-center rounded-full text-ink3 hover:bg-sunk",
+        className,
+      )}
     >
       <X size={18} aria-hidden="true" />
     </button>
@@ -421,6 +432,16 @@ export function ThemeToggle() {
 }
 
 /* --------------------------------------------------------------- headings */
+
+/** The page title on each top-level screen — never two different sizes. */
+export function PageHead({ title, children }: { title: ReactNode; children?: ReactNode }) {
+  return (
+    <section className="mb-7">
+      <h2 className="text-[1.875rem] leading-[1.05] sm:text-4xl">{title}</h2>
+      {children ? <p className="mt-2 max-w-xl text-ink2">{children}</p> : null}
+    </section>
+  );
+}
 
 /**
  * Section heading.

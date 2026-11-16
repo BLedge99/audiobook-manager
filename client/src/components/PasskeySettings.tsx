@@ -103,7 +103,7 @@ export function PasskeySettings() {
           {passkeys.map((passkey) => (
             <li
               key={passkey.id}
-              className="flex items-center justify-between gap-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/20 px-3 py-2"
+              className="flex items-center justify-between gap-3 rounded-[var(--r-pod-sm)] border-2 border-ink/20 px-3 py-2"
             >
               <span className="min-w-0">
                 <span className="block truncate text-[0.875rem] font-bold text-ink">

@@ -84,7 +84,7 @@ function MetadataEditor({ book, canLookup, onUpdated }: { book: Audiobook; canLo
               {candidates.map((candidate) => (
                 <li
                   key={candidate.id}
-                  className="flex items-center justify-between gap-3 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/20 bg-sunk px-3 py-2 text-[0.84375rem]"
+                  className="flex items-center justify-between gap-3 rounded-[var(--r-pod-sm)] border-2 border-ink/20 bg-sunk px-3 py-2 text-[0.84375rem]"
                 >
                   <span className="min-w-0 truncate text-ink2">
                     {candidate.title} {candidate.author && <span className="text-ink3">— {candidate.author}</span>}

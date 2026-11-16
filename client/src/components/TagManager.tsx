@@ -45,7 +45,7 @@ export function TagManager({ tags, onChanged }: { tags: TagSummary[]; onChanged:
   };
 
   const selectClass =
-    "min-w-0 rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink/30 bg-surface px-2.5 py-2 text-[0.875rem] font-bold text-ink";
+    "min-w-0 rounded-[var(--r-pod-sm)] border-2 border-ink/30 bg-surface px-2.5 py-2 text-[0.875rem] font-bold text-ink";
 
   return (
     <section aria-labelledby="tag-manager" className="panel p-4 sm:p-5">

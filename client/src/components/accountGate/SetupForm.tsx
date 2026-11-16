@@ -25,7 +25,7 @@ export function SetupForm({ busy, onSetup, onBack }: SetupFormProps) {
 
   return (
     <form onSubmit={submit} className="mt-5 grid gap-3">
-      <p className="rounded-[14px_11px_14px_11px/11px_14px_11px_14px] border-2 border-ink bg-tan/25 px-3 py-2 text-sm font-bold text-ink">
+      <p className="rounded-[var(--r-pod-sm)] border-2 border-ink bg-tan/25 px-3 py-2 text-sm font-bold text-ink">
         {copy.account.unclaimedHint}
       </p>
       <label htmlFor="claim-household" className="sr-only">
