@@ -4,8 +4,9 @@
  *
  * The steps must not drift apart: validate the new password against the
  * profile's own name, hash it, clear any lockout, revoke every session and
- * device credential. Passkeys survive deliberately — the profile can sign
- * back in with Windows Hello / a device Vault after a reset.
+ * device credential, and delete every WebAuthn credential. Spec 43 phase 2.3:
+ * a stolen passkey no longer survives a suspected-compromise reset — the
+ * legitimate owner re-registers from Settings afterwards.
  */
 import type { PrismaClient } from "@prisma/client";
 import { hashPassword, validatePassword } from "./password";
@@ -41,5 +42,7 @@ export async function resetProfilePasswordCore(
     where: { profileId: target.id, revokedAt: null },
     data: { revokedAt: now },
   });
+  // Spec 43 phase 2.3: a stolen passkey must not survive a compromise reset.
+  await prisma.webAuthnCredential.deleteMany({ where: { profileId: target.id } });
   return updated;
 }

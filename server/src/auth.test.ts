@@ -434,10 +434,20 @@ describe("lockout and reset", () => {
     expect((await login(profile, PASSWORD)).statusCode).toBe(200);
   });
 
-  it("admin reset changes the password and revokes every session", async () => {
+  it("admin reset changes the password and revokes every session and passkey", async () => {
     const profile = await createProfile();
     const oldToken = tokenOf(await login(profile));
     const admin = await createProfile("admin");
+    // A stolen passkey must not survive the reset (spec 43 phase 2.3).
+    await prisma.webAuthnCredential.create({
+      data: {
+        id: `cred-${profile.id}`,
+        profileId: profile.id,
+        credentialId: `cred-${profile.id}`,
+        publicKey: "client-data-key",
+        counter: 0,
+      },
+    });
 
     const reset = await app.inject({
       method: "POST",
@@ -446,6 +456,7 @@ describe("lockout and reset", () => {
       payload: { newPassword: "reset-password-9" },
     });
     expect(reset.statusCode).toBe(200);
+    expect(await prisma.webAuthnCredential.count({ where: { profileId: profile.id } })).toBe(0);
     expect((await login(profile, PASSWORD)).statusCode).toBe(401);
     expect((await login(profile, "reset-password-9")).statusCode).toBe(200);
 
