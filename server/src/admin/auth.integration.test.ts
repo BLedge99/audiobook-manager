@@ -232,4 +232,35 @@ describe("admin panel authentication", () => {
     await expect(executeReadOnlyQuery("sqlite", "DELETE FROM MediaItem")).rejects.toThrow();
     expect(await prisma.mediaItem.count()).toBe(before);
   });
+
+  it("never returns credential hashes or ceremony material in tables or free-form SQL", async () => {
+    const token = await auth.login("dedicated-admin-password", "192.0.2.19");
+    const cookies = { admin_panel_session: token! };
+
+    // The dropped credential tables are not browsable at all.
+    for (const table of ["AdminCredential", "DeviceCredential", "WebAuthnChallenge"]) {
+      const res = await adminApp.inject({ url: `/api/admin/db/tables/${table}`, cookies });
+      expect(res.statusCode).toBe(400);
+    }
+
+    // The session table is browsable for ops, but the hash never appears.
+    const session = await adminApp.inject({ url: "/api/admin/db/tables/Session?page=1&pageSize=1", cookies });
+    expect(session.statusCode).toBe(200);
+    expect(session.body).not.toMatch(/passwordHash|tokenHash|codeHash|stateHash|challenge/i);
+
+    // Same for profiles (passwordHash) and the admin session table.
+    const profile = await adminApp.inject({ url: "/api/admin/db/tables/Profile?page=1&pageSize=1", cookies });
+    expect(profile.statusCode).toBe(200);
+    expect(profile.body).not.toMatch(/passwordHash|tokenHash|codeHash|stateHash|challenge/i);
+    const adminSession = await adminApp.inject({ url: "/api/admin/db/tables/AdminSession?page=1&pageSize=1", cookies });
+    expect(adminSession.statusCode).toBe(200);
+    expect(adminSession.body).not.toMatch(/passwordHash|tokenHash|codeHash|stateHash|challenge/i);
+
+    // And the free-form console must not leak them either.
+    for (const sql of ["SELECT * FROM Session", "SELECT tokenHash FROM Session LIMIT 1", "SELECT passwordHash FROM Profile LIMIT 1", "SELECT challenge FROM WebAuthnChallenge"]) {
+      const res = await adminApp.inject({ method: "POST", url: "/api/admin/db/query", cookies, payload: { sql } });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toMatch(/passwordHash|tokenHash|codeHash|stateHash|challenge/i);
+    }
+  });
 });

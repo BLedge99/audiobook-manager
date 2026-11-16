@@ -7,12 +7,47 @@ export type SqliteConnection = InstanceType<typeof Database>;
 
 export const ADMIN_DB_TABLES = [
   "LibraryRoot", "MediaItem", "Track", "ScanState", "Profile", "Session",
-  "AdminCredential", "AdminSession", "ProfileLibraryEntry", "ListeningHistory",
+  "AdminSession", "ProfileLibraryEntry", "ListeningHistory",
   "PlaySession", "Favourite", "Tag", "MediaItemTag", "WishlistItem", "EnrichmentRun",
   "EnrichmentItem", "MetadataCandidate", "Contributor", "ContributorMediaItem",
   "Genre", "GenreMapping", "MediaItemGenre", "Series", "FieldOverride", "WebAuthnCredential",
-  "WebAuthnChallenge", "DeviceCredential",
 ] as const;
+
+/**
+ * Columns that never leave this console, on any provider — credential hashes
+ * and one-time ceremony material. Tables carrying them (Profile.passwordHash,
+ * Session/AdminSession.tokenHash) stay browsable for row inspection and
+ * relationships; these columns and their names do not.
+ */
+export const ADMIN_SECRET_COLUMNS = [
+  "passwordhash",
+  "tokenhash",
+  "codehash",
+  "statehash",
+  "challenge",
+] as const;
+
+/** Strip denied column names (case-insensitive) from a columns array. */
+export function stripSecretColumnNames(
+  columns: unknown[],
+  nameOf: (column: unknown) => string,
+): unknown[] {
+  return columns.filter((column) => {
+    const name = nameOf(column).toLowerCase();
+    return !(ADMIN_SECRET_COLUMNS as readonly string[]).includes(name);
+  });
+}
+
+/** Strip denied keys (case-insensitive) from a result row. */
+export function stripSecretColumns(row: unknown): unknown {
+  if (row === null || typeof row !== "object" || Array.isArray(row)) return row;
+  const out: Record<string, unknown> = {};
+  const denied = ADMIN_SECRET_COLUMNS as readonly string[];
+  for (const [key, value] of Object.entries(row as Record<string, unknown>)) {
+    if (!denied.includes(key.toLowerCase())) out[key] = value;
+  }
+  return out;
+}
 
 export type AdminDbTable = typeof ADMIN_DB_TABLES[number];
 
@@ -84,7 +119,7 @@ export async function executeReadOnlyQuery(
       own.pragma("query_only = ON");
       const query = own.prepare(statement);
       if (!query.reader) throw new Error("Only read-only statements are allowed.");
-      return query.all();
+      return query.all().map(stripSecretColumns);
     } finally {
       if (!shared) own.close();
     }
@@ -99,7 +134,7 @@ export async function executeReadOnlyQuery(
     try {
       const result = await client.query(statement);
       await client.query("COMMIT");
-      return result.rows;
+      return result.rows.map(stripSecretColumns);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

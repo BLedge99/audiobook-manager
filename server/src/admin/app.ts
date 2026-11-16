@@ -10,7 +10,7 @@ import { EnrichmentManager } from "../metadata/run";
 import type { ScanManager } from "../scanner";
 import { upsertLibraryRoot, deleteLibraryRoot } from "../library-roots";
 import { startScanWithEnrichment } from "../scanning";
-import { ADMIN_DB_TABLES, ADMIN_ROW_LIMIT, executeReadOnlyQuery, validateReadOnlySql, type AdminDbTable, type SqliteConnection } from "./read-only-sql";
+import { ADMIN_DB_TABLES, ADMIN_ROW_LIMIT, executeReadOnlyQuery, stripSecretColumnNames, stripSecretColumns, validateReadOnlySql, type AdminDbTable, type SqliteConnection } from "./read-only-sql";
 import { fileURLToPath } from "node:url";
 import {
   createSignedStorageUploadUrl,
@@ -236,11 +236,19 @@ export async function buildAdminApp(options: {
     let columns: unknown[];
     let rows: unknown[];
     if (readonlySqlite) {
-      columns = readonlySqlite.pragma(`table_info("${table}")`) as unknown[];
-      rows = readonlySqlite.prepare(`SELECT * FROM "${table}" ORDER BY 1 LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize);
+      columns = stripSecretColumnNames(
+        readonlySqlite.pragma(`table_info("${table}")`) as unknown[],
+        (column) => String((column as { name?: unknown }).name ?? ""),
+      );
+      rows = (readonlySqlite.prepare(`SELECT * FROM "${table}" ORDER BY 1 LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize) as unknown[])
+        .map(stripSecretColumns);
     } else {
-      columns = await options.prisma.$queryRawUnsafe("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position", table);
-      rows = await options.prisma.$queryRawUnsafe(`SELECT * FROM "${table}" ORDER BY 1 LIMIT $1 OFFSET $2`, pageSize, (page - 1) * pageSize);
+      columns = stripSecretColumnNames(
+        await options.prisma.$queryRawUnsafe("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position", table) as unknown[],
+        (column) => String((column as { column_name?: unknown }).column_name ?? ""),
+      );
+      rows = (await options.prisma.$queryRawUnsafe(`SELECT * FROM "${table}" ORDER BY 1 LIMIT $1 OFFSET $2`, pageSize, (page - 1) * pageSize) as unknown[])
+        .map(stripSecretColumns);
     }
     const total = readonlySqlite
       ? Number((readonlySqlite.prepare(`SELECT COUNT(*) AS count FROM "${table}"`).get() as { count: number } | undefined)?.count ?? 0)
