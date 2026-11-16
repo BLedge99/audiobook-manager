@@ -39,6 +39,21 @@ The failure this spec fixes (observed 2026-10-30, see
 
 ## Behaviour
 
+### On disk (file layer, spec 41)
+
+Downloaded audio lives at `books/srv-<hash-16>/<bookId>/<trackId>.<ext>`, where
+`<hash-16>` is the first 16 hex characters of the SHA-256 of the server's
+identity (the serverId string; see `client/src/local/replica.ts`). Two layouts
+coexist across the spec-41 transition: per-server `books/srv-*` directories are
+what downloads write now, scanned only against that shelf's own ids; legacy
+root-level `books/<bookId>/` folders (the pre-spec-41 layout this spec's
+failure bullet above describes) stay in place and are adopted in place — the
+file bytes are not moved, only re-attributed to a shelf. Recovery scans the
+root against the union of everything the device claims because a legacy folder
+cannot be attributed to a shelf. See spec 41, step 1.1 (`LIMITATIONS.md`,
+offline-library section) for the full picture; this note is the file layer
+spec 30 always assumed but never documented.
+
 ### Shelves
 
 The device library is a **set of per-server shelves**, plus the union the listener

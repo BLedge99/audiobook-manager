@@ -186,8 +186,7 @@ Both surfaces explain instead of hiding the control:
 
 ### Download recovery
 
-The only remaining record of orphaned audio is the directory layout:
-`books/<bookId>/<trackId>.<ext>`. Detection and adoption are separate:
+The only remaining record of orphaned audio is the directory layout. Detection and adoption are separate. Current layout (spec 41): `books/srv-<hash-16>/<bookId>/<trackId>.<ext>` — the first 16 hex of the SHA-256 of the server's identity — scanned only against the claiming shelf; legacy `books/<bookId>/<trackId>.<ext>` folders from before spec 41 stay in place and are adopted in place against the union of everything the device claims (a legacy folder cannot be attributed to a shelf). See spec 30, "On disk (file layer, spec 41)" and spec 41, step 1.1. The table below describes the flow for either layout:
 
 | Step | Rule |
 |---|---|

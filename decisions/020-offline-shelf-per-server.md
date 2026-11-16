@@ -63,3 +63,14 @@ Rejected alternatives:
 - [`specs/29-offline-resilience.md`](../specs/29-offline-resilience.md)
 - [`decisions/012-device-is-a-player-not-a-library-manager.md`](012-device-is-a-player-not-a-library-manager.md)
 - [`decisions/018-offline-cache-is-provable-two-ways.md`](018-offline-cache-is-provable-two-ways.md)
+
+## Addendum — file layer (2026-11-16, spec 41)
+
+The shelves this ADR names were given a **file layer** in spec 41: downloaded
+audio now lives under `books/srv-<hash-16>/<bookId>/<trackId>.<ext>`, where
+`<hash-16>` is the first 16 hex characters of the SHA-256 of the server's
+identity — the same shelf identity the composite replica key uses, spelled for
+the filesystem. Legacy `books/<bookId>/` directories from before spec 41 remain
+in place and are adopted in place against the union of the device's claims;
+the file bytes are never moved. See spec 30, "On disk (file layer, spec 41)",
+and `LIMITATIONS.md` (offline-library section).
