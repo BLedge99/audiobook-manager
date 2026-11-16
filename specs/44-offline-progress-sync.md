@@ -1,9 +1,12 @@
 # Spec 44 — Offline→online progress sync
 
-> **Status: planned 2026-11-16.** Part of the production-readiness plan
-> ([`specs/43-production-readiness.md`](43-production-readiness.md), phase 1.3);
-> a release blocker for v0.2.0. The README promises "progress syncs after you
-> reconnect" — this spec makes that sentence true.
+> **Status: implemented 2026-11-16; ships with the v0.2.0 release (spec 43).**
+> Part of the production-readiness plan (spec 43, phase 1.3). The README
+> promises "progress syncs after you reconnect" — as of this change it does:
+> on every successful online refresh the client pushes cached rows the server
+> is missing or older than (spec-44 S1), and `cacheLibraryPrivateState` no
+> longer deletes cached progress it cannot supersede (S3). 14 new unit tests;
+> both suites green.
 
 ## Purpose
 

@@ -409,30 +409,28 @@ is left behind.
 ---
 
 ### 1.10 Offline-listened progress never reaches the server
-**Status: BROKEN — data loss on reconnect.** Closing in
-[`specs/44-offline-progress-sync.md`](specs/44-offline-progress-sync.md).
+**Status: FIXED 2026-11-16 (spec 44), pending v0.2.0.**
 
 `saveProgress` (`ChapterPlayer.tsx`) writes the server first and the encrypted
 private cache second; offline, the server write fails and only the cache holds
-the position. Nothing pushes that position back on reconnect, and the next
-successful online refresh runs `cacheLibraryPrivateState`, which **deletes** the
-cached row whenever the server payload carries no progress — or overwrites it
-with the server's older position. The offline listening session disappears, and
-`README.md`'s "progress syncs after you reconnect" is not true of the code. The
-server-side monotonic rule (§1.5) would reject a stale backward push, but the
-client never makes one.
+the position. The client now pushes the cached row on the next successful
+online refresh whenever it is strictly newer (`lastPlayed`; ties/unparseable
+lose to the server), and `cacheLibraryPrivateState` never deletes a cached row
+it cannot supersede. 14 unit tests pin the contract. Full behaviour and
+non-goals (no conflict UI; server remains last-writer-wins until Appendix A
+lands) live in [`specs/44-offline-progress-sync.md`](specs/44-offline-progress-sync.md).
 
 ### 1.11 An unmounted/renamed media root silently deletes the library and its history
-**Status: BROKEN — data loss.** Closing in
-[`specs/43-production-readiness.md`](specs/43-production-readiness.md) (phase 1.1).
+**Status: FIXED 2026-11-16 (spec 43, phase 1.1), pending v0.2.0.**
 
-When a scan completes with the walk finding nothing — an unmounted NAS, a
-renamed/moved root, a network drive that answered but delivered zero files — the
-reconciliation in `scanner.ts` deletes the "stale" `mediaItem` rows **and their
-`ListeningHistory`** with no threshold, no warning and no override. Listening
-history is the irreplaceable record in this system. The fix refuses destructive
-reconciliation on a suspiciously empty walk (env-tunable threshold) and
-requires an explicit, confirm-the-count operator action for intentional wipes.
+The scanner refuses the deletion phase when the walk finds nothing or the
+missing share of previously-known books crosses `SCAN_DELETE_GUARD_PERCENT`
+(default 50): scan marked `incomplete`, warning logged, nothing deleted. An
+explicit `confirmDelete: "delete N books"` override (POST /api/scan) performs
+the intentional wipe. A mid-run crash rolls back the track
+delete/recreate transaction, so a book never faces a session with no tracks.
+Tests: unmounted root, partial vanish, below-threshold, override, day-one
+empty library.
 
 ---
 
