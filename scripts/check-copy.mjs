@@ -218,7 +218,8 @@ Config file shape:
     "budgets": { "hint": 160 },
     "allowedDuplicates": ["Try again"],
     "ignoreKeys": ["copy.brand.*"],
-    "scanIgnore": "^[a-z-]+$"
+    "scanIgnore": "^[a-z-]+$",
+    "scanIgnorePaths": ["src/pages/PrivacyNotice.tsx"]
   }
 `;
 
@@ -933,6 +934,11 @@ function ignored(path, config) {
   return config.ignoreKeys.some((re) => re.test(path));
 }
 
+/** The dialect config keys speak: `.` is literal, `*` is `.*`. */
+function globKey(pattern) {
+  return new RegExp(`^${String(pattern).replace(/\./g, "\\.").replace(/\*/g, ".*")}$`);
+}
+
 /* -------------------------------------------------------------------------- */
 /* source scan                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -1000,6 +1006,7 @@ function scanSource(dir, config) {
   let scanned = 0;
 
   for (const file of files) {
+    if (config.scanIgnorePaths.some((re) => re.test(relative(process.cwd(), file).replace(/\\/g, "/")))) continue;
     const source = readFileSync(file, "utf8");
     if (source.length > 2_000_000) continue;
     const lines = source.split(/\r?\n/);
@@ -1058,6 +1065,7 @@ function main() {
     allowedDuplicates: new Set(),
     ignoreKeys: [],
     scanIgnore: null,
+    scanIgnorePaths: [],
     allowExclamation: false,
   };
 
@@ -1079,9 +1087,12 @@ function main() {
     Object.assign(config.budgets, raw.budgets || {});
     for (const value of raw.allowedDuplicates || []) config.allowedDuplicates.add(value);
     for (const pattern of raw.ignoreKeys || []) {
-      config.ignoreKeys.push(new RegExp(`^${String(pattern).replace(/\./g, "\\.").replace(/\*/g, ".*")}$`));
+      config.ignoreKeys.push(globKey(pattern));
     }
     if (raw.scanIgnore) config.scanIgnore = new RegExp(raw.scanIgnore);
+    for (const pattern of raw.scanIgnorePaths || []) {
+      config.scanIgnorePaths.push(globKey(pattern));
+    }
     if (raw.allowExclamation === true) config.allowExclamation = true;
   }
 

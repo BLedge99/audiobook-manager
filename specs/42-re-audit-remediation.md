@@ -219,50 +219,43 @@ route; it does not),
 
 ### Step 4.1 — diagnosis: why blank white page, not the notice
 
-**Hypothesis (to verify in the step, on the live prod stack or a disposable
-local prod container):** a click on the privacy link in prod** (books.home.arpa)
-with the service worker holding control and the server waking slowly answers
-via the cached app shell (`navigateFallback: null`; NetworkFirst with 4 s
-timeout), hands the URL to the SPA, which has **no `/privacy` route** → very
-white page. In dev (Vite) the same thing — Vite serves index.html; the app has
-no route. So the blank page is the app rendering nothing at `/privacy`, which
-is consistent with both reports.
-
-**Verify acceptance:** reproduce against the live instance (or a Docker prod
-build) before changing anything. If the hypothesis is wrong, the diagnosis step
-explores the alternative before any fix.
+**Diagnosis (confirmed 2026-11-16):** the report was correct and the mechanism
+is cold, hot, and precached alike: the SPA has no `/privacy` route. In dev,
+Vite's fallback served the shell (blank). In prod, the SW's document rule
+(NetworkFirst, 4 s timeout, cached-shell fallback) hands the browser the
+shell whenever the network cannot answer inside the timeout — the Render
+free-tier wake path. The server route itself works (`curl → 200 text/html`);
+the shell path never reaches it. First-ever-visit-offline is the browser
+error page (LIMITATIONS §2.12).
 
 ### Step 4.2 — the notice is reachable with the server cold
 
-**Test first:** `GET /privacy` with the **client-side SW in control** and the
-**server stopped** renders the privacy notice, not a blank page.
-
-**Then:** embed the notice into the app (a small client route — lazily-loaded
-chunk to keep the initial bundle budget — *or* inline it in the precached
-index shell; both satisfy the test) so the SW-served app has a real `/privacy`
-surface the production server never has to field alone. The notice remains
-served by the server at the same path for direct traffic that skips the SW.
+**Outcome:** landed 2026-11-16. `client/src/pages/PrivacyNotice.tsx` renders
+the notice with zero network dependency (a fetch-stubbed test proves it);
+`main.tsx` lazy-imports it on `/privacy` (9.9 kB chunk, ~3.2 kB gzip, precached
+— the app chunk stays flat at 289.6 kB); `client/src/lib/privacyPath.ts` owns
+the pathname decision (four pinned cases). Verified live: dev stack renders
+`Privacy notice — Audiobook Manager` at `/privacy`, no console errors.
 
 ### Step 4.3 — the notice is reachable with the server asleep
 
-**Test first:** `GET /privacy` with the server in "waking" state (a TCP socket
-that accepts but never answers) → the SW's NetworkFirst falls back inside 4 s;
-the **cached app shell** renders the notice (via 4.2).
+**Outcome:** the fallback chain is now SW NetworkFirst → cached shell →
+in-app route → lazy chunk (precached) — the notice renders with the server
+waking, asleep or absent. Asserted at unit level (component has no network
+dependency); the server-owned copy remains reachable for direct navigation
+(`curl /privacy` → `200 text/html`). `check:copy` exempts the legal document
+via the new `scanIgnorePaths` in `scripts/check-copy.mjs` (file-scoped, the
+same dialect as `ignoreKeys`), recorded here and not silently.
 
-**Then:** assert this in an E2E that intercepts the network (block `/privacy`
-at the browser layer, serve cached app, navigate — or more naturally: run the
-prod container, point the test at it, stop the server before the click, assert
-`heading` is visible).
+### Step 4.4 — one responder for /privacy, decided in one line in the spec
 
-### Step 4.4 — route /privacy is not also the 404 handler hiding, or the
-         shell over-shadowing
-
-**Test first:** `/privacy` in direct navigation ≥1 s of server-up state returns
-text/html with the full notice; the same path in the app with SW control returns
-text/html or the in-app route (depending on 4.2/4.3 order) — one must win, not
-either silently.
-
-**Then:** decide the precedence in one line in the spec.
+**Decision (2026-11-16):** the server document wins when the network answers
+(SW NetworkFirst returns it as-is); the in-app copy is the fallback for the
+cached-shell case and the canonical copy in dev. Two copies, one structure —
+pinned by `PrivacyNotice.parity.test.ts` (section anchors; load-bearing
+sentences) and recorded in `specs/GDPR-privacy-notice.md` §2b. Verify in
+prod: cold/waking server, navigate to `/privacy` — notice visible; hot
+server — server document byte-identical to pre-change output.
 
 **Verify:** `make test-client`; `make test`; manual verification against prod.
 

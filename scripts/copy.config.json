@@ -19,5 +19,8 @@
     "copyAdmin.db.nullDisplay",
     "copyAdmin.fields.yes",
     "copyAdmin.fields.no"
+  ],
+  "scanIgnorePaths": [
+    "src/pages/PrivacyNotice.tsx"
   ]
 }

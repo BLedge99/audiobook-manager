@@ -34,6 +34,27 @@ Publish a privacy notice so users (household members and production-demo visitor
 
 ---
 
+## 2b. In-app route: /privacy (added 2026-11-16, spec 42)
+
+The application shell has no router, but the service worker can hand a
+navigation to `/privacy` the app instead of this document: its document rule
+is NetworkFirst with a four-second timeout and a cached-shell fallback, so a
+waking or unreachable server means the browser receives the SPA at the
+privacy URL — and the app used to render nothing.
+
+`client/src/pages/PrivacyNotice.tsx` now carries the same notice as a lazy
+chunk rendered by `main.tsx` on the `/privacy` path. Content parity with the
+server document is pinned by `PrivacyNotice.parity.test.ts` (section anchors
+and load-bearing legal sentences). The Android shell is unaffected (no SW).
+
+**Precedence (spec 42, step 4.4):** when the network answers, this server
+document wins — the SW's NetworkFirst returns it as-is; the in-app copy is
+the fallback for the cached-shell case and for first-ever-visit-offline, and
+is the canonical notice in dev. The two are one document, one source of
+section structure, one parity test — edit both or neither.
+
+---
+
 ## 3. Client copy
 
 Privacy-notice strings live in `client/src/copy.ts` under `copy.privacy`:
@@ -67,6 +88,7 @@ No personal data is collected before the notice is linked.
 ## 6. Acceptance criteria
 
 - [x] `GET /privacy` returns `200` with HTML content (no session required)
+- [x] `/privacy` renders the notice in every reachability state (hot, waking, cold) — in-app copy + parity test (2026-11-16)
 - [x] Notice covers both household and production-demo modes
 - [x] Notice is linked from the sign-in screen before credential entry
 - [x] Notice is linked from the account menu
@@ -81,3 +103,4 @@ No personal data is collected before the notice is linked.
 
 - Route test: `GET /privacy` returns `200` with notice content
 - Client copy test for privacy-notice strings
+- Client parity test (`PrivacyNotice.parity.test.ts`): server and in-app notices share every section anchor and the load-bearing legal sentences (2026-11-16)
