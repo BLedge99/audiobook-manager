@@ -119,7 +119,7 @@ const LibraryCard = memo(function LibraryCard({
       )}
     >
       <button
-        onClick={(event) => dispenseShakeThen(event.currentTarget, () => onSelect(book))}
+        onClick={() => onSelect(book)}
         className="relative block w-full text-left"
       >
         {/* In flow, above the cover. As an absolutely positioned tab it was
@@ -235,7 +235,7 @@ export function ContinueListening({ books, onSelect }: { books: Audiobook[]; onS
           return (
             <button
               key={replicaBookKey(book.serverId ?? "", book.id)}
-              onClick={(event) => dispenseShakeThen(event.currentTarget, () => onSelect(book))}
+              onClick={() => onSelect(book)}
               className={cn(
                 "capsule flex shrink-0 snap-start items-center gap-3 p-3 text-left",
                 index % 2 ? "capsule--alt" : "",

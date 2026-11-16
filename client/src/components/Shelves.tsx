@@ -42,7 +42,7 @@ function ShelfCard({
 }) {
   return (
     <article className={cn("capsule group relative w-[136px] shrink-0 p-2 sm:w-[168px]", index % 2 && "capsule--alt")}>
-      <button onClick={(event) => dispenseShakeThen(event.currentTarget, () => onSelect(book))} className="block w-full text-left">
+      <button onClick={() => onSelect(book)} className="block w-full text-left">
         <span className="relative block">
           <ShellCover bookId={book.id} serverId={book.serverId} className="w-full" />
           <CapsuleMarks />

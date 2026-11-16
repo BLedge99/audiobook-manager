@@ -619,28 +619,8 @@ button:focus {
     transform: rotate(0deg) translateY(-3px);
   }
 }
-/* The dispense shake: a single gentle double-nudge of ≤1deg over ~200ms,
-   toggled by JS on card tap just before the detail opens. Same cant flip
-   as gen-0's press/lift — feels like the capsule tilting rather than being
-   shaken. The rotation swings around the capsule's own resting cant via
-   --cant-current. Reduced-motion listeners never get the class. */
-@keyframes dispense-shake {
-  0% {
-    transform: rotate(var(--cant-current));
-  }
-  30% {
-    transform: rotate(calc(var(--cant-current) + 1deg));
-  }
-  60% {
-    transform: rotate(calc(var(--cant-current) - 0.8deg));
-  }
-  100% {
-    transform: rotate(var(--cant-current));
-  }
-}
-/* The keyframes for the dispense shake; the class itself is declared further
-   down, after `.capsule:hover`, so it wins the `animation` property over the
-   hover wobble while it runs (equal specificity, later source order). */
+/* The keyframes for the hover wobble live further down, before the class
+   rules that use them; the hover class itself is declared after them. */
 .capsule:hover,
 .capsule:focus-within {
   transform: rotate(0deg) translateY(-3px);
@@ -652,20 +632,6 @@ button:focus {
    flourish the user did not ask for. */
 .capsule:hover {
   animation: excited-wobble 500ms ease-out 1;
-}
-/* The dispense shake class. Declared after the hover rules on purpose:
-   `.capsule.dispense-shake` and `.capsule:hover` carry the same specificity
-   (0,2,0), and during the 200ms window the shake -- not the hover wobble --
-   must own the `animation` property. Reduced-motion listeners never get
-   the class (see lib/dispense.ts); the global reduced-motion rule collapses
-   it too. */
-.capsule.dispense-shake {
-  animation: dispense-shake 200ms var(--ease-pop) 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .capsule.dispense-shake {
-    animation: none;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .capsule:hover {
