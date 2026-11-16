@@ -67,16 +67,23 @@ export function useSession(options: UseSessionOptions) {
     getAccountExperience() === "demo" ? null : getActiveProfileId();
 
   const probeInFlight = useRef(false);
+  // Incremented whenever a forced probe supersedes whatever is in flight, so
+  // the stale probe can notice it lost and write nothing.
+  const probeGeneration = useRef(0);
 
   const probeServer = useCallback(async (force = false): Promise<void> => {
     if (offlineModeRef.current && !force) return;
-    // One probe at a time. The probe is itself a request, and a request that
-    // fails reports the server as unreachable -- so without this guard a
-    // failing probe would trigger another probe, for ever.
-    if (probeInFlight.current) return;
+    // One probe at a time — unless the listener asked for another. A force
+    // cancels whatever is in flight: the stalled wake is the reason Retry was
+    // tapped, and the feedback they expect is a fresh attempt, not silence.
+    if (probeInFlight.current && !force) return;
+    if (force) probeGeneration.current += 1;
+    const generation = probeGeneration.current;
+    const stillCurrent = () => probeGeneration.current === generation;
     probeInFlight.current = true;
     try {
       const config = await fetchAppConfig();
+      if (!stillCurrent()) return; // a forced probe superseded this one
       if (offlineModeRef.current && !force) return;
       setAccountExperience(config.accountExperience);
       setApiAccountExperience(config.accountExperience);
@@ -87,10 +94,13 @@ export function useSession(options: UseSessionOptions) {
       // UI shows "waking", because the listener's tap must not look like it
       // went nowhere.
       if (!probe.reachable) {
+        if (!stillCurrent()) return;
         setServerWaking(true);
         probe = await probeServerRequest(WAKE_TIMEOUT_MS);
+        if (!stillCurrent()) return; // a forced probe owns the waking state now
         setServerWaking(false);
       }
+      if (!stillCurrent()) return;
       if (offlineModeRef.current && !force) return;
       setServerReachable(probe.reachable);
       if (probe.reachable) {
@@ -108,6 +118,7 @@ export function useSession(options: UseSessionOptions) {
         return;
       }
       const info = await fetchSession();
+      if (!stillCurrent()) return;
       if (offlineModeRef.current && !force) return;
       if (!info) {
         setAuthed(false);
@@ -131,12 +142,13 @@ export function useSession(options: UseSessionOptions) {
         setProfileId(resolveSessionProfileId());
       }
     } catch (error) {
+      if (!stillCurrent()) return;
       console.error("Could not complete server probe.", error);
       setServerReachable(false);
       setAuthed(false);
       setProfileId(resolveSessionProfileId());
     } finally {
-      probeInFlight.current = false;
+      if (stillCurrent()) probeInFlight.current = false;
     }
   }, []);
 

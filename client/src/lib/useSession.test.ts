@@ -93,6 +93,67 @@ describe("useSession", () => {
     expect(probeServer).toHaveBeenCalledTimes(1);
   });
 
+  it("cancels the parked wake probe when the listener forces a re-probe", async () => {
+    // Resolvers for every reachability-probe call, in call order.
+    const resolvers: Array<(value: { reachable: boolean; authed: boolean }) => void> = [];
+    vi.mocked(probeServer).mockImplementation(
+      () =>
+        new Promise<{ reachable: boolean; authed: boolean }>((resolve) => {
+          resolvers.push(resolve);
+        }) as Promise<never>,
+    );
+
+    // Park the initial probe on its first call to fetchAppConfig; everything
+    // after resolves immediately.
+    let releaseConfig: (() => void) | undefined;
+    vi.mocked(fetchAppConfig)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseConfig = () =>
+              resolve({ accountExperience: "household", oauthProviders: [] });
+          }),
+      )
+      .mockResolvedValue({ accountExperience: "household", oauthProviders: [] });
+
+    const options = baseOptions();
+    options.setServerWaking = vi.fn();
+    const { result, unmount } = renderHook(() => useSession(options));
+
+    // The listener taps "Retry" while the wake probe is parked.
+    await act(async () => {
+      void result.current.probeServer(true);
+    });
+
+    // The forced probe runs its own fast probe, before the parked one wakes.
+    await waitFor(() => expect(resolvers.length).toBe(1));
+
+    // Now release the parked probe: it is stale and must write nothing.
+    await act(async () => {
+      releaseConfig?.();
+      await Promise.resolve();
+    });
+
+    // The forced probe's fast probe answers "not there" → patient probe.
+    await act(async () => {
+      resolvers[0]({ reachable: false, authed: false });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(resolvers.length).toBe(2));
+
+    await act(async () => {
+      resolvers[1]({ reachable: false, authed: false });
+      await Promise.resolve();
+    });
+
+    // The parked probe never reached the network — its stale result was dropped.
+    expect(probeServer).toHaveBeenCalledTimes(2);
+    expect(options.setServerReachable).toHaveBeenCalledTimes(1);
+    expect(options.setServerReachable).toHaveBeenCalledWith(false);
+    expect(options.setAuthed).toHaveBeenCalledWith(false);
+    unmount();
+  });
+
   it("does not clear the profile hint when the server is unreachable", async () => {
     vi.mocked(probeServer).mockResolvedValue({ reachable: false, authed: false });
 
