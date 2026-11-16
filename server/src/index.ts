@@ -36,6 +36,7 @@ async function main() {
   const adminApp = await buildAdminApp({
     prisma, auth: adminAuth, scanner, familyApp: app, logger: true, startedAt: Date.now(),
     storage, storageSync,
+    secureCookie: process.env.COOKIE_SECURE === "true",
   });
   // First launch: create the default household profiles so progress
   // is profile-scoped from the very first play. No-op once seeded.
@@ -61,8 +62,13 @@ async function main() {
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`[server] listening on 0.0.0.0:${PORT}`);
-  await adminApp.listen({ port: ADMIN_PORT, host: "0.0.0.0" });
-  console.log(`[admin] listening on 0.0.0.0:${ADMIN_PORT}`);
+  // The admin panel is a loopback-only operator surface by default. Binding it to
+  // all interfaces puts it on the LAN (or, in Docker, on the bridge network) with
+  // nothing but the admin password in front — set ADMIN_HOST=0.0.0.0 deliberately
+  // if you actually want that, and front it with TLS.
+  const adminHost = process.env.ADMIN_HOST ?? "127.0.0.1";
+  await adminApp.listen({ port: ADMIN_PORT, host: adminHost });
+  console.log(`[admin] listening on ${adminHost}:${ADMIN_PORT}`);
   if (storageSync?.start()) console.log("[storage] startup library sync started");
 
   // Spec 17: seed the genre taxonomy and provider mappings. Idempotent, and

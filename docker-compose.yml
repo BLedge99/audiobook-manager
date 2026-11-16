@@ -54,7 +54,9 @@ services:
       - app_data:/app/data
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
-      - "${ADMIN_PORT:-3100}:${ADMIN_PORT:-3100}"
+      # Loopback-only on the host: the admin panel is an operator surface reached on
+      # this machine (SSH port-forward / browser on the same host), not on the LAN.
+      - "127.0.0.1:${ADMIN_PORT:-3100}:${ADMIN_PORT:-3100}"
     # Spec 37 / ADR 029: the household family port carries no /admin surface;
     # ADMIN_PROXY is deliberately NOT set here. Reach the panel on ADMIN_PORT.
     environment:
@@ -62,6 +64,12 @@ services:
       # The admin port must be passed through: the ports mapping above uses
       # ADMIN_PORT for both sides, but the server reads it from the environment.
       - ADMIN_PORT=${ADMIN_PORT:-3100}
+      # The process must listen on the container's interface for the published port to
+      # reach it; the host-side mapping (127.0.0.1) is what keeps it off the LAN.
+      # Outside Docker, prefer the default (127.0.0.1). In production (books.home.arpa)
+      # the operator surface is only reached through the loopback proxy, so 127.0.0.1
+      # inside the container is correct there.
+      - ADMIN_HOST=${ADMIN_HOST:-0.0.0.0}
       - DATABASE_URL=file:/app/data/library.db
       - LIBRARY_ROOT=/data/audiobooks
       # The E2E security suite asserts that unauthenticated API calls are

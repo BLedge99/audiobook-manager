@@ -21,6 +21,7 @@ import {
 import { registerChildAccountRoutes } from "./child-accounts";
 import { registerAgeRatingRoutes } from "./age-ratings";
 import { collectApiDocs, registerClientDist, sharedCorsOrigins } from "../shared/listener";
+import { registerSecurityHeaders } from "../security-headers";
 
 function routeDocs(app: FastifyInstance): { method: string | string[]; url: string; schema: unknown }[] {
   return ((app as FastifyInstance & { apiDocs?: { method: string | string[]; url: string; schema: unknown }[] }).apiDocs ?? []).map((route) => ({
@@ -60,6 +61,7 @@ export async function buildAdminApp(options: {
   storageSync?: StorageSync;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false, trustProxy: ["127.0.0.1", "::1"] });
+  await registerSecurityHeaders(app);
   await app.register(compress, { threshold: 1024 });
   const enrichmentManager = new EnrichmentManager(options.prisma);
   const readonlySqlite = await openReadonlySqlite();
@@ -70,7 +72,7 @@ export async function buildAdminApp(options: {
   }
   collectApiDocs(app);
   await app.register(cookie);
-  await registerAdminAuth(app, options.auth, options.secureCookie ?? false);
+  await registerAdminAuth(app, options.auth, options.secureCookie ?? process.env.COOKIE_SECURE === "true");
   // Spec 38: kids accounts and age ratings are operator surfaces.
   registerChildAccountRoutes(app, { prisma: options.prisma, auth: options.auth });
   registerAgeRatingRoutes(app, { prisma: options.prisma, auth: options.auth });

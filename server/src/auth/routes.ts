@@ -57,7 +57,10 @@ export function setSessionCookie(
   reply.setCookie(SESSION_COOKIE, token, {
     path: "/",
     httpOnly: true,
-    sameSite: options.secureCookie ? "none" : "lax",
+    // Lax is sufficient: browser traffic is same-site (Render / Caddy), the native
+    // Android client authenticates with x-house-session, and cross-site sending of
+    // the household credential widens CSRF surface for no benefit.
+    sameSite: "lax",
     secure: options.secureCookie,
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });

@@ -59,6 +59,34 @@ describe("admin panel authentication", () => {
     expect(row?.tokenHash).not.toContain(response.headers["set-cookie"]?.toString().split(";")[0].split("=")[1]);
   });
 
+  it("sets a Secure admin cookie when the deployment marks cookies secure", async () => {
+    const secureApp = Fastify();
+    await secureApp.register(cookie);
+    await registerAdminAuth(secureApp, auth, true);
+    const response = await secureApp.inject({ method: "POST", url: "/api/admin/login", remoteAddress: "198.51.100.7", payload: { password: "dedicated-admin-password" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["set-cookie"]).toContain("Secure");
+    await secureApp.close();
+  });
+
+  it("admin app reads COOKIE_SECURE from the environment like the family app", async () => {
+    // Production sets COOKIE_SECURE=true at the edge; the admin listener must honour
+    // it too — index.ts wires it straight from env into buildAdminApp.
+    const saved = process.env.COOKIE_SECURE;
+    process.env.COOKIE_SECURE = "true";
+    let envAdminApp: FastifyInstance | undefined;
+    try {
+      envAdminApp = await buildAdminApp({ prisma, auth, scanner: createScanManager(prisma) });
+      const response = await envAdminApp.inject({ method: "POST", url: "/api/admin/login", remoteAddress: "198.51.100.8", payload: { password: "dedicated-admin-password" } });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["set-cookie"]).toContain("Secure");
+    } finally {
+      if (saved === undefined) delete process.env.COOKIE_SECURE;
+      else process.env.COOKIE_SECURE = saved;
+      await envAdminApp?.close();
+    }
+  });
+
   it("rejects wrong passwords without disclosing the cause and rate-limits attempts", async () => {
     for (let index = 0; index < 10; index++) {
       const response = await app.inject({ method: "POST", url: "/api/admin/login", remoteAddress: "192.0.2.10", payload: { password: "wrong-password" } });
