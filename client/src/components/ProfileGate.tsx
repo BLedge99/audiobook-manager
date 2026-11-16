@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Plus, UserRound } from "lucide-react";
 import { copy } from "../copy";
-import { boundedFetch, setActiveProfileId } from "../lib/api";
+import { setActiveProfileId } from "../lib/api";
+import { requestRaw } from "../lib/request";
 import { ProfileRegistration } from "./ProfileRegistration";
 import { Btn, Field, FullScreen, Wordmark, Notice, EmptyPanel, cn } from "../ui/primitives";
 
@@ -38,7 +39,7 @@ export function ProfileGate({
     setLoading(true);
     setError("");
     try {
-      const res = await boundedFetch("/api/profiles");
+      const res = await requestRaw("/api/profiles");
       if (!res.ok) {
         setError(res.status === 401
           ? copy.profile.sessionExpired
@@ -71,10 +72,9 @@ export function ProfileGate({
     setError("");
     
     try {
-      const res = await boundedFetch("/api/profiles", {
+      const res = await requestRaw("/api/profiles", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: { name },
       });
       if (res.ok) {
         const profile = await res.json();

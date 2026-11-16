@@ -1,4 +1,4 @@
-import { boundedFetch } from "./api";
+import { requestRaw } from "./request";
 
 export interface PasskeySummary {
   id: string;
@@ -46,10 +46,9 @@ export function passkeysSupported(): boolean {
 
 /** Sign in with a passkey for a chosen profile. */
 export async function signInWithPasskey(profileId: number): Promise<PasskeyLoginResult> {
-  const optionsResponse = await boundedFetch("/api/auth/passkeys/login/options", {
+  const optionsResponse = await requestRaw("/api/auth/passkeys/login/options", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ profileId }),
+    body: { profileId },
   });
   if (!optionsResponse.ok) throw await failure(optionsResponse);
 
@@ -58,10 +57,9 @@ export async function signInWithPasskey(profileId: number): Promise<PasskeyLogin
     optionsJSON: await optionsResponse.json(),
   });
 
-  const verifyResponse = await boundedFetch("/api/auth/passkeys/login/verify", {
+  const verifyResponse = await requestRaw("/api/auth/passkeys/login/verify", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ response }),
+    body: { response },
   });
   if (!verifyResponse.ok) throw await failure(verifyResponse);
   return (await verifyResponse.json()) as PasskeyLoginResult;
@@ -69,10 +67,9 @@ export async function signInWithPasskey(profileId: number): Promise<PasskeyLogin
 
 /** Register the current device's Windows Hello / platform authenticator. */
 export async function addPasskey(label?: string): Promise<PasskeySummary> {
-  const optionsResponse = await boundedFetch("/api/auth/passkeys/register/options", {
+  const optionsResponse = await requestRaw("/api/auth/passkeys/register/options", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    body: {},
   });
   if (!optionsResponse.ok) throw await failure(optionsResponse);
 
@@ -81,10 +78,9 @@ export async function addPasskey(label?: string): Promise<PasskeySummary> {
     optionsJSON: await optionsResponse.json(),
   });
 
-  const verifyResponse = await boundedFetch("/api/auth/passkeys/register/verify", {
+  const verifyResponse = await requestRaw("/api/auth/passkeys/register/verify", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ response, label }),
+    body: { response, label },
   });
   if (!verifyResponse.ok) throw await failure(verifyResponse);
   const body = (await verifyResponse.json()) as { credential: PasskeySummary };
@@ -95,13 +91,13 @@ export async function listPasskeys(): Promise<{
   configured: boolean;
   passkeys: PasskeySummary[];
 }> {
-  const response = await boundedFetch("/api/auth/passkeys");
+  const response = await requestRaw("/api/auth/passkeys");
   if (!response.ok) throw await failure(response);
   return (await response.json()) as { configured: boolean; passkeys: PasskeySummary[] };
 }
 
 export async function removePasskey(id: string): Promise<void> {
-  const response = await boundedFetch(`/api/auth/passkeys/${encodeURIComponent(id)}`, {
+  const response = await requestRaw(`/api/auth/passkeys/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!response.ok) throw await failure(response);

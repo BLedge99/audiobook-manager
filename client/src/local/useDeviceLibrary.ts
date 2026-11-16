@@ -14,7 +14,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Audiobook } from "../types";
-import { apiUrl, boundedFetch, getServerUrl, profileHeaders } from "../lib/api";
+import { getServerUrl } from "../lib/api";
+import { requestRaw } from "../lib/request";
 import { copy } from "../copy";
 import { deviceFiles, localDb } from "./device";
 import { downloadBook as runDownload, trackStreamUrl, type DownloadProgress } from "./download";
@@ -235,10 +236,7 @@ export function useDeviceLibrary(
       files,
       sourceServer: getServerUrl(),
       fetchBook: async (bookId) => {
-        const response = await boundedFetch(apiUrl(`/api/audiobooks/${bookId}`), {
-          credentials: "include",
-          headers: profileHeaders(),
-        });
+        const response = await requestRaw(`/api/audiobooks/${bookId}`);
         // 404 is the one answer that means "this folder is not a book any
         // more". Every other failure is "could not ask", which must not be
         // mistaken for a deleted book -- nothing is removed either way.

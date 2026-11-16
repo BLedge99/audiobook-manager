@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   exportKey: vi.fn(),
 }));
 
-vi.mock("../lib/api", () => ({
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()),
   boundedFetch: mocks.fetch,
   getActiveProfileId: () => "7",
 }));
@@ -59,7 +60,7 @@ describe("DeviceUnlockSettings", () => {
       7,
       { profileId: 7, secret: "secret-value", key: "dGVzdC1rZXk=" }
     ));
-    expect(mocks.fetch).toHaveBeenCalledWith("/api/auth/devices", expect.objectContaining({ method: "POST" }));
+    expect(mocks.fetch).toHaveBeenCalledWith("/api/auth/devices", expect.objectContaining({ method: "POST" }), expect.any(Number));
     expect(await screen.findByRole("status")).toHaveTextContent(copy.security.deviceReady);
   });
 
@@ -73,7 +74,9 @@ describe("DeviceUnlockSettings", () => {
     fireEvent.click(await screen.findByRole("button", { name: copy.security.remove }));
 
     await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith(
-      "/api/auth/devices/device-1", { method: "DELETE" },
+      "/api/auth/devices/device-1",
+      expect.objectContaining({ method: "DELETE" }),
+      expect.any(Number),
     ));
     expect(mocks.clear).toHaveBeenCalledWith(7);
     expect(await screen.findByRole("status")).toHaveTextContent(copy.security.deviceRemoved);

@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   subscribe: vi.fn(),
 }));
 
-vi.mock("../lib/api", () => ({
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()),
   boundedFetch: mocks.fetch,
   fetchAppConfig: mocks.fetchAppConfig,
   setSessionToken: mocks.setToken,
@@ -116,7 +117,7 @@ describe("AccountGate native OAuth", () => {
     mocks.fetchAppConfig.mockResolvedValue({ accountExperience: "household", oauthProviders: [] });
     render(<AccountGate accountExperience="household" onSuccess={vi.fn()} />);
 
-    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith("/api/auth/accounts"));
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith("/api/auth/accounts", expect.any(Object), expect.any(Number)));
     expect(screen.queryByRole("button", { name: copy.login.oauthGoogleAction })).toBeNull();
     expect(screen.queryByRole("button", { name: copy.login.oauthGithubAction })).toBeNull();
   });

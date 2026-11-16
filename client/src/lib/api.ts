@@ -582,10 +582,9 @@ export async function boundedFetch(
  */
 export function sessionHeaders(): Record<string, string> {
   const token = isNativeShell() ? readSessionToken() : "";
-  const profileId = getActiveProfileId();
   return {
     ...(token ? { [SESSION_HEADER]: token } : {}),
-    ...(profileId && accountExperience !== "demo" ? { "x-profile-id": profileId } : {}),
+    ...profileHeaders(),
   };
 }
 

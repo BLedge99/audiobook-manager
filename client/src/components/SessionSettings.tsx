@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { copy } from "../copy";
-import { boundedFetch } from "../lib/api";
+import { requestRaw } from "../lib/request";
 import { Btn, Notice } from "../ui/primitives";
 
 /**
@@ -33,7 +33,7 @@ export function SessionSettings({ offline = false }: { offline?: boolean }) {
 
   const refresh = useCallback(async () => {
     try {
-      const response = await boundedFetch("/api/auth/sessions");
+      const response = await requestRaw("/api/auth/sessions");
       if (!response.ok) throw new Error("devices unavailable");
       setDevices(((await response.json()) as { devices: DeviceRecord[] }).devices);
       setMessage("");
@@ -50,7 +50,7 @@ export function SessionSettings({ offline = false }: { offline?: boolean }) {
     setBusyId(key);
     setMessage("");
     try {
-      const response = await boundedFetch(
+      const response = await requestRaw(
         `/api/auth/sessions/device/${encodeURIComponent(key)}`,
         { method: "DELETE" },
       );
@@ -68,7 +68,7 @@ export function SessionSettings({ offline = false }: { offline?: boolean }) {
     setBusyAll(true);
     setMessage("");
     try {
-      const response = await boundedFetch("/api/auth/sessions/others", { method: "DELETE" });
+      const response = await requestRaw("/api/auth/sessions/others", { method: "DELETE" });
       if (!response.ok) throw new Error("sign out failed");
       await refresh();
       setMessage(copy.security.otherDevicesSignedOut);

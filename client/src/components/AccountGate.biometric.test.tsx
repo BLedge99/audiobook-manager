@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   exportKey: vi.fn(),
 }));
 
-vi.mock("../lib/api", () => ({
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()),
   boundedFetch: mocks.fetch,
   setSessionToken: mocks.setToken,
   setActiveProfileId: mocks.setProfile,
@@ -89,6 +90,7 @@ describe("AccountGate biometric sign-in", () => {
     await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith(
       "/api/auth/devices/session",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ secret: "device-secret" }) }),
+      expect.any(Number),
     ));
     expect(mocks.unlockKey).toHaveBeenCalledWith(7, expect.any(Uint8Array));
     expect(mocks.setToken).toHaveBeenCalledWith("device-session");
@@ -185,6 +187,7 @@ describe("AccountGate biometric sign-in", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(copy.login.deviceNeedsPasswordOnline);
     expect(mocks.fetch).not.toHaveBeenCalledWith(
       "/api/auth/devices/session",
+      expect.anything(),
       expect.anything(),
     );
     // The password form is still there: biometrics never trap a person.

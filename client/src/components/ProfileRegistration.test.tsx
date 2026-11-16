@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   rememberKey: vi.fn(),
 }));
 
-vi.mock("../lib/api", () => ({
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()),
   boundedFetch: mocks.fetch,
   setActiveProfileId: mocks.setProfile,
   setSessionToken: mocks.setToken,
@@ -59,6 +60,7 @@ describe("ProfileRegistration", () => {
           password: "sam-password-82",
         }),
       }),
+      expect.any(Number), // the request deadline
     ));
     await waitFor(() => expect(onRegistered).toHaveBeenCalledWith(17, "registered-session", "sam-password-82"));
     expect(mocks.setProfile).toHaveBeenCalledWith(17);

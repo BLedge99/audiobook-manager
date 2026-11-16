@@ -1,7 +1,8 @@
 import { type FormEvent, useState } from "react";
 import { LoaderCircle, UserRound } from "lucide-react";
 import { copy } from "../copy";
-import { boundedFetch, setActiveProfileId, setSessionToken } from "../lib/api";
+import { setActiveProfileId, setSessionToken } from "../lib/api";
+import { requestRaw } from "../lib/request";
 import { responseErrorText } from "../lib/apiError";
 import { rememberProfileKey } from "../local/privateCache";
 import { Btn, Field, Notice } from "../ui/primitives";
@@ -30,10 +31,9 @@ export function ProfileRegistration({
     setBusy(true);
     setError(undefined);
     try {
-      const response = await boundedFetch("/api/auth/register-profile", {
+      const response = await requestRaw("/api/auth/register-profile", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), householdPassword, password }),
+        body: { name: name.trim(), householdPassword, password },
       });
       if (!response.ok) {
         setError(await responseErrorText(response));

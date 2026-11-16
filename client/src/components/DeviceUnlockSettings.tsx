@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Fingerprint } from "lucide-react";
 import { copy } from "../copy";
-import { boundedFetch, getActiveProfileId } from "../lib/api";
+import { getActiveProfileId } from "../lib/api";
+import { requestRaw } from "../lib/request";
 import { biometricVault } from "../lib/biometricVault";
 import { deviceName, getInstallationId } from "../lib/deviceIdentity";
 import { activeCacheKey, exportActiveProfileKey, toBase64 } from "../local/privateCache";
@@ -29,7 +30,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
     setVaultSaved(await biometricVault.hasSavedValue(currentProfileId));
     setChecked(true);
     try {
-      const response = await boundedFetch("/api/auth/devices");
+      const response = await requestRaw("/api/auth/devices");
       if (response.ok) setDevices(((await response.json()) as { devices: DeviceRecord[] }).devices);
     } catch { /* The password route remains available offline. */ }
   };
@@ -49,7 +50,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
       if (!alive) return;
       setChecked(true);
       try {
-        const response = await boundedFetch("/api/auth/devices");
+        const response = await requestRaw("/api/auth/devices");
         if (response.ok && alive) setDevices(((await response.json()) as { devices: DeviceRecord[] }).devices);
       } catch { /* The password route remains available offline. */ }
     };
@@ -80,14 +81,14 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
       }
       
       // Online mode: register device with server and save both secret and key
-      const response = await boundedFetch("/api/auth/devices", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        // The phone names itself (spec 36), so the signed-in devices panel can
-        // tell two phones apart.
-        body: JSON.stringify({
+      const response = await requestRaw("/api/auth/devices", {
+        method: "POST",
+        body: {
+          // The phone names itself (spec 36), so the signed-in devices panel can
+          // tell two phones apart.
           label: deviceName(copy.security.thisDevice),
           deviceId: getInstallationId(),
-        }),
+        },
       });
       if (!response.ok) throw new Error(copy.login.deviceFailed);
       const created = (await response.json()) as { id: string; secret: string };
@@ -96,7 +97,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
       setMessage(copy.security.deviceReady);
       await refresh();
     } catch (error) {
-      if (id) await boundedFetch(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined);
+      if (id) await requestRaw(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined);
       setMessage(error instanceof Error ? error.message : copy.login.deviceFailed);
     } finally { setBusy(false); }
   };
@@ -104,7 +105,7 @@ export function DeviceUnlockSettings({ offline = false }: { offline?: boolean })
   const remove = async (id: string) => {
     setBusy(true);
     try {
-      const response = await boundedFetch(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const response = await requestRaw(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!response.ok) throw new Error(copy.login.deviceFailed);
       await biometricVault.clear(profileId);
       await refresh();

@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   rememberProfileKey: vi.fn(),
 }));
 
-vi.mock("../lib/api", () => ({
+vi.mock("../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api")>()),
   boundedFetch: mocks.fetch,
   fetchAppConfig: mocks.fetchAppConfig,
   setSessionToken: mocks.setToken,

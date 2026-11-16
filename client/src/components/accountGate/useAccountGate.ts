@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { copy } from "../../copy";
 import {
-  boundedFetch,
   clearPendingProfileId,
   fetchAppConfig,
   getPendingProfileId,
@@ -9,6 +8,7 @@ import {
   setSessionToken,
   apiUrl,
 } from "../../lib/api";
+import { requestRaw } from "../../lib/request";
 import { beginNativeOAuth, subscribeNativeOAuth, type NativeOAuthResult } from "../../lib/oauthNative";
 import { errorSentenceForCode, responseErrorText } from "../../lib/apiError";
 import { isNativeShell } from "../../lib/platform";
@@ -85,7 +85,7 @@ export function useAccountGate({
           }
           return;
         }
-        const res = await boundedFetch("/api/auth/accounts");
+        const res = await requestRaw("/api/auth/accounts");
         if (!res.ok) {
           if (alive) {
             setAccountsLoadFailed(true);
@@ -194,25 +194,23 @@ export function useAccountGate({
       // Adopt this sign-in into the phone's existing device credential, so
       // the panel lists the phone once instead of one row per re-sign-in.
       // No secret, no rotation: this is the bookkeeping only.
-      await boundedFetch("/api/auth/devices/link", {
+      await requestRaw("/api/auth/devices/link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId: getInstallationId() }),
+        body: { deviceId: getInstallationId() },
       }).catch(() => undefined);
       if (biometricVault.hasSecret(profileId)) return;
       const key = await exportActiveProfileKey(profileId);
       if (!key) return;
-      const response = await boundedFetch("/api/auth/devices", {
+      const response = await requestRaw("/api/auth/devices", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // The phone names itself (spec 36): "Pixel 4a" rather than "Android
-        // device", so the signed-in devices panel can tell two phones apart.
-        // The device id also makes this a rotation of the phone's existing
-        // credential rather than a second one.
-        body: JSON.stringify({
+        body: {
+          // The phone names itself (spec 36): "Pixel 4a" rather than "Android
+          // device", so the signed-in devices panel can tell two phones apart.
+          // The device id also makes this a rotation of the phone's existing
+          // credential rather than a second one.
           label: deviceName(copy.security.thisDevice),
           deviceId: getInstallationId(),
-        }),
+        },
       });
       if (!response.ok) return;
       const created = (await response.json()) as { id: string; secret: string };
@@ -224,7 +222,7 @@ export function useAccountGate({
       });
     } catch {
       if (deviceId) {
-        await boundedFetch(`/api/auth/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" }).catch(() => undefined);
+        await requestRaw(`/api/auth/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" }).catch(() => undefined);
       }
     }
   };
@@ -234,10 +232,9 @@ export function useAccountGate({
     setBusy(true);
     setError(undefined);
     try {
-      const res = await boundedFetch("/api/auth/login", {
+      const res = await requestRaw("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId: mode.account.id, password }),
+        body: { profileId: mode.account.id, password },
       });
       if (!res.ok) {
         setError(await responseErrorText(res));
@@ -368,9 +365,9 @@ export function useAccountGate({
       let token: string | undefined;
       let offlineSignIn = false;
       try {
-        const response = await boundedFetch("/api/auth/devices/session", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ secret: saved.secret }),
+        const response = await requestRaw("/api/auth/devices/session", {
+          method: "POST",
+          body: { secret: saved.secret },
         });
         if (!response.ok) {
           if (response.status === 401 || response.status === 404) {
@@ -404,14 +401,13 @@ export function useAccountGate({
     setBusy(true);
     setError(undefined);
     try {
-      const res = await boundedFetch("/api/auth/claim", {
+      const res = await requestRaw("/api/auth/claim", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           profileId: mode.account.id,
           householdPassword,
           newPassword,
-        }),
+        },
       });
       if (!res.ok) {
         setError(await responseErrorText(res));
@@ -432,10 +428,9 @@ export function useAccountGate({
     setBusy(true);
     setError(undefined);
     try {
-      const res = await boundedFetch(mode.signup ? "/api/auth/signup" : "/api/auth/login", {
+      const res = await requestRaw(mode.signup ? "/api/auth/signup" : "/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: { email, password },
       });
       if (!res.ok) {
         setError(await responseErrorText(res));
@@ -472,10 +467,9 @@ export function useAccountGate({
     setBusy(true);
     setError(undefined);
     try {
-      const res = await boundedFetch("/api/auth/login", {
+      const res = await requestRaw("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: { password },
       });
       if (!res.ok) {
         setError(await responseErrorText(res));
