@@ -57,6 +57,19 @@ describe("PROVIDER_GENRE_MAPPING targets", () => {
   });
 });
 
+describe("Christmas subjects (2026-11-17)", () => {
+  for (const provider of ["openlibrary", "googlebooks", "audnexus", "librivox"]) {
+    it(`${provider}: "christmas stories" maps to fiction`, () => {
+      expect(PROVIDER_GENRE_MAPPING[provider]["christmas stories"]).toBe("fiction");
+    });
+
+    it(`${provider}: "ghost stories" and "ghosts" map to horror`, () => {
+      expect(PROVIDER_GENRE_MAPPING[provider]["ghost stories"]).toBe("horror");
+      expect(PROVIDER_GENRE_MAPPING[provider]["ghosts"]).toBe("horror");
+    });
+  }
+});
+
 describe("isJunkSubject", () => {
   it("rejects machine tags and slugs", () => {
     // Captured from the real payload for The Ickabog.
