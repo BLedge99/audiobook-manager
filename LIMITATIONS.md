@@ -630,6 +630,24 @@ If the first visit must render without a network, that is a product decision —
 a small defer takes a deliberate offline fallback page via `navigateFallback` —
 and it is tracked here rather than silently added.
 
+### 2.13 SQLite concurrent writes have no busy_timeout (spec 43 phase 1.2, spec 45 phase 5)
+**Status: LIMITED — deliberate, documented; the ceiling is real and accepted.**
+
+The Prisma SQLite engine exposes no `busy_timeout` knob, and the
+`sqlite-pragmas.test.ts` that exists asserts the pragma only on a hand-opened
+handle — it proves nothing about the connections the app actually uses. The
+scanner's transactional writes hold the write lock in milliseconds (slow I/O
+stays outside the transaction), and `PRAGMA journal_mode=WAL` gives readers and
+the single writer real concurrency, so a streaming progress save during a scan
+waits rather than failing in the common case. A progress save racing the
+scanner at the wrong moment can still see `SQLITE_BUSY` and fall back to
+last-write-wins — the app does not retry the save on that code today.
+
+**What to do about it:** take the error seriously if it ever reproduces; the
+fix is a retry with a small backoff around `saveProgress`, not a busy_timeout
+(Postgres — the production target — needs none of this). Do not "fix" this by
+claiming a pragma proves something it does not.
+
 ---
 
 ## 3. Deferred

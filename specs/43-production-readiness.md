@@ -163,8 +163,12 @@ by forcing an injected failure mid-transaction. Concurrent progress save during
 rescan completes without `SQLITE_BUSY`.
 
 **Definition of done:** no code path performs `track.deleteMany` outside a
-transaction; the busy_timeout pragma is asserted in a test (query
-`PRAGMA busy_timeout` and expect 5000); mid-rescan crash test passes.
+transaction (done, pinned in `scanner.integration.test.ts`); mid-rescan
+crash test passes. **Corrected by spec 45 (phase 5):** the original done-criterion
+claimed the busy_timeout pragma was asserted to be live on the connection —
+Prisma's SQLite engine exposes no knob, and the shipped
+`sqlite-pragmas.test.ts` asserts it only on a hand-opened handle. WAL + short
+transactions are the control that exists; LIMITATIONS.md records the ceiling.
 
 ### 1.3 → `specs/44-offline-progress-sync.md`
 
