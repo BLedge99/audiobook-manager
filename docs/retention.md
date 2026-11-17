@@ -65,7 +65,7 @@ The only backups of personal data are **weekly `pg_dump`s of the database**,
 encrypted with `age` (`scripts/backup-db.sh`), retained as the 7 newest files
 on the **same host/NAS** as the application (accepted risk R2 in
 `docs/risk-register.md`). An erasure removes rows from the live database
-immediately; erased rows then age out of the 7-dump rotation within ~28 days.
+immediately; erased rows then age out of the 7-dump rotation within ~49 days.
 Consequences:
 
 1. An erasure request honoured on date D is guaranteed absent from backups by
@@ -86,3 +86,4 @@ Consequences:
 - Governance: `docs/gdpr-governance.md` — data-protection lead owns the schedule and reviews it annually.
 - Audit: `GDPR-AUDIT.md` §5 (storage limitation findings).
 - Code: `server/src/auth/service.ts` `cleanupExpired()`; `server/src/auth/routes.ts` `cleanupAfterLogin()`; `server/src/index.ts` startup cleanup.
+

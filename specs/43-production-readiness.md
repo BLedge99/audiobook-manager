@@ -290,24 +290,33 @@ template boilerplate.
 
 ## Phase 3 — Backup & restore (same-site, encrypted — accepted risk R2)
 
+> File list and behaviour corrected by spec 45 (phase 4, phase 1): the script
+> is bash, prunes to **7 newest ≈ 49 days** (the two-tier rotation was never
+> built), verifies the dump before it enters the rotation, and fails closed.
+
 ### 3.1 Weekly encrypted `pg_dump`
 
-**Files:** new `scripts/backup-db.sh` (POSIX sh, `set -eu`), new
+**Files:** new `scripts/backup-db.sh` (bash, `set -euo pipefail`), new
 `docs/backup-restore.md` (the runbook), `docs/retention.md` and `docs/roa.md`
 (erasure-lag notes), repo-root `Makefile` (optional `make backup-test`).
 
 **Behaviour:** cron or systemd timer (documented both ways) dumps the
-production Postgres weekly (`pg_dump --format=custom --compress=9`), pipes
-through `age --recipient <operator pubkey>` to `/data/backups/bookle-<UTC-date>.dump.age`
-(or the household NAS equivalent), and prunes to **4 weekly + 3 monthly**.
+production Postgres weekly (`pg_dump --format=custom --compress=9`), encrypts
+`age --recipient <operator pubkey>` to `/data/backups/bookle-<UTC-date>.dump.age`
+(or the household NAS equivalent), and prunes to the **7 newest** dumps
+(weekly cadence ≈ 49 days — this sentence corrected by spec 45 from
+"4 weekly + 3 monthly", which was never implemented).
 `DATABASE_URL` is read from the environment, never the repo. The script prints
 the SHA-256 of each written dump. The operator's `age` private key lives in
 their password manager plus one printed recovery sheet — **losing it loses every
 backup**; the runbook says so in the first paragraph.
 
 **Definition of done:** script runs end-to-end against a scratch Postgres in a
-container; ciphertext verifies `age --decrypt | pg_restore --list`; retention
-pruning verified by fabricating 9 fixture files; runbook reviewed.
+container; ciphertext verifies `age --decrypt | pg_restore --list` (operator's
+out-of-band drill, not the script); a dead pg_dump fails the script and
+leaves every pre-existing backup untouched (spec 45 phase 1, pinned by
+`scripts/backup-db.test.sh`); retention pruning verified by fabricating
+fixture files; runbook reviewed.
 
 ### 3.2 Baseline restore drill (then annually)
 
@@ -330,7 +339,8 @@ exact commands typed, not paraphrase.
 if applicable.
 
 **Content:** erasure removes data from the live DB immediately; weekly-rotating
-backups drop erased records within ~28 days (Western rotation); a restore
+backups drop erased records within **~49 days** (the 7-newest rotation;
+corrected by spec 45 from ~28 days); a restore
 rehearsal must not resurrect erased records into a live system without
 re-applying pending erasures (the runbook's restore path states this);
 `FieldOverride`/history erasure semantics are unchanged.

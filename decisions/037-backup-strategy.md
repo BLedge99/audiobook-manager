@@ -38,8 +38,10 @@ oversight.
 
 1. **Weekly `pg_dump`** (custom format, `--compress=9`), piped through
    `age` to a file on the **same host/NAS** as the app (or its backup volume).
-2. **Retention: 4 weekly + 3 monthly.** Erased data leaves backups within
-   ~28 days; `docs/retention.md` documents this lag and the erasure procedure.
+2. **Retention: the 7 newest dumps** (weekly cadence ≈ 49 days). Erased data
+   leaves backups within ~49 days; `docs/retention.md` documents this lag and
+   the erasure procedure. The two-tier 4-weekly + 3-monthly plan was never
+   built; see the addendum below.
 3. **No offsite copy.** Host/NAS loss, ransomware, or a volume wipe destroys
    listening history. Accepted knowingly; recorded as risk R2 with a review
    date (2027-05-16) and a documented upgrade path (one rclone/restic remote to
@@ -80,7 +82,7 @@ oversight.
   ordinary corruption/deletion recovers to ≤ 7 days as well.
 - Recovery time: ~15 minutes (dump decrypt + `pg_restore` into scratch
   Postgres + smoke test per runbook).
-- Erasure lag in backups: ~28 days, documented; restore rehearsals must not
+- Erasure lag in backups: ~49 days, documented; restore rehearsals must not
   resurrect erased records into live use without re-applying pending erasures.
 - The demo's honest position improves from "whatever Supabase plan gives us"
   to "managed primary + one verified application-level copy".
@@ -88,3 +90,15 @@ oversight.
   baseline drill, logged, before v0.2.0 is tagged.**
 - If the operator later enables the offsite path, this ADR is superseded, not
   amended — the superseding ADR says so in its status line.
+
+## Addendum — retention as implemented (2026-11-17, spec 45 phase 4)
+
+The decision's "4 weekly + 3 monthly" tier was never built; the shipped
+script keeps the **7 newest** dumps (`ls -t books/*.dump.age | tail -n +8`),
+which at a weekly cadence is ≈ **49 days** for the oldest survivor. An
+erasure honoured on D is guaranteed absent from backups by roughly D + 49
+days, not D + 28. `docs/retention.md`, `docs/roa.md`,
+`docs/backup-restore.md` and this file were corrected to say so; spec 43's
+phase-3 text describes the intent as read at the time, not the shipped
+reality. The two-tier rotation remains available as a deliberate future
+change to the script, not as documentation of today's.

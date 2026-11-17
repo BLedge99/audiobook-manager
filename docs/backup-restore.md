@@ -28,13 +28,8 @@ in your password manager, never in the repo.
 
 ```cron
 # /etc/cron.d/bookle-backup — Sunday 04:30, quiet hours
-30 4 * * 0  postgres  . /etc/bookle/backup.env && pg_dump "$DATABASE_URL" --format=custom | age --recipient "$AGE_RECIPIENT" --output "$BACKUP_DIR/bookle-$(date -u +\%Y-\%m-\%d).dump.age" && /opt/bookle/scripts/backup-db.sh
-```
-
-or the script directly (it does dump + encrypt + prune + digest):
-
-```sh
-. /etc/bookle/backup.env && /opt/bookle/scripts/backup-db.sh
+# The script does dump + encrypt + prune + digest; no inline pg_dump here.
+30 4 * * 0  postgres  . /etc/bookle/backup.env && /opt/bookle/scripts/backup-db.sh
 ```
 
 ## What the script proves — and what only a drill proves
@@ -92,10 +87,10 @@ The full application-level smoke test (boot the server against the restored
 database, log in, `GET /api/audiobooks`, one `PUT .../progress`) is part of the
 annual drill; see `docs/drills.md` for how it went most recently.
 
-## GDPR: erased data outlives the live database by up to ~28 days
+## GDPR: erased data outlives the live database by up to ~49 days
 
 An erasure removes rows from the live database immediately. The weekly-rotating
-backups drop those rows within ~28 days (7-dump rotation). Two rules follow:
+backups drop those rows within ~49 days (7-dump rotation). Two rules follow:
 
 1. **A restore must not resurrect an erased person.** Before pointing the
    live app at a restored database, re-apply any pending erasures (the erasure
@@ -124,3 +119,4 @@ rclone copy "$BACKUP_DIR" remote:bookle-backups --include 'bookle-*.dump.age' --
 (or `restic -r b2:bookle-backups`). The encryption here is already age-based,
 so the offsite copy needs no additional crypto. Then update this file,
 `docs/risk-register.md` (R2 disappears), and ADR 037 gets superseded.
+

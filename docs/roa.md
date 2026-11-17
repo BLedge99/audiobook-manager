@@ -29,7 +29,7 @@ spec 35 and ADR 026.
 **Backups.** The database is also copied weekly via `pg_dump`, encrypted with
 `age`, retained as the 7 newest dumps on the same host (accepted risk R2,
 [`docs/risk-register.md`](risk-register.md)). Erased rows age out of rotation
-within ~28 days; a restore must re-apply any erasures granted since the dump
+within ~49 days; a restore must re-apply any erasures granted since the dump
 was taken. See [`docs/retention.md`](retention.md) (Backups) and
 [`docs/backup-restore.md`](backup-restore.md).
 
