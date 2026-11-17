@@ -23,7 +23,7 @@ services:
       npm --prefix client ci && npm --prefix client run build &&
       npm --prefix client run build:admin &&
       npm --prefix server ci && npm --prefix server run build
-    startCommand: npm --prefix server run start
+    startCommand: bash -c "npm --prefix server run db:prod:migrate && npm --prefix server run start"
     healthCheckPath: /api/health
     disk:
       name: bookle-data
@@ -56,6 +56,8 @@ services:
       - key: ADMIN_PROXY
         value: "true"  # hosted single-port deployment: family port proxies /admin (ADR 029)
       # --- non-secret config ---
+      - key: NODE_VERSION
+        value: "24"
       - key: NODE_ENV
         value: production
       - key: TRUST_PROXY

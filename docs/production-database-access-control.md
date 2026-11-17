@@ -66,8 +66,12 @@ Prisma opens its own pool per process. Against Supabase:
 
 ## Applying it
 
-The production image runs `prisma migrate deploy` before the server starts, so
-the next deploy applies the migration by itself.
+The production blueprint's `startCommand` runs
+`npm --prefix server run db:prod:migrate && npm --prefix server run start`, so
+the next deploy applies the migration before the first request. (The doc used
+to claim this while `render.yaml` started the server bare; spec 45 phase 3
+made the claim true — the blueprint now migrates first, and a config test
+pins it.)
 
 To close the exposure before a deploy, run the same SQL by hand in the
 **Supabase dashboard → SQL Editor → New query**. Copy the contents of the
