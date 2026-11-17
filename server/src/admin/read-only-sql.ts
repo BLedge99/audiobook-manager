@@ -38,13 +38,27 @@ export function stripSecretColumnNames(
   });
 }
 
-/** Strip denied keys (case-insensitive) from a result row. */
+/** bcrypt ($2a$/$2b$/$2y$) and argon2 ($argon2id$…) — offline-crackable
+ *  material. The key filter cannot see aliases; the value cannot hide behind
+ *  one. Both providers run every row through this. Family code never leaks
+ *  them; the free-form console is the surface that needs it. */
+const CRACKABLE = [/^\$2[aby]\$\d{2}\$/, /^\$argon2(id|i|d)\$/];
+
+/** Redact every string value that is unmistakably a password hash. */
+export function scrubSecretValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  return CRACKABLE.some((re) => re.test(value)) ? "[redacted]" : value;
+}
+
+/** Strip denied keys (case-insensitive) from a result row, and redact
+ *  crackable values under whatever key they hide in. */
 export function stripSecretColumns(row: unknown): unknown {
   if (row === null || typeof row !== "object" || Array.isArray(row)) return row;
   const out: Record<string, unknown> = {};
   const denied = ADMIN_SECRET_COLUMNS as readonly string[];
   for (const [key, value] of Object.entries(row as Record<string, unknown>)) {
-    if (!denied.includes(key.toLowerCase())) out[key] = value;
+    if (denied.includes(key.toLowerCase())) continue;
+    out[key] = scrubSecretValue(value);
   }
   return out;
 }

@@ -597,7 +597,7 @@ not cut.** Verification battery (this session):
 | 1.2 | Track delete/recreate + book upsert in one interactive transaction; WAL on the test template; SQLite ceiling documented |
 | 1.3 | Ships as [`specs/44-offline-progress-sync.md`](44-offline-progress-sync.md) — one-directional push on reconnect; README's sentence is now true |
 | 1.4 | Media route tests (416/suffix ranges/start>end/cover Content-Type whitelist/root confinement) + the whitelist fix |
-| 2.1 | Admin console: credential tables out, hash columns stripped on both providers, asserted by test |
+| 2.1 | Admin console: credential tables out, hash columns stripped on both providers, asserted by test — **corrected by spec 45 phase 2**: key-name filtering alone let `SELECT "passwordHash" AS digest` through; rows are now also scrubbed of bcrypt/argon2-shaped values, asserted by test |
 | 2.2 | OAuth auto-provision gated to demo/opt-in; client copy; ROPA updated |
 | 2.3 | Password reset deletes target's passkeys (device creds already revoked) |
 | 2.4 | SameSite/CSRF posture documented in SECURITY.md (accepted R3) |

@@ -262,5 +262,23 @@ describe("admin panel authentication", () => {
       expect(res.statusCode).toBe(200);
       expect(res.body).not.toMatch(/passwordHash|tokenHash|codeHash|stateHash|challenge/i);
     }
+
+    // The alias bypass: a credential column renamed to anything else must
+    // never reach the body (spec 45 phase 2). Seed one and name it nothing.
+    await prisma.profile.create({
+      data: {
+        name: "cred-shape-test",
+        passwordHash: "$2b$10$N9qo8uLOickgx2ZMRZoMye3FTfD6BQmHcQUdh5pFc8N9b3r0n0l7u",
+      },
+    });
+    const alias = await adminApp.inject({
+      method: "POST",
+      url: "/api/admin/db/query",
+      cookies,
+      payload: { sql: `SELECT "passwordHash" AS digest FROM "Profile" WHERE name = 'cred-shape-test'` },
+    });
+    expect(alias.statusCode).toBe(200);
+    expect(alias.body).not.toContain("$2");
+    expect(alias.body).toContain("[redacted]");
   });
 });

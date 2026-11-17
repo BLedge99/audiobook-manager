@@ -78,6 +78,65 @@ describe("executeReadOnlyQuery", () => {
       db.close();
     }
   });
+
+  it("redacts bcrypt-shaped values under ANY column name — the alias bypass", async () => {
+    // The key-name filter cannot see `SELECT passwordHash AS digest`; the value
+    // is what the operator must not get. Offline-crackable bcrypt material is
+    // the load-bearing case.
+    const db = new Database(":memory:");
+    try {
+      db.exec("CREATE TABLE cred (id INTEGER PRIMARY KEY, digest TEXT)");
+      db.prepare("INSERT INTO cred (digest) VALUES (?)").run(
+        "$2b$10$N9qo8uLOickgx2ZMRZoMye3FTfD6BQmHcQUdh5pFc8N9b3r0n0l7u",
+      );
+      const rows = (await executeReadOnlyQuery(
+        "sqlite",
+        "SELECT digest AS hidden_note FROM cred",
+        db as never,
+      )) as { hidden_note: string }[];
+      expect(rows[0]?.hidden_note).toBe("[redacted]");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("redacts argon2-shaped values too", async () => {
+    const db = new Database(":memory:");
+    try {
+      db.exec("CREATE TABLE cred (id INTEGER PRIMARY KEY, digest TEXT)");
+      db.prepare("INSERT INTO cred (digest) VALUES (?)").run("$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$something");
+      const rows = (await executeReadOnlyQuery(
+        "sqlite",
+        "SELECT digest AS also_hidden FROM cred",
+        db as never,
+      )) as { also_hidden: string }[];
+      expect(rows[0]?.also_hidden).toBe("[redacted]");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("leaves ordinary strings and hex-shaped enrichment data untouched", async () => {
+    const db = new Database(":memory:");
+    try {
+      db.exec("CREATE TABLE t2 (id INTEGER PRIMARY KEY, note TEXT, digest TEXT)");
+      db.prepare("INSERT INTO t2 (note, digest) VALUES (?, ?)").run(
+        "a normal description",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      );
+      const rows = (await executeReadOnlyQuery(
+        "sqlite",
+        "SELECT note, digest AS alias_digest FROM t2",
+        db as never,
+      )) as { note: string; alias_digest: string }[];
+      expect(rows[0]?.note).toBe("a normal description");
+      expect(rows[0]?.alias_digest).toBe(
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      );
+    } finally {
+      db.close();
+    }
+  });
 });
 
 describe("validateReadOnlySql — server-side function blocklist", () => {
