@@ -615,7 +615,7 @@ not cut.** Verification battery (this session):
 | 2.2 | OAuth auto-provision gated to demo/opt-in; client copy; ROPA updated |
 | 2.3 | Password reset deletes target's passkeys (device creds already revoked) |
 | 2.4 | SameSite/CSRF posture documented in SECURITY.md (accepted R3) |
-| 2.5 | Passkey login/options rate-limited (30/15 min/IP + profile); atomic `failedLoginCount` |
+| 2.5 | Passkey login/options rate-limited (30/15 min/IP + profile); atomic `failedLoginCount` — **corrected by spec 45 (phase 6)**: the 429 body carried `retryAfterSeconds` while the spec promised the `Retry-After` header; the header is now set and pinned by test |
 | 2.6 | SECURITY.md rewritten; `docs/risk-register.md` carries R1–R4 + A1–A6 |
 | 3 | Weekly age-encrypted same-site dump; baseline restore drill **executed for real** (wipe → decrypt → restore → counts → production build boots → login → 200) |
 | 4 | `render.yaml` (build/health/disk/1-hop proxy/secrets out), rollback runbook, smoke script — all verified against a live production build |

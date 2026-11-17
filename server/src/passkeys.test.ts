@@ -410,6 +410,8 @@ describe("passkey login/options are rate limited (spec 43 phase 2.5)", () => {
       }
       const blocked = await limited.inject({ method: "POST", url: "/api/auth/passkeys/login/options", payload: {} });
       expect(blocked.statusCode).toBe(429);
+      // The Retry-After header the spec promised — not just the body (spec 45 phase 6).
+      expect(blocked.headers["retry-after"]).toMatch(/^[1-9]\d*$/);
       expect(blocked.json()).toEqual({ code: "account_locked", params: { retryAfterSeconds: expect.any(Number) } });
     } finally {
       await limited.close();

@@ -461,6 +461,7 @@ export async function registerPasskeyRoutes(
     const blocked = !ipCheck.allowed ? ipCheck : !profileCheck.allowed ? profileCheck : null;
     if (blocked) {
       // Dropped without counting: a spray cannot extend its own window by retrying.
+      reply.header("Retry-After", String(blocked.retryAfterSeconds));
       return fail(reply, 429, "account_locked", { retryAfterSeconds: blocked.retryAfterSeconds });
     }
     challengeLimiter.record(`ip:${request.ip}`, Date.now());
