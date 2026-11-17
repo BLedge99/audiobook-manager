@@ -32,8 +32,9 @@ const { chromium } = require("playwright");
 const TARGET = process.env.CAPTURE_URL || "http://127.0.0.1:5173";
 const PASSWORD = process.env.CAPTURE_PASS || "household";
 const OUT = process.env.CAPTURE_OUT || ".impeccable/review";
-/** Profile created by `npm --prefix server run seed:profiles`. */
-const PROFILE = process.env.CAPTURE_PROFILE || "Ben";
+/** Default profile to click through the gate with. Override with CAPTURE_PROFILE;
+    create the account first (npm run dev) — fresh installs ship with none. */
+const PROFILE = process.env.CAPTURE_PROFILE || "Capture";
 
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1440, height: 900 };

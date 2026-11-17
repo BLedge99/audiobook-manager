@@ -146,10 +146,11 @@ renamed to `test`, and existing `Testing` to `admin-test`, preserving their ids
 and history. `Archie` is kept if present but is not seeded on a fresh install.
 No profile is deleted automatically.
 
-On a fresh database the server seeds `admin`, `ben`, `dad` and `mum`; `test` and
-`admin-test` are seeded only when test accounts are enabled, and their known
-passwords come from the environment in development and CI only. A production
-database never gets a known test password.
+On a fresh database the server seeded `admin`, `ben`, `dad` and `mum`; `test` and
+`admin-test` were seeded only when test accounts were enabled. **Amended
+2026-11-17 (ADR 038): fresh installs ship with no preset profiles at all — the
+first profile created in the app becomes the household admin and follows the
+server library.**
 
 ## Alternatives rejected
 

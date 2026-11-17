@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { searchOpenLibraryBySubject } from "./openlibrary";
+import { bindSubjectPoolStore, searchOpenLibraryBySubject, type SubjectPoolStore } from "./openlibrary";
 import {
   buildOwnedIdentities,
   buildSeed,
@@ -162,8 +162,61 @@ function explain(candidate: Taggable, seed: ReturnType<typeof buildSeed>): Recom
   return { code: "related" };
 }
 
+interface SubjectPoolRow {
+  key: string;
+  createdAt: Date;
+  payload: string;
+}
+
+interface SubjectPoolDelegate {
+  findUnique(args: { where: { key: string } }): Promise<SubjectPoolRow | null>;
+  upsert(args: {
+    where: { key: string };
+    create: { key: string; payload: string };
+    update: { payload: string };
+  }): Promise<unknown>;
+}
+
+/**
+ * Prisma-backed subject pool.
+ *
+ * Serialised without `raw` supplies — candidates carry the whole OL doc, which
+ * would make the table the size of the enrichment cache. Everything Discover
+ * needs travels in the mapped fields.
+ */
+function prismaSubjectPoolStore(delegate: SubjectPoolDelegate): SubjectPoolStore {
+  return {
+    async read(key) {
+      const row = await delegate.findUnique({ where: { key } });
+      if (!row) return undefined;
+      try {
+        const parsed = JSON.parse(row.payload) as ProviderCandidate[];
+        return Array.isArray(parsed) ? parsed : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    async write(key, candidates) {
+      const lean = candidates.map(({ raw: _raw, ...rest }) => rest);
+      await delegate.upsert({
+        where: { key },
+        create: { key, payload: JSON.stringify(lean) },
+        update: { payload: JSON.stringify(lean) },
+      });
+    },
+  };
+}
+
+function bindPrismaSubjectPoolStore(prisma: PrismaClient): void {
+  const delegate = (prisma as unknown as { subjectPool?: SubjectPoolDelegate }).subjectPool;
+  if (!delegate) return; // e.g. the unit-test fakes
+  bindSubjectPoolStore(prismaSubjectPoolStore(delegate));
+}
+
 export class RecommendationService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaClient) {
+    bindPrismaSubjectPoolStore(prisma);
+  }
 
   /** Everything the library owns, as normalised identities. */
   private async ownedIdentities(): Promise<Set<string>> {

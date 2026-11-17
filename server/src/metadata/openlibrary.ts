@@ -154,6 +154,42 @@ const SUBJECT_CACHE_MAX = 120;
 const subjectPoolCache = new Map<string, { at: number; candidates: ProviderCandidate[] }>();
 
 /**
+ * Persistence for the subject pool.
+ *
+ * Discover used to serve results from a 30-minute in-memory pool. A cold start
+ * (a deploy, a crash, a Render instance restart) meant Discover's only input
+ * was a live call to Open Library, and when the provider was unreachable the
+ * pool came back empty and the UI said "no new books found yet" — a provider
+ * outage presented to the listener as a catalogue result. This binding is
+ * wired by the RecommendationService, backed by the `SubjectPool` table, so
+ * the pool survives restarts and degrades to stale-if-error instead of zero.
+ */
+export interface SubjectPoolStore {
+  read(key: string): Promise<ProviderCandidate[] | undefined>;
+  write(key: string, candidates: ProviderCandidate[]): Promise<void>;
+}
+
+let subjectPoolStore: SubjectPoolStore | null = null;
+
+/** Bind (or clear, for tests) the durable pool. The app's server binds one at startup. */
+export function bindSubjectPoolStore(store: SubjectPoolStore | null): void {
+  subjectPoolStore = store;
+}
+
+function cacheFresh(cached: { at: number; candidates: ProviderCandidate[] } | undefined): boolean {
+  return !!cached && Date.now() - cached.at < SUBJECT_CACHE_TTL_MS;
+}
+
+function rememberPool(cacheKey: string, candidates: ProviderCandidate[]): void {
+  // Evict oldest-first. `Map` preserves insertion order.
+  if (subjectPoolCache.size >= SUBJECT_CACHE_MAX) {
+    const oldest = subjectPoolCache.keys().next().value;
+    if (oldest) subjectPoolCache.delete(oldest);
+  }
+  subjectPoolCache.set(cacheKey, { at: Date.now(), candidates });
+}
+
+/**
  * Fetch one page of an Open Library subject search.
  *
  * Paging uses the documented `page` + `limit` pair (page starts at 1).
@@ -167,13 +203,41 @@ export async function searchOpenLibraryBySubject(
   const cacheKey = `${subject}:${limit}:${page}`;
 
   const cached = subjectPoolCache.get(cacheKey);
-  if (cached && Date.now() - cached.at < SUBJECT_CACHE_TTL_MS) return cached.candidates;
+  if (cacheFresh(cached)) return cached!.candidates;
+
+  if (subjectPoolStore) {
+    try {
+      const persisted = await subjectPoolStore.read(cacheKey);
+      if (persisted && persisted.length > 0) {
+        rememberPool(cacheKey, persisted);
+        return persisted;
+      }
+    } catch (err) {
+      // Best effort: the provider path below stays usable without it.
+      console.warn(`[openlibrary] subject pool read failed for ${cacheKey}:`, err);
+    }
+  }
 
   const query = encodeURIComponent(`subject:${subject}`);
   const res = await openLibraryGet(
     `https://openlibrary.org/search.json?q=${query}&page=${page}&limit=${limit}&fields=${encodeURIComponent(OPEN_LIBRARY_FIELDS)}`,
   );
-  if (!res?.ok) return cached?.candidates ?? [];
+  if (!res?.ok) {
+    const statusLine = res ? `HTTP ${res.status}` : "request failed/timeout/unavailable";
+    console.warn(`[openlibrary] subject search failed for ${cacheKey}: ${statusLine}`);
+    // Serve the in-memory pool if we have one (it may be stale), then the
+    // persisted pool — anything is better than an empty answer when the
+    // provider is down.
+    if (cached) return cached.candidates;
+    if (subjectPoolStore) {
+      try {
+        return (await subjectPoolStore.read(cacheKey)) ?? [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
 
   const data = (await res.json()) as { docs?: Record<string, unknown>[] };
   const candidates = (data.docs ?? [])
@@ -188,12 +252,12 @@ export async function searchOpenLibraryBySubject(
     }))
     .filter((candidate) => candidate.title && !isNonBookTitle(candidate.title));
 
-  // Evict oldest-first. `Map` preserves insertion order.
-  if (subjectPoolCache.size >= SUBJECT_CACHE_MAX) {
-    const oldest = subjectPoolCache.keys().next().value;
-    if (oldest) subjectPoolCache.delete(oldest);
+  rememberPool(cacheKey, candidates);
+  if (subjectPoolStore) {
+    void subjectPoolStore.write(cacheKey, candidates).catch((err) => {
+      console.warn(`[openlibrary] subject pool write failed for ${cacheKey}:`, err);
+    });
   }
-  subjectPoolCache.set(cacheKey, { at: Date.now(), candidates });
   return candidates;
 }
 

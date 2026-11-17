@@ -181,17 +181,21 @@ export class LocalLibraryDatabase extends Dexie {
       privateRows: "&id, [profileId+table]",
     });
     // Spec 30: the downloaded-book table is keyed by `<serverId>#<bookId>` so a
-    // device can hold more than one server's shelf. Key path renamed from `id`
-    // to `bookKey` because the key is now a composite string, not a bare book id.
+    // device can hold more than one server's shelf.
+    //
+    // Dexie cannot change the primary key of an existing store: declaring
+    // `books: "bookKey"` here failed every device that already had a v3
+    // database, with "Upgrade error not yet supported for changing primary
+    // key" — the whole local database then refused to open, taking covers with
+    // it. Replica rows are disposable (a book can always be re-downloaded), so
+    // this version drops the old `id`-keyed table outright. Data worth keeping
+    // is in `covers` and `privateRows`, which are untouched.
     this.version(4).stores({
-      books: "bookKey",
+      books: null,
       covers: "&key",
       keyEnvelopes: "&profileId",
       privateRows: "&id, [profileId+table]",
     });
-    // Spec 39: external books live beside the replica and never sync. Additive
-    // again: every existing table keeps its shape, so this upgrade needs no
-    // data migration — only the new store.
     this.version(5).stores({
       books: "bookKey",
       covers: "&key",

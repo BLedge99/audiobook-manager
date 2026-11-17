@@ -62,7 +62,7 @@ with individual credentials yet).
 - [x] Deleting a profile removes its profile-scoped rows.
 - [x] Switching profiles in the UI immediately swaps displayed progress.
 - [x] Profile names are unique (409 on duplicate; enforced by DB unique index).
-- [x] Default household profiles (Dad, Mum, Archie, Ben, Playwright, Testing) are seeded on first boot of an empty DB.
+- [x] Profiles created in the app; fresh installs ship with none (ADR 038). Pre-seeded `Dad`, `Mum`, `Archie`, `Ben`, `Playwright`, `Testing` (i.e. `admin`/member set) removed 2026-11-17.
 - [x] A household member can register a profile with the household password; an empty account list has an explicit registration path.
 - [x] API failures are distinct from a confirmed empty profile list; offline mode never invents temporary server profile IDs or stores the household password.
 - [x] Tests: route tests for auth gate; E2E for login → profile pick → play.

@@ -84,33 +84,34 @@ describe("addExternalItem", () => {
 });
 
 describe("database upgrade (v4 → v5)", () => {
-  it("keeps existing replica books and covers intact", async () => {
+  it("drops the legacy replica rows but keeps covers after the v3 -> v5 upgrade", async () => {
     const name = `test-upgrade-${crypto.randomUUID()}`;
 
-    // Build a v4-shaped database exactly as the shipped code did.
-    const v4 = new Dexie(name);
-    v4.version(4).stores({
-      books: "bookKey",
+    // Build a v3-shaped database exactly as the shipped pre-spec-30 code did.
+    // (v4 used to be declared as `books: "bookKey"` on top of that, which Dexie
+    // cannot apply — every v3 device's database refused to open.)
+    const v3 = new Dexie(name);
+    v3.version(3).stores({
+      books: "id",
       covers: "&key",
       keyEnvelopes: "&profileId",
       privateRows: "&id, [profileId+table]",
     });
-    await v4.open();
-    await v4.table("books").put({
-      bookKey: "https://server#1",
-      serverId: "https://server",
-      book: { id: 1, title: "Kept", author: "A", duration: 10, fileFormat: "mp3", createdAt: "2026-01-01", tracks: [] },
+    await v3.open();
+    await v3.table("books").put({
+      id: 1,
+      book: { id: 1, title: "Regenerated on rescan", author: "A", duration: 10, fileFormat: "mp3", createdAt: "2026-01-01", tracks: [] },
       fetchedAt: "2026-01-01",
       tracks: {},
     });
-    await v4.table("covers").put({ key: "book:1", blob: new Blob(["x"]), etag: null, savedAt: 1, bytes: 1 });
-    v4.close();
+    await v3.table("covers").put({ key: "book:1", blob: new Blob(["x"]), etag: null, savedAt: 1, bytes: 1 });
+    v3.close();
 
-    // Open with the current (v5) schema and assert nothing was lost.
+    // Open with the current schema: the old replica table is dropped (rows were
+    // disposable), the covers survive, and the new table exists.
     const current = new LocalLibraryDatabase(name);
     const books = await current.books.toArray();
-    expect(books).toHaveLength(1);
-    expect(books[0].book.title).toBe("Kept");
+    expect(books).toEqual([]); // repopulated by the next scan
     expect(await current.covers.toArray()).toHaveLength(1);
     expect(await current.externalItems.toArray()).toEqual([]);
     await current.delete();

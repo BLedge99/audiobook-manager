@@ -28,6 +28,7 @@ import {
 import type { OAuthConfig, OAuthIdentity, OAuthProvider } from "./oauth";
 import { exchangeAuthorizationCode, fetchOAuthIdentity, safeEqualStrings } from "./oauth";
 import { resetProfilePasswordCore } from "./profile-admin";
+import { giveProfileEveryBook } from "../library-membership";
 import { RateLimiter } from "../rate-limit";
 
 // Re-exported for the consumers that import from ./service (routes, passkeys,
@@ -166,6 +167,11 @@ export class AuthService {
     let result: LoginResult;
     try {
       result = await this.prisma.$transaction(async (transaction) => {
+        // Fresh installs ship with no preset profiles; the first profile
+        // created in the app becomes the household admin and follows the
+        // server library, so a new household sees its books straight away.
+        const existing = await transaction.profile.count();
+        const bootstrap = existing === 0;
         const profile = await transaction.profile.create({
           data: {
             name: profileName,
@@ -173,6 +179,8 @@ export class AuthService {
             passwordUpdatedAt: now,
             lastLoginAt: now,
             lastActiveAt: now,
+            role: bootstrap ? "admin" : "member",
+            followsServerLibrary: bootstrap,
           },
         });
         const session = await transaction.session.create({
@@ -188,7 +196,7 @@ export class AuthService {
             expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
           },
         });
-        return { token, session, profile, role: "member" };
+        return { token, session, profile, role: bootstrap ? "admin" : "member" };
       });
     } catch (error) {
       if (
@@ -203,6 +211,16 @@ export class AuthService {
     }
 
     this.clearIp(ip);
+    // Give the first-ever profile a library entry for every book that already
+    // exists, matching the old seeded admin. Best-effort: a failure here must
+    // not undo the account creation; the next scan re-adds books anyway.
+    if (result.role === "admin" && result.profile?.followsServerLibrary) {
+      try {
+        await giveProfileEveryBook(this.prisma, result.profile.id);
+      } catch (error) {
+        console.error("[auth] first-profile library bootstrap failed:", error);
+      }
+    }
     return result;
   }
 

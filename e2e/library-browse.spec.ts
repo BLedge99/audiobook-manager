@@ -336,9 +336,9 @@ test.describe("server library", () => {
     await expect(page.getByRole("heading", { name: "Select books to add to your library" })).toBeVisible();
     await expect(page.getByText(/Every audiobook the household has/)).toBeVisible();
 
-    // The server's shelf and the profile's shelf are the same books here --
-    // the seeded profiles follow the server library -- so the count line is
-    // what proves the tab read the server, not the profile.
+    // The server's shelf and the profile's shelf are the same books after
+    // ADR 038 (pickAnyProfile shelves the whole server library), so the
+    // count line is what proves the tab read the server, not the profile.
     await expect(page.getByText(/\d+ of \d+ in your library/)).toBeVisible();
     await expect(page.getByText("All audiobooks")).toBeVisible();
   });

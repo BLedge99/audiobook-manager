@@ -608,3 +608,12 @@ model ScanState {
 
   libraryRoot LibraryRoot @relation(fields: [libraryRootId], references: [id], onDelete: Cascade)
 }
+
+// Spec 19 / ADR 010: a persisted pool of Open Library subject searches.
+// Discover queries OL live at request time; this table is the durable pool
+// the server falls back to when the provider is down. Household-independent.
+model SubjectPool {
+  key       String   @id
+  createdAt DateTime @default(now())
+  payload   String
+}

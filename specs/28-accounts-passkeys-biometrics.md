@@ -42,6 +42,8 @@ Confirmed with the household:
 1. **Profiles are accounts.** `admin` and `admin-test` are admins; `ben`, `dad`,
    `mum`, `archie` and `test` are members. Existing data is preserved; existing
    `Playwright` becomes `test` and existing `Testing` becomes `admin-test`.
+   **Amended 2026-11-17 (ADR 038): these rules describe the migration of an
+   existing installation. Fresh installs ship no preset profiles — rule 3b.**
 2. **Normal users enter one password.** `APP_PASSWORD` is break-glass/recovery
    and profile claiming, not a daily second factor for anyone, including an
    admin.
@@ -63,10 +65,20 @@ Confirmed with the household:
 9. **No automatic deletion.** `Archie` stays if already present, but is not
    seeded on a fresh install. Removing a profile remains an explicit admin
    action with its history warning.
+3b. **(ADR 038) No profiles are pre-seeded on a fresh install.** The first
+   profile a human creates in the app (via register-profile) becomes the
+   household admin and follows the server library, absorbing every book that
+   exists at that moment; every profile created afterwards is a plain member
+   with an empty shelf, shelving books explicitly.
 
 ## Account model
 
 `Profile` is the account. There is no second user table.
+
+The table below describes the migration of an **existing** installation
+(pre-ADR-038). **Fresh installs (ADR 038, 2026-11-17) ship with no profiles at
+all**: the first profile created in the app becomes `admin` and follows the
+server library; everyone after that is a member with an empty shelf.
 
 | Profile | Role | Notes |
 |---|---|---|
@@ -123,9 +135,9 @@ password.
   /api/auth/register-profile` validates the household key, creates the profile,
   and returns a profile-bound session. A failed account-list request is an
   error state, not an empty-list/signup state.
-- On a fresh install with no passwords set, the first-run screen explains that
-  an admin must claim `admin` with the household key, or that the household key
-  can be used to set each profile's first password.
+- On a fresh install with no profiles yet, the first-run screen explains that the
+  household key can be used to create the first profile (it becomes the admin)
+  and set each profile's first password.
 - The account list is public. That is deliberate: a person has to know which
   profile to sign in as, and the names are already visible on the profile
   screen. It exposes no secrets.
@@ -544,11 +556,12 @@ Added to `server/src/http-errors.ts` and mapped in `client/src/lib/apiError.ts`:
 5. Leave every other profile as `member` with `followsServerLibrary` unchanged.
 6. Do not seed `Archie` on a fresh install; keep the row if it already exists.
 
-On a fresh database, seed `admin`, `ben`, `dad`, `mum` with no password, plus
-`test` and `admin-test` only when `SEED_TEST_ACCOUNTS=true`. When test seeding
-is on, read `TEST_PROFILE_PASSWORD` and `ADMIN_TEST_PROFILE_PASSWORD` from the
-environment and hash them; if either is missing, create the profile unclaimed
-rather than inventing a password.
+**Amended 2026-11-17 (ADR 038).** Fresh installs no longer seed `admin`, `ben`,
+`dad` or `mum`. The first profile created in the app becomes `admin` with
+`followsServerLibrary = true` and absorbs every book that exists at that
+moment; subsequent profiles are plain members with an empty shelf. `test` and
+`admin-test` are no longer seeded either; test flows create what they need.
+The migration above still describes the existing-install path.
 
 The migration must run under `prisma migrate deploy`, not `db push`, and must be
 checked against a copy of the live database before it is applied.
@@ -609,8 +622,8 @@ checked against a copy of the live database before it is applied.
       still answers 401 without one.
 - [x] Existing data survives the migration: `Playwright` becomes `test`,
       `Testing` becomes `admin-test`, and `Archie` remains if present.
-- [x] A fresh database seeds `admin`, `ben`, `dad`, `mum` and no known test
-      password in production.
+- [x] A fresh database ships with no preset profiles; the first created becomes
+      `admin` and follows the server library (ADR 038, 2026-11-17).
 - [x] A web passkey can be registered with a virtual authenticator and used to
       sign in; a mismatched origin fails.
 - [x] Passkey controls are hidden and the server answers

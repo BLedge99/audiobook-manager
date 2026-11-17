@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { buildApp } from "./app";
-import { seedDefaultProfiles } from "./seed";
+
 import { buildAdminApp } from "./admin/app";
 import { AdminAuth } from "./admin/auth";
 import { PrismaClient } from "@prisma/client";
@@ -54,15 +54,15 @@ async function main() {
     storage, storageSync,
     secureCookie: process.env.COOKIE_SECURE === "true",
   });
-  // First launch: create the default household profiles so progress
-  // is profile-scoped from the very first play. No-op once seeded.
+  // Fresh installs ship with no preset profiles. The first profile a human
+  // creates in the app (register-profile) becomes the household admin and
+  // follows the server library; see specs/03 and decisions/038.
   try {
     if ((await prisma.profile.count()) === 0) {
-      const created = await seedDefaultProfiles(prisma);
-      console.log(`[server] seeded default profiles: ${created.join(", ")}`);
+      console.log("[server] fresh install: create the first profile in the app (it becomes the household admin)");
     }
   } catch (err) {
-    console.error("[server] profile seeding skipped:", err);
+    console.error("[server] fresh-install probe skipped:", err);
   }
 
   // Spec 28: expired and revoked auth rows are cleared at startup as well as

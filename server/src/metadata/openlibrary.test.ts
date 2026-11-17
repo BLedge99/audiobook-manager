@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
   clearSubjectPoolCache,
+  bindSubjectPoolStore,
   searchOpenLibrary,
   searchOpenLibraryBySubject,
   fetchOpenLibraryDescription,
@@ -245,5 +246,56 @@ describe("searchOpenLibraryBySubject", () => {
     await searchOpenLibraryBySubject("horror", { limit: 50, page: 1 });
     // A failure is not an answer.
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("subject pool persistence", () => {
+  const candidate = { source: "openlibrary" as const, title: "The Shining", confidence: 0.5, providerKey: "/works/OL1W" };
+
+  beforeEach(() => {
+    clearSubjectPoolCache();
+  });
+  afterEach(() => {
+    bindSubjectPoolStore(null);
+  });
+
+  it("serves a persisted pool when Open Library is unreachable", async () => {
+    const store = { read: async () => [candidate], write: async () => {} };
+    bindSubjectPoolStore(store);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 503 })));
+    const results = await searchOpenLibraryBySubject("horror");
+    expect(results).toEqual([candidate]);
+  });
+
+  it("yields a persisted pool when the response is not OK (rate limit)", async () => {
+    const store = { read: async () => [candidate], write: async () => {} };
+    bindSubjectPoolStore(store);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 429 })));
+    const results = await searchOpenLibraryBySubject("horror");
+    expect(results).toEqual([candidate]);
+  });
+
+  it("writes the pool back after a successful provider call", async () => {
+    const written: string[] = [];
+    const store = { read: async () => undefined, write: async (key: string) => { written.push(key); } };
+    bindSubjectPoolStore(store);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      docs: [{ key: "/works/OL1W", title: "The Shining", author_name: ["Stephen King"], cover_i: 9, subject: ["horror"] }],
+    }), { status: 200 })));
+    const results = await searchOpenLibraryBySubject("horror");
+    expect(results).toHaveLength(1);
+    expect(written).toEqual(["horror:12:1"]);
+  });
+
+  it("serves the persisted pool before hitting the provider again (fresh-but-empty provider would be worse)", async () => {
+    const spy = vi.fn(async () => new Response(JSON.stringify({ docs: [] }), { status: 200 }));
+    const store = { read: async () => [candidate], write: async () => {} };
+    bindSubjectPoolStore(store);
+    vi.stubGlobal("fetch", spy);
+    const results = await searchOpenLibraryBySubject("horror");
+    // The persisted pool stands in for "empty is not an answer": Discover keeps
+    // showing suggestions instead of "no new books found yet".
+    expect(results).toEqual([candidate]);
+    expect(spy).not.toHaveBeenCalled(); // no provider call at all when fresh data is persisted
   });
 });

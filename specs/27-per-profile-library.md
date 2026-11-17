@@ -37,10 +37,10 @@ script.
 "Migrated to contain every book" says what is true at the moment of the
 migration; it does not say what happens to a book scanned *next month*. The
 flag says that, and it is what makes a fresh install behave like a migrated
-one: the profiles that existed when the feature shipped (and the six default
-seeded profiles) follow the server library and keep receiving new books, while
-a profile created afterwards starts empty and does not. Removing a book does
-**not** clear the flag — "not that one" is not "not any new ones".
+one: the profiles that existed when the feature shipped followed the server
+library and keep receiving new books, while a profile created afterwards starts
+empty and does not. Removing a book does not clear the flag — "not that one" is
+not "not any new ones".
 
 **Not a per-profile copy of the files.** Membership is a *row*, not a file. The
 audio file stays exactly where it is, in the library root, and two profiles can

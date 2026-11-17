@@ -59,11 +59,10 @@ export async function pickProfile(page: Page, name: string): Promise<void> {
 /**
  * Pass the profile gate without caring *which* profile is used.
  *
- * Tests that only need "somebody is listening" must not hardcode a seeded
- * name: a fresh server seeds `DEFAULT_PROFILES`, but a database that already
- * exists may not contain any particular one, and a hardcoded name turns a
- * smoke test into a false failure. Creates a profile only if the server has
- * none at all.
+ * Tests that only need "somebody is listening" must not hardcode a profile
+ * name: fresh installs ship no seeded profiles (ADR 038). Creates a profile
+ * only if the server has none at all, then shelves the whole server library
+ * into it.
  */
 export async function pickAnyProfile(page: Page): Promise<string> {
   await expect(page.getByRole("heading", { name: "Who's listening?" })).toBeVisible();
@@ -82,6 +81,21 @@ export async function pickAnyProfile(page: Page): Promise<string> {
   await page.getByPlaceholder("Name").fill(name);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
+  // The app creates new profiles with an empty shelf (specs/27 / ADR 038);
+  // give the test profile the whole server library so grid assertions hold.
+  const serverLibrary = await page.request.get("/api/server-library");
+  if (serverLibrary.ok()) {
+    const books = (await serverLibrary.json()) as { id: number }[];
+    for (const book of books) {
+      // Best-effort: already-shelved books answer non-2xx; the seeded state
+      // only differs on a fresh database, so this is always safe to attempt.
+      await page.request
+        .post(`/api/audiobooks/${book.id}/library`)
+        .catch(() => undefined);
+    }
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Your audiobooks" })).toBeVisible();
+  }
   return name;
 }
 
