@@ -80,6 +80,7 @@ fails if a row ever loses its erase strategy.
 | Field | Value |
 |-------|-------|
 | **Activity** | Storing per-profile listening position and full listening sessions |
+| **Client writes on reconnect** | Positions may be written by the client on reconnect (spec 44), subject to the server's monotonic rule |
 | **Personal data** | `ListeningHistory.profileId`, `ListeningHistory.mediaItemId`, `startedAt`, `endedAt`, `fromPosition`, `toPosition`; `PlaySession.profileId`, `PlaySession.mediaItemId`, `position`, `playedAt` |
 | **Lawful basis** | Art. 6(1)(f) legitimate interest — core service functionality, user expects progress to persist across devices; or Art. 6(1)(a) consent where opt-in |
 | **Retention** | Per retention schedule (Phase 6); deleted on account erasure |

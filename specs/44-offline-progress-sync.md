@@ -134,3 +134,26 @@ where a write can originate, not what is stored. `docs/roa.md` Activity 4
 (listening progress) wording gains one clause: "positions may be written by
 the client on reconnect, subject to the server's monotonic rule". Retention is
 unchanged (erasure still removes everything, spec 43 Phase 5).
+
+## Amendment (2026-11-17, spec 45 phase 8)
+
+The 2026-11-17 re-audit found this spec's text and the shipped code had
+silently diverged; this section is the record. Changes:
+
+1. **Client pushes `position`/`completed` only, never `lastPlayed`.** S1 as
+   written said the PUT carries the cached `lastPlayed`; the server PUT
+   schema accepts only `position`/`completed`, and `ListeningHistory
+   .lastPlayed` is `@updatedAt` — the server's clock is the authority for
+   the monotonic comparison. Client-supplied ordering timestamps are not
+   trusted, so the push carries position and completion; server rows
+   compare and win under the S1/S2 rule unchanged. When in doubt nothing is
+   pushed and nothing is lost.
+2. **The ROPA clause landed in Activity 3 (listening history), not
+   "Activity 4"** — this spec numbered the listening-history section 4;
+   roa.md numbers it 3. Same clause, same place in effect: "Positions may
+   be written by the client on reconnect (spec 44), subject to the server's
+   monotonic rule."
+3. **The missing reconnect test landed.** `client/src/useLibrary.test.tsx`
+   now pins the orchestration end-to-end: offline cached row, server payload
+   fresh on refresh, the PUT observed with `{ position, completed }` — the
+   seam that was only unit-tested at the module boundary now is too.

@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useLibrary } from "./useLibrary";
 import { copy } from "./copy";
-import type { Audiobook } from "./types";
+import { LocalLibraryDatabase } from "./local/db";
+import { cacheProgress, lockOfflineCache, rememberProfileKey } from "./local/privateCache";
+import type { Audiobook, BookProgress } from "./types";
 
 /**
  * Spec 15b feature 4 — a refresh must never blank the library.
@@ -400,6 +402,53 @@ describe("useLibrary", () => {
     expect(result.current.error).toBe(
       "Could not reach the server. Check the phone is on the home network, and that the server address in Settings is right.",
     );
+  });
+
+  it("pushes the offline position back when the server comes back (spec 45 phase 8)", async () => {
+    // The spec-44 seam: after a successful online refresh, the client pushes
+    // any cached position the server is missing or older than — the thing a
+    // listener expects to resume after an offline session.
+    //
+    // Seed one cached row in the shared fake IndexedDB under the empty server
+    // id the tests' fetch layer points at (no configured server → getServerUrl()
+    // === ""), with the server's payload carrying progress: null.
+    const db = new LocalLibraryDatabase();
+    await rememberProfileKey(3, "correct-horse-9", db);
+    const seeded: BookProgress = {
+      position: 123,
+      completed: false,
+      lastPlayed: new Date("2026-11-16T10:00:00.000Z").toISOString(),
+    };
+    await cacheProgress(1, seeded, "", db);
+
+    const offlineBook: Audiobook = {
+      ...book(1, "One"),
+      progress: null,
+    } as unknown as Audiobook;
+    respondWith([offlineBook]);
+
+    renderHook(() => useLibrary());
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([url, init]) =>
+          String(url).endsWith("/api/audiobooks/1/progress") &&
+          (init as { method?: string }).method === "PUT",
+        ),
+      ).toBe(true),
+    );
+
+    const push = fetchMock.mock.calls.find(([url, init]) =>
+      String(url).endsWith("/api/audiobooks/1/progress") &&
+      (init as { method?: string }).method === "PUT",
+    );
+    expect(JSON.parse((push?.[1] as { body?: string }).body ?? "{}")).toEqual({
+      position: 123,
+      completed: false,
+    });
+
+    lockOfflineCache();
+    db.close();
   });
 
   it("reports refreshing for the very first load too", async () => {
