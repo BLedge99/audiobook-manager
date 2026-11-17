@@ -195,7 +195,7 @@ export class RecommendationService {
     // the ranking stage would then have to sift, while "horror" returns a few
     // hundred that are actually related to a household that likes Poe.
     const subjects = [...seed.genres.entries()]
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 3)
       .map(([slug]) => slug);
     if (!subjects.length) return [];

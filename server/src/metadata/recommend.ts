@@ -1,4 +1,23 @@
 import { normalizeText } from "./types";
+import { GENRE_TAXONOMY } from "./taxonomy";
+
+/**
+ * The catch-all genre describes "we could not tell", not what a book is
+ * about. It must never enter the seed: `subject:misc` returns an arbitrary
+ * pool, and scoring it would pretend arbitrary books are topical matches.
+ * Every book always carries the catch-all (spec 17 — a book must appear
+ * under something), so it is systematically the most common genre in any
+ * library; seeding from it poisons every Discover run.
+ */
+const CATCH_ALL_GENRES = new Set(
+  GENRE_TAXONOMY.filter((entry) => entry.isCatchAll).map((entry) => normalizeText(entry.slug)),
+);
+
+/** Is this genre value the catch-all? Works for slugs and raw provider strings. */
+export function isCatchAllGenre(value: string | null | undefined): boolean {
+  const key = normalizeText(value);
+  return key.length > 0 && CATCH_ALL_GENRES.has(key);
+}
 
 /**
  * Spec 19 / ADR 010 — recommendation seeds, ranking and dedupe.
@@ -124,7 +143,12 @@ export function buildSeed(items: Taggable[]): SeedProfile {
   for (const item of items) {
     bump(seed.authors, item.author, RECOMMENDATION_WEIGHTS.author);
     bump(seed.series, item.seriesName, RECOMMENDATION_WEIGHTS.series);
-    for (const genre of item.genres ?? []) bump(seed.genres, genre);
+    for (const genre of item.genres ?? []) {
+      // The catch-all says nothing topical; it is stored for display, never
+      // for recommendations.
+      if (isCatchAllGenre(genre)) continue;
+      bump(seed.genres, genre);
+    }
     for (const narrator of item.narrators ?? []) bump(seed.narrators, narrator, RECOMMENDATION_WEIGHTS.narrator);
     for (const tag of item.customTags ?? []) bump(seed.customTags, tag, RECOMMENDATION_WEIGHTS.customTag);
 
