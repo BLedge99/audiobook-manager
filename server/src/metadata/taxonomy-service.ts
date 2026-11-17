@@ -3,6 +3,17 @@ import { GENRE_TAXONOMY, PROVIDER_GENRE_MAPPING, type GenreSeed } from "./taxono
 import { normalizeText } from "./types";
 
 /**
+ * Supavisor (the Supabase connection pooler) in transaction mode cannot hold
+ * an interactive `$transaction` across queries — every boot on the hosted demo
+ * failed the taxonomy seed with P2028. SQLite integration tests, on the other
+ * hand, cannot afford the per-row upserts' fsyncs without a transaction. Both
+ * paths are legitimate; pick per provider.
+ */
+function isPostgres(): boolean {
+  return (process.env.DATABASE_URL ?? "").startsWith("postgres");
+}
+
+/**
  * Spec 17 — taxonomy seeding, provider-string mapping, and contributor
  * reconciliation.
  */
@@ -13,60 +24,89 @@ import { normalizeText } from "./types";
  * `name` are preserved, because a re-seed only fills a name when the row has
  * none -- the slug is the stable identity.
  *
- * One transaction: the per-row upserts each used to be their own commit
- * (~150 fsyncs on every boot), which blew the 10s integration-test timeout on
- * a loaded machine.
+ * SQLite: one transaction — the per-row upserts each used to be their own
+ * commit (~150 fsyncs on every boot), which blew the 10s integration-test
+ * timeout on a loaded machine (spec 43).
+ *
+ * Postgres (the hosted demo, Supavisor transaction mode): one transaction
+ * fails outright with P2028 — the pooler cannot hold an interactive
+ * transaction across pooled connections. Per-row upserts are the same shape,
+ * just outside a transaction.
  */
 export async function seedGenres(prisma: PrismaClient): Promise<number> {
   let created = 0;
-  await prisma.$transaction(async (tx) => {
-    const upsert = async (seed: GenreSeed, parentId: number | null, sortOrder: number): Promise<number> => {
-      const existing = await tx.genre.findUnique({ where: { slug: seed.slug } });
-      const row = await tx.genre.upsert({
-        where: { slug: seed.slug },
-        create: {
-          slug: seed.slug,
-          name: seed.name,
-          parentId,
-          sortOrder,
-          isCatchAll: seed.isCatchAll ?? false,
-        },
-        update: { parentId, sortOrder, isCatchAll: seed.isCatchAll ?? false },
-      });
-      if (!existing) created += 1;
-      return row.id;
-    };
 
+  const upsert = async (
+    client: Pick<PrismaClient, "genre">,
+    seed: GenreSeed,
+    parentId: number | null,
+    sortOrder: number,
+  ): Promise<number> => {
+    const existing = await client.genre.findUnique({ where: { slug: seed.slug } });
+    const row = await client.genre.upsert({
+      where: { slug: seed.slug },
+      create: {
+        slug: seed.slug,
+        name: seed.name,
+        parentId,
+        sortOrder,
+        isCatchAll: seed.isCatchAll ?? false,
+      },
+      update: { parentId, sortOrder, isCatchAll: seed.isCatchAll ?? false },
+    });
+    if (!existing) created += 1;
+    return row.id;
+  };
+
+  if (isPostgres()) {
     for (const [index, top] of GENRE_TAXONOMY.entries()) {
-      const parentId = await upsert(top, null, index);
+      const parentId = await upsert(prisma, top, null, index);
       for (const [childIndex, child] of (top.children ?? []).entries()) {
-        await upsert(child, parentId, childIndex);
+        await upsert(prisma, child, parentId, childIndex);
+      }
+    }
+    return created;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const upsertTx = (txClient: typeof tx) => (seed: GenreSeed, parentId: number | null, sortOrder: number) =>
+      upsert(txClient, seed, parentId, sortOrder);
+    const inner = upsertTx(tx);
+    for (const [index, top] of GENRE_TAXONOMY.entries()) {
+      const parentId = await inner(top, null, index);
+      for (const [childIndex, child] of (top.children ?? []).entries()) {
+        await inner(child, parentId, childIndex);
       }
     }
   });
   return created;
 }
 
-/** Idempotent seed of the provider-string mappings. One transaction, like seedGenres. */
+/** Idempotent seed of the provider-string mappings. Shape matches seedGenres. */
 export async function seedGenreMappings(prisma: PrismaClient): Promise<number> {
   let created = 0;
-  await prisma.$transaction(async (tx) => {
+  const inner = async (client: Pick<PrismaClient, "genre" | "genreMapping">) => {
     for (const [provider, mapping] of Object.entries(PROVIDER_GENRE_MAPPING)) {
       for (const [rawValue, slug] of Object.entries(mapping)) {
-        const genre = await tx.genre.findUnique({ where: { slug } });
+        const genre = await client.genre.findUnique({ where: { slug } });
         if (!genre) continue; // mapping points at a genre the seed did not create
-        const existing = await tx.genreMapping.findUnique({
+        const existing = await client.genreMapping.findUnique({
           where: { provider_rawValue: { provider, rawValue } },
         });
         if (!existing) created += 1;
-        await tx.genreMapping.upsert({
+        await client.genreMapping.upsert({
           where: { provider_rawValue: { provider, rawValue } },
           create: { provider, rawValue, genreId: genre.id },
           update: { genreId: genre.id },
         });
       }
     }
-  });
+  };
+  if (isPostgres()) {
+    await inner(prisma);
+    return created;
+  }
+  await prisma.$transaction((tx) => inner(tx));
   return created;
 }
 

@@ -36,6 +36,16 @@ export async function seedDefaultBlocklist(prisma: PrismaClient): Promise<number
   // No taxonomy yet → do not burn the marker; try again next boot.
   if (existing === 0 && genres.length === 0) return 0;
 
+  if (process.env.DATABASE_URL?.startsWith("postgres")) {
+    // Supavisor transaction mode (see taxonomy-service.ts). No interactive
+    // transaction for the demo.
+    if (genres.length > 0) {
+      await prisma.blocklistGenre.createMany({ data: genres.map((genre) => ({ genreId: genre.id })) });
+    }
+    await prisma.genreBlocklistSeed.create({ data: { id: 1 } });
+    return genres.length;
+  }
+
   await prisma.$transaction(async (tx) => {
     if (genres.length > 0) {
       await tx.blocklistGenre.createMany({ data: genres.map((genre) => ({ genreId: genre.id })) });
