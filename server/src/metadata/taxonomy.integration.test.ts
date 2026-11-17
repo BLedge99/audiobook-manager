@@ -74,6 +74,13 @@ describe("mapGenreString", () => {
     expect(genre?.slug).toBe("science-fiction");
   });
 
+  it("maps LibriVox General Fiction to Fiction instead of Miscellaneous", async () => {
+    const genreId = await mapGenreString(prisma, "librivox", "General Fiction");
+    const genre = await prisma.genre.findUnique({ where: { id: genreId! } });
+    expect(genre?.slug).toBe("fiction");
+    expect(genre?.isCatchAll).toBe(false);
+  });
+
   it("matches case-insensitively", async () => {
     const lower = await mapGenreString(prisma, "audnexus", "science fiction");
     const upper = await mapGenreString(prisma, "audnexus", "SCIENCE FICTION");

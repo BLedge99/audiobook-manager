@@ -239,6 +239,7 @@ export const PROVIDER_GENRE_MAPPING: Record<string, Record<string, string>> = {
     classics: "classics",
   },
   librivox: {
+    "general fiction": "fiction",
     "detective fiction": "detective",
     "mystery fiction": "mystery-thriller",
     "crime/non-fiction": "true-crime",

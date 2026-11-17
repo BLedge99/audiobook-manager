@@ -72,10 +72,14 @@ export const OPEN_LIBRARY_FIELDS = [
 
 export async function searchOpenLibrary(title: string, _author?: string): Promise<ProviderCandidate[]> {
   const query = encodeURIComponent(title);
-  const res = await fetch(
+  const res = await openLibraryGet(
     `https://openlibrary.org/search.json?q=${query}&limit=10&fields=${encodeURIComponent(OPEN_LIBRARY_FIELDS)}`,
   );
-  if (!res.ok) return [];
+  if (!res?.ok) {
+    const statusLine = res ? `HTTP ${res.status}` : "request failed/timeout/unavailable";
+    console.warn(`[openlibrary] title search failed: ${statusLine}`);
+    return [];
+  }
   const data = (await res.json()) as { docs?: Record<string, unknown>[] };
   return (data.docs ?? [])
     .map((doc) => {
@@ -275,8 +279,8 @@ export function clearSubjectPoolCache(): void {
 export async function fetchOpenLibraryDescription(workKey: string | undefined): Promise<string | undefined> {
   if (!workKey || !/^\/works\/[A-Za-z0-9]+$/.test(workKey)) return undefined;
   try {
-    const res = await fetch(`https://openlibrary.org${workKey}.json`);
-    if (!res.ok) return undefined;
+    const res = await openLibraryGet(`https://openlibrary.org${workKey}.json`);
+    if (!res?.ok) return undefined;
     const data = (await res.json()) as { description?: unknown };
     const value = data.description;
     // Open Library returns either a bare string or a shape carrying `value`,

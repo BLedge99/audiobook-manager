@@ -68,6 +68,10 @@ describe("Christmas subjects (2026-11-17)", () => {
       expect(PROVIDER_GENRE_MAPPING[provider]["ghosts"]).toBe("horror");
     });
   }
+
+  it("maps LibriVox's General Fiction heading to Fiction instead of the catch-all", () => {
+    expect(PROVIDER_GENRE_MAPPING.librivox["general fiction"]).toBe("fiction");
+  });
 });
 
 describe("isJunkSubject", () => {

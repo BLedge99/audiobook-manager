@@ -145,6 +145,22 @@ describe("searchOpenLibrary", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
     expect(await searchOpenLibrary("x")).toEqual([]);
   });
+
+  it("identifies title searches and applies a timeout", async () => {
+    let init: { headers?: Record<string, string>; signal?: AbortSignal } | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, options?: { headers?: Record<string, string>; signal?: AbortSignal }) => {
+        init = options;
+        return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+      }),
+    );
+
+    await searchOpenLibrary("A Christmas Carol");
+
+    expect(init?.headers?.["User-Agent"]).toMatch(/Bookle/);
+    expect(init?.signal).toBeDefined();
+  });
 });
 
 describe("searchOpenLibraryBySubject", () => {
