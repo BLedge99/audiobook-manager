@@ -72,7 +72,7 @@ const TABS: { id: Tab; label: string; icon: typeof Library }[] = [
 
 /**
  * The machine's mark comes from the shared primitives (`ui/primitives`), the
- * same one the gates and the wordmark use â€” one drawing, everywhere.
+ * same one the gates and the wordmark use — one drawing, everywhere.
  */
 
 function App() {
@@ -129,7 +129,7 @@ function App() {
    */
   const [serverReachable, setServerReachable] = useState<boolean | undefined>(() => offlineMode ? false : undefined);
   /**
-   * A slow probe is in flight â€” the fast probe failed and the patient one
+   * A slow probe is in flight — the fast probe failed and the patient one
    * hasn't answered yet, which on the free tier means "waking up", not
    * "absent". While this is true the app renders the waking screen rather
    * than the unlock-offline gate it would otherwise fall through to.
@@ -302,7 +302,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
 
   /**
-   * Which books to show â€” the derived-library bundle moved to
+   * Which books to show — the derived-library bundle moved to
    * lib/useDerivedLibrary.ts (spec 43 phase 6.2). Offline with nothing
    * downloaded is still the app: the shelf shows an honest empty state.
    */
@@ -355,7 +355,7 @@ function App() {
     // Favourites live on the connected server; a foreign book with this id is
     // not the book the listener tapped, and favouriting it would toggle someone
     // else's catalogue entry. The components hide the heart for these books
-    // already â€” this is the belt to that braces.
+    // already — this is the belt to that braces.
     if (!libraryBooks.some((book) => book.id === bookId && isFromThisServer(book))) return;
     void browse.toggleFavourite(bookId);
   }, [browse, libraryBooks]);
@@ -729,7 +729,7 @@ function App() {
               <div className="min-w-0 flex-1">
                 <SearchBar value={search} onChange={onSearchChange} resultCount={searchedBooks.length} />
               </div>
-              {/* Spec 39: books the listener owns elsewhere â€” never the server, never playable */}
+              {/* Spec 39: books the listener owns elsewhere — never the server, never playable */}
               {canSeeBuySurfaces(session?.role) && (
                 <Btn variant="quiet" size="sm" className="shrink-0" onClick={() => setAddExternalOpen(true)}>
                   <Link2 size={15} aria-hidden="true" /> {copy.external.addButton}
@@ -798,7 +798,7 @@ function App() {
               )}
             </section>
 
-            {/* Spec 39 â€” the external shelf. Not searchable, not filterable, never on the server. */}
+            {/* Spec 39 — the external shelf. Not searchable, not filterable, never on the server. */}
             {canSeeBuySurfaces(session?.role) && search.trim().length === 0 && (
               <>
                 <ExternalBooks role={session?.role} items={externalItems} onLaunch={openExternal} onRemove={removeExternal} />
