@@ -1,7 +1,8 @@
 # Backup restore drills
 
 One entry per drill. A backup that has never been restored is a hope, not a
-backup. Spec 43 phase 3.2: baseline drill at the v0.2.0 release, then
+backup. Spec 43 phase 3.2: baseline drill at the v0.2.0 release (the tag is
+not cut yet — see spec 43 phase 8), then
 **annually** (put a calendar reminder in — the repo cannot remind you).
 
 If the live database has to be pointed at a restored dump (host replacement,
@@ -14,7 +15,7 @@ data is the one way a drill or disaster can silently undo an erasure.
 ## 2026-11-16 — baseline drill (synthetic data, scratch Postgres 16)
 
 **Context.** No production dump exists yet (the v0.2.0 release gate counts on
-the first two weekly dumps). This drill ran against a **synthetic** scratch
+the first two weekly dumps; the tag has not been cut). This drill ran against a **synthetic** scratch
 PostgreSQL 16 instance built from the repo's real migration history, seeded
 with: 1 library root, 1 book, 2 profiles, 1 listening-history row, 1 favourite,
 1 shelf entry. The value proven here is the *procedure* — dump, encrypt,

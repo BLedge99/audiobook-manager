@@ -4,6 +4,11 @@ The client design system, as built. Written from the shipped world on 2026-10-18
 after [`specs/15-gui-redesign.md`](specs/15-gui-redesign.md) landed. The
 contract this implements is that spec; this file is the reference for changing it.
 
+History: the pre-redesign screens (initial scaffold, scanner-wired grid, detail
+dialog, household-password gate) are reconstructed as wireframes in
+[`docs/design-lab/early/`](docs/design-lab/early/README.md), labelled with the
+commits they were drawn from.
+
 Product truth lives in [`PRODUCT.md`](PRODUCT.md). The visual world is
 **injection-moulded capsule vending, drawn by hand**.
 
@@ -190,8 +195,8 @@ These are documented at length in spec 15 and each one cost real time:
 ## Verifying a change
 
 ```bash
-npm --prefix client run test                 # 895 unit tests
-npx playwright test                          # 40 E2E, needs a running stack
+npm --prefix client run test                 # ~1000 unit tests (2026-11)
+npx playwright test                          # ~58 E2E (48 chromium + 10 security), needs a running stack
 node scripts/capture-ui.js                   # screenshots + layout guards
 ```
 

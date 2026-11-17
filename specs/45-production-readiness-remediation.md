@@ -283,8 +283,11 @@ the flow unchanged (the gap was coverage, not design).
 
 ### Step 8.2 — the ROPA clause
 
-`docs/roa.md` Activity 4 gains `… and positions may be written by the client
-on reconnect, subject to the server's monotonic rule.`
+`docs/roa.md` Activity 3 (listening history; numbered 3 there, not 4) gained
+`… and positions may be written by the client on reconnect …`. The 2026-11-16
+wording leaned on a "server monotonic rule" that never existed — corrected
+2026-11-17: the clause now states plainly that the server is last-writer-wins
+and the client-side strictly-newer comparison is the guard.
 
 ### Step 8.3 — spec 44 records the divergence itself
 

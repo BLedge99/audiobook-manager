@@ -1,5 +1,10 @@
 # Spec 17 — Tag & taxonomy model
 
+> **Status: implemented (2026-11).** The taxonomy tree, multi-narrator sets,
+> series ordering, per-field overrides and both reset endpoints exist and are
+> tested. Verified criterion-by-criterion against the code on 2026-11-17; the
+> one remaining unchecked box names the gap (no reset-behaviour test).
+
 ## Purpose
 Make the library genuinely taggable. Replace the single comma-separated
 `genre` string with a curated multi-valued taxonomy, support **multiple
@@ -39,22 +44,23 @@ Builds on ADR 009.
 ## API deltas
 
 - `GET /api/genres` — the taxonomy tree
-- `PUT/POST/DELETE /api/genres/:id` — manage the tree
+- `GET/POST /api/genres`, `PATCH/DELETE /api/genres/:id` — manage the tree (as implemented; `PUT` was the original sketch, only `PATCH` exists)
 - `GET/PUT /api/audiobooks/:id/tags` — full tag suite read/edit
 - `POST /api/audiobooks/:id/metadata/reset`, `POST /api/metadata/reset-all`
 
 ## Acceptance criteria
 
-- [ ] A book carries several genres from the curated tree, each with a source.
-- [ ] A multi-narrator title lists every narrator; re-applying a match removes
+- [x] A book carries several genres from the curated tree, each with a source.
+- [x] A multi-narrator title lists every narrator; re-applying a match removes
       contributors that the new match does not have.
-- [ ] Series position sorts numerically, including fractional positions.
-- [ ] Fixing only a narrator does **not** freeze the title against rescans.
-- [ ] Rescan leaves a book with no overrides fully refreshed from embedded tags.
-- [ ] Reset restores embedded values and clears the override rows.
-- [ ] An unmapped provider genre lands in `Misc` rather than disappearing.
-- [ ] Tests: precedence resolver (pure, table-driven), contributor
-      reconciliation, series sorting, reset behaviour, taxonomy CRUD routes.
+- [x] Series position sorts numerically, including fractional positions.
+- [x] Fixing only a narrator does **not** freeze the title against rescans.
+- [x] Rescan leaves a book with no overrides fully refreshed from embedded tags.
+- [x] Reset restores embedded values and clears the override rows.
+- [x] An unmapped provider genre lands in `Misc` rather than disappearing.
+- [ ] Tests: precedence resolver (pure, table-driven) ✓, contributor
+      reconciliation ✓, series sorting ✓ (client-side), reset behaviour ✗ (no
+      test yet), taxonomy CRUD routes ✓.
 
 ## Not in this spec
 Favourites and custom tag assignment (18), recommendations (19), UI (20).

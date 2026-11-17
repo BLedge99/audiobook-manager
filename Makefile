@@ -261,9 +261,9 @@ typecheck:
 # shapes it cannot see (JSX expressions and template literals).
 #
 # `scripts/copy.config.json` records the product's own banned words. Its
-# `ignoreKeys` list is empty: the burn-down finished in feature 7b's second
-# pass, and the list may only shrink from here -- never add a key to silence a
-# new string.
+# `ignoreKeys` list holds three keys (admin DB null display and yes/no flag
+# labels) plus one scan-ignored path (PrivacyNotice); the list may only shrink
+# from here -- never add a key to silence a new string.
 #
 # Part of `make test`, and of CI.
 check-copy:

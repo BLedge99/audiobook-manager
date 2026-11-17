@@ -51,7 +51,7 @@ The data collected is minimal: only fields needed for the service. No analytics,
 | Email address exposed in a breach | Low | Medium | Low | Password hashes (scrypt), sessions revoked on password change, `cleanupExpired` removes expired/revoked sessions, transport over HTTPS for production web | Low |
 | Tracking via session cookie across sites | Low | Low | Low | SameSite cookie, HttpOnly, no third-party scripts, no analytics | Low |
 | Recommendations used to infer sensitive attributes | Low | Low | Low | Tag-similarity only, not profiling under Art. 22, users may object under Art. 21 | Low |
-| Android LAN HTTP (mixed content) exposes session on untrusted networks | Medium | High | Medium | Mitigated by trusted-LAN-only deployment guidance (ADR 014); production demo users access via HTTPS (`books.home.arpa`); documented as accepted risk in LIMITATIONS §4 | Medium (LAN only) |
+| Android LAN HTTP (mixed content) exposes session on untrusted networks | Medium | High | Medium | Mitigated by trusted-LAN-only deployment guidance (ADR 014); production demo users access via HTTPS (`https://audiobook-manager.onrender.com`); documented as accepted risk in LIMITATIONS §4 | Medium (LAN only) |
 | OAuth provider compromise exposes provider identity | Low | Medium | Low | Provider identity stored but not used for anything beyond account linking; email verification required for Google/GitHub | Low |
 
 ---

@@ -43,6 +43,13 @@ recorded (§1.10, §1.11); they block the v0.2.0 household release.
 
 **Updated 2026-11-13** with the external-providers feature (spec 39) — see §3.
 
+**Re-verified 2026-11-17** against current `master`. Where a measurement below
+was taken against the original 2026-10-13 snapshot (coverage numbers, fixture
+counts), it is marked as such; those cannot be re-measured today. The §2.11
+metadata-precedence gap is closed as of 2026-11 (see ADR 028 addendum); Google
+Books now ships its API key in the demo deployment (`render.yaml`), though it
+remains absent from local `.env`.
+
 Status legend: **BROKEN** = does not work · **LIMITED** = works, but narrower
 than intended · **DEFERRED** = deliberately not built.
 
@@ -50,12 +57,14 @@ than intended · **DEFERRED** = deliberately not built.
 
 ## 1. Broken
 
-### 1.1 Google Books is completely non-functional
-**Status: BROKEN — needs a key.**
+### 1.1 Google Books is non-functional without an API key
+**Status: BROKEN until a key is configured — needs a key.** (2026-11-17:
+`render.yaml` now provisions `GOOGLE_BOOKS_API_KEY` for the demo deployment;
+local `.env` still carries none, so local enrichment remains degraded.)
 
-`GET https://www.googleapis.com/books/v1/volumes` returns `{"error": ...}` from
-this host. `searchGoogleBooks` then returns `[]` silently, so half the provider
-chain has been doing nothing at all.
+`GET https://www.googleapis.com/books/v1/volumes` returns `{"error": ...}`
+without a key. `searchGoogleBooks` then returns `[]` silently, so half the provider
+chain does nothing at all.
 
 The mapping code is **written and unit-tested** — `mapGoogleVolume` extracts
 `categories`, `publisher`, `publishedDate`, `industryIdentifiers`, `language`,
@@ -493,7 +502,8 @@ Adding `GOOGLE_BOOKS_API_KEY` should reduce this by giving the chain a third
 independent opinion.
 
 ### 2.3 Narrator coverage is 8/12 and capped by what files carry
-**Status: LIMITED.**
+**Status: LIMITED.** (Measured 2026-10-13 against a personal commercial library
+that is not in this repo; figure cannot be re-measured today.)
 
 Narrators are resolved locally (spec 24) in order: `composer` atom → `comment`
 field (`Read By X`) → bracketed folder name (`{Stephen Fry}`). There is **no
@@ -509,7 +519,8 @@ name. **This is the correct outcome, not a gap to close.** The spec 17
 tag-suite editor is the intended manual answer.
 
 ### 2.4 Series coverage is 6/12 and may be at its ceiling
-**Status: LIMITED.**
+**Status: LIMITED.** (Measured 2026-10-13 against a personal commercial library
+that is not in this repo; figure cannot be re-measured today.)
 
 Series is read from Open Library, gated: only when no provider supplied one,
 and only with both a name and a usable position. Several commercial sets simply
@@ -594,25 +605,22 @@ The column is in the schema and nothing populates it. ASIN extraction is
 filename-only, and only at enrichment time. Writing it at scan time would make
 Audnexus reachable permanently rather than incidentally.
 
-### 2.11 Metadata field precedence is not enforced (last writer wins)
-**Status: LIMITED — contradicts ADR 009; intended rule recorded in ADR 028, not yet enforced.**
+### 2.11 Metadata field precedence — closed (2026-11)
+**Status: RESOLVED — the intended rule is enforced (ADR 028 addendum, 2026-11-17).**
 
-`server/src/metadata/precedence.ts` defines the per-field chain but nothing in
-production imports it. The scanner, the enrichment applier/run, and the routes
-re-derive their own guards, so the effective rule is **last writer wins** for
-any field that is not user-overridden: the scanner writes embedded values and
-the enrichment applier writes enriched ones. A rescan can therefore overwrite an
-*enriched* value with an *embedded* one, and only a user override survives a
-later conflicting write. There is no derived (filename/folder) layer, and
-`metadataSource === "user"` is read as a legacy freeze signal but never written,
-so that freeze is unrecoverable.
+This section previously recorded that `precedence.ts` existed but was imported
+by nothing, and that the effective rule was **last writer wins**. That is no
+longer true: `scanner.ts` now guards its writes with
+`canScannerWrite(field, overrideFieldNames, hasEnrichedLayer)`,
+`metadata/apply.ts` uses `canEnrichmentWrite`, and `routes/metadata.ts` uses
+`decideOverrideAction` — enriched values win over embedded ones on rescan, and
+user overrides still take precedence per-field.
 
-[ADR 028](decisions/028-metadata-field-precedence-chain.md) sets the intended
-chain as `user override > enriched > embedded > derived` (derived reserved), with
-enriched winning over embedded, user overrides per-field and always winning, and
-enrichment free to change or clear non-overridden fields. Step 5.2 of spec 37
-moves the rule into the module that owns it; until then, this file records the
-current behaviour.
+Two remnants remain true: there is still no derived (filename/folder) layer, and
+`metadataSource === "user"` is read as a legacy freeze signal but never
+written. [ADR 028](decisions/028-metadata-field-precedence-chain.md) records
+the chain as `user override > enriched > embedded > derived` (derived
+reserved).
 
 ### 2.12 A first-ever visit with no network renders the browser's error page
 **Status: LIMITED — deliberate, recorded trade-off of the wake/cold-start work (spec 42, phase 2).**

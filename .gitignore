@@ -98,3 +98,6 @@ client/test-output*.txt
 
 # Generated architecture-review output; kept locally, not project source.
 docs/spec-37-architecture-deepening-report.html
+
+# Marking scheme (coursework assessment material — not for the repo)
+markscheme/

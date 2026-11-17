@@ -56,8 +56,12 @@ codebase-design skills — this file names the *domain*, not the code.
   re-establish a session without a password. Rotating, single per device,
   hash-stored, revocable (spec 36).
 - **demo mode** — the production demo experience: no household password;
-  OAuth/email sign-in, per-account shelves, age-gated kids' accounts, no
-  admin routes. A different product surface with the same player.
+  OAuth/email sign-in, per-account shelves, age-gated kids' accounts. A
+  different product surface with the same player. The admin panel is still not
+  served on the family port by default; the demo deployment opts into
+  `ADMIN_PROXY=true`, which proxies `/admin` and `/api/admin/*` on the family
+  port to the loopback admin listener (`server/src/app.ts`). Household
+  deployments leave `ADMIN_PROXY` unset and get a 404.
 - **admin listener** — the second Fastify app on port 3100: the operator
   panel (scan trigger, DB browser, age ratings). A separate **door**, not a
   separate implementation (ADR 022); the family listener never serves it.

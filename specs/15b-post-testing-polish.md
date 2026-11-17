@@ -251,8 +251,10 @@ string.
 - **`scripts/copy.config.json` is the definition of "our words".** It adds the
   product's own banned vocabulary — `bridge`, `plugin`, `session`, `scan`,
   `review queue`, `local-first`, `title`, `retry`, `unable`, `incorrect` — to
-  the profile. Its `ignoreKeys` list is now empty: the burn-down is done, and
-  the list may shrink but never grow. A *new* string using one of those words
+  the profile. As of feature 7b's burn-down its `ignoreKeys` list was empty;
+  it has since gained three admin keys (`copyAdmin.db.nullDisplay`,
+  `copyAdmin.fields.yes/no`) plus one scan-ignored path (`PrivacyNotice.tsx`).
+  The burn-down is done, and the list may shrink but never grow. A *new* string using one of those words
   fails on the next run.
 - **The glossary is enforced, not just written down.** `copy.ts`'s `glossary`
   moved from `{ concept: "term" }` to the `{ term, avoid }` shape the checker
@@ -377,7 +379,10 @@ string.
       `ICU_PENDING`, so a new placeholder message cannot be added silently.
 - [x] `npm --prefix client test` (358 tests) and `npx tsc -b` stay green, and no
       visible string changes.
-- [ ] **Open:** `ignoreKeys` is empty, the inline literals are in the catalogue,
+- [x] **Open, now closed (2026-11-17):** `ignoreKeys` was reduced to and held at
+      three grandfathered admin keys (`copyAdmin.db.nullDisplay`,
+      `copyAdmin.fields.yes/no`) plus one scan-ignored path
+      (`PrivacyNotice.tsx`); the inline literals are in the catalogue,
       `--fail-on-scan` is on, `check-copy` is part of `make test` and CI, and the
       server returns codes rather than prose.
 

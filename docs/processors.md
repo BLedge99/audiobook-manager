@@ -1,7 +1,7 @@
 # Third-Party Processors & DPAs — GDPR Art. 28
 
-**Last updated:** 5 November 2026  
-**Status:** Draft — implements Phase 7 of `docs/GDPR-REMEDIATION-PLAN.md`  
+**Last updated:** 17 November 2026   
+**Status:** Current — demo hosting processors (Render, Supabase Postgres) added 2026-11-17
 **Review cycle:** Reviewed on every new external integration, at least annually, and before the production demo goes live.
 
 ## Core control
@@ -22,30 +22,34 @@
 | 6 | **Supabase Storage** (supabase.com) | Optional server-side audiobook file sync (private bucket) | **No** | Audiobook files and catalogue metadata only | Supabase DPA applies if enabled | Server-side service-role key only; private bucket; not enabled by default; see `.env.production.example` |
 | 7 | **Google / GitHub OAuth** (accounts.google.com, github.com/login) | Demo sign-in only (`ACCOUNT_EXPERIENCE=demo` or explicit opt-in, spec 43 phase 2.2) | **Partial** — the browser sends the user to the provider; the server exchanges the one-time authorization code (pseudonymous) and receives verified name/email/id back; the password never crosses our systems | Authorization code (single-use, 60 s handler window), client credentials, returned verified identity (sub, email, name) | Google API ToS / GitHub ToS; Art. 6(1)(a) consent basis for demo sign-up | Not engaged at all in household deployments (OAuth is disabled there); whether the demo keeps open sign-up is the deployment's ACCOUNT_EXPERIENCE decision |
 
+| 8 | **Render** (render.com) | Hosts the public demo (web service, Frankfurt region) | **Yes** (infrastructure) | Account/profile data, listening history, session data — stored at rest on the Render service and its attached disk; PostgreSQL is hosted by Supabase (row 9), not Render | Render DPA / privacy statement | Demo only (`ACCOUNT_EXPERIENCE=demo`); household deployments run on the household's own hardware and do not engage Render |
+| 9 | **Supabase Postgres** (supabase.com) | Managed PostgreSQL for the public demo (`DATABASE_URL`) | **Yes** | The full application database (profiles, sessions, listening history, favourites, wishlist) — subject to Row-Level Security on every table (ADR 026) | Supabase DPA (select region at project creation; demo project is an EU region) | Demo only; household deployments use local SQLite and do not engage Supabase |
+
 ---
 
 ## Sub-processors
 
-No sub-processors are engaged. The seven processors listed above are the only external recipients; none receives personal data in normal operation. Row 7 (OAuth) receives no personal data beyond the one-time, pseudonymous authorization code and the verified identity it returns, and is engaged only in the demo's open sign-up.
+No other sub-processors are engaged. The nine processors listed above are the only external recipients; none receives personal data in normal operation beyond the demo hosting pair (Render + Supabase Postgres, rows 8–9), which store the demo's application data at rest. Row 7 (OAuth) receives no personal data beyond the one-time, pseudonymous authorization code and the verified identity it returns, and is engaged only in the demo's open sign-up.
 
 ---
 
 ## International transfers
 
-No personal data is transferred outside the server's jurisdiction. Catalogue enrichment queries may reach public APIs hosted outside the EEA/UK (e.g. Open Library, Google Books), but those queries carry book identifiers only — no personal data about any user.
+No personal data is transferred outside the server's jurisdiction by the application itself. For the public demo, personal data is stored in the EU (Render Frankfurt region; Supabase project region chosen at creation — confirm it is an EU region). Catalogue enrichment queries may reach public APIs hosted outside the EEA/UK (e.g. Open Library, Google Books), but those queries carry book identifiers only — no personal data about any user.
 
 ---
 
 ## Customer / user instructions
 
 - **Household deployment:** No external processors receive personal data. No action required.
-- **Production demo:** Same. If Supabase Storage is enabled, confirm the Supabase DPA applies and note it in `.env.production.example`.
+- **Production demo:** Render (hosting) and Supabase Postgres (database) are engaged processors storing demo personal data at rest; their DPAs apply. If Supabase Storage is enabled, confirm the Supabase DPA covers it and note it in `.env.production.example`.
 - **Enrichment provider changes:** Any new external integration must be added to this inventory before deployment, with a determination of whether it receives personal data.
 
 ---
 
 ## Cross-reference
 
+- Cross-reference continued: rows 8–9 (Render hosting, Supabase Postgres) are recorded in `docs/roa.md` RoPA entries for the demo deployment and covered by the DPIA (`docs/dpia.md`).
 - RoPA Activity 9: `docs/roa.md` — external catalogue enrichment (no personal data sent).
 - RoPA Activity 10: `docs/roa.md` — optional AI via LM Studio (local, no personal data).
 - RoPA Activity 11: `docs/roa.md` — optional Supabase Storage sync (no personal data).

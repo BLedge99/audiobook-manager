@@ -1,0 +1,857 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2132 4292" width="2132" height="4292" font-family="Arial, Helvetica, sans-serif">
+  <rect width="2132" height="4292" fill="#0b1117"/>
+  <text x="1066" y="42" font-size="26" font-weight="bold" fill="#f8fafc" text-anchor="middle">Audiobook Manager - Complete API Reference (2026-11)</text>
+  <text x="1066" y="66" font-size="12" fill="#94a3b8" text-anchor="middle">Every route on both listeners. Generated from the source; verified 2026-11-17. Schemas on every route - no raw request.body.</text>
+  <rect x="40" y="82" width="13" height="13" rx="3" fill="#94a3b8"/>
+  <text x="58" y="93" font-size="11" fill="#cbd5e1"><tspan font-weight="bold">PUBLIC</tspan> - no session</text>
+  <rect x="260" y="82" width="13" height="13" rx="3" fill="#7dd3fc"/>
+  <text x="278" y="93" font-size="11" fill="#cbd5e1"><tspan font-weight="bold">SESSION</tspan> - household session</text>
+  <rect x="480" y="82" width="13" height="13" rx="3" fill="#5eead4"/>
+  <text x="498" y="93" font-size="11" fill="#cbd5e1"><tspan font-weight="bold">PROFILE</tspan> - profile-bound session</text>
+  <rect x="700" y="82" width="13" height="13" rx="3" fill="#fb923c"/>
+  <text x="718" y="93" font-size="11" fill="#cbd5e1"><tspan font-weight="bold">ADMIN</tspan> - session role=admin (family)</text>
+  <rect x="920" y="82" width="13" height="13" rx="3" fill="#c084fc"/>
+  <text x="938" y="93" font-size="11" fill="#cbd5e1"><tspan font-weight="bold">PANEL</tspan> - admin_panel_session (:3100)</text>
+  <rect x="1140" y="82" width="13" height="13" rx="3" fill="#f472b6"/>
+  <text x="1158" y="93" font-size="11" fill="#cbd5e1"><tspan font-weight="bold">MEDIA</tspan> - 5-min scoped ?media= bearer</text>
+  <text x="40" y="126" font-size="11" fill="#64748b">Flow: client -> (Caddy / Render edge) -> family listener :3000 -> Fastify schema validation -> route handler -> Prisma -> DB.  '/api/*' is auth-gated on the family listener; CORS allowlist; OPTIONS preflights pass through.  Demo mode (ACCOUNT_EXPERIENCE=demo) 404s everything except the public allowlist and account-scoped routes; children (role=child) are blocked again in-handler on age-restricted routes.</text>
+  <rect x="40" y="150" width="660" height="434" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="54" y="166" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">PUBLIC — STATIC &amp; HEALTH</text>
+  <text x="54" y="186" font-size="10.5" fill="#7c8aa0" font-style="italic">No session. Served identically on both listeners.</text>
+  <rect x="52" y="204" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="217" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="217" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/health</text>
+  <rect x="636.2" y="204" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="216.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="235" font-size="10.5" fill="#94a3b8">Liveness probe -&gt; {status:&quot;ok&quot;} (render.yaml healthCheckPath)</text>
+  <rect x="52" y="248" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="261" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="261" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/config</text>
+  <rect x="636.2" y="248" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="260.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="279" font-size="10.5" fill="#94a3b8">Account experience + which OAuth providers are enabled</text>
+  <rect x="52" y="292" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="305" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="305" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/privacy</text>
+  <rect x="636.2" y="292" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="304.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="323" font-size="10.5" fill="#94a3b8">GDPR privacy notice (unauthenticated HTML)</text>
+  <rect x="52" y="336" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="349" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="349" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/providers</text>
+  <rect x="636.2" y="336" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="348.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="367" font-size="10.5" fill="#94a3b8">Enabled OAuth providers + email sign-up flags</text>
+  <rect x="52" y="380" width="46" height="17" rx="3" fill="#c084fc"/>
+  <text x="75" y="393" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">ALL</text>
+  <text x="106" y="393" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/assets/*, /*</text>
+  <rect x="636.2" y="380" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="392.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="411" font-size="10.5" fill="#94a3b8">Built client from client/dist (immutable hashed assets, index.html</text>
+  <text x="106" y="427" font-size="10.5" fill="#94a3b8">revalidates); unknown non-/api paths fall back to the SPA; misses -&gt; 404</text>
+  <text x="106" y="443" font-size="10.5" fill="#94a3b8">JSON</text>
+  <rect x="40" y="602" width="660" height="594" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="54" y="618" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">AUTH — SESSIONS &amp; SIGN-IN</text>
+  <text x="54" y="638" font-size="10.5" fill="#7c8aa0" font-style="italic">Household mode: shared password, per-profile sessions. Demo mode: email + OAuth.</text>
+  <rect x="52" y="656" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="669" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="669" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/login</text>
+  <rect x="636.2" y="656" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="668.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="687" font-size="10.5" fill="#94a3b8">Household / profile / email sign-in; sets house_session cookie</text>
+  <rect x="52" y="700" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="713" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="713" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/logout</text>
+  <rect x="636.2" y="700" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="712.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="731" font-size="10.5" fill="#94a3b8">Revokes the token and clears the cookie</text>
+  <rect x="52" y="744" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="757" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="757" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/session</text>
+  <rect x="629.9" y="744" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="658.9499999999999" y="756.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="106" y="775" font-size="10.5" fill="#94a3b8">Current session context (role, profile, expiry)</text>
+  <rect x="52" y="788" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="801" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="801" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/password</text>
+  <rect x="629.9" y="788" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="658.9499999999999" y="800.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="106" y="819" font-size="10.5" fill="#94a3b8">Change your own password</text>
+  <rect x="52" y="832" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="845" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="845" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/register-profile</text>
+  <rect x="636.2" y="832" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="844.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="863" font-size="10.5" fill="#94a3b8">Self-register a profile with the household password (404 in demo)</text>
+  <rect x="52" y="876" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="889" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="889" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/claim</text>
+  <rect x="636.2" y="876" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="888.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="907" font-size="10.5" fill="#94a3b8">Claim an unclaimed profile with the household password (404 in demo)</text>
+  <rect x="52" y="920" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="933" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="933" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/accounts</text>
+  <rect x="636.2" y="920" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="932.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="951" font-size="10.5" fill="#94a3b8">List sign-in accounts for the account picker (404 in demo)</text>
+  <rect x="52" y="964" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="977" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="977" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/signup</text>
+  <rect x="636.2" y="964" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="976.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="995" font-size="10.5" fill="#94a3b8">Email sign-up — demo / email-signup deployments only</text>
+  <rect x="40" y="1214" width="660" height="402" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="54" y="1230" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">AUTH — DEVICES (BIOMETRICS, ANDROID)</text>
+  <text x="54" y="1250" font-size="10.5" fill="#7c8aa0" font-style="italic">Device credentials are long-lived, biometric-gated secrets issued once at enrolment.</text>
+  <rect x="52" y="1268" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="1281" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="1281" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/devices/link</text>
+  <rect x="629.9" y="1268" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="1280.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="1299" font-size="10.5" fill="#94a3b8">Attach the caller’s session to a device credential</text>
+  <rect x="52" y="1312" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="1325" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="1325" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/devices</text>
+  <rect x="629.9" y="1312" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="1324.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="1343" font-size="10.5" fill="#94a3b8">Enrol a new device credential</text>
+  <rect x="52" y="1356" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="1369" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="1369" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/devices</text>
+  <rect x="629.9" y="1356" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="1368.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="1387" font-size="10.5" fill="#94a3b8">List your device credentials</text>
+  <rect x="52" y="1400" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="75" y="1413" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="106" y="1413" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/devices/:id</text>
+  <rect x="629.9" y="1400" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="1412.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="1431" font-size="10.5" fill="#94a3b8">Revoke a device credential</text>
+  <rect x="52" y="1444" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="1457" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="1457" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/devices/session</text>
+  <rect x="636.2" y="1444" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="1456.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="1475" font-size="10.5" fill="#94a3b8">Exchange a device secret for a session (biometric re-auth; 404 in demo)</text>
+  <rect x="40" y="1634" width="660" height="466" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="54" y="1650" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">AUTH — PASSKEYS (WEBAUTHN)</text>
+  <text x="54" y="1670" font-size="10.5" fill="#7c8aa0" font-style="italic">Registration needs a profile session; login is public and rate-limited per IP/profile.</text>
+  <rect x="52" y="1688" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="1701" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="1701" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/passkeys/login/options</text>
+  <rect x="636.2" y="1688" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="1700.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="1719" font-size="10.5" fill="#94a3b8">Issue a login challenge (rate-limited)</text>
+  <rect x="52" y="1732" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="1745" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="1745" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/passkeys/login/verify</text>
+  <rect x="636.2" y="1732" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="1744.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="1763" font-size="10.5" fill="#94a3b8">Verify assertion, mint a session</text>
+  <rect x="52" y="1776" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="1789" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="1789" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/passkeys/register/options</text>
+  <rect x="629.9" y="1776" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="1788.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="1807" font-size="10.5" fill="#94a3b8">Issue a registration challenge</text>
+  <rect x="52" y="1820" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="1833" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="1833" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/passkeys/register/verify</text>
+  <rect x="629.9" y="1820" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="1832.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="1851" font-size="10.5" fill="#94a3b8">Verify attestation, store the credential</text>
+  <rect x="52" y="1864" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="1877" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="1877" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/passkeys</text>
+  <rect x="629.9" y="1864" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="1876.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="1895" font-size="10.5" fill="#94a3b8">List your passkeys</text>
+  <rect x="52" y="1908" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="75" y="1921" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="106" y="1921" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/passkeys/:id</text>
+  <rect x="629.9" y="1908" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="1920.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="1939" font-size="10.5" fill="#94a3b8">Delete your passkey</text>
+  <rect x="40" y="2118" width="660" height="466" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="54" y="2134" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">AUTH — SESSIONS &amp; ADMIN RECOVERY</text>
+  <text x="54" y="2154" font-size="10.5" fill="#7c8aa0" font-style="italic">Device-scoped and individual session revocation; admin recovery actions.</text>
+  <rect x="52" y="2172" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="2185" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="2185" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/sessions</text>
+  <rect x="629.9" y="2172" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="658.9499999999999" y="2184.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="106" y="2203" font-size="10.5" fill="#94a3b8">List your signed-in sessions/devices</text>
+  <rect x="52" y="2216" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="75" y="2229" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="106" y="2229" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/sessions/:id</text>
+  <rect x="629.9" y="2216" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="658.9499999999999" y="2228.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="106" y="2247" font-size="10.5" fill="#94a3b8">Revoke one session</text>
+  <rect x="52" y="2260" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="75" y="2273" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="106" y="2273" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/sessions/device/:key</text>
+  <rect x="629.9" y="2260" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="658.9499999999999" y="2272.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="106" y="2291" font-size="10.5" fill="#94a3b8">Revoke every session on one device</text>
+  <rect x="52" y="2304" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="75" y="2317" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="106" y="2317" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/sessions/others</text>
+  <rect x="629.9" y="2304" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="658.9499999999999" y="2316.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="106" y="2335" font-size="10.5" fill="#94a3b8">Revoke all your other sessions</text>
+  <rect x="52" y="2348" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="2361" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="2361" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/accounts/:id/reset</text>
+  <rect x="642.5" y="2348" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="665.25" y="2360.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="106" y="2379" font-size="10.5" fill="#94a3b8">Admin reset of a profile’s password (404 in demo)</text>
+  <rect x="52" y="2392" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="2405" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="2405" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/accounts/:id/unlock</text>
+  <rect x="642.5" y="2392" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="665.25" y="2404.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="106" y="2423" font-size="10.5" fill="#94a3b8">Admin unlock of a locked profile</text>
+  <rect x="40" y="2602" width="660" height="274" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="54" y="2618" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">AUTH — OAUTH (DEMO / PRODUCTION)</text>
+  <text x="54" y="2638" font-size="10.5" fill="#7c8aa0" font-style="italic">PKCE + state cookies; native Android uses a one-time handoff code.</text>
+  <rect x="52" y="2656" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="2669" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="2669" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/:provider/authorize</text>
+  <rect x="636.2" y="2656" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="2668.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="2687" font-size="10.5" fill="#94a3b8">Start Google/GitHub OAuth (callback: /callback)</text>
+  <rect x="52" y="2700" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="2713" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="2713" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/:provider/callback</text>
+  <rect x="636.2" y="2700" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="2712.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="2731" font-size="10.5" fill="#94a3b8">OAuth callback — mints a session or a one-time handoff</text>
+  <rect x="52" y="2744" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="2757" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="2757" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/oauth/handoff</text>
+  <rect x="636.2" y="2744" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="662.1" y="2756.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="106" y="2775" font-size="10.5" fill="#94a3b8">Native-app exchange: one-time code -&gt; session</text>
+  <rect x="40" y="2894" width="660" height="354" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="54" y="2910" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">MEDIA — STREAMING &amp; COVERS</text>
+  <text x="54" y="2930" font-size="10.5" fill="#7c8aa0" font-style="italic">Tokens or sessions; `&lt;audio&gt;` cannot send headers, so media URLs carry a 5-minute scoped</text>
+  <text x="54" y="2946" font-size="10.5" fill="#7c8aa0" font-style="italic">bearer instead.</text>
+  <rect x="52" y="2964" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="75" y="2977" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="106" y="2977" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/auth/media-token</text>
+  <rect x="629.9" y="2964" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="658.9499999999999" y="2976.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="106" y="2995" font-size="10.5" fill="#94a3b8">Issue a 5-min profile-scoped `?media=` bearer for one cover/book/track</text>
+  <rect x="52" y="3008" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="3021" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="3021" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/cover</text>
+  <rect x="579.5" y="3008" width="108.5" height="17" rx="8" fill="none" stroke="#f472b6"/>
+  <text x="633.75" y="3020.5" font-size="8.5" fill="#f472b6" text-anchor="middle">SESSION | MEDIA</text>
+  <text x="106" y="3039" font-size="10.5" fill="#94a3b8">Cover image (conditional GET, MIME whitelist, ETag)</text>
+  <rect x="52" y="3052" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="3065" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="3065" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/stream</text>
+  <rect x="579.5" y="3052" width="108.5" height="17" rx="8" fill="none" stroke="#f472b6"/>
+  <text x="633.75" y="3064.5" font-size="8.5" fill="#f472b6" text-anchor="middle">SESSION | MEDIA</text>
+  <text x="106" y="3083" font-size="10.5" fill="#94a3b8">Whole-book audio stream with range support</text>
+  <rect x="52" y="3096" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="75" y="3109" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="106" y="3109" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/tracks/:id/stream</text>
+  <rect x="579.5" y="3096" width="108.5" height="17" rx="8" fill="none" stroke="#f472b6"/>
+  <text x="633.75" y="3108.5" font-size="8.5" fill="#f472b6" text-anchor="middle">SESSION | MEDIA</text>
+  <text x="106" y="3127" font-size="10.5" fill="#94a3b8">Single track stream with range support (416 on bad ranges)</text>
+  <rect x="736" y="150" width="660" height="722" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="750" y="166" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">LIBRARY — SHELF &amp; SCAN</text>
+  <text x="750" y="186" font-size="10.5" fill="#7c8aa0" font-style="italic">Per-profile, age-gated shelf; scanning is admin-only and 404s in demo.</text>
+  <rect x="748" y="204" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="217" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="217" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks</text>
+  <rect x="1325.9" y="204" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="216.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="235" font-size="10.5" fill="#94a3b8">Caller’s shelf (age-gated, capped by MAX_LIBRARY_ITEMS, conditional)</text>
+  <rect x="748" y="248" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="261" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="261" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/server-library</text>
+  <rect x="1325.9" y="248" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="260.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="279" font-size="10.5" fill="#94a3b8">Whole server library with inLibrary flag</text>
+  <rect x="748" y="292" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="305" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="305" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id</text>
+  <rect x="1325.9" y="292" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="304.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="323" font-size="10.5" fill="#94a3b8">One book’s detail (age-visibility enforced)</text>
+  <rect x="748" y="336" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="349" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="349" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/library</text>
+  <rect x="1325.9" y="336" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="348.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="367" font-size="10.5" fill="#94a3b8">Add the book to your shelf</text>
+  <rect x="748" y="380" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="771" y="393" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="802" y="393" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/library</text>
+  <rect x="1325.9" y="380" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="392.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="411" font-size="10.5" fill="#94a3b8">Remove the book from your shelf</text>
+  <rect x="748" y="424" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="437" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="437" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/scan</text>
+  <rect x="1338.5" y="424" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="436.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="455" font-size="10.5" fill="#94a3b8">Start scan + enrichment (404 in demo)</text>
+  <rect x="748" y="468" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="481" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="481" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/scan/status</text>
+  <rect x="1338.5" y="468" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="480.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="499" font-size="10.5" fill="#94a3b8">Scan progress per root (404 in demo)</text>
+  <rect x="748" y="512" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="525" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="525" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/library-roots</text>
+  <rect x="1338.5" y="512" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="524.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="543" font-size="10.5" fill="#94a3b8">List library roots + scan state, paths stripped (404 in demo)</text>
+  <rect x="748" y="556" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="569" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="569" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/library-roots</text>
+  <rect x="1338.5" y="556" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="568.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="587" font-size="10.5" fill="#94a3b8">Upsert a library root (404 in demo)</text>
+  <rect x="748" y="600" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="771" y="613" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="802" y="613" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/library-roots/:id</text>
+  <rect x="1338.5" y="600" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="612.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="631" font-size="10.5" fill="#94a3b8">Delete a library root (404 in demo)</text>
+  <rect x="736" y="890" width="660" height="354" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="750" y="906" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">ENRICHMENT — CANDIDATES &amp; RUNS</text>
+  <text x="750" y="926" font-size="10.5" fill="#7c8aa0" font-style="italic">Best-effort provider chain; members may apply matches for unapplied books, admins can</text>
+  <text x="750" y="942" font-size="10.5" fill="#7c8aa0" font-style="italic">force runs.</text>
+  <rect x="748" y="960" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="973" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="973" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/enrich</text>
+  <rect x="1325.9" y="960" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="972.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="991" font-size="10.5" fill="#94a3b8">Single-book enrichment via the chain (404 in demo)</text>
+  <rect x="748" y="1004" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="1017" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="1017" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/enrichment/run</text>
+  <rect x="1338.5" y="1004" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="1016.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="1035" font-size="10.5" fill="#94a3b8">Enqueue a (re)enrichment run (404 in demo)</text>
+  <rect x="748" y="1048" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="1061" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="1061" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/enrichment/status</text>
+  <rect x="1338.5" y="1048" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="1060.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="1079" font-size="10.5" fill="#94a3b8">Enrichment run status (404 in demo)</text>
+  <rect x="748" y="1092" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="1105" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="1105" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/enrichment/review-queue</text>
+  <rect x="1338.5" y="1092" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="1104.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="1123" font-size="10.5" fill="#94a3b8">Low-confidence review backlog (404 in demo)</text>
+  <rect x="736" y="1262" width="660" height="610" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="750" y="1278" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">METADATA — TAGS &amp; OVERRIDE</text>
+  <text x="750" y="1298" font-size="10.5" fill="#7c8aa0" font-style="italic">Manual edits are admin-only; overrides always win over enrichment/scanner writes (ADR</text>
+  <text x="750" y="1314" font-size="10.5" fill="#7c8aa0" font-style="italic">028).</text>
+  <rect x="748" y="1332" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="1345" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="1345" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/candidates</text>
+  <rect x="1325.9" y="1332" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="1344.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="1363" font-size="10.5" fill="#94a3b8">Stored candidates, score-ordered, internals stripped</text>
+  <rect x="748" y="1376" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="1389" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="1389" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/metadata</text>
+  <rect x="1325.9" y="1376" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="1388.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="1407" font-size="10.5" fill="#94a3b8">Apply a stored candidate (members) or manual edit incl. cover URL (admin)</text>
+  <rect x="748" y="1420" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="1433" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="1433" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/tags</text>
+  <rect x="1325.9" y="1420" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="1432.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="1451" font-size="10.5" fill="#94a3b8">Full tag suite with provenance</text>
+  <rect x="748" y="1464" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="771" y="1477" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PUT</text>
+  <text x="802" y="1477" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/tags</text>
+  <rect x="1338.5" y="1464" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="1476.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="1495" font-size="10.5" fill="#94a3b8">Replace the tag suite; records overrides (404 in demo)</text>
+  <rect x="748" y="1508" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="1521" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="1521" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/metadata/reset</text>
+  <rect x="1338.5" y="1508" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="1520.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="1539" font-size="10.5" fill="#94a3b8">Clear a book’s field overrides, re-queue (404 in demo)</text>
+  <rect x="748" y="1552" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="1565" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="1565" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/metadata/reset-all</text>
+  <rect x="1338.5" y="1552" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="1564.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="1583" font-size="10.5" fill="#94a3b8">Clear ALL overrides, re-queue everything</text>
+  <rect x="748" y="1596" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="771" y="1609" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PUT</text>
+  <text x="802" y="1609" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/tracks/:n/title</text>
+  <rect x="1325.9" y="1596" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="1608.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="1627" font-size="10.5" fill="#94a3b8">Set/clear one chapter-title override</text>
+  <rect x="748" y="1640" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="1653" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="1653" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/ai-suggest</text>
+  <rect x="1338.5" y="1640" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="1652.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="1671" font-size="10.5" fill="#94a3b8">LM Studio best-match suggestion (404 in demo)</text>
+  <rect x="736" y="1890" width="660" height="658" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="750" y="1906" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">TAXONOMY — GENRES &amp; TAGS</text>
+  <text x="750" y="1926" font-size="10.5" fill="#7c8aa0" font-style="italic">Curated tree; admins mutate; the catch-all genre is undeletable.</text>
+  <rect x="748" y="1944" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="1957" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="1957" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/genres</text>
+  <rect x="1325.9" y="1944" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="1956.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="1975" font-size="10.5" fill="#94a3b8">Genre tree with age-scoped book counts</text>
+  <rect x="748" y="1988" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="2001" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="2001" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/genres</text>
+  <rect x="1338.5" y="1988" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="2000.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="2019" font-size="10.5" fill="#94a3b8">Create a genre (404 in demo)</text>
+  <rect x="748" y="2032" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="771" y="2045" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PATCH</text>
+  <text x="802" y="2045" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/genres/:id</text>
+  <rect x="1338.5" y="2032" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="2044.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="2063" font-size="10.5" fill="#94a3b8">Rename / reparent a genre (404 in demo)</text>
+  <rect x="748" y="2076" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="771" y="2089" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="802" y="2089" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/genres/:id</text>
+  <rect x="1338.5" y="2076" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="2088.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="2107" font-size="10.5" fill="#94a3b8">Delete a genre (404 in demo)</text>
+  <rect x="748" y="2120" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="2133" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="2133" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/tags</text>
+  <rect x="1325.9" y="2120" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="2132.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="2151" font-size="10.5" fill="#94a3b8">List custom tags with age-scoped counts</text>
+  <rect x="748" y="2164" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="2177" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="2177" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/tags</text>
+  <rect x="1338.5" y="2164" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="2176.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="2195" font-size="10.5" fill="#94a3b8">Create a tag (404 in demo)</text>
+  <rect x="748" y="2208" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="771" y="2221" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PATCH</text>
+  <text x="802" y="2221" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/tags/:id</text>
+  <rect x="1338.5" y="2208" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="2220.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="2239" font-size="10.5" fill="#94a3b8">Rename a tag (404 in demo)</text>
+  <rect x="748" y="2252" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="771" y="2265" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="802" y="2265" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/tags/:id</text>
+  <rect x="1338.5" y="2252" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="2264.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="2283" font-size="10.5" fill="#94a3b8">Delete a tag and its assignments (404 in demo)</text>
+  <rect x="748" y="2296" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="2309" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="2309" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/tags/:id/merge</text>
+  <rect x="1338.5" y="2296" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="1361.25" y="2308.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="802" y="2327" font-size="10.5" fill="#94a3b8">Merge a tag into another (404 in demo)</text>
+  <rect x="736" y="2566" width="660" height="546" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="750" y="2582" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">DISCOVER &amp; WISHLIST</text>
+  <text x="750" y="2602" font-size="10.5" fill="#7c8aa0" font-style="italic">Recommendations are tag-similarity; the buy sheet rate-limits to 30 req/min per profile.</text>
+  <rect x="748" y="2620" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="2633" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="2633" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/discover/similar/:id</text>
+  <rect x="1325.9" y="2620" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="1354.95" y="2632.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="802" y="2651" font-size="10.5" fill="#94a3b8">Similar books for a seed</text>
+  <rect x="748" y="2664" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="2677" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="2677" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/discover/for-me</text>
+  <rect x="1325.9" y="2664" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="2676.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="2695" font-size="10.5" fill="#94a3b8">Recommendations for your profile</text>
+  <rect x="748" y="2708" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="2721" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="2721" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/wishlist</text>
+  <rect x="1325.9" y="2708" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="2720.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="2739" font-size="10.5" fill="#94a3b8">Your wishlist</text>
+  <rect x="748" y="2752" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="2765" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="2765" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/wishlist</text>
+  <rect x="1325.9" y="2752" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="2764.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="2783" font-size="10.5" fill="#94a3b8">Add a metadata-only wishlist entry</text>
+  <rect x="748" y="2796" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="771" y="2809" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="802" y="2809" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/wishlist/:id</text>
+  <rect x="1325.9" y="2796" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="2808.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="2827" font-size="10.5" fill="#94a3b8">Remove your wishlist entry</text>
+  <rect x="748" y="2840" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="771" y="2853" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PUT</text>
+  <text x="802" y="2853" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/wishlist/:id/owned</text>
+  <rect x="1325.9" y="2840" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="2852.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="2871" font-size="10.5" fill="#94a3b8">Mark your entry owned</text>
+  <rect x="748" y="2884" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="2897" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="2897" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/buy-context</text>
+  <rect x="1325.9" y="2884" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="2896.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="2915" font-size="10.5" fill="#94a3b8">LibriVox match for the “get this book” sheet (rate-limited)</text>
+  <rect x="736" y="3130" width="660" height="354" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="750" y="3146" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">PROGRESS &amp; HISTORY</text>
+  <text x="750" y="3166" font-size="10.5" fill="#7c8aa0" font-style="italic">Last-write-wins on the server; the client only pushes strictly-newer positions on</text>
+  <text x="750" y="3182" font-size="10.5" fill="#7c8aa0" font-style="italic">reconnect (spec 44).</text>
+  <rect x="748" y="3200" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="3213" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="3213" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/progress</text>
+  <rect x="1325.9" y="3200" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="3212.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="3231" font-size="10.5" fill="#94a3b8">Your resume position</text>
+  <rect x="748" y="3244" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="771" y="3257" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PUT</text>
+  <text x="802" y="3257" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/progress</text>
+  <rect x="1325.9" y="3244" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="3256.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="3275" font-size="10.5" fill="#94a3b8">Save position/completed (clamped to duration)</text>
+  <rect x="748" y="3288" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="771" y="3301" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="802" y="3301" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/sessions</text>
+  <rect x="1325.9" y="3288" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="3300.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="3319" font-size="10.5" fill="#94a3b8">Record a play session</text>
+  <rect x="748" y="3332" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="771" y="3345" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="802" y="3345" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/history</text>
+  <rect x="1325.9" y="3332" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="1354.95" y="3344.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="802" y="3363" font-size="10.5" fill="#94a3b8">Last 100 play sessions (child-filtered)</text>
+  <rect x="1432" y="150" width="660" height="530" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="166" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">PROFILES &amp; FAVOURITES</text>
+  <text x="1446" y="186" font-size="10.5" fill="#7c8aa0" font-style="italic">Profile CRUD is admin-only; favourites are yours alone.</text>
+  <rect x="1444" y="204" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="217" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="217" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/profiles</text>
+  <rect x="2021.9" y="204" width="58.1" height="17" rx="8" fill="none" stroke="#7dd3fc"/>
+  <text x="2050.9500000000003" y="216.5" font-size="8.5" fill="#7dd3fc" text-anchor="middle">SESSION</text>
+  <text x="1498" y="235" font-size="10.5" fill="#94a3b8">List profiles (picker; 403 for non-admin, 404 in demo)</text>
+  <rect x="1444" y="248" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="261" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="261" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/profiles</text>
+  <rect x="2034.5" y="248" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="2057.25" y="260.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="1498" y="279" font-size="10.5" fill="#94a3b8">Create a profile (404 in demo)</text>
+  <rect x="1444" y="292" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="1467" y="305" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="1498" y="305" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/profiles/:id</text>
+  <rect x="2034.5" y="292" width="45.5" height="17" rx="8" fill="none" stroke="#fb923c"/>
+  <text x="2057.25" y="304.5" font-size="8.5" fill="#fb923c" text-anchor="middle">ADMIN</text>
+  <text x="1498" y="323" font-size="10.5" fill="#94a3b8">Erase a profile and all its personal data (404 in demo)</text>
+  <rect x="1444" y="336" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="1467" y="349" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PUT</text>
+  <text x="1498" y="349" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/favourite</text>
+  <rect x="2021.9" y="336" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="348.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="367" font-size="10.5" fill="#94a3b8">Favourite a book</text>
+  <rect x="1444" y="380" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="1467" y="393" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="1498" y="393" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/audiobooks/:id/favourite</text>
+  <rect x="2021.9" y="380" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="392.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="411" font-size="10.5" fill="#94a3b8">Unfavourite (idempotent)</text>
+  <rect x="1444" y="424" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="437" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="437" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/favourites</text>
+  <rect x="2021.9" y="424" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="436.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="455" font-size="10.5" fill="#94a3b8">Your favourited books (child-filtered)</text>
+  <rect x="1444" y="468" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="481" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="481" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/favourites/ids</text>
+  <rect x="2021.9" y="468" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="480.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="499" font-size="10.5" fill="#94a3b8">Plain id set for list views</text>
+  <rect x="1432" y="698" width="660" height="418" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="714" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">GDPR — YOUR DATA</text>
+  <text x="1446" y="734" font-size="10.5" fill="#7c8aa0" font-style="italic">Self-service access, rectification, erasure (Art. 15–18, 20); hashed secrets never leave</text>
+  <text x="1446" y="750" font-size="10.5" fill="#7c8aa0" font-style="italic">the server.</text>
+  <rect x="1444" y="768" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="781" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="781" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/me/export</text>
+  <rect x="2021.9" y="768" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="780.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="799" font-size="10.5" fill="#94a3b8">Art. 15/20 export (JSON)</text>
+  <rect x="1444" y="812" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="1467" y="825" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PATCH</text>
+  <text x="1498" y="825" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/me</text>
+  <rect x="2021.9" y="812" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="824.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="843" font-size="10.5" fill="#94a3b8">Art. 16 rectify your name/colour</text>
+  <rect x="1444" y="856" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="1467" y="869" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="1498" y="869" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/me</text>
+  <rect x="2021.9" y="856" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="868.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="887" font-size="10.5" fill="#94a3b8">Art. 17 erase your account and all personal data</text>
+  <rect x="1444" y="900" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="1467" y="913" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="1498" y="913" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/me/listening-history/:historyId</text>
+  <rect x="2021.9" y="900" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="912.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="931" font-size="10.5" fill="#94a3b8">Delete one history entry</text>
+  <rect x="1444" y="944" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="1467" y="957" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="1498" y="957" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/me/favourites/:mediaItemId</text>
+  <rect x="2021.9" y="944" width="58.1" height="17" rx="8" fill="none" stroke="#5eead4"/>
+  <text x="2050.9500000000003" y="956.5" font-size="8.5" fill="#5eead4" text-anchor="middle">PROFILE</text>
+  <text x="1498" y="975" font-size="10.5" fill="#94a3b8">Remove one favourite</text>
+  <rect x="1432" y="1134" width="660" height="498" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="1150" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">ADMIN — AUTH (PANEL)</text>
+  <text x="1446" y="1170" font-size="10.5" fill="#7c8aa0" font-style="italic">Second listener on :3100, loopback-only by default. Cookie is SameSite=Strict, 8 h TTL.</text>
+  <rect x="1444" y="1188" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="1201" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="1201" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/health</text>
+  <rect x="2028.2" y="1188" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="2054.1" y="1200.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="1498" y="1219" font-size="10.5" fill="#94a3b8">Admin liveness + adminConfigured flag (port 3100)</text>
+  <rect x="1444" y="1232" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="1245" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="1245" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/config</text>
+  <rect x="2028.2" y="1232" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="2054.1" y="1244.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="1498" y="1263" font-size="10.5" fill="#94a3b8">Whether the admin credential is seeded</text>
+  <rect x="1444" y="1276" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="1289" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="1289" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/login</text>
+  <rect x="2028.2" y="1276" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="2054.1" y="1288.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="1498" y="1307" font-size="10.5" fill="#94a3b8">Panel sign-in (rate-limited 10/5 min/IP)</text>
+  <rect x="1444" y="1320" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="1333" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="1333" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/session</text>
+  <rect x="2034.5" y="1320" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="1332.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="1351" font-size="10.5" fill="#94a3b8">Check panel session validity</text>
+  <rect x="1444" y="1364" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="1377" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="1377" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/logout</text>
+  <rect x="2028.2" y="1364" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="2054.1" y="1376.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="1498" y="1395" font-size="10.5" fill="#94a3b8">Revoke panel session</text>
+  <rect x="1444" y="1408" width="46" height="17" rx="3" fill="#c084fc"/>
+  <text x="1467" y="1421" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">ALL</text>
+  <text x="1498" y="1421" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/, /assets/*</text>
+  <rect x="2028.2" y="1408" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="2054.1" y="1420.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="1498" y="1439" font-size="10.5" fill="#94a3b8">Admin SPA from client/admin-dist; unknown non-/api paths fall back to it;</text>
+  <text x="1498" y="1455" font-size="10.5" fill="#94a3b8">misses -&gt; 404 JSON</text>
+  <rect x="1432" y="1650" width="660" height="338" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="1666" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">ADMIN — STATUS &amp; STORAGE</text>
+  <text x="1446" y="1686" font-size="10.5" fill="#7c8aa0" font-style="italic">Read-only dashboard plus operator storage controls.</text>
+  <rect x="1444" y="1704" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="1717" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="1717" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/status</text>
+  <rect x="2034.5" y="1704" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="1716.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="1735" font-size="10.5" fill="#94a3b8">Roots, counts, enrichment, storage, DB type, CORS, uptime</text>
+  <rect x="1444" y="1748" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="1761" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="1761" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/storage/upload-url</text>
+  <rect x="2034.5" y="1748" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="1760.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="1779" font-size="10.5" fill="#94a3b8">Signed Supabase upload URL for a book file</text>
+  <rect x="1444" y="1792" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="1805" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="1805" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/storage/status</text>
+  <rect x="2034.5" y="1792" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="1804.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="1823" font-size="10.5" fill="#94a3b8">Storage sync state</text>
+  <rect x="1444" y="1836" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="1849" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="1849" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/storage/sync</text>
+  <rect x="2034.5" y="1836" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="1848.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="1867" font-size="10.5" fill="#94a3b8">Start library → storage sync (202/409)</text>
+  <rect x="1432" y="2006" width="660" height="402" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="2022" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">ADMIN — LIBRARY CONTROLS</text>
+  <text x="1446" y="2042" font-size="10.5" fill="#7c8aa0" font-style="italic">Mirrors the family listener’s admin-gated scan surface for the operator.</text>
+  <rect x="1444" y="2060" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="2073" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="2073" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/library-roots</text>
+  <rect x="2034.5" y="2060" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2072.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2091" font-size="10.5" fill="#94a3b8">Roots + scan state (paths included — operator only)</text>
+  <rect x="1444" y="2104" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="2117" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="2117" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/library-roots</text>
+  <rect x="2034.5" y="2104" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2116.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2135" font-size="10.5" fill="#94a3b8">Upsert a root</text>
+  <rect x="1444" y="2148" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="1467" y="2161" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="1498" y="2161" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/library-roots/:id</text>
+  <rect x="2034.5" y="2148" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2160.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2179" font-size="10.5" fill="#94a3b8">Delete a root</text>
+  <rect x="1444" y="2192" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="2205" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="2205" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/scan</text>
+  <rect x="2034.5" y="2192" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2204.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2223" font-size="10.5" fill="#94a3b8">Start scan + enrichment</text>
+  <rect x="1444" y="2236" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="2249" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="2249" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/scan/status</text>
+  <rect x="2034.5" y="2236" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2248.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2267" font-size="10.5" fill="#94a3b8">Scan progress per root</text>
+  <rect x="1432" y="2426" width="660" height="338" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="2442" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">ADMIN — DB EXPLORER &amp; API DOCS</text>
+  <text x="1446" y="2462" font-size="10.5" fill="#7c8aa0" font-style="italic">Allowlisted read-only access; secrets stripped; queries row-capped.</text>
+  <rect x="1444" y="2480" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="2493" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="2493" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/db/tables</text>
+  <rect x="2034.5" y="2480" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2492.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2511" font-size="10.5" fill="#94a3b8">Allowlisted table row counts</text>
+  <rect x="1444" y="2524" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="2537" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="2537" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/db/tables/:table</text>
+  <rect x="2034.5" y="2524" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2536.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2555" font-size="10.5" fill="#94a3b8">Paged browse of a table (secret columns stripped)</text>
+  <rect x="1444" y="2568" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="2581" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="2581" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/db/query</text>
+  <rect x="2034.5" y="2568" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2580.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2599" font-size="10.5" fill="#94a3b8">Read-only SQL, validated, row-capped, result redacted</text>
+  <rect x="1444" y="2612" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="2625" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="2625" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/api-docs</text>
+  <rect x="2034.5" y="2612" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2624.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2643" font-size="10.5" fill="#94a3b8">Route inventory of both listeners (generated from live schemas)</text>
+  <rect x="1432" y="2782" width="660" height="466" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="2798" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">ADMIN — KIDS ACCOUNTS (SPEC 38)</text>
+  <text x="1446" y="2818" font-size="10.5" fill="#7c8aa0" font-style="italic">Age bands, never DOBs; kids see only age-appropriate books (404 everywhere else).</text>
+  <rect x="1444" y="2836" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="2849" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="2849" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/kids-accounts</text>
+  <rect x="2034.5" y="2836" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2848.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2867" font-size="10.5" fill="#94a3b8">List kids accounts with library counts</text>
+  <rect x="1444" y="2880" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="2893" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="2893" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/kids-accounts</text>
+  <rect x="2034.5" y="2880" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2892.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2911" font-size="10.5" fill="#94a3b8">Create a kids account</text>
+  <rect x="1444" y="2924" width="46" height="17" rx="3" fill="#fbbf24"/>
+  <text x="1467" y="2937" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">PATCH</text>
+  <text x="1498" y="2937" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/kids-accounts/:id</text>
+  <rect x="2034.5" y="2924" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2936.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2955" font-size="10.5" fill="#94a3b8">Rename / re-band / disable</text>
+  <rect x="1444" y="2968" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="1467" y="2981" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="1498" y="2981" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/kids-accounts/:id</text>
+  <rect x="2034.5" y="2968" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="2980.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="2999" font-size="10.5" fill="#94a3b8">Erase a kids account</text>
+  <rect x="1444" y="3012" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="3025" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="3025" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/kids-accounts/:id/reset-password</text>
+  <rect x="2034.5" y="3012" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3024.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3043" font-size="10.5" fill="#94a3b8">Reset a kids account’s password</text>
+  <rect x="1444" y="3056" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="3069" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="3069" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/kids-accounts/:id/fill-shelf</text>
+  <rect x="2034.5" y="3056" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3068.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3087" font-size="10.5" fill="#94a3b8">Shelve all age-appropriate books</text>
+  <rect x="1432" y="3266" width="660" height="674" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="3282" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">ADMIN — AGE RATINGS &amp; BLOCKLIST</text>
+  <text x="1446" y="3302" font-size="10.5" fill="#7c8aa0" font-style="italic">Providers suggest ages; a human confirms. Blocklist applies everywhere including media</text>
+  <text x="1446" y="3318" font-size="10.5" fill="#7c8aa0" font-style="italic">URLs.</text>
+  <rect x="1444" y="3336" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="3349" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="3349" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/age-ratings/books</text>
+  <rect x="2034.5" y="3336" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3348.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3367" font-size="10.5" fill="#94a3b8">Search books by title/author (max 50)</text>
+  <rect x="1444" y="3380" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="3393" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="3393" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/age-ratings/review</text>
+  <rect x="2034.5" y="3380" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3392.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3411" font-size="10.5" fill="#94a3b8">Books with provider-suggested minimumAge</text>
+  <rect x="1444" y="3424" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="3437" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="3437" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/age-ratings/set</text>
+  <rect x="2034.5" y="3424" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3436.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3455" font-size="10.5" fill="#94a3b8">Confirm rating 0/4/7/9/12/16/null</text>
+  <rect x="1444" y="3468" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="3481" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="3481" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/age-ratings/confirm</text>
+  <rect x="2034.5" y="3468" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3480.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3499" font-size="10.5" fill="#94a3b8">Accept the suggested rating</text>
+  <rect x="1444" y="3512" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="3525" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="3525" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/age-ratings/dismiss</text>
+  <rect x="2034.5" y="3512" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3524.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3543" font-size="10.5" fill="#94a3b8">Dismiss the suggested rating</text>
+  <rect x="1444" y="3556" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="3569" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="3569" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/genre-blocklist</text>
+  <rect x="2034.5" y="3556" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3568.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3587" font-size="10.5" fill="#94a3b8">Blocklisted genres with counts</text>
+  <rect x="1444" y="3600" width="46" height="17" rx="3" fill="#34d399"/>
+  <text x="1467" y="3613" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">GET</text>
+  <text x="1498" y="3613" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/genre-blocklist/options</text>
+  <rect x="2034.5" y="3600" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3612.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3631" font-size="10.5" fill="#94a3b8">Unblocked candidates (max 20)</text>
+  <rect x="1444" y="3644" width="46" height="17" rx="3" fill="#60a5fa"/>
+  <text x="1467" y="3657" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">POST</text>
+  <text x="1498" y="3657" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/genre-blocklist</text>
+  <rect x="2034.5" y="3644" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3656.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3675" font-size="10.5" fill="#94a3b8">Blocklist a genre</text>
+  <rect x="1444" y="3688" width="46" height="17" rx="3" fill="#f87171"/>
+  <text x="1467" y="3701" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">DELETE</text>
+  <text x="1498" y="3701" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin/genre-blocklist/:genreId</text>
+  <rect x="2034.5" y="3688" width="45.5" height="17" rx="8" fill="none" stroke="#c084fc"/>
+  <text x="2057.25" y="3700.5" font-size="8.5" fill="#c084fc" text-anchor="middle">PANEL</text>
+  <text x="1498" y="3719" font-size="10.5" fill="#94a3b8">Unblocklist a genre</text>
+  <rect x="1432" y="3958" width="660" height="226" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="1446" y="3974" font-size="12.5" font-weight="bold" fill="#22d3ee" letter-spacing="1">ADMIN — PROXY SHIM (FAMILY PORT)</text>
+  <text x="1446" y="3994" font-size="10.5" fill="#7c8aa0" font-style="italic">Only when ADMIN_PROXY=true (Render demo). Otherwise 404 — panel unreachable from the</text>
+  <text x="1446" y="4010" font-size="10.5" fill="#7c8aa0" font-style="italic">family listener.</text>
+  <rect x="1444" y="4028" width="46" height="17" rx="3" fill="#c084fc"/>
+  <text x="1467" y="4041" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">ALL</text>
+  <text x="1498" y="4041" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/admin, /admin/*</text>
+  <rect x="2028.2" y="4028" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="2054.1" y="4040.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="1498" y="4059" font-size="10.5" fill="#94a3b8">Reverse-proxy to loopback :3100 admin SPA</text>
+  <rect x="1444" y="4072" width="46" height="17" rx="3" fill="#c084fc"/>
+  <text x="1467" y="4085" font-size="10.5" font-weight="bold" fill="#020617" text-anchor="middle">ALL</text>
+  <text x="1498" y="4085" font-size="10.5" fill="#e2e8f0" font-family="Consolas, monospace">/api/admin, /api/admin/*</text>
+  <rect x="2028.2" y="4072" width="51.8" height="17" rx="8" fill="none" stroke="#94a3b8"/>
+  <text x="2054.1" y="4084.5" font-size="8.5" fill="#94a3b8" text-anchor="middle">PUBLIC</text>
+  <text x="1498" y="4103" font-size="10.5" fill="#94a3b8">Reverse-proxy to loopback :3100 admin API</text>
+  <text x="1066" y="4262" font-size="10.5" fill="#475569" text-anchor="middle">Family listener: :3000 (households + demo).  Admin listener: :3100 (loopback default, separate credential, SameSite=Strict cookie).  Errors are codes (fail()), never details.  All mutations are profile-scoped row checks.</text>
+</svg>

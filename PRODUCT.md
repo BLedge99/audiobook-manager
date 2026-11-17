@@ -149,7 +149,9 @@ sitting.
   reads the table against the `consumer-plain` profile, with `copy.operator`
   read as `professional-b2b`. `make check-copy` runs it, and it is part of
   `make test` and CI. The words this product bans live in
-  `scripts/copy.config.json`; its `ignoreKeys` list is empty, and the rule is
+  `scripts/copy.config.json`; its `ignoreKeys` list holds three keys
+  (`copyAdmin.db.nullDisplay`, `copyAdmin.fields.yes`, `copyAdmin.fields.no`)
+  and one scan-ignored path (`src/pages/PrivacyNotice.tsx`), and the rule is
   that the list may shrink but never grow.
 
 The ban is on the **system's** words, not the **brand's**. "Shelf" is the
@@ -205,7 +207,7 @@ deliberately rather than left to be discovered:
 | `AGENTS.md`, `roadmap.md`, `LIMITATIONS.md`, `specs/*`, `decisions/*` | Prose references; not user-facing, rename as prose edits. **roadmap.md and LIMITATIONS.md updated** for the spec 15 redesign |
 | `Makefile`, `docker-compose.yml`, `Dockerfile.prod`, `.devcontainer/` | Service and container names; renaming changes host paths and volumes |
 
-**The blocker, stated plainly:** `e2e/helpers.ts:42` matches the `<h1>` by exact
+**The blocker, stated plainly:** `e2e/helpers.ts` matches the `<h1>` by exact
 accessible name,
 
 ```ts

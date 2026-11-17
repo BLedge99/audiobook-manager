@@ -14,9 +14,11 @@ something to improvise against a live demo people are using right now.
 
 ## Steps
 
-1. **Find the last known-good tag:** `git tag --sort=-creatordate` — the
-   demo shipped from a tagged release (v0.2.0 and later). Pick the previous tag,
-   not `master`.
+1. **Find the last known-good commit:** `git tag --sort=-creatordate` — no
+   releases have been tagged yet (only `v0.1.0-pre`), so until the v0.2.0 tag
+   exists, pick the last known-good commit SHA from the deploy history
+   (Render dashboard → "Deploys") or from `git log`. Do not roll back to
+   `master` blindly; pick the SHA that smoke last passed against.
 2. **Redeploy that tag on Render.** Either:
    - Dashboard → service → "Manual Deploy" → pick the commit of the previous
      tag, or

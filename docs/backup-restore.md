@@ -41,7 +41,8 @@ the age **public** key. So:
 
 - The script guarantees a non-empty plaintext input and a zero-exit age run.
   A dead database produces no file and deletes nothing that exists.
-  (Regression-pinned by `bash scripts/backup-db.test.sh`; run it in CI.)
+  (Regression-pinned by `bash scripts/backup-db.test.sh`; not yet wired into
+  CI — run it manually after changing the script.)
 - Only the restore drill can prove the archive opens — `age --decrypt |
   pg_restore --list`, then a restore into a wiped database. That is why the
   drill lives in `docs/drills.md`, not in the cron job, and why the first

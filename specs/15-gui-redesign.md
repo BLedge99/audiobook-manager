@@ -74,7 +74,7 @@ make `e2e/library-browse.spec.ts`'s
 ### Theme
 
 Light, dark and follow-the-device, persisted in `localStorage` and applied
-before first paint by an inline script in `index.html`. Dark is the same machine
+before first paint by an external `/theme-init.js` script. Dark is the same machine
 lit from inside, not an inverted palette: the acrylic gloss drops to a faint
 highlight and the shell tints lighten under it.
 
@@ -90,7 +90,7 @@ highlight and the shell tints lighten under it.
    passes unchanged.
 5. The detail dialog does not scroll sideways inside itself. Its DOM stays
    `div.fixed.inset-0 > article`, because the E2E suite locates it that way.
-6. All 266 client unit tests and all 40 Playwright tests pass without editing a
+6. All client unit tests and all Playwright tests pass without editing a
    single assertion.
 7. `prefers-reduced-motion: reduce` disables the particle burst and the ambient
    field, and the app remains fully usable.
@@ -100,8 +100,8 @@ highlight and the shell tints lighten under it.
 
 **A block comment left bare in JSX children position is text and renders.** A
 comment added while fixing `main`'s padding shipped to a Pixel 4a as a paragraph
-of CSS commentary at the top of the Library tab. It passed `tsc`, all 266 unit
-tests and all 40 Playwright tests, and survived two rounds of screenshot review.
+of CSS commentary at the top of the Library tab. It passed `tsc`, the client
+unit suite and the Playwright suite, and survived two rounds of screenshot review.
 Only a person looking at the actual phone caught it. The braces are mandatory:
 `{/* ... */}`. `scripts/capture-ui.js` now fails the build if a comment or a
 `TODO` is visible on screen.
@@ -127,7 +127,7 @@ and blew the page sideways. `min-w-0` on the grid item, not only its child.
 
 ## Known gaps this spec does not close
 
-- The wordmark still reads "Audiobook Manager". `e2e/helpers.ts:42` matches the
+- The wordmark still reads "Audiobook Manager". `e2e/helpers.ts` matches the
   `<h1>` by exact accessible name, and `PRODUCT.md` records that the rename is
   not yet scheduled.
 - The library is fetched once at mount, before a profile exists, so progress

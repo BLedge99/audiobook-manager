@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-11
+- **Addendum (2026-11-17):** the enforcement gap described in the Context below is now closed. `scanner.ts` guards its writes with `canScannerWrite(field, overrideFieldNames, hasEnrichedLayer)`, `metadata/apply.ts` uses `canEnrichmentWrite`, and `routes/metadata.ts` uses `decideOverrideAction` — enriched values now win over embedded ones on rescan, with user overrides still taking precedence. The "last writer wins" description is historical, not current behaviour.
 - **Supersedes:** the *enforcement* described in ADR 009 (the precedence model and the per-field override table remain the intent; this ADR records what the chain means now and resolves the open questions that blocked implementation)
 - **Related:** [ADR 009 — Field-level metadata precedence](009-field-level-metadata-precedence.md), [spec 37 — Architecture deepening](../specs/37-architecture-deepening.md) (Phase 5), [spec 17 — Metadata enrichment](../specs/17-metadata-enrichment.md)
 

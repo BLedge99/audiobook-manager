@@ -60,7 +60,7 @@ test/              Real LibriVox MP3 sample libraries for scanner tests/fixtures
 e2e/               Playwright E2E + security suite
 decisions/         ADRs (architectural decision records)
 specs/             One spec per roadmap feature: behaviour + acceptance criteria + checks
-docs/              Operational guides (production HTTPS, book storage, database access control)
+docs/              Operational guides (production HTTPS, book storage, database access control); docs/diagrams/architecture.svg is the high-level architecture diagram, docs/diagrams/api.svg is the complete per-route API reference (regenerate via `node scripts/generate-api-diagram.cjs`); docs/design-lab/early/ holds the pre-spec-15 wireframes
 scripts/           Copy check, LAN exposure, device tunnel, E2E WSL provisioning
 ```
 
@@ -91,7 +91,7 @@ scripts/           Copy check, LAN exposure, device tunnel, E2E WSL provisioning
 
 **SQLite locally, PostgreSQL in production (ADR 019).** One Prisma model serves both; the SQLite schema is generated from the canonical PostgreSQL schema via a sync script so the two cannot describe different models. Local dev and tests stay SQLite to avoid requiring Docker or a database for every `npm test`; production uses a managed PostgreSQL.
 
-**Local network only (ADR 006).** No tunnel, no port forwarding, no public exposure. The household is non-technical, and public hosting adds auth/TLS burden before the auth model is mature. Remote access is deliberately deferred.
+**Local network first, with an optional public demo (ADR 006, amended by ADR 023).** The household deployment stays on the home LAN: no tunnel, no port forwarding. Separately, an opt-in hosted demo (`ACCOUNT_EXPERIENCE=demo`, Render blueprint in `render.yaml`) lets people try the app over the internet with email/password or OAuth sign-up. ADR 006's "no public exposure" stance applies to the household product; the demo is a deliberate, documented exception with its own risk register entry (R4).
 
 **Device is a player, not a library manager (ADR 012).** The server holds authority; the device holds a read replica. Scanning, enrichment, and library management happen server-side only. The device downloads and plays.
 
@@ -126,7 +126,7 @@ This is an honest list of what does not work yet, why, and what is planned. Full
 - **Auto-apply** has a deliberate author-agreement judgement call in the 0.7–0.9 score band.
 - **Contributor sets** are replaced wholesale on enrichment; last write wins.
 - **Media.items.asin** exists in the schema but is never written.
-- **No remote access** (by design). No public hosting, no Tailscale, no Cloudflare Tunnel yet.
+- **Remote access** exists only as an optional hosted demo (`audiobook-manager.onrender.com`); the household deployment remains LAN-only. See ADR 023 and `render.yaml`.
 - **No transcoding, no M4B merging, no metadata embedding into files.**
 - **No social features, sharing outside the household, or ratings from strangers.**
 - **No multi-server sync or cloud backup.**
@@ -187,7 +187,7 @@ The server exposes a REST API over HTTP. All route inputs are validated with Fas
 | Admin panel | Published on its own `ADMIN_PORT` (default `3100`) by the base compose; loopback-only on the host | Separate `ADMIN_PANEL_PASSWORD`; operator dashboard |
 | Cookies | `COOKIE_SECURE` not set | `COOKIE_SECURE: "true"`; `TRUST_PROXY` set to Caddy internal IP |
 | WebAuthn | `localhost` RP id / origin | `books.home.arpa` RP id / `https://books.home.arpa` origin |
-| Media files | Mounted read-only (`./test:/media:ro` or local library roots) | `${MEDIA_PATH}` mounted read-only; durable audio in private Supabase Storage bucket (operator uploads) |
+| Media files | Mounted read-only (`./test:/media:ro` or local library roots) | Caddy deployment: `${MEDIA_PATH}` mounted read-only. Public demo (Render): private Supabase Storage bucket, operator uploads, rebuilt into `SUPABASE_CACHE_DIR` |
 | Cache | Local SQLite file + named Docker volumes | `app_data` volume; covers in `COVER_DIR` |
 | Deployment | `docker compose up -d` | `docker compose -f docker-compose.prod.yml up -d --build` |
 | Migrations | `prisma migrate deploy --schema prisma/sqlite/schema.prisma` | `prisma migrate deploy --schema prisma/schema.prisma` |

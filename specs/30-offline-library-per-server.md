@@ -1,5 +1,11 @@
 # Spec 30 — Offline library is per server, and holds what the device downloaded
 
+> **Status: implemented (2026-11).** Replica keyed `<serverId>#<bookId>`
+> (`client/src/local/replica.ts`), per-server shelves wired through
+> `librarySource.ts` / `useDeviceLibrary.ts`. Verified criterion-by-criterion
+> 2026-11-17; the remaining unticked box is the unexecuted regression suite,
+> not missing behaviour.
+
 ## Purpose
 
 The offline library has to survive the household's real deployment pattern:
@@ -102,13 +108,15 @@ actually hears from.
 
 ## Acceptance criteria
 
-- [ ] A book downloaded from server A appears in the device's offline library
+- [x] A book downloaded from server A appears in the device's offline library
       while the app is pointed at server B, and plays offline.
-- [ ] A book downloaded from server B, after adopting one from server A, is
+- [x] A book downloaded from server B, after adopting one from server A, is
       downloadable and adoptable independently.
-- [ ] Adoption of an orphaned folder still requires server confirmation (spec 29
+- [x] Adoption of an orphaned folder still requires server confirmation (spec 29
       behaviour preserved) and tags the adopted row with the confirming server.
 - [ ] Existing single-server flows are unchanged (regression suite green).
+      Single-server paths preserved in code (legacy adopt-in-place, legacy
+      replica rows tested); the suite was not executed in the 2026-11-17 pass.
 
 ## Non-goals
 

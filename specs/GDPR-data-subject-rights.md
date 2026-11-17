@@ -1,6 +1,6 @@
 # Spec: GDPR Data Subject Rights — Export, Erasure, Rectification
 
-**Status:** Draft — implements GDPR remediation Phases 3–5  
+**Status:** Implemented and tested — GDPR remediation Phases 3–5 (self-service export, erasure, rectification). See `server/src/routes/gdpr.ts` and `specs/45-*` verification records.
 **GDPR basis:** Art. 15–22 (access, portability, erasure, rectification, restriction, objection)
 
 ---
@@ -104,18 +104,18 @@ Not implemented in this spec. A `PATCH /api/me/restrict` flag was planned but de
 
 ## 4. Acceptance criteria
 
-- [ ] Authenticated export returns all personal data for the requesting profile only
-- [ ] Export excludes token hashes, password hashes, and secret hashes
-- [ ] Unauthenticated export returns `401`
-- [ ] Self-service deletion cascades to all related tables
-- [ ] Other profiles' data is untouched by deletion
-- [ ] Unauthenticated deletion returns `401`
-- [ ] `PATCH /api/me` updates name and colour for the requesting profile only
-- [ ] Name clashes with another profile return `409`
-- [ ] `DELETE /api/me/listening-history/:id` deletes only the requesting profile's row
-- [ ] `DELETE /api/me/favourites/:mediaItemId` deletes only the requesting profile's favourite
-- [ ] Client "Export my data" button downloads a JSON file
-- [ ] Client "Delete my account" button shows a confirmation dialog
+- [x] Authenticated export returns all personal data for the requesting profile only
+- [x] Export excludes token hashes, password hashes, and secret hashes
+- [x] Unauthenticated export returns `401`
+- [x] Self-service deletion cascades to all related tables
+- [x] Other profiles' data is untouched by deletion
+- [x] Unauthenticated deletion returns `401`
+- [x] `PATCH /api/me` updates name and colour for the requesting profile only
+- [x] Name clashes with another profile return `409`
+- [x] `DELETE /api/me/listening-history/:id` deletes only the requesting profile's row
+- [x] `DELETE /api/me/favourites/:mediaItemId` deletes only the requesting profile's favourite
+- [x] Client "Export my data" button downloads a JSON file
+- [x] Client "Delete my account" button shows a confirmation dialog
 
 ---
 

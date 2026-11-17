@@ -19,9 +19,11 @@ is a household, not an organisation."*). ADR 016 settled the account model: a
 `Profile` is the account, there is no second user table, and access is a
 password / passkey / device ceremony against that profile.
 
-The production server (`books.home.arpa`, Caddy TLS) now hosts a **demo
-audience**: real people sign in over the web to look at a limited set of free
-LibriVox books and see how the app works. Against that audience the existing
+The production server (originally sketched as `books.home.arpa` with Caddy
+TLS; shipped as the Render demo at `audiobook-manager.onrender.com` per
+ADR 029) now hosts a **demo audience**: real people sign in over the web to
+look at a limited set of free LibriVox books and see how the app works.
+Against that audience the existing
 surfaces are the wrong tool or no tool at all:
 
 - the household password is meaningless to a stranger who found the site;

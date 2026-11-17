@@ -1,7 +1,7 @@
 # GDPR Governance & Lawful-Basis Register
 
-**Last updated:** 2026-11-12  
-**Status:** Draft  
+**Last updated:** 2026-11-17  
+**Status:** Current — remediation Phases 1–9 complete; Phase 10 (final review/sign-off) in progress  
 **References:** `docs/roa.md`, `GDPR-AUDIT.md`, `server/prisma/schema.prisma`
 
 ---
@@ -51,12 +51,12 @@ Where legitimate interest is relied upon (activities 3, 4, 5, 7, 8, 12):
 
 | Principle | How it is met | Gap / phase |
 |-----------|---------------|-------------|
-| Lawfulness, fairness, transparency | Lawful basis documented per activity; privacy notice pending (Phase 2) | P0-1 privacy notice |
+| Lawfulness, fairness, transparency | Lawful basis documented per activity; privacy notice served at `/privacy` (spec GDPR remediation Phase 2) | Done |
 | Purpose limitation | Data collected for service functionality only; no secondary use | None |
 | Data minimisation | Only fields needed for the service are stored; no biometric templates; no analytics | None |
 | Data minimisation (children) | Kids accounts store an age band only — never a date of birth (spec 38) | None |
-| Accuracy | Profile name/color editable (Phase 5); history entries deletable individually | P0-5 rectification |
-| Storage limitation | No retention schedule yet | P0-6 retention (Phase 6) |
+| Accuracy | Profile name/color editable; history entries deletable individually; self-service rectification (Phase 5) | Done |
+| Storage limitation | Retention schedule defined (`docs/retention.md`, 7-newest ≈49 days; enforced) | Done |
 | Integrity & confidentiality | scrypt password hashing, encrypted client cache, HttpOnly/Secure/SameSite cookies, path confinement, error hygiene | Android LAN HTTP gap (P0-5, Phase 8) |
 | Accountability | This RoPA + governance doc + audit report | Ongoing |
 
@@ -66,14 +66,14 @@ Where legitimate interest is relied upon (activities 3, 4, 5, 7, 8, 12):
 
 | Right | Art. | Status | Phase |
 |-------|------|--------|-------|
-| Access / export | 15, 20 | Not implemented | Phase 3 |
-| Erasure ("be forgotten") | 17 | Admin-only deletion exists; self-service pending | Phase 4 |
-| Rectification | 16 | Profile name/color partially updatable; no general rectification | Phase 5 |
-| Restriction | 18 | Not implemented | Phase 5 |
-| Object | 21 | Not implemented | Phase 5 |
+| Access / export | 15, 20 | Implemented — `GET /api/me/export` (spec GDPR remediation Phase 3) | Done |
+| Erasure ("be forgotten") | 17 | Implemented — self-service `DELETE /api/me`; admin deletion exists; cascade per `docs/retention.md` | Done |
+| Rectification | 16 | Implemented — self-service profile edit (`PATCH /api/me`); kids age band rectifiable by admin | Done |
+| Restriction | 18 | Implemented — `DELETE /api/me/listening-history/:id` and per-item favourites/wishlist erasure | Done |
+| Object | 21 | No dedicated object toggle; objection is honoured via the self-service erasure/rectification paths above | Phase 5 (partial) |
 | Portability | 20 | Covered by export (Phase 3) | Phase 3 |
 | Withdraw consent | 7(3) | Not implemented where consent applies | Phase 5 |
-| Complain to supervisory authority | 77(d) | To be published in privacy notice | Phase 2 |
+| Complain to supervisory authority | 77(d) | Published in the privacy notice (`/privacy`) | Done |
 
 All data-subject-rights requests go to the data-protection lead contact and must be answered within one month.
 
@@ -102,4 +102,4 @@ This governance document and the RoPA are reviewed:
 
 ---
 
-**Next phase:** Phase 2 — Privacy notice & transparency (publish privacy notice, serve at `/privacy`, link from sign-in/account pages).
+**Next phase:** Phase 10 — final review (GDPR-REMEDIATION-PLAN.md); the privacy notice is live at `/privacy` and linked from the sign-in/account pages.

@@ -1,0 +1,27 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 700" width="1120" height="700" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1120" height="700" fill="#1e293b"/>
+  <!-- browser frame -->
+  <rect x="16" y="16" width="1088" height="668" rx="12" fill="#0b1117" stroke="#334155" stroke-width="2"/>
+  <rect x="16" y="16" width="1088" height="40" rx="12" fill="#111827"/>
+  <circle cx="40" cy="36" r="6" fill="#475569"/><circle cx="60" cy="36" r="6" fill="#475569"/><circle cx="80" cy="36" r="6" fill="#475569"/>
+  <rect x="120" y="26" width="500" height="20" rx="10" fill="#1f2937"/>
+  <text x="132" y="40" font-size="12" fill="#94a3b8">http://localhost:5173</text>
+
+  <!-- gate: centred card on dark background -->
+  <rect x="16" y="56" width="1088" height="628" fill="#0b1117"/>
+  <rect x="400" y="180" width="320" height="300" fill="#0f172a" stroke="#1e293b"/>
+  <text x="424" y="236" font-size="20" font-weight="bold" fill="#ffffff">Audiobook Manager</text>
+  <text x="424" y="262" font-size="13" fill="#94a3b8">Enter the household password to continue.</text>
+  <rect x="424" y="286" width="272" height="40" fill="#020617" stroke="#334155"/>
+  <text x="436" y="311" font-size="12" fill="#64748b">Household password</text>
+  <rect x="424" y="342" width="272" height="40" fill="#22d3ee"/>
+  <text x="560" y="367" font-size="14" font-weight="600" fill="#020617" text-anchor="middle">Sign in</text>
+  <text x="560" y="540" font-size="10" fill="#334155" text-anchor="middle">Gate shown before any session exists (LoginGate.tsx @ 99f6dbb)</text>
+
+  <!-- callouts -->
+  <rect x="772" y="220" width="300" height="90" rx="6" fill="#111827" stroke="#334155"/>
+  <text x="784" y="244" font-size="11" font-weight="600" fill="#22d3ee">WHO IT IS FOR</text>
+  <text x="784" y="264" font-size="11" fill="#cbd5e1">The household --- one shared password,</text>
+  <text x="784" y="281" font-size="11" fill="#cbd5e1">then pick who you are on this device.</text>
+  <text x="784" y="300" font-size="10" fill="#64748b">Profiles came next: ProfileSwitcher, same commit.</text>
+</svg>

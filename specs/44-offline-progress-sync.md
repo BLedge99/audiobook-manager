@@ -130,9 +130,10 @@ future/past `lastPlayed` values; none of the tests use wall-clock sleeps.
 ## GDPR
 
 No new personal-data category. Progress rows already exist; this spec moves
-where a write can originate, not what is stored. `docs/roa.md` Activity 4
+where a write can originate, not what is stored. `docs/roa.md` Activity 3
 (listening progress) wording gains one clause: "positions may be written by
-the client on reconnect, subject to the server's monotonic rule". Retention is
+the client on reconnect — the server is last-writer-wins; the client-side
+strictly-newer comparison is the guard (spec 44)". Retention is
 unchanged (erasure still removes everything, spec 43 Phase 5).
 
 ## Amendment (2026-11-17, spec 45 phase 8)

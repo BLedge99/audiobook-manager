@@ -1,5 +1,11 @@
 # Spec 40 — Recent servers
 
+> **Status: implemented (2026-11).** `client/src/lib/recentServers.ts` (+ test),
+> wired into Settings (save-and-test) and first-run Connect; localStorage key
+> `recentServers`, max 5, most-recent-first. All acceptance criteria verified
+> against the code on 2026-11-17 (AC6 is code-verified; there is no dedicated
+> ServerSetup test).
+
 ## Purpose
 
 The app already lets a listener point at more than one server (the local dev
@@ -72,19 +78,19 @@ server used before is one tap.
 
 ## Acceptance criteria
 
-- [ ] After a successful "Save and test" (or first-run "Connect") in one
+- [x] After a successful "Save and test" (or first-run "Connect") in one
       session, the same address appears in Settings' recent-servers list
       without being retyped.
-- [ ] Tapping a listed address switches the app to it: the health check runs
+- [x] Tapping a listed address switches the app to it: the health check runs
       against that address, and on success the app behaves exactly as after
       "Save and test" (explicit offline mode ends, library refreshes).
-- [ ] Forgetting an entry removes it from the list and changes nothing else;
+- [x] Forgetting an entry removes it from the list and changes nothing else;
       the configured server and its local data are untouched.
-- [ ] The list is capped at 5, most-recent-first, with no duplicates, and
+- [x] The list is capped at 5, most-recent-first, with no duplicates, and
       survives an app restart (stored, not in-memory).
-- [ ] Malformed stored data does not break the Settings panel; it renders
+- [x] Malformed stored data does not break the Settings panel; it renders
       with no list shown.
-- [ ] First-run setup records the address it just connected to.
+- [x] First-run setup records the address it just connected to.
 
 ## Non-goals
 

@@ -27,7 +27,7 @@ to desktop and Android clients over your home network.
 5. Present a Netflix-style library: grid, search, detail view.
 6. Play audio with chapters, playback speed, sleep timer, and resume.
 7. Per-user profiles with server-side listening progress and full history.
-8. Progressive Web App on Android (installable); native-ish wrapper later.
+8. Progressive Web App on Android (installable), shipped as a Capacitor-wrapped WebView app (see `client/capacitor.config.ts`, spec 26).
 9. Optional AI features via LM Studio (matching, summaries) that never gate
    core functionality.
 
@@ -44,15 +44,16 @@ to desktop and Android clients over your home network.
 - Library scanning, metadata extraction, cover art, online enrichment
 - Per-user profiles and server-side progress/history
 - Full playback UX (chapters, speed, sleep timer)
-- PWA Android support and a later WebView wrapper
+- PWA Android support, shipped as a Capacitor WebView wrapper
 - Optional LM Studio AI features behind an adapter
 - Full test suite: unit (backend + frontend), integration, Playwright E2E,
   and a dedicated security test project
 
 ## Out of scope (for now)
 
-- Remote/internet access (aspirational; local network only — see
-  `decisions/006-remote-access.md`)
+- Remote/internet access for the household app (local network only — see
+  `decisions/006-remote-access.md`; an opt-in hosted demo exists for trying the
+  app, see `decisions/023-oauth-email-signin-production-demo.md` / `render.yaml`)
 - Transcoding, M4B merging, metadata embedding into files (future stretch,
   manual-only)
 - Social features, sharing outside the household, ratings from strangers

@@ -1,7 +1,7 @@
 # ADR 006 — Local network only; remote access deferred
 
 ## Status
-Accepted
+Accepted 2026-09-22 — amended 2026-11-04 by ADR 023 (public hosted demo, `ACCOUNT_EXPERIENCE=demo`) and ADR 024 (demo account experience). The household deployment remains LAN-only; the hosted demo is a deliberate, scoped exception documented in those ADRs and `docs/risk-register.md` (R4). The declined-access rationale for the household product stands.
 
 ## Context
 The household is non-technical. Tailscale adds per-device setup burden; public

@@ -1,7 +1,7 @@
 # ADR 003 — Auth phasing: shared household password, profiles first-class
 
 ## Status
-Accepted
+Accepted 2026-09-22 — amended 2026-11 by ADR 016 (profiles are accounts: passkeys/biometrics) and ADR 023 (email/password + OAuth for the hosted demo). Per-profile credentials, biometrics and (demo-only) OAuth/email sign-in shipped; the "no per-user credentials" clause now applies only to the household deployment model.
 
 ## Context
 The app will have multiple household users, but exposing full account management

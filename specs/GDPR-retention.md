@@ -1,6 +1,6 @@
 # Spec: GDPR Retention & Storage Limitation
 
-**Status:** Draft — implements GDPR remediation Phase 6  
+**Status:** Implemented and enforced — GDPR remediation Phase 6. Retention model is the 7-newest ≈49-day backup story plus 24-month inactive-profile purge; see `docs/retention.md` and `server/src/gdpr/personal-data.ts`.
 **GDPR basis:** Art. 5(1)(e) — personal data kept no longer than necessary
 
 ---
@@ -67,15 +67,15 @@ When a profile is deleted for inactivity, all related personal-data rows cascade
 
 ## 6. Acceptance criteria
 
-- [ ] `docs/retention.md` published and mapped to each personal-data table
-- [ ] Expired sessions are removed by `cleanupExpired()` (tested)
-- [ ] Expired device credentials are removed by `cleanupExpired()` (tested)
-- [ ] Expired admin sessions are removed by `cleanupExpired()` (tested)
-- [ ] Expired WebAuthn challenges are removed by `cleanupExpired()` (tested)
-- [ ] Inactive profiles (24 months no activity) are deleted with cascade (tested)
-- [ ] Never-used profiles (created >24 months ago, never signed in) are deleted (tested)
-- [ ] Active profiles are not deleted (tested)
-- [ ] Sessions exactly at the expiry boundary are not deleted (tested)
+- [x] `docs/retention.md` published and mapped to each personal-data table
+- [x] Expired sessions are removed by `cleanupExpired()` (tested)
+- [x] Expired device credentials are removed by `cleanupExpired()` (tested)
+- [x] Expired admin sessions are removed by `cleanupExpired()` (tested)
+- [x] Expired WebAuthn challenges are removed by `cleanupExpired()` (tested)
+- [x] Inactive profiles (24 months no activity) are deleted with cascade (tested)
+- [x] Never-used profiles (created >24 months ago, never signed in) are deleted (tested)
+- [x] Active profiles are not deleted (tested)
+- [x] Sessions exactly at the expiry boundary are not deleted (tested)
 
 ---
 

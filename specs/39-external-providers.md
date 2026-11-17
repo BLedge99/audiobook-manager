@@ -1,6 +1,6 @@
 # Spec 39 — External providers: client-side external books and Discover buy links
 
-**Status:** Implemented on branch `External-providers` (2026-11-13). Acceptance criteria ticked except the on-device matrix; see LIMITATIONS §3. Build plan: [`docs/external-providers-plan.md`](../docs/external-providers-plan.md).
+**Status:** Implemented on `master` (2026-11-13; branch `External-providers` merged). Acceptance criteria ticked except the on-device matrix; see LIMITATIONS §3. Build plan: [`docs/external-providers-plan.md`](../docs/external-providers-plan.md).
 
 ## Purpose
 

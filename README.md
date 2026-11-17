@@ -54,7 +54,7 @@ The app works in a web browser on desktop, and as an installable app on Android 
 
 ## Things worth knowing
 
-- **It works on your home network only.** The app is designed to be used by devices connected to your home Wi-Fi. It is not intended to be accessed from outside your home, and there is no remote-access feature built in.
+- **It works on your home network by default.** The app is designed to be used by devices connected to your home Wi-Fi. There is also an optional hosted demo (Google/GitHub/email sign-up) for trying the app out — see the technical docs for how that deployment differs.
 - **Profiles have their own sign-in.** The household password is used to create or recover a profile; each person signs in with their own profile password or device biometric.
 - **Your files are safe.** The app only reads your audiobooks. It never writes metadata into your files, moves them, or deletes them.
 - **Online lookups are optional.** The app can look up covers and descriptions online, but it works perfectly well without them. Any AI-assisted features are optional and never required to browse or play.

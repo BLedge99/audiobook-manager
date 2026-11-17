@@ -1,7 +1,10 @@
 # Spec 37 — Architecture deepening: nine deepening opportunities
 
-> **Status:** planned. Every step below is self-contained and independently
-> mergeable. See "How to work this plan" below before starting anything.
+> **Status:** implemented and merged to `master` (2026-11-13; the
+> `architecture-deepening` branch carried the final two steps and has since
+> landed). Verified against the working tree 2026-11-17; the acceptance boxes
+> were ticked as their work landed — the few remaining unticked boxes below
+> are all E2E-gated or unverified, never started or deliberately deferred.
 >
 > **Reconciliation 2026-11-13.** This header is the honest status block.
 > All work below is verified against the working tree, not against the
@@ -1504,7 +1507,9 @@ test cannot drift from the code it is checking.
 
 **Definition of done**
 - [x] The route-table test exists and passes.
-- [ ] Every route that takes input has a schema.
+- [ ] Every route that takes input has a schema. (Unverified as a blanket
+      claim in the 2026-11-17 pass — spec 45 phase 10 keeps suppression of
+      this class of gap explicit; treat as unproven, not proven false.)
 - [x] A malformed body now returns 400, not a 500 or a silent default.
 
 ### Step 7.2 — Extract the taxonomy routes

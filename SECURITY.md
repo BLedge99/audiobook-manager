@@ -45,7 +45,10 @@ maintainer, not a test range. Use a local deployment (the repo's
   inside the trust boundary. Passwords, passkeys and per-profile accounts exist
   for *privacy between family members*, not to exclude the household.
 - The **hosted demo** (`ACCOUNT_EXPERIENCE=demo`) is a public instance with
-  Google/GitHub sign-up; it is run as a public beta and treated as having a
+  email/password sign-up (demo-gated open sign-up) and OAuth sign-in when the
+  operator sets `OAUTH_ENABLED=true` with registered redirect URIs — the
+  committed `render.yaml` ships with `OAUTH_ENABLED=false`, so email/password
+  is the guaranteed path. It is run as a public beta and treated as having a
   wider, less trusted audience. The `x-profile-id` isolation, child-account
   gating and demo-vs-household policy are the load-bearing controls there.
 - The **admin panel** (`:3100`) is the operator surface. It listens on

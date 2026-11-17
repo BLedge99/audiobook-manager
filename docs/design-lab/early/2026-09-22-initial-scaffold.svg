@@ -1,0 +1,52 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 700" width="1120" height="700" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1120" height="700" fill="#1e293b"/>
+  <!-- browser frame -->
+  <rect x="16" y="16" width="1088" height="668" rx="12" fill="#0b1117" stroke="#334155" stroke-width="2"/>
+  <rect x="16" y="16" width="1088" height="40" rx="12" fill="#111827"/>
+  <circle cx="40" cy="36" r="6" fill="#475569"/><circle cx="60" cy="36" r="6" fill="#475569"/><circle cx="80" cy="36" r="6" fill="#475569"/>
+  <rect x="120" y="26" width="500" height="20" rx="10" fill="#1f2937"/>
+  <text x="132" y="40" font-size="12" fill="#94a3b8">http://localhost:5173</text>
+
+  <!-- header: fixed top bar -->
+  <rect x="16" y="56" width="1088" height="64" fill="#020617" stroke="#1e293b"/>
+  <rect x="48" y="72" width="26" height="26" rx="4" fill="#2563eb"/>
+  <text x="94" y="90" font-size="19" font-weight="bold" fill="#ffffff">Audiobook Manager</text>
+  <text x="700" y="90" font-size="15" fill="#cbd5e1">Home</text>
+  <text x="830" y="90" font-size="15" fill="#cbd5e1">Library</text>
+  <text x="960" y="90" font-size="15" fill="#cbd5e1">Search</text>
+
+  <!-- main content -->
+  <text x="48" y="170" font-size="16" font-weight="600" fill="#e2e8f0">Featured</text>
+  <!-- 3 featured cards -->
+  <g>
+    <rect x="48" y="186" width="320" height="210" rx="8" fill="#1e293b"/>
+    <rect x="48" y="186" width="320" height="90" rx="8" fill="#334155"/>
+    <text x="64" y="300" font-size="15" font-weight="600" fill="#f8fafc">Dune</text>
+    <text x="64" y="322" font-size="12" fill="#94a3b8">by Frank Herbert</text>
+    <text x="64" y="342" font-size="11" fill="#64748b">Narrated by Scott Brick</text>
+  </g>
+  <g>
+    <rect x="400" y="186" width="320" height="210" rx="8" fill="#1e293b"/>
+    <rect x="400" y="186" width="320" height="90" rx="8" fill="#334155"/>
+    <text x="416" y="300" font-size="15" font-weight="600" fill="#f8fafc">Project Hail Mary</text>
+    <text x="416" y="322" font-size="12" fill="#94a3b8">by Andy Weir</text>
+    <text x="416" y="342" font-size="11" fill="#64748b">Narrated by Ray Porter</text>
+  </g>
+  <g>
+    <rect x="752" y="186" width="320" height="210" rx="8" fill="#1e293b"/>
+    <rect x="752" y="186" width="320" height="90" rx="8" fill="#334155"/>
+    <text x="768" y="300" font-size="15" font-weight="600" fill="#f8fafc">The Hobbit</text>
+    <text x="768" y="322" font-size="12" fill="#94a3b8">by J.R.R. Tolkien</text>
+    <text x="768" y="342" font-size="11" fill="#64748b">Narrated by Robbie Coltrane</text>
+  </g>
+
+  <text x="48" y="440" font-size="16" font-weight="600" fill="#e2e8f0">All Audiobooks</text>
+  <!-- all grid: two rows of five -->
+  <g fill="#1e293b">
+    <rect x="48" y="456" width="180" height="120" rx="8"/><rect x="248" y="456" width="180" height="120" rx="8"/><rect x="448" y="456" width="180" height="120" rx="8"/><rect x="648" y="456" width="180" height="120" rx="8"/><rect x="848" y="456" width="180" height="120" rx="8"/>
+  </g>
+
+  <!-- footer -->
+  <rect x="16" y="600" width="1088" height="40" fill="#020617"/>
+  <text x="560" y="624" font-size="11" fill="#64748b" text-anchor="middle">Audiobook Manager v0.1.0 --- Local-first audiobook management</text>
+</svg>

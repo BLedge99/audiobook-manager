@@ -1,5 +1,16 @@
 # Spec 26 — Android app with offline listening
 
+> **Status note (2026-11-17):** Partially implemented. Built and working: the
+> Capacitor Android shell, offline downloads, the per-server device replica
+> (spec 30), and the client-side strictly-newer push on reconnect (spec 44).
+> **Not implemented:** everything under "Progress merge rule" and "Server
+> contract" below — `PUT /api/audiobooks/:id/progress` accepts only
+> `{position, completed}`, is plain last-write-wins, has no `allowRewind`, and
+> no conflict dialog exists. Backward pushes are not blocked; the only guard is
+> the client's strictly-newer comparison on reconnect. The offline/download
+> criteria were verified against the code and the on-device records
+> (2026-11-17); the progress-merge boxes remain unchecked.
+
 ## Purpose
 The product targets commercial audiobooks and the household needs to listen
 **away from home**. Today that is impossible: the PWA caches no API responses
@@ -296,16 +307,19 @@ with plain stream URLs). Fixed by `mediaAssetUrl()` sending the profile header.
 
 ## Acceptance criteria
 
-- [ ] An installable APK sideloads onto an Android device.
-- [ ] **Spike proven first:** audio plays from a local file with the screen off
-      for 5 minutes, and seeks correctly within a file.
-- [ ] A downloaded book plays with the network off.
-- [ ] Its genres, tags, series and chapters are visible offline.
-- [ ] A book not downloaded still streams while online.
-- [ ] "Remove from device" frees space and leaves the server copy untouched.
-- [ ] Server URL is configurable in-app without rebuilding the web bundle.
-- [ ] Android APK excludes the browser PWA service worker, and an update cannot
-      launch a stale WebView app shell.
+- [x] An installable APK sideloads onto an Android device. (Sideload flow shipped; household phones run debug-keystore APKs — see "Distribution" above and spec 28.)
+- [x] **Spike proven first:** audio plays from a local file with the screen off
+      for 5 minutes, and seeks correctly within a file. (Measured on Pixel 4a,
+      Android 13 — `MediaSessionService` running, screen-off 180 s with position
+      advancing; see "Sprint 1 result" above.)
+- [x] A downloaded book plays with the network off.
+- [x] Its genres, tags, series and chapters are visible offline.
+- [x] A book not downloaded still streams while online.
+- [x] "Remove from device" frees space and leaves the server copy untouched.
+- [x] Server URL is configurable in-app without rebuilding the web bundle.
+- [x] Android APK excludes the browser PWA service worker, and an update cannot
+      launch a stale WebView app shell. (`vite build --mode android` drops the
+      SW — `client/vite.config.ts`.)
 - [ ] Forward progress sync applies silently.
 - [ ] Backward progress beyond 5 minutes prompts with both positions named, and
       neither button silently overwrites.

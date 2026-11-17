@@ -1,7 +1,7 @@
 # GDPR Audit — audiobook-manager
 
 **Date:** 2026-11-05  
-**Status:** **Remediated** — all findings addressed per `docs/GDPR-REMEDIATION-PLAN.md` (10 phases complete)  
+**Status:** **Remediated** — all findings addressed per `docs/GDPR-REMEDIATION-PLAN.md` (Phases 1–9 complete; Phase 10 sign-off in progress as of 2026-11-16). Note: this document is a dated snapshot of the 2026-11-05 findings; see the remediation plan and `docs/gdpr-governance.md` for the current state.
 **Scope:** Server (Fastify + Prisma + SQLite/PostgreSQL), client (React + Vite + IndexedDB), external data flows  
 **Regulation:** UK GDPR / EU GDPR (Regulation (EU) 2016/679) and ePrivacy (PECR) as applicable  
 **Source of truth order applied:** roadmap.md > specs/ > decisions/ > LIMITATIONS.md > code
@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-This audit assesses the personal-data processing of the audiobook-manager against GDPR. The project is a **local-first, household-scoped audiobook manager** that eventually runs as a **public-facing production demo** (`https://books.home.arpa`) for independent visitors.
+This audit assesses the personal-data processing of the audiobook-manager against GDPR. The project is a **local-first, household-scoped audiobook manager** that eventually runs as a **public-facing production demo** (`https://audiobook-manager.onrender.com`) for independent visitors.
 
 **Overall finding: partially compliant by design, with significant gaps in transparency, data subject rights, and retention.** No processing appears to be unlawful *per se*, but several GDPR obligations are not yet implemented:
 

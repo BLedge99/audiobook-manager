@@ -214,8 +214,12 @@
 4. `make test` passes; `make check-copy` passes.
 
 ### Definition of done
-- All 10 phases complete; tests pass; no regressions in existing suites.
-- GDPR-AUDIT.md updated to "Remediated" status.
+Phase 10 is done when: every GDPR endpoint (export, erasure, rectification,
+restriction) has integration tests, the client flows are tested, Playwright
+covers sign-in → export → erase, `make test` and `make check-copy` pass, and
+`GDPR-AUDIT.md` reads "Remediated". (Unit/integration coverage exists as of
+this writing; the E2E deletion flow is the outstanding item; the phase stays
+"In progress" in the summary table until it lands.)
 
 ---
 

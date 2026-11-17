@@ -1,0 +1,133 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 1170" width="1320" height="1170" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .boxTitle { font-size: 15px; font-weight: bold; fill: #f8fafc; }
+      .boxText  { font-size: 11.5px; fill: #cbd5e1; }
+      .boxSmall { font-size: 10.5px; fill: #94a3b8; }
+      .eyebrow  { font-size: 10px; letter-spacing: 2px; fill: #22d3ee; font-weight: bold; }
+      .containerTitle { font-size: 14px; font-weight: bold; fill: #e2e8f0; letter-spacing: 1px; }
+      .arrowLabel { font-size: 10px; fill: #94a3b8; font-style: italic; }
+    </style>
+  </defs>
+
+  <rect width="1320" height="1170" fill="#0b1117"/>
+
+  <!-- Title -->
+  <text x="660" y="42" class="boxTitle" text-anchor="middle" font-size="26">Audiobook Manager --- Final Architecture (2026-11)</text>
+  <text x="660" y="62" class="boxSmall" text-anchor="middle">Local-first household audiobook server with an optional public demo --- one Node.js codebase, two listeners, two client surfaces.</text>
+
+  <!-- ===== Clients ===== -->
+  <rect x="60" y="92" width="580" height="120" rx="10" fill="#131c2b" stroke="#334155" stroke-width="1.5"/>
+  <text x="80" y="116" class="eyebrow">CLIENT --- WEB</text>
+  <text x="80" y="140" class="boxTitle">Web browser --- PWA</text>
+  <text x="80" y="162" class="boxText">React + Vite + TypeScript + Tailwind</text>
+  <text x="80" y="180" class="boxText">Light/dark themes -- IndexedDB read replica -- service worker</text>
+  <text x="80" y="198" class="boxSmall">Served by the dev server locally; by Caddy / Render in deployment</text>
+
+  <rect x="680" y="92" width="580" height="120" rx="10" fill="#131c2b" stroke="#334155" stroke-width="1.5"/>
+  <text x="700" y="116" class="eyebrow">CLIENT --- ANDROID</text>
+  <text x="700" y="140" class="boxTitle">Android app --- Capacitor WebView</text>
+  <text x="700" y="162" class="boxText">Same web bundle -- @capgo/capacitor-media-session foreground service</text>
+  <text x="700" y="180" class="boxText">Biometric Vault holds the device credential -- offline downloads</text>
+  <text x="700" y="198" class="boxSmall">Sideloaded APK -- HTTP LAN direct to the server (documented limitation)</text>
+
+  <!-- arrows clients -> edge -->
+  <line x1="350" y1="212" x2="350" y2="248" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="970" y1="212" x2="970" y2="248" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- clients can reach either deployment; one arrow each for clarity -->
+
+  <!-- ===== Edge / deployment ===== -->
+  <rect x="60" y="248" width="580" height="132" rx="10" fill="#101a17" stroke="#1f4034" stroke-width="1.5"/>
+  <text x="80" y="272" class="eyebrow">DEPLOYMENT --- HOUSEHOLD (RECOMMENDED)</text>
+  <text x="80" y="296" class="boxTitle">Home server -- Caddy -- books.home.arpa</text>
+  <text x="80" y="318" class="boxText">Caddy :443 (`tls internal`, local root CA) --- app :3000</text>
+  <text x="80" y="336" class="boxText">Android --- http://&lt;lan-ip&gt;:3000 -- admin panel on loopback :3100</text>
+  <text x="80" y="354" class="boxText">Docker Compose (base + prod override) -- read-only media mount</text>
+  <text x="80" y="372" class="boxSmall">Not yet deployed with Windows CA trust -- WebAuthn RP is books.home.arpa in prod config, localhost in dev</text>
+
+  <rect x="680" y="248" width="580" height="132" rx="10" fill="#1a1410" stroke="#40341f" stroke-width="1.5"/>
+  <text x="700" y="272" class="eyebrow">DEPLOYMENT --- PUBLIC DEMO (RENDER)</text>
+  <text x="700" y="296" class="boxTitle">audiobook-manager.onrender.com</text>
+  <text x="700" y="318" class="boxText">`ACCOUNT_EXPERIENCE=demo` -- open email/password + OAuth sign-up</text>
+  <text x="700" y="336" class="boxText">Supabase Postgres (EU) + private Storage bucket -- persistent /data disk</text>
+  <text x="700" y="354" class="boxText">Blueprint in `render.yaml` -- `/api/health` health check -- weekly age-encrypted dumps</text>
+  <text x="700" y="372" class="boxSmall">Public beta -- accepted risks R1---R4 -- smoke-tested after each deploy</text>
+
+  <!-- arrows edge -> server -->
+  <line x1="350" y1="380" x2="350" y2="416" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="970" y1="380" x2="970" y2="416" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ===== Server container ===== -->
+  <rect x="60" y="416" width="1200" height="330" rx="12" fill="#0f172a" stroke="#475569" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="84" y="442" class="containerTitle">NODE.JS SERVER --- FASTIFY + PRISMA (DOCKER)</text>
+
+  <!-- family listener -->
+  <rect x="84" y="456" width="680" height="150" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="104" y="480" class="eyebrow">FAMILY LISTENER -- :3000</text>
+  <text x="104" y="502" class="boxTitle">The app API</text>
+  <text x="104" y="522" class="boxText">~13 route modules -- Fastify schema on every route -- no raw request.body</text>
+  <text x="104" y="540" class="boxText">Auth sessions per profile -- household password break-glass -- passkeys / biometrics</text>
+  <text x="104" y="558" class="boxText">Media-token streaming (5-min TTL) -- bounded ranges, 416 on bad ranges</text>
+  <text x="104" y="576" class="boxText">Path confinement via `safePath` -- CORS allowlist -- errors are codes, never details</text>
+  <text x="104" y="594" class="boxSmall">`ADMIN_PROXY=true` (demo only) forwards /admin + /api/admin/* --- 127.0.0.1:3100; household: 404</text>
+
+  <!-- admin listener -->
+  <rect x="788" y="456" width="448" height="150" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="808" y="480" class="eyebrow">ADMIN LISTENER -- :3100</text>
+  <text x="808" y="502" class="boxTitle">Operator panel --- a second door</text>
+  <text x="808" y="522" class="boxText">Separate `ADMIN_PANEL_PASSWORD` -- SameSite=Strict cookie</text>
+  <text x="808" y="540" class="boxText">Read-only status dashboard -- library controls -- purge/scan</text>
+  <text x="808" y="558" class="boxText">DB explorer: allowlisted tables + query policy -- values redacted</text>
+  <text x="808" y="576" class="boxText">API docs generated from live Fastify route schemas</text>
+  <text x="808" y="594" class="boxSmall">Loopback by default; not on the household LAN unless deliberate</text>
+
+  <!-- scanner + enrichment pipeline -->
+  <rect x="84" y="626" width="1152" height="100" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="104" y="650" class="eyebrow">SCANNER --- ENRICHMENT PIPELINE</text>
+  <text x="104" y="672" class="boxText">Walk configured LibraryRoots --- music-metadata + FFmpeg (tags -- chapters -- durations -- covers) --- group into books</text>
+  <text x="104" y="690" class="boxText">Enrichment chain (per item): LibriVox --- Open Library --- Google Books -- best-effort, user confirms, overrides win (ADR 028)</text>
+  <text x="104" y="708" class="boxSmall">Background runs enqueued on scan -- resumable (`EnrichmentRun`) -- never gates browsing/playback -- never writes to media files</text>
+
+  <!-- ===== arrows to data ===== -->
+  <line x1="340" y1="746" x2="340" y2="782" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- admin listener reads the same DB; flow omitted for clarity (API is read-only, allowlisted) -->
+  <line x1="700" y1="746" x2="700" y2="782" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ===== Data row ===== -->
+  <rect x="60" y="782" width="470" height="140" rx="10" fill="#101a24" stroke="#1f3a4a" stroke-width="1.5"/>
+  <text x="80" y="806" class="eyebrow">DATA --- DATABASE</text>
+  <text x="80" y="830" class="boxTitle">PostgreSQL in every production deploy</text>
+  <text x="80" y="852" class="boxText">Household (books.home.arpa) and demo (Render) both run managed Postgres</text>
+  <text x="80" y="870" class="boxText">SQLite is local dev/test only - never production (ADR 019)</text>
+  <text x="80" y="888" class="boxText">31 models · RLS on every table (ADR 026) · both histories shipped</text>
+  <text x="80" y="906" class="boxSmall">Database is the only irreplaceable state · weekly encrypted dumps</text>
+
+  <rect x="554" y="782" width="330" height="140" rx="10" fill="#101a24" stroke="#1f3a4a" stroke-width="1.5"/>
+  <text x="574" y="806" class="eyebrow">DATA --- FILESYSTEM</text>
+  <text x="574" y="830" class="boxTitle">Read-only media</text>
+  <text x="574" y="852" class="boxText">Configured LibraryRoots, read-only</text>
+  <text x="574" y="870" class="boxText">Cover cache (`COVER_DIR`)</text>
+  <text x="574" y="888" class="boxText">Paths never leave the server in responses</text>
+
+  <rect x="908" y="782" width="352" height="140" rx="10" fill="#101a24" stroke="#1f3a4a" stroke-width="1.5"/>
+  <text x="928" y="806" class="eyebrow">DATA --- STORAGE (DEMO)</text>
+  <text x="928" y="830" class="boxTitle">Supabase Storage</text>
+  <text x="928" y="852" class="boxText">Private `audiobooks` bucket</text>
+  <text x="928" y="870" class="boxText">Service-role key server-only</text>
+  <text x="928" y="888" class="boxText">Rebuilt into `/data` cache on the Render host</text>
+
+  <!-- ===== External row ===== -->
+  <rect x="60" y="962" width="1200" height="90" rx="10" fill="#15151f" stroke="#37304a" stroke-width="1.5"/>
+  <text x="80" y="986" class="eyebrow">EXTERNAL SERVICES --- ALL OPTIONAL</text>
+  <text x="80" y="1008" class="boxText">Metadata providers: LibriVox -- Open Library -- Google Books (keyed) -- Audnexus (chapters by ASIN)   |   AI: LM Studio, OpenAI-compatible, local only</text>
+  <text x="80" y="1028" class="boxSmall">Enrichment sends book identifiers only, never personal data -- AI never gates core behaviour --- the app is fully usable with every provider down</text>
+
+  <!-- arrow between scanner and external services -->
+  <line x1="660" y1="962" x2="660" y2="930" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- footer -->
+  <text x="660" y="1120" class="boxSmall" text-anchor="middle">Audiobook Manager - high-level view - see README_technical.md for detail, decisions/ for the 37 ADRs, specs/ for behaviour and acceptance criteria</text>
+</svg>

@@ -80,7 +80,7 @@ fails if a row ever loses its erase strategy.
 | Field | Value |
 |-------|-------|
 | **Activity** | Storing per-profile listening position and full listening sessions |
-| **Client writes on reconnect** | Positions may be written by the client on reconnect (spec 44), subject to the server's monotonic rule |
+| **Client writes on reconnect** | Positions may be written by the client on reconnect (spec 44). The server applies last-write-wins (no monotonic rule was implemented — see `LIMITATIONS.md` §1.5); the client only pushes a strictly-newer cached position, which is the guard against regression |
 | **Personal data** | `ListeningHistory.profileId`, `ListeningHistory.mediaItemId`, `startedAt`, `endedAt`, `fromPosition`, `toPosition`; `PlaySession.profileId`, `PlaySession.mediaItemId`, `position`, `playedAt` |
 | **Lawful basis** | Art. 6(1)(f) legitimate interest — core service functionality, user expects progress to persist across devices; or Art. 6(1)(a) consent where opt-in |
 | **Retention** | Per retention schedule (Phase 6); deleted on account erasure |

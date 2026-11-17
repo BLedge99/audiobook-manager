@@ -1,11 +1,11 @@
 # Spec 43 — Production readiness (household release, v0.x line)
 
-> **Status: planned 2026-11-16.** Written from the 2026-11-16 critique of the
-> whole codebase (six findings verified by hand, three deep-dive reviews, both
-> suites green at time of writing: server 915, client 993). Household-first;
-> the public demo (Render + Supabase) inherits the same work. The release this
-> plan gates is **v0.2.0** — the project stays on the 0.x line; v1.0.0 waits
-> for the client architecture work in Phase 6 and a stable drill history.
+> **Status: implemented 2026-11-16 (phases 0–7); phase 8 deliberately not cut.**
+> Written from the 2026-11-16 critique of the whole codebase (six findings
+> verified by hand, three deep-dive reviews). Household-first; the public demo
+> (Render + Supabase) inherits the same work. The release this plan gates is
+> **v0.2.0 — untagged**: the tag waits for ≥ 2 weekly dumps and a restore
+> drill. Suites green at close-out per spec 45 (server 975, client 1008).
 >
 > The offline→online progress push is a separate, user-facing feature with its
 > own spec: [`specs/44-offline-progress-sync.md`](44-offline-progress-sync.md).
@@ -633,9 +633,11 @@ not cut.** Verification battery (this session):
 - **Playwright e2e: not run this session.** The WSL2/Windows port mapping on
   the dev host stopped forwarding both `:3000` and `:5173`
   (`Invoke-WebRequest` reset/timed out while the containers report healthy),
-  and `make test-e2e` ends in `device-tunnel.ps1`, which raises a UAC prompt —
-  not something to trigger unattended. Run `scripts/e2e-wsl.sh` when the stack
-  is reachable from the host, or when you are at the machine.
+  and `make test-e2e` brings up the compose stack and runs Playwright; the
+  Windows-side LAN exposure (`scripts/device-tunnel.ps1`, UAC prompt) is the
+  separate `make device-tunnel` target — not part of `make test-e2e`. Run
+  `scripts/e2e-wsl.sh` when the stack is reachable from the host, or when you
+  are at the machine.
 - **App.tsx → ≤ 700 lines: exception recorded** (see 6.2). The render shell
   needs render-level tests/e2e backing before a safe split.
 - **Weekly dumps cannot be "implemented" from here** — the script is, the
