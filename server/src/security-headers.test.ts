@@ -34,6 +34,7 @@ function expectSecurityHeaders(response: { headers: Record<string, unknown> }) {
   // Provider cover CDNs must stay reachable from the browser (Discover fetches them).
   for (const host of [
     "https://covers.openlibrary.org",
+    "https://archive.org",
     "https://cdn.audnex.us",
     "https://books.google.com",
     "https://books.googleusercontent.com",

@@ -30,9 +30,13 @@ export async function registerSecurityHeaders(app: FastifyInstance): Promise<voi
         // The browser fetches provider covers directly from their CDNs (Discover,
         // review queue): OpenLibrary (which redirects to archive.org), Audnexus and
         // Google Books. Connect sources only; everything else stays same-origin.
+        // Note: `covers.openlibrary.org` 30x's image responses to `archive.org`
+        // (the apex, not a subdomain — `*.archive.org` does not match it), so the
+        // apex `archive.org` must be allowed in addition to its subdomains.
         connectSrc: [
           "'self'",
           "https://covers.openlibrary.org",
+          "https://archive.org",
           "https://*.archive.org",
           "https://cdn.audnex.us",
           "https://books.google.com",
