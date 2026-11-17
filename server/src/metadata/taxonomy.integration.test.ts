@@ -74,6 +74,29 @@ describe("mapGenreString", () => {
     expect(genre?.slug).toBe("science-fiction");
   });
 
+  it("uses the built-in mapping before the database seed has inserted it", async () => {
+    const book = await makeBook("Genre Book Startup Race");
+    const catchAll = await prisma.genre.findFirstOrThrow({ where: { isCatchAll: true } });
+    await prisma.mediaItemGenre.create({
+      data: { mediaItemId: book.id, genreId: catchAll.id, source: "provider" },
+    });
+    await prisma.genreMapping.deleteMany({
+      where: { provider: "librivox", rawValue: "general fiction" },
+    });
+
+    try {
+      await applyGenres(prisma, book.id, "librivox", ["General Fiction"]);
+
+      const rows = await prisma.mediaItemGenre.findMany({
+        where: { mediaItemId: book.id },
+        include: { genre: true },
+      });
+      expect(rows.map((row) => row.genre.slug)).toEqual(["fiction"]);
+    } finally {
+      await seedGenreMappings(prisma);
+    }
+  });
+
   it("maps LibriVox General Fiction to Fiction instead of Miscellaneous", async () => {
     const genreId = await mapGenreString(prisma, "librivox", "General Fiction");
     const genre = await prisma.genre.findUnique({ where: { id: genreId! } });

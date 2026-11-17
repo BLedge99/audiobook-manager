@@ -5,28 +5,18 @@ import { clearSubjectPoolCache } from "./openlibrary";
 import { buildSeed } from "./recommend";
 import type { ProviderCandidate } from "./types";
 
-/**
- * Spec 43 addendum (2026-11-17) — "Christmas Carol now matches misc".
- *
- * Root cause: `expand()` browses the *top seed genres by weight*, and the
- * seed kept the catch-all slug. For a one-book seed every genre has weight
- * 1.0, so DB insertion order decides — and "misc" sorts high. `subject:misc`
- * returns an arbitrary pool, so Discover served whatever was under
- * "miscellaneous", which is indistinguishable from random.
- */
-
 const subjectSearch = vi.hoisted(() => vi.fn());
 vi.mock("./openlibrary", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./openlibrary")>()),
   searchOpenLibraryBySubject: subjectSearch,
 }));
 
-function candidate(title: string): ProviderCandidate {
+function candidate(title: string, genres = ["fiction"]): ProviderCandidate {
   return {
     source: "openlibrary",
     title,
     author: "Some Author",
-    genres: ["fiction"],
+    genres,
     confidence: 0.5,
     providerKey: `/works/${title}`,
   };
@@ -69,21 +59,21 @@ beforeEach(() => {
   subjectSearch.mockResolvedValue([candidate("The Cratchit Family")]);
 });
 
-describe("seed construction skips the catch-all genre", () => {
-  it("drops misc from the seed entirely", () => {
+describe("seed construction uses catch-all only as a fallback", () => {
+  it("omits misc when topical genres are available", () => {
     const seed = buildSeed([{ title: "X", genres: ["misc", "fiction"], author: "A" }]);
     expect(seed.genres.has("misc")).toBe(false);
     expect(seed.genres.has("fiction")).toBe(true);
   });
 
-  it("a misc-only seed has no genre signal, not a misc signal", () => {
-    const seed = buildSeed([{ title: "X", genres: ["misc"] }]);
-    expect(seed.genres.size).toBe(0);
+  it("retains misc when no topical genre is available", () => {
+    const seed = buildSeed([{ title: "X", genres: ["misc"], author: "A" }]);
+    expect(seed.genres.get("misc")).toBeGreaterThan(0);
   });
 });
 
-describe("similarTo never browses the catch-all subject", () => {
-  it("queries fiction, not misc, for a Christmas Carol", async () => {
+describe("similarTo prefers topical genres over the catch-all subject", () => {
+  it("queries fiction, not misc, when a topical genre is available", async () => {
     const service = new RecommendationService(fakePrisma(CAROL));
     await service.similarTo(1, { page: 1, pageSize: 5 });
 
@@ -91,5 +81,25 @@ describe("similarTo never browses the catch-all subject", () => {
     expect(subjects.length).toBeGreaterThan(0);
     expect(subjects).not.toContain("misc");
     expect(subjects).toContain("fiction");
+  });
+
+  it("queries misc and returns ranked results when no topical genre is available", async () => {
+    const item = {
+      title: "An Unenriched Book",
+      author: "A Known Author",
+      contributors: [],
+      customTags: [],
+      genres: [{ genre: { slug: "misc" } }],
+      series: null,
+      seriesPosition: null,
+    };
+    subjectSearch.mockResolvedValue([candidate("Another Book", ["misc"])]);
+
+    const service = new RecommendationService(fakePrisma(item));
+    const result = await service.similarTo(1, { page: 1, pageSize: 5 });
+
+    const subjects = subjectSearch.mock.calls.map(([subject]) => subject as string);
+    expect(subjects).toContain("misc");
+    expect(result.recommendations.map(({ title }) => title)).toContain("Another Book");
   });
 });

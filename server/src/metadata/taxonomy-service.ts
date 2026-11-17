@@ -127,8 +127,6 @@ export async function mapGenreString(
   rawValue: string,
 ): Promise<number | null> {
   const mappings = await prisma.genreMapping.findMany({ where: { provider } });
-  if (mappings.length === 0) return (await prisma.genre.findFirst({ where: { isCatchAll: true } }))?.id ?? null;
-
   const target = normalizeText(rawValue);
 
   // Exact normalized match.
@@ -145,6 +143,17 @@ export async function mapGenreString(
     })
     .sort((a, b) => normalizeText(b.rawValue).length - normalizeText(a.rawValue).length);
   if (contained.length > 0) return contained[0].genreId;
+
+  // The server begins listening before its potentially slow, per-row mapping
+  // seed completes. Use the checked-in defaults when the matching DB row is
+  // not there yet, while still letting an explicit DB mapping take precedence.
+  const builtIn = Object.entries(PROVIDER_GENRE_MAPPING[provider] ?? {}).find(
+    ([raw]) => normalizeText(raw) === target,
+  );
+  if (builtIn) {
+    const genre = await prisma.genre.findUnique({ where: { slug: builtIn[1] } });
+    if (genre) return genre.id;
+  }
 
   const catchAll = await prisma.genre.findFirst({ where: { isCatchAll: true } });
   return catchAll?.id ?? null;

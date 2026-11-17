@@ -15,6 +15,9 @@ learned recommender, and the UI must not imply otherwise.
   - Automatic: favourites → seeded from the union of the profile's favourites.
 - **Seed extraction (pure).** From a book or a favourites set, extract genres,
   authors, narrators, series and custom tags with weights.
+- **Catch-all fallback.** Do not let the `misc` genre compete with known
+  topical genres. When a seed has no topical genres, retain `misc` as a broad
+  fallback so sparsely enriched books can still discover results.
 - **Provider expansion.** Seeds browse Open Library by subject, most distinctive
   genre first.
   > **Corrected 2026-10-18.** This originally read "Seeds drive queries through
