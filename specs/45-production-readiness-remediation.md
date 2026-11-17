@@ -1,11 +1,11 @@
 # Spec 45 — Production-readiness remediation: claims vs tree (2026-11-17 review)
 
-> **Status: planned.** Written from the 2026-11-17 re-audit of specs 43/44
+> **Status: done 2026-11-17.** Written from the 2026-11-17 re-audit of specs 43/44
 > (foreign review). Every finding below was verified off the tree before it
-> entered this plan: H1–H3 by direct read, the MEDIUMs by spot check. Read
-> "How to work this plan" before starting anything.
-
-## Purpose
+> entered this plan: H1–H3 by direct read, the MEDIUMs by spot check. EXECUTION
+> COMPLETE — see "Close-out (2026-11-17)" at the end of the file for the record.
+>
+> ## Purpose
 
 Specs 43/44 did real work with real care; the audit found its weakness to be
 one systematic thing — **claims outrunning reality at the seams nobody
@@ -363,3 +363,66 @@ claim matches the tool.
 
 **Effort (rough):** 1–3 × M; 4–10 × S; 11 × S. All phases independently
 mergeable after 0.
+
+## Close-out (2026-11-17)
+
+All phases executed and pushed to master on 2026-11-17 (commits 64a9932…4017fe5
++ this one). What each landed, with the evidence:
+
+- **Phase 1 (H1)** — `scripts/backup-db.sh` now dumps to a temp file first and
+  refuses on empty plaintext; prunes only after a verified write. Regression-
+  pinned by `scripts/backup-db.test.sh` (5 cases, run under WSL; 5/5 pass on
+  Linux; the pipe-mask class is structurally gone, not patched over).
+- **Phase 2 (H2)** — the admin read-only SQL console redacts
+  bcrypt/argon2-shaped values under ANY output key, both providers. Alias
+  regression test at the route boundary; the phase-2.1 spec row carries the
+  correction.
+- **Phase 3 (H3, M3, L6)** — `render.yaml` startCommand runs
+  `db:prod:migrate` before `start`; `NODE_VERSION: "24"`; OAuth redirect URIs
+  documented; the auto-migrate doc paragraph made true; `render-config.test.ts`
+  pins the blueprint (3 tests).
+- **Phase 4 (M1, L7)** — retention is one story everywhere: 7-newest ≈ **49
+  days** (ADR 037 addendum; retention.md, roa.md, backup-restore.md corrected);
+  the runbook's cron example double-dump is gone; spec 43's phase-3 text carries
+  the correction markers.
+- **Phase 5 (M2)** — the truth is written: LIMITATIONS §2.13; spec 43's
+  phase-1.2 row corrected (the SQLite write path, not the hand-opened handle).
+- **Phase 6 (M4)** — passkey `login/options` 429 carries `Retry-After`; header
+  pinned by test; spec 43's phase-2.5 row corrected.
+- **Phase 7 (M5)** — the nine mojibake em-dashes restored; zero `â€` remain.
+- **Phase 8 (L2, L3, L1)** — the spec-44 reconnect orchestration is pinned
+  (`useLibrary.test.tsx`, real IndexedDB + real push path); the roa.md Activity
+  3 clause landed; the spec-44 amendment records the position-only divergence
+  (server's `@updatedAt` is the monotonic authority).
+- **Phase 9 (L4, L5, L6)** — admin reset copy names passkey re-registration;
+  `applyLockIfCountMet` single-statement guard with two direct tests; OAuth
+  redirect URIs written.
+- **Phase 10 (L8)** — all ten suppressions carry `-- reason:` on the directive
+  line; `scripts/check-suppressions.mjs` wired into client CI as
+  `check:suppressions` (gate proven to bite with a planted violation); spec
+  43's 6.1 row corrected.
+- **Phase 11 (close-out)** — this file; roadmap item 45 lands as Done; audit
+  record below.
+
+**Verification record (2026-11-17):**
+
+- Client suite: **1008/1008** (95 files); server suite: **975 passed, 4 skipped**
+  (84 files); one scanner-class flake re-ran green alone.
+- Both typechecks green; client build ~13 s; app chunk 291.4 kB (pre-phase
+  289.7 kB); CSS 68.8 kB; all bundle budgets met; `npm run lint` exits 0;
+  `check:copy` 0 errors (11 baseline warnings, unchanged); `npm audit
+  --audit-level=high` — server 0 vulnerabilities, client clean (pre-existing
+  4 low-severity toolchain advisories in `deepmerge` remain, accepted; not
+  introduced by this change).
+- **Named and accepted, deliberately, carried forward:** L9 (console
+  side-effect edges — `pg_control_*` class), L10 (unordered first-1000
+  library cap), L12 (no CSP `report-to`), L13 (over-strip of future
+  `challenge`/`statehash`-named columns — safe direction), L5's residual
+  theoretical interleaving (inter-write ordering is not expressible with a
+  single update; the guard makes the failure benign).
+
+**Not done, deliberately, and why:** v0.2.0 still waits on the two weekly
+dumps and the real-dump restore drill (spec 43's own gate; 2026-11-17 rhythm:
+nothing wall-clock runs today); Playwright e2e still not run (WSL port
+forward; UAC); the tiered 4-weekly + 3-monthly rotation remains a deliberate
+future change to the script, not documentation.
