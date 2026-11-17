@@ -69,11 +69,7 @@ export function useSession(options: UseSessionOptions) {
   // "demo" sessions carry no household profile id; everything else does.
   const resolveSessionProfileId = useCallback(
     () => (isDemoExperience(getAccountExperience()) ? null : getActiveProfileId()),
-    // getAccountExperience is an inline arrow over a ref in App.tsx, and it is
-    // called at resolution time precisely so it sees the *current* value.
-    // Excluded from deps on purpose: including it would recreate probeServer
-    // every render and re-fire the mount effect.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: inline arrow over a ref; read at resolution time sees the current value
     [],
   );
 

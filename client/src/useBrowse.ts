@@ -89,7 +89,7 @@ export function useBrowse(profileId: string | null = null) {
         }
     });
     return { fn, generation };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- profileId is the refresh trigger, read at call time by the requests themselves
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: profileId is the refresh trigger, read at call time by the requests themselves
   }, [profileId]);
 
   useEffect(() => {

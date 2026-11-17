@@ -499,7 +499,7 @@ export function ChapterPlayer({
     })();
     return () => { cancelled = true; };
     // Keyed on book.id only: applyResume/bookServerId read current values at call time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: keyed on book.id; live values read at call time
   }, [book.id]);
 
   // Periodic progress save while playing (spec 04: report every ~10s).
@@ -509,7 +509,7 @@ export function ChapterPlayer({
     const timer = window.setInterval(() => saveProgress(bookPosition()), 10_000);
     return () => window.clearInterval(timer);
     // saveProgress reads the live position via refs; depending on it would reset the interval.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: live refs; the dep would reset the interval
   }, [playing]);
 
   // Flush progress + session when the listener stops, or the page goes away.
@@ -551,7 +551,7 @@ export function ChapterPlayer({
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
     // Mount-once wiring: listeners read live refs; the cleanup removes exactly these.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: mount-once; listeners read live refs
   }, []);
 
   // Element events, registered exactly once.
@@ -708,7 +708,7 @@ export function ChapterPlayer({
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
     // Bind handlers when the segment mapping changes; they read live refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: bind on segment change; handlers read live refs
   }, [segments, kind, total]);
 
   /**
@@ -755,7 +755,7 @@ export function ChapterPlayer({
       void audio.play().catch(reportPlayFailure);
     }
     // Adopt the resolved source only when its key/url or attempt changes; targetPlan is current each render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: adopt only on key/url/attempt change
   }, [resolved?.key, resolved?.url, sourceState.attempt, book, segments, kind]);
 
   // Apply playback speed, including to a newly loaded file.
@@ -785,7 +785,7 @@ export function ChapterPlayer({
       audio.load();
     };
     // Unmount cleanup only; reads refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: unmount cleanup only
   }, []);
 
   // Lock-screen / notification controls.

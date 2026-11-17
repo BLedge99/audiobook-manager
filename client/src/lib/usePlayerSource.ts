@@ -203,7 +203,7 @@ export function usePlayerSource({
     return () => { cancelled = true; };
     // The `source` object is rebuilt on every position tick by `planPosition`,
     // so depend on its fields, not on the object.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reason: rebuilt per tick; depend on its fields
   }, [bookId, source?.key, source?.path, source?.id, source?.kind, source?.localTrackId, localUrlForTrack, serverId, failedLocal, attempt]);
 
   const markLocalFailed = useCallback(() => {

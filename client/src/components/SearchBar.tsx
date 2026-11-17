@@ -45,7 +45,7 @@ export function SearchBar({
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // `value` is intentionally not a dependency: this effect fires on typing.
-  }, [draft]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft]); // eslint-disable-line react-hooks/exhaustive-deps -- reason: `value` intentionally not a dep; fires on typing
 
   const parsed = parseSearchQuery(value);
   const active = !parsed.empty;

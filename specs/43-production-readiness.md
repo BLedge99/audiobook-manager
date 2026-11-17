@@ -620,7 +620,7 @@ not cut.** Verification battery (this session):
 | 3 | Weekly age-encrypted same-site dump; baseline restore drill **executed for real** (wipe → decrypt → restore → counts → production build boots → login → 200) |
 | 4 | `render.yaml` (build/health/disk/1-hop proxy/secrets out), rollback runbook, smoke script — all verified against a live production build |
 | 5 | GDPR: export/erasure re-verified; scan-delete path now asserts history/candidates erased; processors inventory gains the OAuth row |
-| 6.1 | ESLint flat config + react-hooks at **error** + CI job; one real bug fixed (useMemo after early return) |
+| 6.1 | ESLint flat config + react-hooks at error + CI gate; one real bug fixed (useMemo after early return) — **corrected by spec 45 (phase 10)**: the promised `-- reason:` suppression rule was never enforced by CI; spec 45 adds `npm run check:suppressions` to client CI, requiring the marker on the suppression line itself, and the ten call sites now carry it |
 | 6.2 | App.tsx 1210 → 975 lines (extract-only; exception recorded in the item) |
 | 7 | One-serialisation ETag, 30 s root-realpath cache, `MAX_LIBRARY_ITEMS` cap + header, `coverRetryCount` cap, pool guidance |
 
