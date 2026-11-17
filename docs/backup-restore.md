@@ -37,6 +37,21 @@ or the script directly (it does dump + encrypt + prune + digest):
 . /etc/bookle/backup.env && /opt/bookle/scripts/backup-db.sh
 ```
 
+## What the script proves — and what only a drill proves
+
+`scripts/backup-db.sh` is deliberately dumb. It refuses to write the archive
+when `pg_dump` produced zero bytes, and it prunes nothing until the new
+archive exists on disk. It cannot open its own archives — the host holds only
+the age **public** key. So:
+
+- The script guarantees a non-empty plaintext input and a zero-exit age run.
+  A dead database produces no file and deletes nothing that exists.
+  (Regression-pinned by `bash scripts/backup-db.test.sh`; run it in CI.)
+- Only the restore drill can prove the archive opens — `age --decrypt |
+  pg_restore --list`, then a restore into a wiped database. That is why the
+  drill lives in `docs/drills.md`, not in the cron job, and why the first
+  real-Sunday restore exercise is what validates your own data.
+
 Check the output monthly: seven `bookle-*.dump.age` files, newest dated this
 week, `sha256sum` present. On a Raspberry Pi prefer the timer over cron so it
 catch-up-fires after downtime; both are documented here because home machines
