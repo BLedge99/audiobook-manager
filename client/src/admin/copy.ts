@@ -221,7 +221,7 @@ export const copyAdmin = {
     fillShelfDoneMany: (count: number) => `Added ${count} books to the shelf.`,
     fillShelfFailed: "Unable to add the age-appropriate books.",
     resetPassword: "Reset password",
-    resetPasswordDone: "Password updated. Their sessions were revoked.",
+    resetPasswordDone: "Password updated. Their sessions were revoked and their passkeys removed — they will need to register a new passkey before signing in that way again.",
     resetPasswordFailed: "Unable to reset the password.",
     shelfCount: (count: number) => `Books on the shelf: ${count}`,
     lastActive: (when: string) => `Last signed in: ${when}`,

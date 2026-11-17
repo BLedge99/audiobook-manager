@@ -735,6 +735,18 @@ export class AuthService {
     return Math.max(0, Math.ceil(remaining / 1000));
   }
 
+  /**
+   * The second write of the lockout pair, guarded by the *current* count so a
+   * slow in-flight failure can never resurrect a lock an operator has since
+   * cleared: if the operator's unlock reset the counter, this matches nothing.
+   */
+  private async applyLockIfCountMet(profileId: number, lockedUntil: Date): Promise<void> {
+    await this.prisma.profile.updateMany({
+      where: { id: profileId, failedLoginCount: { gte: LOCK_AFTER } },
+      data: { lockedUntil },
+    });
+  }
+
   private secondsUntil(date: Date): number {
     return Math.max(1, Math.ceil((date.getTime() - this.now().getTime()) / 1000));
   }
@@ -753,10 +765,7 @@ export class AuthService {
       const exponent = Math.min(count - LOCK_AFTER, 5);
       const seconds = Math.min(30 * 2 ** exponent, 900);
       lockedUntil = new Date(this.now().getTime() + seconds * 1000);
-      await this.prisma.profile.update({
-        where: { id: profile.id },
-        data: { lockedUntil },
-      });
+      await this.applyLockIfCountMet(profile.id, lockedUntil);
     }
     return lockedUntil;
   }
