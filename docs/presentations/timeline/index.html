@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audiobook Manager — the GUI at each stage</title>
+<style>
+  :root {
+    --ground: #0b1117;
+    --panel: #131c2b;
+    --panel-2: #1a2740;
+    --line: #334155;
+    --ink: #e2e8f0;
+    --ink-2: #cbd5e1;
+    --muted: #94a3b8;
+    --dim: #64748b;
+    --accent: #22d3ee;
+    --rasp: #ff5c8a;
+    --gold: #f6c453;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--ground); color: var(--ink); font-family: "Avenir Next", "Segoe UI", -apple-system, system-ui, sans-serif; }
+  .slide { min-height: 100vh; position: relative; padding: 40px 52px 60px; display: flex; flex-direction: column; }
+  .eyebrow { color: var(--accent); font-size: 10.5px; letter-spacing: 3px; font-weight: 700; text-transform: uppercase; }
+  h1 { font-size: clamp(38px, 5.4vw, 60px); line-height: 1.08; font-weight: 800; letter-spacing: -0.02em; }
+  h2 { font-size: clamp(24px, 3vw, 34px); line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; margin: 8px 0 4px; }
+  h3 { font-size: 15px; font-weight: 700; margin: 12px 0 5px; }
+  p, li { font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+  ul { margin-left: 19px; } li { margin: 3px 0; }
+  code { font-family: Consolas, monospace; font-size: 11.5px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: #9ae6b4; }
+  .small { font-size: 12px; color: var(--muted); }
+  .dim { color: var(--dim); }
+  .cols { display: grid; gap: 22px; align-items: start; }
+  .cols-2 { grid-template-columns: 1.15fr 0.85fr; }
+  .cols-2r { grid-template-columns: 0.85fr 1.15fr; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .panel.dark { background: #020617; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; font-size: 11px; color: var(--ink-2); background: var(--panel-2); }
+  .chip.commit { font-family: Consolas, monospace; color: #9ae6b4; border-color: #1f4034; }
+  .chip.date { color: var(--gold); border-color: #40341f; }
+  figure { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #020617; display: flex; flex-direction: column; }
+  figure figcaption { padding: 8px 11px; font-size: 11px; color: var(--muted); background: rgba(2,6,23,.92); line-height: 1.45; }
+  figure figcaption b { color: var(--ink-2); font-weight: 700; }
+  img.shot { display: block; width: 100%; }
+  img.phone { max-height: 560px; width: auto; margin: 0 auto; }
+  img.shot.fit { object-fit: contain; width: auto; max-width: 100%; margin: 0 auto; background: #020617; }
+  .grid-6 img { max-height: 240px; object-fit: contain; width: auto; margin: 0 auto; }
+  .grid { display: grid; gap: 12px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-6 { grid-template-columns: repeat(6, 1fr); }
+  .kicker { display: flex; gap: 14px; align-items: baseline; margin-bottom: 2px; }
+  .kicker .no { font-family: Consolas, monospace; color: var(--dim); font-size: 12px; }
+  .navtag { position: absolute; top: 16px; right: 24px; font-size: 11px; color: var(--dim); font-family: Consolas, monospace; }
+  .progressdots { position: fixed; right: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 50; }
+  .progressdots a { width: 7px; height: 7px; border-radius: 50%; background: #334155; display: block; }
+  .progressdots a:hover { background: var(--accent); }
+  .counterbar { position: fixed; left: 0; bottom: 0; height: 3px; background: var(--accent); width: 0%; z-index: 60; }
+  .footer-note { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; font-size: 10.5px; color: var(--dim); }
+  .kbd { border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-family: Consolas, monospace; font-size: 11px; background: var(--panel-2); }
+  .caption-lede { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .cmp { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .cmp th, .cmp td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+  .cmp th { background: var(--panel-2); color: var(--gold); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  @media print {
+    .slide { min-height: 0; page-break-after: always; padding: 26px 32px; }
+    .progressdots, .counterbar { display: none; }
+  }
+</style>
+</head>
+<body>
+<nav class="progressdots" aria-label="Slides"></nav>
+<div class="counterbar" id="bar"></div>
+
+<!-- 1. TITLE -->
+<section class="slide" id="s1" style="justify-content: center;">
+  <div class="navtag">01 / 22</div>
+  <div class="eyebrow">GUI / UX timeline</div>
+  <h1 style="margin-top: 16px;">Audiobook Manager:<br>the GUI at each stage,<br>2026-09-22 → 2026-11-17</h1>
+  <p style="margin-top: 20px; font-size: 17px; max-width: 560px;">Screens from the first commit to the submission build, in order.<br>Images are the point of each slide; text only labels what the images show.</p>
+  <div class="row" style="margin-top: 26px;">
+    <span class="chip date">first commit 25d3000</span><span class="chip date">submission build 5d67e0f</span>
+    <span class="chip">harness captures</span><span class="chip">design-lab captures</span><span class="chip">device photos</span>
+  </div>
+  <div class="footer-note"><span>How each image was made: slide 02. Everything else is on the slide itself.</span><span><span class="kbd">←</span> <span class="kbd">→</span> navigate</span></div>
+</section>
+
+<!-- 2. HOW TO READ -->
+<section class="slide" id="s2">
+  <div class="navtag">02 / 22</div>
+  <div class="kicker"><span class="eyebrow">Method</span><span class="no">how the images were made</span></div>
+  <h2>Three kinds of evidence</h2>
+  <div class="cols cols-2" style="margin-top: 10px;">
+    <div class="panel">
+      <h3>Harness captures — historical code, rendered for real</h3>
+      <p>For stages that predate any saved screenshots (Sep 22, Sep 23, Oct 17), the era's own <code>client/</code> source was checked out with <code>git archive</code>, rendered by a minimal Vite harness with canned data, and screenshotted with Playwright. What you see is the actual era UI — its layout, type, colours and components — not a redrawing.</p>
+      <h3 style="margin-top: 10px;">design-lab captures — the real app</h3>
+      <p>From 2026-11-14: the running app on phone and desktop, captured during the design-lab work. Used for the redesign baseline (gen-0) and for the variant comparison (v1–v4).</p>
+      <h3 style="margin-top: 10px;">Device photos</h3>
+      <p>The household's phones, taken during offline-era testing (spec 26/29). Kept in <code>specs/evidence/</code>.</p>
+    </div>
+    <div class="panel">
+      <h3>Colour coding by source</h3>
+      <ul>
+        <li><b>Harness capture of <code>&lt;sha&gt;</code></b> — historical code, fixture data</li>
+        <li><b>design-lab capture</b> — real app, 2026-11-14</li>
+        <li><b>Device photo, date</b> — real phone, real household</li>
+      </ul>
+      <h3 style="margin-top: 12px;">What this deck does not do</h3>
+      <ul>
+        <li>It doesn't rate stages. Early screens are shown as they were, because the work to build them was the same work as now.</li>
+        <li>It doesn't claim tests were run where they weren't. The design-lab tournament never ran; the deck says so on slides 12–13.</li>
+        <li>It doesn't sell the redesign. The redesign is shown as a set of changes (slide 08) with its before and after.</li>
+      </ul>
+      <p class="small" style="margin-top: 12px;">Slide 15 lists every source: git SHAs, directories, ledger files.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>Fixtures in harness captures resemble the real LibriVox test library; they are invented sample data, not household media.</span></div>
+</section>
+
+<!-- 3. OVERVIEW -->
+<section class="slide" id="s3">
+  <div class="navtag">03 / 22</div>
+  <div class="kicker"><span class="eyebrow">Overview</span><span class="no">stages in order</span></div>
+  <h2>The stages</h2>
+  <table class="cmp" style="margin-top: 12px; font-size: 12.5px;">
+    <tr><th>Date</th><th>Stage</th><th>What the commit added</th></tr>
+    <tr><td>Sep 22</td><td>Scaffold</td><td>Grid layout, mock data, dark slate + blue, placeholder covers broken</td></tr>
+    <tr><td>Sep 23</td><td>Scanner wired</td><td>Folders, scan button, grid fed by real files, chapter playback (same day)</td></tr>
+    <tr><td>Oct 2–6</td><td>Auth + profiles</td><td>Household password, per-profile identity, per-book resume position shown in the grid</td></tr>
+    <tr><td>Oct 12–17</td><td>Browse, Discover, search, tags, Android</td><td>Shelves, suggestions, typed search, tag editor, Capacitor shell, offline downloads</td></tr>
+    <tr><td>Oct 18</td><td>Spec 15 redesign</td><td>Full restyle: tokens, capsule cards, dock navigation, all surfaces, same components</td></tr>
+    <tr><td>Oct 19–21</td><td>Polish + offline/phone</td><td>copy.ts table, phone-first layout fixes, offline entry screens, download flow</td></tr>
+    <tr><td>Nov 14</td><td>design-lab</td><td>Variants v1–v4 of the post-redesign build; v4 merged (gen-1 line)</td></tr>
+    <tr><td>Nov 17</td><td>Submission build</td><td>Master @ 5d67e0f</td></tr>
+  </table>
+  <div class="footer-note"><span>523 commits, 8 stages, one product. Nothing was removed; every stage was a revision of the same loop: browse → pick → press play.</span></div>
+</section>
+
+<!-- 4. ERA 1 -->
+<section class="slide" id="s4">
+  <div class="navtag">04 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 1 · Sep 22</span><span class="no">25d3000 — prototype</span></div>
+  <h2>Prototype to check the loop</h2>
+  <div class="cols cols-2">
+    <figure><img class="shot" src="assets/era0-desktop.png" alt="Sep 22 scaffold: featured and all-books grids, broken cover images"><figcaption><b>Desktop</b> — harness capture of <code>25d3000</code>. Cover URLs 404; <code>public/</code> was empty, so broken-image icons show.</figcaption></figure>
+    <figure><img class="shot phone" src="assets/era0-phone.png" alt="Sep 22 scaffold at phone width"><figcaption><b>Phone, 390px</b> — same code, same layout reflowed by width. The grid went from 5 columns to 2.</figcaption></figure>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>What it was for</h3><p class="small">To check whether "browse covers → pick a book → press play" was a loop worth building. One screen, mock data, answer found in an afternoon.</p></div>
+    <div class="panel"><h3>What it has</h3><p class="small">Fixed top bar (wordmark + 3 links); a Featured row of three cards; a 5-column grid; a footer line. Dark slate ground, blue accent.</p></div>
+    <div class="panel"><h3>What it doesn't have</h3><p class="small">No real data, no folders, no auth, no audio, no resume, no phone layout beyond reflow, no covers.</p></div>
+  </div>
+  <div class="footer-note"><span>Harness capture of 25d3000 · Sep 22 2026 · half of the first commit's UI is placeholder by design.</span></div>
+</section>
+
+<!-- 5. ERA 2 -->
+<section class="slide" id="s5">
+  <div class="navtag">05 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 2 · Sep 23</span><span class="no">771731c — scanner wired</span></div>
+  <h2>The mock becomes a library</h2>
+  <div class="grid grid-3">
+    <figure><img class="shot" src="assets/eraSep23-desktop.png" alt="Sep 23: hero, scan CTA, folder rows, library grid"><figcaption><b>Desktop</b> — harness capture of <code>771731c</code>. Hero + "Scan library" CTA, folders section, grid of real items.</figcaption></figure>
+    <figure><img class="shot phone" src="assets/eraSep23-phone.png" alt="Sep 23 at phone width"><figcaption><b>Phone, 390px</b> — same build. Folder rows stack; CTA full width; grid 2-up.</figcaption></figure>
+    <figure><img class="shot" src="assets/eraSep23-detail.png" alt="Sep 23: book dialog with native audio element"><figcaption><b>Book dialog</b> — cover, meta, native <code>&lt;audio controls&gt;</code>. Playback worked; chapters existed in the data, not yet in the UI.</figcaption></figure>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>Added in this stage</h3><p class="small">Scanner integration (files → book rows), cover art via <code>/api/audiobooks/:id/cover</code>, working refresh, library roots management, scan trigger + progress, empty state.</p></div>
+    <div class="panel"><h3>Changed in this stage</h3><p class="small">Mock data removed; palette moved from blue to cyan on near-black; hero + scan CTA became the top of the page; grid gained duration badges and track counts.</p></div>
+    <div class="panel"><h3>Same day, same commit family</h3><p class="small"><code>6c32f08</code> added chapter-aware playback and the book dialog. The dialog's two-column layout is still the one in use.</p></div>
+  </div>
+  <div class="footer-note"><span>Harness capture of 771731c (+ 6c32f08 dialog) · Sep 23 2026 · "calm shelf" copy is still in the hero, four weeks before the redesign.</span></div>
+</section>
+
+<!-- 6. ERA 3 -->
+<section class="slide" id="s6">
+  <div class="navtag">06 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 3 · Oct 2–13</span><span class="no">auth, profiles, resume</span></div>
+  <h2>One password,<br>one bookmark per person</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>Added, in order</h3>
+      <ul>
+        <li><b>Sep 28 → Oct 2:</b> household password gate (<code>99f6dbb</code>) — the app became a family object.</li>
+        <li><b>Oct 2:</b> profiles — each person picks their name; progress, favourites, history stay theirs.</li>
+        <li><b>Oct 2 (ce5ec22) → Oct 6 (e0e022a):</b> server-side resume position, shown on the grid ("Continue listening", "3 books are part-finished").</li>
+        <li><b>Oct 12–13:</b> Browse tab, Discover tab, typed search (specs 20/22), tag manager.</li>
+        <li><b>Oct 13:</b> Capacitor Android shell — downloads, background playback (spec 26 sprints 1–2).</li>
+      </ul>
+      <p class="small" style="margin-top: 10px;">No capture of this era exists. The gate on the right is reproduced from <code>LoginGate.tsx</code> as of <code>99f6dbb</code> — 49 lines, fetch <code>/api/auth/login</code>, done.</p>
+    </div>
+    <div class="panel dark">
+      <h3>The gate, as committed (99f6dbb)</h3>
+      <div style="background:#0b1117; border:1px solid var(--line); border-radius:10px; padding:24px; text-align:center; font-family:Consolas,monospace; font-size:12px; margin-top:8px; color:#94a3b8;">
+        <div style="font-family: 'Segoe UI', sans-serif; font-weight: 700; font-size: 18px; color: #ffffff;">Audiobook Manager</div>
+        <div style="margin: 6px 0 14px;">Enter the household password to continue.</div>
+        <div style="border:1px solid #334155; background:#020617; padding:8px; text-align:left; margin-bottom:10px;">Household password</div>
+        <div style="background:#22d3ee; color:#020617; font-weight:700; padding:8px; font-family: 'Segoe UI', sans-serif;">Sign in</div>
+      </div>
+      <p class="small" style="margin-top: 12px;">Direct child of the scaffold — the first user-facing auth in the repo, one password for the household, everyone visible to everyone. A reasonable starting point; the UI got more people-shaped later (passkeys, kids accounts).</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>Reproduced from source, not captured · the phone arrived before the polish — the Android build predates the redesign by five days.</span></div>
+</section>
+
+<!-- 7. ERA 4 FULL SUITE -->
+<section class="slide" id="s7">
+  <div class="navtag">07 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 4 · Oct 12–17</span><span class="no">everything built, before the restyle</span></div>
+  <h2>Every screen exists; none match</h2>
+  <p class="caption-lede">Harness captures of <code>834856d~1</code> — the Oct 17 build, before any visual work.</p>
+  <div class="grid grid-6" style="margin-top: 8px;">
+    <figure><img class="shot" src="assets/oct17-lib-desktop.png" alt="Library tab"><figcaption><b>Library</b> · desktop</figcaption></figure>
+    <figure><img class="shot" src="assets/oct17-browse-desktop.png" alt="Browse tab with filters"><figcaption><b>Browse</b> · filter panel</figcaption></figure>
+    <figure><img class="shot" src="assets/oct17-discover-desktop.png" alt="Discover suggestions"><figcaption><b>Discover</b> · suggestions</figcaption></figure>
+    <figure><img class="shot" src="assets/oct17-detail-desktop.png" alt="Book detail dialog"><figcaption><b>Detail</b> · dialog</figcaption></figure>
+  </div>
+  <div class="grid grid-6" style="margin-top: 10px;">
+    <figure><img class="shot phone" src="assets/oct17-lib-phone.png" alt="Library tab phone"><figcaption><b>Library</b> · phone</figcaption></figure>
+    <figure><img class="shot phone" src="assets/oct17-browse-phone.png" alt="Browse phone"><figcaption><b>Browse</b> · phone</figcaption></figure>
+    <figure><img class="shot phone" src="assets/oct17-discover-phone.png" alt="Discover phone"><figcaption><b>Discover</b> · phone</figcaption></figure>
+    <figure><img class="shot phone" src="assets/oct17-favourites-phone.png" alt="Favourites phone"><figcaption><b>Favourites</b> · 2 saved</figcaption></figure>
+    <figure><img class="shot phone" src="assets/oct17-settings-phone.png" alt="Settings phone"><figcaption><b>Settings</b> · server URL</figcaption></figure>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>Added in this era</h3><p class="small">Browse + filters + shelves, Discover (suggestions, wishlist), typed search, tag manager, review queue, kids age bands, favourites, offline mode, Android shell + downloads + background playback.</p></div>
+    <div class="panel"><h3>State of the design system at this point</h3><p class="small">None — every surface styles itself: slate panels, cyan accents, outlined chips, native inputs. No tokens, no motion language, no shared layout rules.</p></div>
+    <div class="panel"><h3>Why it still worked</h3><p class="small">Layouts were conventional and density was high — you could see every feature on one screen. Fine for the builder; the household found the same screens <i>unreadable at a glance</i> — see stage 5.</p></div>
+  </div>
+  <div class="footer-note"><span>Harness captures of 834856d~1 · Oct 17 2026 · the last build before the redesign commit pair (next slide).</span></div>
+</section>
+
+<!-- 8. WHAT THE REDESIGN CHANGED -->
+<section class="slide" id="s8">
+  <div class="navtag">08 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 5 · Oct 18</span><span class="no">spec 15 — what changed</span></div>
+  <h2>The restyle, as a change list</h2>
+  <div class="cols cols-2">
+    <figure><img class="shot phone" src="assets/eraA-phone.png" alt="Before the redesign: Oct 17 phone capture"><figcaption><b>Before</b> — <code>834856d~1</code> (harness). Operator controls (folders, scan CTA) above the books; tabs wrap; Continue listening below the fold.</figcaption></figure>
+    <figure><img class="shot phone" src="assets/gen0-phone-library-light.png" alt="After the redesign: library phone, light aero capsule design"><figcaption><b>After</b> — gen-0 capture, Nov 14 2026 (the restyle build, unchanged by later work). Dock navigation, Continue listening first, book cards with covers.</figcaption></figure>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>Components</h3><p class="small">Self-hosted Fredoka + Nunito; semantic colour tokens (light/dark); motion tokens; capsule card + Tube + Dome primitives.</p></div>
+    <div class="panel"><h3>Layout</h3><p class="small">Dock navigation phone / rail desktop; Continue listening above the grid; operator controls moved after the books — one structural change, on purpose.</p></div>
+    <div class="panel"><h3>Coverage</h3><p class="small">All ~20 surfaces restyled in one pass: splash, gates, tabs, detail, player, settings, admin. Behaviour unchanged: no props, hooks or routes moved with the restyle.</p></div>
+  </div>
+  <div class="footer-note"><span>Two commits: 834856d (design system) and d4220e9 (restyle) · specs/15-gui-redesign.md · the restyle was driven by the 2026-10-18 household test, recorded in user-testing-2026-10-18.md.</span></div>
+</section>
+
+<!-- 9. REDESIGN SURFACES -->
+<section class="slide" id="s9">
+  <div class="navtag">09 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 5 · after</span><span class="no">the restyled surfaces</span></div>
+  <h2>Same surfaces,<br>new system</h2>
+  <div class="grid grid-4">
+    <figure><img class="shot" src="assets/gen0-phone-library-light.png" alt="Library light"><figcaption><b>Library</b> · phone, light</figcaption></figure>
+    <figure><img class="shot" src="assets/gen0-phone-library-dark.png" alt="Library dark"><figcaption><b>Library</b> · phone, dark</figcaption></figure>
+    <figure><img class="shot" src="assets/gen0-phone-detail-light.png" alt="Detail light"><figcaption><b>Detail</b> · phone, light</figcaption></figure>
+    <figure><img class="shot" src="assets/gen0-phone-browse-dark.png" alt="Browse dark"><figcaption><b>Browse</b> · phone, dark</figcaption></figure>
+  </div>
+  <div class="grid grid-4" style="margin-top: 12px;">
+    <figure><img class="shot" src="assets/gen0-desktop-library-light.png" alt="Library desktop light"><figcaption><b>Library</b> · desktop, light</figcaption></figure>
+    <div class="panel"><h3>What changed on screen</h3><p class="small">Cards became canted capsules with marker outlines and tinted-plastic covers. One raspberry dome per view. Tube for progress and chapters. Status colour always accompanied by words.</p></div>
+    <div class="panel"><h3>What didn't change</h3><p class="small">Features, flows, routes, props. Anything an Oct 17 user did, an Oct 18 user can do the same way — only the chrome is new.</p></div>
+    <div class="panel"><h3>What it cost</h3><p class="small">One day (2026-10-18), two commits, all ~20 surfaces. Restyle-only is why it fit in a day.</p></div>
+  </div>
+  <div class="footer-note"><span>design-lab captures 2026-11-14 of the restyle build (gen-0 baseline) · light + dark shown deliberately — the spec shipped both.</span></div>
+</section>
+
+<!-- 10. 15b + OFFLINE -->
+<section class="slide" id="s10">
+  <div class="navtag">10 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 6 · Oct 19–21</span><span class="no">spec 15b — what shipped after</span></div>
+  <h2>What the restyle didn’t fix</h2>
+  <div class="grid grid-3">
+    <figure><img class="shot phone" src="assets/offline-covers-pixel4a-2026-10-19.png" alt="Offline library covers on Pixel 4a, 2026-10-19"><figcaption><b>Device photo, 2026-10-19</b> — offline library, airplane mode, covers intact. First proof the cache worked on hardware.</figcaption></figure>
+    <figure><img class="shot phone" src="assets/offline-library-pixel4a-2026-10-21.png" alt="Offline library on Pixel 4a, 2026-10-21"><figcaption><b>Device photo, 2026-10-21</b> — same screen two days later, after the restyle + cache work.</figcaption></figure>
+    <figure><img class="shot phone" src="assets/offline-library-defy-2026-10-21.png" alt="Offline library on the Defy, 2026-10-21"><figcaption><b>Device photo, 2026-10-21</b> — same checks on the household's second phone.</figcaption></figure>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>Issue fixes (spec 15b)</h3><p class="small">Issue-by-issue pass from user-testing-2026-10-18.md: layout overflow at 390px, dialog fit at 320px, placeholder leakage in copy, discover latency, stale refresh, ETag cache correctness.</p></div>
+    <div class="panel"><h3>copy.ts (Oct 20–21)</h3><p class="small">Every user-facing string moved into one table, in two registers (listener/operator). <code>make check-copy</code> bans implementation language from listener copy; CI fails the build.</p></div>
+    <div class="panel"><h3>Offline screens</h3><p class="small">Offline, locked, no-server and empty-library surfaces (spec 29) — four states that previously rendered as broken, now first-class screens.</p></div>
+  </div>
+  <div class="footer-note"><span>Device-tested on Pixel 4a and Moto Defy · specs/evidence/ · the only stage measured by holding phones, not by taste.</span></div>
+</section>
+
+<!-- 11. LAB SETUP -->
+<section class="slide" id="s11">
+  <div class="navtag">11 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 7 · Nov 14</span><span class="no">the design-lab — what it was</span></div>
+  <h2>A tournament<br>to pick the best variant</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>What was planned</h3>
+      <p>Take the post-restyle build, generate four variant branches, score each against a rubric held outside the repo, pick the winner, merge it, repeat.</p>
+      <h3 style="margin-top: 10px;">What ran</h3>
+      <ul>
+        <li>Branches <code>design-lab/gen1/v1..v4</code> cut from <code>cdf0e8f</code>; gen-0 baseline captured (<code>c22f573</code>, tagged).</li>
+        <li>Every variant passed the same guards: layout, sideways-scroll, dialog fit; 895 tests green at each step.</li>
+        <li><code>scripts/capture-ui.js</code> captured phone + desktop, light and dark.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>The four variants</h3>
+      <table class="cmp">
+        <tr><th>Variant</th><th>Direction</th></tr>
+        <tr><td>v1 “quiet hierarchy”</td><td>Cover-forward cards, calmer filter rail</td></tr>
+        <tr><td>v2 “dark-mode luxury”</td><td>Dark-only: lamp-lit ground, warm plum surfaces</td></tr>
+        <tr><td>v3 “newsprint zine”</td><td>Risograph paper world; eliminated before judging</td></tr>
+        <tr><td>v4 “aero polish”</td><td>Atmosphere &amp; glass: horizon wash, lamp pool, unified glass</td></tr>
+      </table>
+      <p class="small" style="margin-top: 10px;">v1 and v2 kept the capsule identity and moved one axis each. v3 was a left-field seed. v4 was steered pass-by-pass by the repo owner from “atmosphere” to fully glassed chrome.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>docs/design-lab/ — gallery.md, ledger.json, gen-0/, gen-1/ · branches pushed with their captures committed.</span></div>
+</section>
+
+<!-- 12. VARIANTS -->
+<section class="slide" id="s12">
+  <div class="navtag">12 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 7 · the variants</span><span class="no">each against its baseline, matched theme</span></div>
+  <h2>The four variants<br>against gen-0</h2>
+  <div class="grid grid-2">
+    <figure><img class="shot" src="assets/gen0-phone-library-light.png" alt="gen-0 baseline light"><figcaption><b>gen-0</b> (baseline) · light</figcaption></figure>
+    <figure><img class="shot" src="assets/gen1-v1-phone-library-light.png" alt="v1 quiet hierarchy light"><figcaption><b>v1 — quiet hierarchy</b> · light. Cards lean harder on covers; calmer chrome. Same tokens.</figcaption></figure>
+    <figure><img class="shot" src="assets/gen0-phone-library-dark.png" alt="gen-0 baseline dark"><figcaption><b>gen-0</b> (baseline) · dark — v2's comparison pair, since v2 changed dark only</figcaption></figure>
+    <figure><img class="shot" src="assets/gen1-v2-phone-library-dark.png" alt="v2 dark-mode luxury dark"><figcaption><b>v2 — dark-mode luxury</b> · dark. Deeper ground, warmer plum sinks, rim light on covers. Light untouched.</figcaption></figure>
+  </div>
+  <div class="grid grid-2" style="margin-top: 12px;">
+    <figure><img class="shot" src="assets/gen1-v3-phone-library-light.png" alt="v3 newsprint zine light"><figcaption><b>v3 — newsprint zine</b> · light. Riso paper, one spot colour, zero radius. Eliminated before judging (direction, 2026-11-14).</figcaption></figure>
+    <figure><img class="shot" src="assets/gen1-v4-phone-library-light.png" alt="v4 aero polish light"><figcaption><b>v4 — aero polish</b> · light. Horizon wash, lamp pool, unified glass recipe. Merged to master (<code>8476aa2</code>, <code>ad56ddd</code>).</figcaption></figure>
+  </div>
+  <div class="footer-note"><span>v1/v3/v4 compare against gen-0 light; v2 against gen-0 dark. Same phone width, same fixture books, same day.</span></div>
+</section>
+
+<!-- 13. WHY IT ENDED -->
+<section class="slide" id="s13">
+  <div class="navtag">13 / 22</div>
+  <div class="kicker"><span class="eyebrow">Stage 7 · the outcome</span><span class="no">what the ledger records</span></div>
+  <h2>Judging never ran</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>What was supposed to happen</h3>
+      <p>A vision-model judge scores each variant against the rubric; the winner merges; gen 2 starts.</p>
+      <h3 style="margin-top: 12px;">What happened (ledger.json)</h3>
+      <ul>
+        <li>The cloud VL free tier was exhausted; no rubric scores were produced. Every variant's <code>fitness</code> is <code>null</code>.</li>
+        <li>In-session inspection was used to steer v2 → v4 in place of scores.</li>
+        <li>v3 was eliminated by direction (2026-11-14), not by measurement.</li>
+        <li>v4 pass 1 measured as effectively unchanged vs gen-0; passes 2–4 made the atmosphere visible and then the glass consistent.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>What shipped</h3>
+      <ul>
+        <li><code>8476aa2</code> — v4 passes 1–4 merged into the design-lab line.</li>
+        <li><code>ad56ddd</code> — design-lab line merged to master: v4 UI + rem font-scale fix + jsdom flake fix + gallery.</li>
+        <li>v1, v2, v3 remain unmerged branches.</li>
+      </ul>
+      <h3 style="margin-top: 12px;">How to read this honestly</h3>
+      <p>No variant was shown to be better than gen-0 by any recorded measurement. The final design is what remained after a human chose between them. The lab produced a mergeable overhaul and a written record; it did not produce evidence of superiority.</p>
+      <div class="row" style="margin-top: 10px;"><span class="chip">fitness: null (v1–v4)</span><span class="chip">0 rubric scores</span><span class="chip">v4 merged by decision</span></div>
+    </div>
+  </div>
+  <div class="footer-note"><span>docs/design-lab/ledger.json and gallery.md — quoted from the artefact, not from memory.</span></div>
+</section>
+
+<!-- 14. CURRENT SUITE -->
+<section class="slide" id="s14">
+  <div class="navtag">14 / 22</div>
+  <div class="kicker"><span class="eyebrow">Current · Nov 17</span><span class="no">master @ 5d67e0f — full suite</span></div>
+  <h2>The current app,<br>all surfaces</h2>
+  <p class="caption-lede">Harness captures of master (fixture data, 1440px desktop / 390px phone).</p>
+  <div class="grid grid-6" style="margin-top: 8px;">
+    <figure><img class="shot" src="assets/now-lib-desktop.png" alt="Library desktop"><figcaption><b>Library</b> · desktop</figcaption></figure>
+    <figure><img class="shot" src="assets/now-browse-desktop.png" alt="Browse desktop"><figcaption><b>Browse</b> · filters</figcaption></figure>
+    <figure><img class="shot" src="assets/now-discover-desktop.png" alt="Discover desktop"><figcaption><b>Discover</b> · suggestions</figcaption></figure>
+  </div>
+  <div class="grid grid-6" style="margin-top: 10px;">
+    <figure><img class="shot" src="assets/now-detail-desktop.png" alt="Detail desktop"><figcaption><b>Detail</b> · player + chapters</figcaption></figure>
+    <figure><img class="shot" src="assets/now-favourites-desktop.png" alt="Favourites desktop"><figcaption><b>Favourites</b> · desktop</figcaption></figure>
+    <figure><img class="shot" src="assets/now-settings-desktop.png" alt="Settings desktop"><figcaption><b>Settings</b> · desktop</figcaption></figure>
+  </div>
+  <div class="grid grid-6" style="margin-top: 10px;">
+    <figure><img class="shot phone" src="assets/now-lib-phone.png" alt="Library phone"><figcaption><b>Library</b> · phone</figcaption></figure>
+    <figure><img class="shot phone" src="assets/now-browse-phone.png" alt="Browse phone"><figcaption><b>Browse</b> · phone</figcaption></figure>
+    <figure><img class="shot phone" src="assets/now-discover-phone.png" alt="Discover phone"><figcaption><b>Discover</b> · phone</figcaption></figure>
+    <figure><img class="shot phone" src="assets/now-detail-phone.png" alt="Detail phone"><figcaption><b>Detail</b> · phone</figcaption></figure>
+    <figure><img class="shot phone" src="assets/now-favourites-phone.png" alt="Favourites phone"><figcaption><b>Favourites</b> · phone</figcaption></figure>
+    <figure><img class="shot phone" src="assets/now-settings-phone.png" alt="Settings phone"><figcaption><b>Settings</b> · phone</figcaption></figure>
+  </div>
+  <div class="footer-note"><span>Harness captures of master · prod build · mocked API (fixture books) · shows every primary surface, both viewports.</span></div>
+</section>
+
+<!-- 15. CURRENT: FIRST CONTACT + DARK -->
+<section class="slide" id="s15">
+  <div class="navtag">15 / 22</div>
+  <div class="kicker"><span class="eyebrow">Current · first contact</span><span class="no">gate, setup, dark theme</span></div>
+  <h2>The surfaces every user<br>meets first</h2>
+  <div class="grid grid-4">
+    <figure><img class="shot phone" src="assets/gen1-v4-gate-phone-light.png" alt="Current gate screen"><figcaption><b>Gate</b> — first screen. Household password; demo deployments show sign-up instead.</figcaption></figure>
+    <figure><img class="shot phone" src="assets/gen1-v4-setup-rasp-light.png" alt="Current setup screen"><figcaption><b>Setup</b> — point the app at a server; Rasp CTA is the shared glass material.</figcaption></figure>
+    <figure><img class="shot phone" src="assets/gen1-v4-phone-library-dark.png" alt="Current library dark"><figcaption><b>Library</b> · dark — v4 ramp: deeper ground, off-white ink, glass at 88%.</figcaption></figure>
+    <figure><img class="shot" src="assets/gen1-v4-desktop-library-dark.png" alt="Current library desktop dark"><figcaption><b>Library</b> · desktop, dark</figcaption></figure>
+  </div>
+  <p class="small" style="margin-top: 14px;">These are the Nov 14 captures of the same build that shipped to master. The design-lab retakes were required twice for these screens — WSL filesystem latency and a frozen preview build both produced screenshots of stale code; both were re-captured.</p>
+  <div class="footer-note"><span>design-lab captures, Nov 14 2026 · master unchanged in these surfaces since ad56ddd.</span></div>
+</section>
+
+<!-- 16. RECAP -->
+<section class="slide" id="s16">
+  <div class="navtag">16 / 22</div>
+  <div class="kicker"><span class="eyebrow">Recap</span><span class="no">what shipped when</span></div>
+  <h2>Stage by stage</h2>
+  <table class="cmp" style="margin-top: 10px; font-size: 12px;">
+    <tr><th>Date</th><th>Commit</th><th>UI addition</th></tr>
+    <tr><td>Sep 22</td><td>25d3000</td><td>Scaffold: grid, mock data</td></tr>
+    <tr><td>Sep 23</td><td>771731c · 6c32f08</td><td>Folders, scan, covers, chapter playback</td></tr>
+    <tr><td>Oct 2</td><td>99f6dbb · ce5ec22</td><td>Household gate, profiles, resume on the grid</td></tr>
+    <tr><td>Oct 12–13</td><td>d1bc639 · 203088a · f414560</td><td>Browse, Discover, tags, search, Android shell</td></tr>
+    <tr><td>Oct 18</td><td>834856d · d4220e9</td><td>Design system + full restyle</td></tr>
+    <tr><td>Oct 19–21</td><td>cb28038 · 59482e3 · 838c736 · b226f4a</td><td>Polish, offline screens, one-voice copy</td></tr>
+    <tr><td>Nov 14</td><td>gen-1 v4 · 8476aa2 · ad56ddd</td><td>Aero passes 1–4 merged to master</td></tr>
+    <tr><td>Nov 17</td><td>master 5d67e0f</td><td>Docs reconciled; brief; API reference</td></tr>
+  </table>
+  <div class="footer-note"><span>25 commits listed; the full client history is 400+. Only UI-affecting commits are shown.</span></div>
+</section>
+
+<!-- 17. WHAT'S VERIFIED -->
+<section class="slide" id="s17">
+  <div class="navtag">17 / 22</div>
+  <div class="kicker"><span class="eyebrow">Verification</span><span class="no">image provenance, plainly</span></div>
+  <h2>What each image is</h2>
+  <table class="cmp" style="margin-top: 10px; font-size: 11px;">
+    <tr><th>Images</th><th>Source</th><th>Caveat</th></tr>
+    <tr><td>era0-*, eraSep23-*, oct17-*, now-*</td><td>Harness render of the era's/current client code, canned data</td><td>Data is invented; fixtures resemble the test library (LibriVox public domain)</td></tr>
+    <tr><td>gen0-*</td><td>design-lab capture, Nov 14, live stack</td><td>Captures the Oct 18 restyle build as it stood Nov 14 — includes later minor changes</td></tr>
+    <tr><td>gen1-v2-*-dark</td><td>gen-1/v2 branch capture</td><td>v2 changed dark only; shown in dark. Light images exist but are out of scope for assessing v2</td></tr>
+    <tr><td>gen1-v1/v3/v4-*</td><td>gen-1 branch captures</td><td>v1/v2/v3 were never merged; they render from branch source</td></tr>
+    <tr><td>offline-*</td><td>Device photos, Oct 19/21</td><td>Taken during the offline work; stored in specs/evidence/</td></tr>
+    <tr><td>Gate (slide 06)</td><td>Reproduced from LoginGate.tsx @ 99f6dbb</td><td>Not a capture; the app never rendered this in isolation after profiles existed</td></tr>
+  </table>
+  <p class="small" style="margin-top: 10px;">Missing captures: nothing between 99f6dbb (Oct 2) and the Oct 17 harness point. If a stage needs defending in detail, the repo has the code for every one of them.</p>
+  <div class="footer-note"><span>No image in this deck was edited, retouched or regenerated. Era 0 keeps its broken covers on purpose.</span></div>
+</section>
+
+<!-- 18. CONTRACT -->
+<section class="slide" id="s18">
+  <div class="navtag">18 / 22</div>
+  <div class="kicker"><span class="eyebrow">DESIGN.md</span><span class="no">the contract the UI obeys</span></div>
+  <h2>Rules, after the restyle</h2>
+  <div class="grid grid-2">
+    <div class="panel">
+      <h3>Tokens before components</h3>
+      <p>One semantic remap over two raw palettes; colour changes touch one declaration and both themes move. Fonts self-hosted; 4px grid; radii from a documented scale; motion tokens with reduced-motion respect.</p>
+    </div>
+    <div class="panel">
+      <h3>Status colour never travels alone</h3>
+      <p>Every coloured state carries a word and/or icon; the legend sits with status surfaces. Warnings and trophies sound different, not just look different.</p>
+    </div>
+    <div class="panel">
+      <h3>Touch targets and type</h3>
+      <p>44px minimum targets; tabular numerals; 100% text-size-adjust so Android's WebView can't inflate layout; WCAG AA documented per ink pair, with the exceptions marked.</p>
+    </div>
+    <div class="panel">
+      <h3>One voice in copy</h3>
+      <p>copy.ts holds every string in two registers (listener/operator); <code>make check-copy</code> fails the build on implementation words leaking into listener copy.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>DESIGN.md · PRODUCT.md · make check-copy (CI) · phone-layout Playwright suite (CI).</span></div>
+</section>
+
+<!-- 19. LESSONS -->
+<section class="slide" id="s19">
+  <div class="navtag">19 / 22</div>
+  <div class="kicker"><span class="eyebrow">Retrospective</span><span class="no">what the stages share</span></div>
+  <h2>What the stages share</h2>
+  <div class="panel">
+    <ul>
+      <li>Bugs clustered at hand-offs: file system → API, browser → WebView, restyle → phone. Every fix landed where the seam showed.</li>
+      <li>The two changes that made the app feel coherent (spec 15, v4) cost one day each and changed no routes, props or hooks.</li>
+      <li>Constraints travelled forward: mentions of the grid, the dock and the Tube exist in the codebase before they exist in the design.</li>
+      <li>Offline was won on the devices, not in the editor: every offline screen is in specs/evidence/.</li>
+      <li>The lab generated variants; a human picked. The paper trail (ledger, tags, branches) is why that is claimable.</li>
+    </ul>
+  </div>
+  <div class="footer-note"><span>None of this required a rewrite. Each stage preserved the previous one.</span></div>
+</section>
+
+<!-- 20. SOURCES -->
+<section class="slide" id="s20">
+  <div class="navtag">20 / 22</div>
+  <div class="kicker"><span class="eyebrow">Sources</span><span class="no">files this deck quotes or shows</span></div>
+  <h2>Where everything came from</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>Code and commits</h3>
+      <ul class="small" style="font-family: Consolas, monospace; line-height: 1.9; font-size: 11px;">
+        <li>25d3000 · scaffold (Sep 22)</li>
+        <li>771731c · 6c32f08 · scanner + playback (Sep 23)</li>
+        <li>99f6dbb · ce5ec22 · e0e022a · auth + resume (Oct 2–6)</li>
+        <li>d1bc639 · 203088a · f414560 · 73487d8 (Oct 12–14)</li>
+        <li>834856d~1 · pre-redesign baseline (Oct 17)</li>
+        <li>834856d · d4220e9 · redesign (Oct 18)</li>
+        <li>cb28038 · 59482e3 · 838c736 · b226f4a (Oct 19–21)</li>
+        <li>c22f573 · gen-0 tag · 8476aa2 · ad56ddd (Nov 14)</li>
+        <li>master · 5d67e0f (Nov 17)</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Documents</h3>
+      <ul class="small">
+        <li>specs/15-gui-redesign.md · specs/15b-post-testing-polish.md</li>
+        <li>specs/26-android-app.md · specs/22-search.md · specs/20-browse-discover.md</li>
+        <li>specs/29-offline-resilience.md · specs/44-offline-progress-sync.md</li>
+        <li>user-testing-2026-10-18.md — the household session that prompted the restyle</li>
+        <li>DESIGN.md · PRODUCT.md · PRD.md</li>
+        <li>docs/design-lab/{gallery.md, ledger.json, gen-0/, gen-1/}</li>
+        <li>docs/presentations/timeline/ — this deck and the harness</li>
+      </ul>
+      <p class="small" style="margin-top: 10px;">Harness + capture method: <code>README.md</code> in this folder. Fonts in harness captures are fixture files; the app's real faces render in production captures (gen-0, gen-1, now-*).</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>Everything shown is in the repository, including this slide.</span></div>
+</section>
+
+<!-- 21. CLOSING -->
+<section class="slide" id="s21">
+  <div class="navtag">21 / 22</div>
+  <div class="kicker"><span class="eyebrow">Close</span><span class="no">one line per stage</span></div>
+  <h2>Fifty-six days,</h2>
+  <table class="cmp" style="margin-top: 10px; font-size: 12px;">
+    <tr><th>Stage</th><th>What it added</th></tr>
+    <tr><td>Sep 22 — Scaffold</td><td>A grid of books, mocked</td></tr>
+    <tr><td>Sep 23 — Scanner wired</td><td>The real thing behind the grid</td></tr>
+    <tr><td>Oct 2–13 — Profiles and tabs</td><td>An app for a household, not one person</td></tr>
+    <tr><td>Oct 17 — The baseline</td><td>Everything worked; nothing matched</td></tr>
+    <tr><td>Oct 18 — Spec 15</td><td>One system, every surface</td></tr>
+    <tr><td>Oct 19–21 — Spec 15b</td><td>Fixes from holding real phones</td></tr>
+    <tr><td>Nov 14 — design-lab</td><td>Variants explored; v4 chosen; merged</td></tr>
+    <tr><td>Nov 17 — Submission</td><td>docs reconciled; brief; API reference</td></tr>
+  </table>
+  <div class="footer-note"><span>Audiobook Manager · a household app for a household library.</span></div>
+</section>
+
+<!-- 22. BACK COVER -->
+<section class="slide" id="s22" style="justify-content: center; text-align: center;">
+  <div class="navtag">22 / 22</div>
+  <div class="eyebrow">Back cover</div>
+  <h1 style="margin-top: 16px;">Audiobook Manager</h1>
+  <p style="margin: 18px auto 0; font-size: 18px; max-width: 520px;">Household audiobook server.<br>This deck: the GUI at every stage of its life.</p>
+  <div class="row" style="justify-content: center; margin-top: 26px;">
+    <span class="chip">docs/presentations/timeline/</span>
+    <span class="chip">images + sources in this folder</span>
+    <span class="chip"><span class="kbd">←</span> <span class="kbd">→</span> navigate</span>
+  </div>
+</section>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const dots = document.querySelector('.progressdots');
+  slides.forEach((s, i) => {
+    const a = document.createElement('a');
+    a.href = '#' + s.id;
+    a.title = 'Slide ' + (i + 1);
+    dots.appendChild(a);
+  });
+  let idx = 0;
+  const bar = document.getElementById('bar');
+  const setBar = () => { bar.style.width = ((idx + 1) / slides.length * 100) + '%'; };
+  const go = (i) => { idx = Math.max(0, Math.min(slides.length - 1, i)); slides[idx].scrollIntoView({ behavior: 'auto', block: 'start' }); setBar(); };
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(idx + 1); }
+    if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(idx - 1); }
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+  });
+  const obs = new IntersectionObserver((entries) => {
+    for (const entry of entries) if (entry.isIntersecting) { idx = slides.indexOf(entry.target); setBar(); }
+  }, { threshold: 0.5 });
+  slides.forEach((s) => obs.observe(s));
+  setBar();
+</script>
+</body>
+</html>
