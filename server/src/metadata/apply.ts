@@ -158,6 +158,13 @@ export async function applyCandidate(
      * overwrite a better one.
      */
     coverFallback?: { url: string; source: ProviderId; identifier?: string };
+    /** Best matching genre candidate, retaining its provider mapping identity. */
+    genreCandidate?: Pick<ProviderCandidate, "source" | "genres">;
+    /** Best matching candidate that carries a usable age signal. */
+    ageSuggestionCandidate?: Pick<
+      ProviderCandidate,
+      "source" | "genres" | "subjectStrings" | "maturityRating"
+    >;
   } = {},
 ): Promise<ApplyResult> {
   const locked = options.overriddenFields ?? new Set<string>();
@@ -240,8 +247,9 @@ export async function applyCandidate(
   }
 
   // Genres and contributors are relational, not scalar columns.
-  if (candidate.genres?.length) {
-    await applyGenres(prisma, item.id, candidate.source, candidate.genres);
+  const genreCandidate = options.genreCandidate ?? candidate;
+  if (genreCandidate.genres?.length) {
+    await applyGenres(prisma, item.id, genreCandidate.source, genreCandidate.genres);
     fields.push("genres");
   }
 
@@ -265,10 +273,10 @@ export async function applyCandidate(
   // NO confirmed rating; confirmed ratings always win and are never touched
   // by enrichment. Never applied as a gate — the admin confirms or dismisses.
   if (item.minimumAge == null) {
-    const suggested = suggestionForCandidate(candidate);
+    const suggested = suggestionForCandidate(options.ageSuggestionCandidate ?? candidate);
     if (suggested !== null) {
       data.suggestedMinimumAge = suggested;
-      data.suggestedMinimumAgeSource = candidate.source;
+      data.suggestedMinimumAgeSource = (options.ageSuggestionCandidate ?? candidate).source;
       fields.push("suggestedMinimumAge");
     }
   }

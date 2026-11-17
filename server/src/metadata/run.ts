@@ -2,12 +2,19 @@ import type { PrismaClient } from "@prisma/client";
 import { applyCandidate, storeCandidates } from "./apply";
 import { AudnexusAsin, extractAsin } from "./audnexus";
 import { applyChapterTitles } from "./chapters";
-import { DEFAULT_CONFIDENCE_THRESHOLD, runChain, selectCoverSource, UNKNOWN_AUTHOR } from "./chain";
+import {
+  DEFAULT_CONFIDENCE_THRESHOLD,
+  poolableCandidates,
+  runChain,
+  selectCoverSource,
+  UNKNOWN_AUTHOR,
+} from "./chain";
 import { recordCoverOutcome } from "./cover-retry";
 import { fetchOpenLibraryDescription } from "./openlibrary";
 import { upsertSeries } from "./taxonomy-service";
 import type { EnrichmentQuery, ProviderId } from "./types";
 import { shouldAutoApply } from "./types";
+import { suggestionForCandidate } from "../age/suggestion";
 
 /**
  * Spec 16 — the background enrichment run.
@@ -406,6 +413,8 @@ export class EnrichmentManager {
         return;
       }
 
+      const matchingCandidates = poolableCandidates(query, best, result.candidates);
+
       // Spec 21: chapter titles are applied regardless of the auto-apply threshold.
       // A match that is only 80% confident on the *title* is still the right
       // book often enough to be worth improving its chapter names, and
@@ -417,9 +426,9 @@ export class EnrichmentManager {
       // Open Library often outscores LibriVox on a title match but has no
       // chapters at all, so taking chapters from the overall winner silently
       // threw away the only source that had them.
-      const chapterSource = result.candidates
+      const chapterSource = matchingCandidates
         .filter((candidate) => candidate.chapters && candidate.chapters.length > 0)
-        .sort((a, b) => b.confidence - a.confidence)[0];
+        [0];
       if (chapterSource?.chapters?.length) {
         try {
           await applyChapterTitles(this.prisma, mediaItemId, chapterSource.chapters);
@@ -434,24 +443,14 @@ export class EnrichmentManager {
       // Open Library's series comes from merged editions, so it is trusted only
       // when complete: a name AND a usable position. A name with no position is
       // far more often an imprint or a box-set label than a series.
-      const providerSeries = result.candidates
-        .filter((candidate) => candidate.seriesName && candidate.source !== "openlibrary")
-        .sort((a, b) => b.confidence - a.confidence)[0];
-      const openLibrarySeries = result.candidates
-        .filter(
-          (candidate) =>
-            candidate.source === "openlibrary" &&
-            candidate.seriesName &&
-            candidate.seriesPosition !== undefined,
-        )
-        .sort((a, b) => b.confidence - a.confidence)[0];
-
-      const series =
-        providerSeries?.seriesName
-          ? { name: providerSeries.seriesName, position: providerSeries.seriesPosition }
-          : openLibrarySeries?.seriesName
-            ? { name: openLibrarySeries.seriesName, position: openLibrarySeries.seriesPosition }
-            : null;
+      const seriesSource = matchingCandidates.find(
+        (candidate) =>
+          candidate.seriesName &&
+          (candidate.source !== "openlibrary" || candidate.seriesPosition !== undefined),
+      );
+      const series = seriesSource?.seriesName
+        ? { name: seriesSource.seriesName, position: seriesSource.seriesPosition }
+        : null;
 
       if (series?.name) {
         try {
@@ -495,18 +494,43 @@ export class EnrichmentManager {
       // Open Library search results carry no blurb, so this needs a second
       // request per book -- and issuing it unconditionally would waste a call
       // on every book that already has a description from another provider.
-      const needsDescription = !best.description && !item.description;
-      if (needsDescription) {
-        const workKey = best.source === "openlibrary"
-          ? (best.raw as { key?: string } | undefined)?.key
-          : undefined;
-        const fetched = await fetchOpenLibraryDescription(workKey).catch(() => undefined);
-        if (fetched) best = { ...best, description: fetched };
+      const pooled = { ...best };
+      for (const candidate of matchingCandidates.slice(1)) {
+        if (!pooled.author?.trim() && candidate.author?.trim()) pooled.author = candidate.author;
+        if (!pooled.narrators?.length && candidate.narrators?.length) pooled.narrators = candidate.narrators;
+        if (!pooled.description?.trim() && candidate.description?.trim()) pooled.description = candidate.description;
+        if (!pooled.publishedYear && candidate.publishedYear) pooled.publishedYear = candidate.publishedYear;
+        if (!pooled.isbn?.trim() && candidate.isbn?.trim()) pooled.isbn = candidate.isbn;
+        if (!pooled.publisher?.trim() && candidate.publisher?.trim()) pooled.publisher = candidate.publisher;
+        if (!pooled.language?.trim() && candidate.language?.trim()) pooled.language = candidate.language;
       }
 
-      const coverFallback = best.coverUrl ? undefined : selectCoverSource(result.candidates) ?? undefined;
+      const needsDescription = !pooled.description && !item.description;
+      if (needsDescription) {
+        const descriptionSource = matchingCandidates.find(
+          (candidate) =>
+            candidate.source === "openlibrary" &&
+            typeof (candidate.raw as { key?: unknown } | undefined)?.key === "string",
+        );
+        const workKey = descriptionSource
+          ? (descriptionSource.raw as { key: string }).key
+          : undefined;
+        const fetched = await fetchOpenLibraryDescription(workKey).catch(() => undefined);
+        if (fetched) pooled.description = fetched;
+      }
 
-      await applyCandidate(this.prisma, item, best, { overriddenFields, coverFallback });
+      const coverFallback = best.coverUrl ? undefined : selectCoverSource(matchingCandidates) ?? undefined;
+      const genreCandidate = matchingCandidates.find((candidate) => candidate.genres?.length);
+      const ageSuggestionCandidate = matchingCandidates.find(
+        (candidate) => suggestionForCandidate(candidate) !== null,
+      );
+
+      await applyCandidate(this.prisma, item, pooled, {
+        overriddenFields,
+        coverFallback,
+        genreCandidate,
+        ageSuggestionCandidate,
+      });
       await this.prisma.mediaItem.update({
         where: { id: mediaItemId },
         data: { enrichmentStatus: "applied", enrichedAt: new Date() },

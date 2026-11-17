@@ -3,6 +3,7 @@ import {
   looksLikeLibriVox,
   resolveProviderOrder,
   runChain,
+  poolableCandidates,
   selectCoverSource,
   DEFAULT_CONFIDENCE_THRESHOLD,
 } from "./chain";
@@ -184,6 +185,49 @@ describe("runChain", () => {
 
     expect(result.best?.source).toBe("librivox");
     expect(later.search).not.toHaveBeenCalled();
+  });
+
+  describe("poolableCandidates", () => {
+    const primary: ProviderCandidate = {
+      source: "librivox",
+      title: "A Christmas Carol",
+      author: "Charles Dickens",
+      confidence: 1,
+    };
+
+    it("keeps the winner first and admits a matching provider fallback", () => {
+      const openLibrary: ProviderCandidate = {
+        source: "openlibrary",
+        title: "A Christmas Carol",
+        author: "Charles Dickens",
+        genres: ["Christmas stories"],
+        confidence: 1,
+      };
+      expect(
+        poolableCandidates(
+          { title: "A Christmas Carol", author: "Charles Dickens" },
+          primary,
+          [openLibrary, primary],
+        ),
+      ).toEqual([primary, openLibrary]);
+    });
+
+    it("does not pool fields from an exact-title candidate with a conflicting known author", () => {
+      const wrongBook: ProviderCandidate = {
+        source: "openlibrary",
+        title: "A Christmas Carol",
+        author: "Someone Else",
+        genres: ["Romance"],
+        confidence: 1,
+      };
+      expect(
+        poolableCandidates(
+          { title: "A Christmas Carol", author: "Charles Dickens" },
+          primary,
+          [wrongBook],
+        ),
+      ).toEqual([primary]);
+    });
   });
 
   it("continues to the next provider when the first is below threshold", async () => {

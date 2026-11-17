@@ -7,7 +7,9 @@ Accepted, **partly superseded by ADR 011**
 > its host was wrong, so it never worked as the "commercial" entry in this
 > chain. It has been removed from the title-driven search and is now an
 > ASIN-keyed lookup used for chapter titles. Everything below about LibriVox
-> detection, sequential walking and `METADATA_PROVIDER_ORDER` still stands.
+> detection and `METADATA_PROVIDER_ORDER` still stands. Field-level pooling
+> across matching providers is defined by ADR 039; the best match remains the
+> metadata winner, but search does not stop once a winner is found.
 
 ## Context
 Spec 07 enriches from Open Library and Google Books. Both are book-oriented,

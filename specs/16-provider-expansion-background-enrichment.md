@@ -29,10 +29,14 @@ Supersedes the provider list in spec 07. Builds on ADR 008.
     sequence, publisher, description, genres (parent + sub), ASIN, cover.
   - `GoogleBooksProvider`, `OpenLibraryProvider` — retained from spec 07,
     restricted to description/cover gap-filling.
-- **Adaptive chain.** Provider priority is resolved per item from local
-  evidence (LibriVox vs commercial) per ADR 008, then walked **sequentially,
-  stopping at the first match at or above the confidence threshold**.
-  `METADATA_PROVIDER_ORDER` overrides the resolution.
+- **Adaptive chain and field pooling.** Provider priority is resolved per item
+  from local evidence (LibriVox vs commercial) per ADR 008 and searched
+  sequentially. The highest-confidence candidate remains the match winner;
+  other candidates that plausibly match the same title/author may fill fields
+  the winner does not provide. The winner's values take precedence when both
+  sources supply a field. Provider-specific values (such as genres) retain the
+  supplying provider's identity for mapping. `METADATA_PROVIDER_ORDER`
+  overrides the search order.
 - **Background pass.** Completing a scan enqueues an enrichment run. The run
   is resumable, persisted in `ScanState`-adjacent progress columns, bounded by
   a concurrency cap and a per-provider delay, and reports

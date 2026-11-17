@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { EnrichmentManager, buildQuery } from "./run";
 import { UNKNOWN_AUTHOR } from "./chain";
+import { seedGenreMappings, seedGenres } from "./taxonomy-service";
 import { createTestDatabase } from "../test-support/database";
 
 /**
@@ -19,6 +20,8 @@ let nextId = 0;
 
 beforeAll(async () => {
   prisma = new PrismaClient();
+  await seedGenres(prisma);
+  await seedGenreMappings(prisma);
   const root = await prisma.libraryRoot.create({ data: { path: "/lib", label: "Test" } });
   libraryRootId = root.id;
 }, 120_000);
@@ -214,6 +217,77 @@ describe("EnrichmentManager status", () => {
     // Either skipped (no candidates) or applied/review (stubbed payload) --
     // what must never happen is a silent no-op leaving it untouched.
     expect(refreshed?.enrichmentStatus).not.toBeNull();
+  });
+
+  it("keeps the winner's values and fills missing fields and genres from another match", async () => {
+    const book = await makeBook("A Christmas Carol");
+    await prisma.mediaItem.update({
+      where: { id: book.id },
+      data: { author: "Charles Dickens", filePath: `/lib/${book.id}/librivox/A Christmas Carol.mp3` },
+    });
+
+    const originalFetch = global.fetch;
+    global.fetch = (async (input: unknown) => {
+      const url = String(input);
+      if (url.startsWith("https://librivox.org/api/feed/audiobooks")) {
+        return new Response(
+          JSON.stringify({
+            books: [
+              {
+                id: "123",
+                title: "A Christmas Carol",
+                authors: [{ first_name: "Charles", last_name: "Dickens" }],
+                description: "LibriVox description",
+                copyright_year: 1843,
+                genres: [],
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.startsWith("https://openlibrary.org/search.json")) {
+        return new Response(
+          JSON.stringify({
+            docs: [
+              {
+                key: "/works/OL123W",
+                title: "A Christmas Carol",
+                author_name: ["Charles Dickens"],
+                first_publish_year: 1844,
+                isbn: ["9780141439846"],
+                subject: ["Christmas stories", "Juvenile fiction"],
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      await new EnrichmentManager(prisma).enrichOneNow(book.id);
+    } finally {
+      global.fetch = originalFetch;
+    }
+
+    const updated = await prisma.mediaItem.findUniqueOrThrow({ where: { id: book.id } });
+    expect(updated.metadataSource).toBe("librivox");
+    expect(updated.publishedYear).toBe(1843);
+    expect(updated.isbn).toBe("9780141439846");
+    expect(updated.description).toBe("LibriVox description");
+    expect(updated.suggestedMinimumAge).toBe(12);
+    expect(updated.suggestedMinimumAgeSource).toBe("openlibrary");
+
+    const genres = await prisma.mediaItemGenre.findMany({
+      where: { mediaItemId: book.id },
+      include: { genre: true },
+    });
+    expect(genres.map((entry) => entry.genre.slug)).toContain("fiction");
   });
 });
 

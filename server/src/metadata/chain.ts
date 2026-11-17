@@ -7,6 +7,10 @@ import {
   type MetadataProvider,
   type ProviderCandidate,
   type ProviderId,
+  scoreMatch,
+  shouldAutoApply,
+  similarity,
+  AUTO_APPLY_AUTHOR_AGREEMENT,
 } from "./types";
 
 /**
@@ -116,6 +120,36 @@ export interface ChainResult {
   provider: ProviderId | null;
   /** Ordered provider ids actually walked, for diagnostics. */
   walked: ProviderId[];
+}
+
+/**
+ * Keep the winning match first, then include only alternative candidates that
+ * also plausibly describe this item. Open Library and Google Books use
+ * title-only confidence, so reject a conflicting known author before letting
+ * either source fill a missing field.
+ */
+export function poolableCandidates(
+  query: EnrichmentQuery,
+  best: ProviderCandidate,
+  candidates: ProviderCandidate[],
+): ProviderCandidate[] {
+  const knownAuthor = query.author?.trim() && !query.authorIsUnknown ? query.author : undefined;
+  const alternatives = candidates
+    .filter((candidate) => candidate !== best)
+    .filter((candidate) => {
+      if (
+        knownAuthor &&
+        candidate.author &&
+        similarity(knownAuthor, candidate.author) < AUTO_APPLY_AUTHOR_AGREEMENT
+      ) {
+        return false;
+      }
+      const confidence = scoreMatch(query, candidate.title, candidate.author);
+      return shouldAutoApply(confidence, query, candidate.author, candidate.title);
+    })
+    .sort((a, b) => b.confidence - a.confidence);
+
+  return [best, ...alternatives];
 }
 
 /**
