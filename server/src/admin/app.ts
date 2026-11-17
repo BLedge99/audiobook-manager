@@ -243,9 +243,10 @@ export async function buildAdminApp(options: {
       rows = (readonlySqlite.prepare(`SELECT * FROM "${table}" ORDER BY 1 LIMIT ? OFFSET ?`).all(pageSize, (page - 1) * pageSize) as unknown[])
         .map(stripSecretColumns);
     } else {
+      const pgColumns = await options.prisma.$queryRawUnsafe<{ column_name?: unknown }[]>("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position", table);
       columns = stripSecretColumnNames(
-        await options.prisma.$queryRawUnsafe("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position", table) as unknown[],
-        (column) => String((column as { column_name?: unknown }).column_name ?? ""),
+        pgColumns.map((column) => ({ name: (column as { column_name?: unknown }).column_name ?? "" })),
+        (column) => String((column as { name?: unknown }).name ?? ""),
       );
       rows = (await options.prisma.$queryRawUnsafe(`SELECT * FROM "${table}" ORDER BY 1 LIMIT $1 OFFSET $2`, pageSize, (page - 1) * pageSize) as unknown[])
         .map(stripSecretColumns);
