@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audiobook Manager — the architecture at each stage</title>
+<style>
+  :root {
+    --ground: #0b1117;
+    --panel: #131c2b;
+    --panel-2: #1a2740;
+    --line: #334155;
+    --ink: #e2e8f0;
+    --ink-2: #cbd5e1;
+    --muted: #94a3b8;
+    --dim: #64748b;
+    --accent: #22d3ee;
+    --rasp: #ff5c8a;
+    --gold: #f6c453;
+    --green: #34d399;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--ground); color: var(--ink); font-family: "Avenir Next", "Segoe UI", -apple-system, system-ui, sans-serif; }
+  .slide { min-height: 100vh; position: relative; padding: 36px 48px 56px; display: flex; flex-direction: column; }
+  .eyebrow { color: var(--accent); font-size: 10.5px; letter-spacing: 3px; font-weight: 700; text-transform: uppercase; }
+  h1 { font-size: clamp(38px, 5.4vw, 60px); line-height: 1.08; font-weight: 800; letter-spacing: -0.02em; }
+  h2 { font-size: clamp(22px, 2.6vw, 30px); line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; margin: 6px 0 2px; }
+  h3 { font-size: 14px; font-weight: 700; margin: 11px 0 4px; }
+  p, li { font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+  ul { margin-left: 17px; } li { margin: 2px 0; }
+  code { font-family: Consolas, monospace; font-size: 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: #9ae6b4; }
+  .small { font-size: 11.5px; color: var(--muted); }
+  .dim { color: var(--dim); }
+  .cols { display: grid; gap: 18px; align-items: start; }
+  .cols-2 { grid-template-columns: 1.15fr 0.85fr; }
+  .cols-2r { grid-template-columns: 0.85fr 1.15fr; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; }
+  .panel.dark { background: #020617; }
+  .panel.warn { background: #1a1410; border-color: #40341f; }
+  .panel.good { background: #101a17; border-color: #1f4034; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; font-size: 11px; color: var(--ink-2); background: var(--panel-2); }
+  .chip.commit { font-family: Consolas, monospace; color: #9ae6b4; border-color: #1f4034; }
+  .chip.date { color: var(--gold); border-color: #40341f; }
+  figure { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #020617; display: flex; flex-direction: column; }
+  figure figcaption { padding: 7px 11px; font-size: 10.5px; color: var(--muted); background: rgba(2,6,23,.92); line-height: 1.4; }
+  figure figcaption b { color: var(--ink-2); font-weight: 700; }
+  img.shot { display: block; width: 100%; }
+  img.diagram { display: block; width: 100%; background: #0b1117; }
+  img.diagram.fit { width: auto; max-width: 100%; max-height: 44vh; object-fit: contain; margin: 0 auto; }
+  img.diagram.fit-sm { width: auto; max-width: 100%; max-height: 34vh; object-fit: contain; margin: 0 auto; }
+  .dense, .dense li { font-size: 9px; line-height: 1.32; }
+  .dense li { margin: 1px 0; }
+  img.diagram.fit-tall { width: auto; max-width: 100%; max-height: 50vh; object-fit: contain; margin: 0 auto; }
+  .grid { display: grid; gap: 10px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .kicker { display: flex; gap: 14px; align-items: baseline; margin-bottom: 1px; }
+  .kicker .no { font-family: Consolas, monospace; color: var(--dim); font-size: 12px; }
+  .navtag { position: absolute; top: 14px; right: 22px; font-size: 11px; color: var(--dim); font-family: Consolas, monospace; }
+  .progressdots { position: fixed; right: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 5px; z-index: 50; }
+  .progressdots a { width: 7px; height: 7px; border-radius: 50%; background: #334155; display: block; }
+  .progressdots a:hover { background: var(--accent); }
+  .counterbar { position: fixed; left: 0; bottom: 0; height: 3px; background: var(--accent); width: 0%; z-index: 60; }
+  .footer-note { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; font-size: 10px; color: var(--dim); }
+  .kbd { border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-family: Consolas, monospace; font-size: 11px; background: var(--panel-2); }
+  .caption-lede { font-size: 11.5px; color: var(--dim); margin-top: 0; }
+  .cmp { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+  .cmp th, .cmp td { border: 1px solid var(--line); padding: 4px 7px; text-align: left; vertical-align: top; }
+  .cmp th { background: var(--panel-2); color: var(--gold); font-size: 9.5px; text-transform: uppercase; letter-spacing: 1px; }
+  .cmp code { font-size: 10px; }
+  .tag { display: inline-block; font-size: 9px; font-weight: 700; border-radius: 4px; padding: 1px 6px; letter-spacing: 1px; text-transform: uppercase; }
+  .tag.high { background: #3a1a1a; color: #ff8a8a; border: 1px solid #5a2626; }
+  .tag.med { background: #3a2f10; color: #f6c453; border: 1px solid #54431c; }
+  .tag.low { background: #16301f; color: #34d399; border: 1px solid #1f4034; }
+  .tag.done { background: #16301f; color: #34d399; border: 1px solid #1f4034; }
+  @media print {
+    .slide { min-height: 0; page-break-after: always; padding: 22px 30px; }
+    .progressdots, .counterbar { display: none; }
+  }
+</style>
+</head>
+<body>
+<nav class="progressdots" aria-label="Slides"></nav>
+<div class="counterbar" id="bar"></div>
+
+<!-- 1. TITLE -->
+<section class="slide" id="s1" style="justify-content: center;">
+  <div class="navtag">01 / 33</div>
+  <div class="eyebrow">Architecture timeline</div>
+  <h1 style="margin-top: 14px;">Audiobook Manager:<br>the architecture at each stage,<br>2026-09-22 → 2026-11-17</h1>
+  <p style="margin-top: 18px; font-size: 16px; max-width: 620px;">From the first scaffold to the submission build, in the order it happened — including the three fresh-context architecture reviews and everything they forced to be fixed, with the diagrams to show the shape of each change.</p>
+  <div class="row" style="margin-top: 22px;">
+    <span class="chip date">first commit 25d3000</span><span class="chip date">submission build 5d67e0f</span>
+    <span class="chip">3 architecture reviews, in detail</span><span class="chip">diagrams drawn from git history</span><span class="chip">ADRs + specs quoted</span>
+  </div>
+  <div class="footer-note"><span>How the diagrams were made: slide 02. Everything else is on the slide itself.</span><span><span class="kbd">←</span> <span class="kbd">→</span> navigate</span></div>
+</section>
+
+<!-- 2. HOW TO READ -->
+<section class="slide" id="s2">
+  <div class="navtag">02 / 33</div>
+  <div class="kicker"><span class="eyebrow">Method</span><span class="no">how the diagrams were made</span></div>
+  <h2>Diagrams from the record,<br>not from memory</h2>
+  <div class="cols cols-2" style="margin-top: 8px;">
+    <div class="panel">
+      <h3>What the diagrams are</h3>
+      <p>Each diagram was drawn by hand from the git record: the commit diffs, the ADRs in <code>decisions/</code>, the specs in <code>specs/</code>, and <code>LIMITATIONS.md</code>. They are explanations, not screenshots. Every caption names the exact commits the diagram compresses. Where the deck simplifies, it says so.</p>
+      <h3 style="margin-top: 10px;">The three architecture reviews</h3>
+      <p>Three fresh-context reviews walked the codebase in November — 2026-11-11, 2026-11-15, 2026-11-16. Each was read-only, produced a report that lived in <code>%TEMP%</code> and was never committed, and each became an in-repo spec (37, 41, 42) whose phases were executed and merged. Their report files, where named: <code>architecture-review-2026-11-15-1154.html</code> (spec 41) and <code>architecture-review-2026-11-16-1147.html</code> (spec 42). The 2026-11-11 review's report is not named in the spec; only its findings survive, in spec 37. Slides 13–25 cover them in detail.</p>
+      <h3 style="margin-top: 10px;">The exception</h3>
+      <p>Slide 28 shows the current-state diagram that ships in the repository itself: <code>docs/diagrams/architecture.svg</code>, added in <code>5d67e0f</code>. Reproduced, not redrawn.</p>
+    </div>
+    <div class="panel">
+      <h3>What this deck does not do</h3>
+      <ul>
+        <li>It doesn't rate eras. The scaffold was the right shape for its day; it is shown as it was.</li>
+        <li>It doesn't claim tests passed where the record doesn't say so. Flakes, skipped E2E runs and a pushed-red commit are all stated.</li>
+        <li>It doesn't hide the bad weeks. The security work happened because audits found the holes; the deck names them.</li>
+        <li>It doesn't quote the %TEMP% reports as if they were committed — only what the specs and ADRs record is quotable, and it is what this deck uses.</li>
+      </ul>
+      <h3 style="margin-top: 12px;">Colour coding</h3>
+      <ul>
+        <li><b>Dark diagram</b> — drawn for this deck, simplified from the record</li>
+        <li><b>Repo diagram</b> — <code>docs/diagrams/architecture.svg</code>, unchanged</li>
+        <li><b>Commit chips</b> — short SHAs; check them with <code>git show</code></li>
+      </ul>
+      <p class="small" style="margin-top: 10px;">Slide 31 lists every source: commits, reviews, ADRs, specs, documents.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>One project, one repository, 467 commits, 39 ADRs, 45 numbered specs + 3 GDPR specs. No other sources were used.</span></div>
+</section>
+
+<!-- 3. OVERVIEW -->
+<section class="slide" id="s3">
+  <div class="navtag">03 / 33</div>
+  <div class="kicker"><span class="eyebrow">Overview</span><span class="no">stages in order</span></div>
+  <h2>The stages</h2>
+  <table class="cmp" style="margin-top: 8px; font-size: 9.5px;">
+    <tr><th>Date</th><th>Stage</th><th>What structurally changed</th></tr>
+    <tr><td>Sep 22</td><td>1 · Scaffold</td><td>Two dev containers (client :5173, server :3000), mock data, no auth, SQLite</td></tr>
+    <tr><td>Sep 23</td><td>2 · Scanner wired</td><td>Server reads real files; chapter-aware playback; same two-container shape</td></tr>
+    <tr><td>Oct 2</td><td>3 · First full system</td><td>One container serves app + API on :3000 · LAN read-only media · one scanner (ADR 005) · auth + profiles · security suite (spec 11) · specs/ADRs begin</td></tr>
+    <tr><td>Oct 12–14</td><td>4 · Android + offline</td><td>Capacitor shell, on-device downloads, IndexedDB replica, background audio, header auth (86484b5)</td></tr>
+    <tr><td>Oct 18–21</td><td>5 · Restyle (marker)</td><td>No server, DB or API change — listed for completeness; see the design deck</td></tr>
+    <tr><td>Oct 24–27</td><td>5b · Accounts &amp; biometrics</td><td>Passkeys, device vault, lockout policy; runtime + dependency hardening</td></tr>
+    <tr><td>Oct 29–30</td><td>6 · Two databases</td><td>Production → hosted PostgreSQL (Supabase); SQLite stays for home + tests (ADR 019)</td></tr>
+    <tr><td>Nov 2–5</td><td>7 · A second door</td><td>Admin panel on its own listener :3100 (ADR 022) · OAuth demo accounts · GDPR ten-phase remediation · dependency audit fixes</td></tr>
+    <tr><td>Nov 10–11</td><td>8 · Locking the doors</td><td>Row-level security deny-all on every Supabase table (ADR 026) · one live session per device (spec 36)</td></tr>
+    <tr><td>Nov 11–13</td><td>9 · The deepening (spec 37)</td><td>2026-11-11 fresh-context review → 29 findings → 11 phases / 45 steps: route modules, one client request interface, one rule one module, demo-only admin proxy. Merged f024c6b</td></tr>
+    <tr><td>Nov 12–13</td><td>10 · Three additions</td><td>Kids accounts (spec 38, ADR 033) · native OAuth handoff (spec 32, ADR 036) · native media proxy (ADR 031) · check-price buy links (spec 39, ADR 034)</td></tr>
+    <tr><td>Nov 14–15</td><td>11 · Aero + the 2026-11-15 audit (spec 41)</td><td>Design-lab v4 merged (UI only) · nine audit cards → ten phases; four spec-37-shaped recurrences + one live data bug (per-server audio dirs); 895→936 / 806→827 tests</td></tr>
+    <tr><td>Nov 16</td><td>12 · The 2026-11-16 re-audit (spec 42) + security</td><td>Fresh-context re-audit → nine cards + the /privacy blank page · wake budget module · GDPR household self-service fixed · SW reload gated on idle playback · the security remediation (SSRF, helmet, fail-closed, SQL console) · production readiness (backups, lint gate) · spec 44 offline progress</td></tr>
+    <tr><td>Nov 17</td><td>13 · Final fixes</td><td>Spec 45 re-audit remediation (claims-vs-tree) · docs reconciled (BRIEF.md, API + architecture diagrams, 5d67e0f) · submission</td></tr>
+  </table>
+  <div class="footer-note"><span>Slides 13–19: the 2026-11-11 review in detail. Slides 21–22: the 2026-11-15 audit. Slides 23–25: the 2026-11-16 re-audit and security remediation.</span></div>
+</section>
+
+<!-- 4. STAGE 1 -->
+<section class="slide" id="s4">
+  <div class="navtag">04 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 1 · Sep 22</span><span class="no">25d3000 — the scaffold</span></div>
+  <h2>Two containers<br>and a mock bookshelf</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit" src="assets/era1-scaffold.svg" alt="Sep 22 scaffold: browser talks to a Vite dev server on 5173, which talks to a stub Fastify API on 3000, which reads an empty SQLite schema. The media folder is mounted but unused."><figcaption><b>The whole system, as committed</b> — drawn from <code>25d3000</code>. Nothing here is simulated: it is the container layout from that commit's docker-compose, with the mock books removed from the picture.</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>What it was for</h3><p class="small">To answer one question: is “browse covers → pick a book → press play” worth building? The answer came in an afternoon.</p></div>
+    <div class="panel"><h3>What it had</h3><p class="small">A Vite dev server for the React UI, a Fastify server with two stub endpoints, an empty Prisma schema, and Docker so it booted the same on any machine.</p></div>
+    <div class="panel"><h3>What it didn't have</h3><p class="small">Real files, sign-in, playback, a build step, a deployment story. Both ports were open to localhost; CORS was wide but local-only.</p></div>
+  </div>
+  <div class="footer-note"><span>Drawn from 25d3000 · 73163f2 made it bootable the same day · every box in this diagram was replaced or hardened within eleven days.</span></div>
+</section>
+
+<!-- 5. STAGE 2 -->
+<section class="slide" id="s5">
+  <div class="navtag">05 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 2 · Sep 23</span><span class="no">771731c — the mock becomes a library</span></div>
+  <h2>The same shape,<br>now pointed at real files</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>What changed</h3>
+      <ul>
+        <li>The server learned to walk folders, read tags and group files into books (<code>771731c</code>).</li>
+        <li>Tracks stream over HTTP; playback is chapter-aware (<code>6c32f08</code>) — same day, same commit family.</li>
+        <li>The UI stopped showing invented books and started showing the household's actual audiobooks.</li>
+      </ul>
+      <h3 style="margin-top: 10px;">What did not change</h3>
+      <p class="small">The container layout, the ports, the database, the lack of sign-in. The scaffold's architecture absorbed the first real feature without moving a single service.</p>
+    </div>
+    <div class="panel">
+      <h3>Why this stage matters</h3>
+      <p>This is where the project stopped being a demo. Every later architecture decision — profiles, enrichment, offline, the admin panel — exists because real, messy files now flowed through the system and broke assumptions in interesting ways.</p>
+      <h3 style="margin-top: 10px;">The quiet debt</h3>
+      <p class="small">A second, divergent scanner implementation was created in this period. It was deleted nine days later in <code>467307c</code> (ADR 005). One scanner is still the rule.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>771731c · 6c32f08 · 2026-09-23 · captured in the GUI deck as the “scanner wired” stage — same event, seen from the outside.</span></div>
+</section>
+
+<!-- 6. STAGE 3 -->
+<section class="slide" id="s6">
+  <div class="navtag">06 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 3 · Oct 2</span><span class="no">the first full system</span></div>
+  <h2>One container,<br>one household, one day</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit" src="assets/era2-first-system.svg" alt="Oct 2 system: phones and laptops on the LAN hit one container on port 3000, which serves both the built web app and the API. Media is mounted read-only; SQLite holds profiles, progress and settings."><figcaption><b>The first shape the household used</b> — drawn from <code>5ebc03a</code> (single container), <code>467307c</code> (one scanner), <code>4442789</code> (security suite), <code>99f6dbb</code> (household gate).</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>Added in this stage</h3><p class="small">Household password + profiles, server-side resume position, PWA packaging, LAN deployment with the server hosting the built client, and the first security hardening with automated tests (spec 11).</p></div>
+    <div class="panel"><h3>Structural changes</h3><p class="small">Two containers → one. The dev servers retired; the app ships as static files from Fastify. Media moved to a read-only mount. The scanner was consolidated to one code path.</p></div>
+    <div class="panel"><h3>And the paperwork</h3><p class="small">The specs, roadmap and the first ADRs landed the same day (<code>f3dca59</code>). From here on, the repository argues with itself in writing before it changes.</p></div>
+  </div>
+  <div class="footer-note"><span>2026-10-02 was the densest day in the history: ~20 commits covering specs 01–14. “Full system” is literal — it is everything except Android.</span></div>
+</section>
+
+<!-- 7. STAGE 4 -->
+<section class="slide" id="s7">
+  <div class="navtag">07 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 4 · Oct 12–14</span><span class="no">Android &amp; offline</span></div>
+  <h2>The phone is<br>not a small browser</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit" src="assets/era3-android.svg" alt="Android phone with a Capacitor WebView, downloads on device, an IndexedDB replica of the library, connecting over the LAN to the unchanged home server."><figcaption><b>The first second surface</b> — drawn from <code>f414560</code> (spike) and <code>73487d8</code> (downloads + offline playback). The server did not change shape; the client grew a native shell.</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>Added in this stage</h3><p class="small">Capacitor Android shell, on-device downloads, background playback, first-run setup with no server present, Browse/Discover/search/tags/favourites (specs 16–25), enrichment with providers.</p></div>
+    <div class="panel"><h3>The seam bugs</h3><p class="small">The WebView would not send the session cookie cross-origin, so the Android shell authenticates with a session header instead (<code>86484b5</code>, <code>4f960bb</code>). Font boosting, sideways scrolling and lock-screen controls followed the same pattern: found on the device, fixed on the device.</p></div>
+    <div class="panel"><h3>Why the shape held</h3><p class="small">Nothing about the server moved. The phone became a second, fatter client — with its own copies of the library and its own failure modes — and the API absorbed it unchanged.</p></div>
+  </div>
+  <div class="footer-note"><span>Device photos from this era live in specs/evidence/ · the phone arrived before the visual redesign by six days.</span></div>
+</section>
+
+<!-- 8. STAGE 5 (restyle) -->
+<section class="slide" id="s8">
+  <div class="navtag">08 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 5 · Oct 18–21</span><span class="no">the restyle — marked, not reviewed</span></div>
+  <h2>A big change that<br>changed no structure</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>What happened</h3>
+      <p>On 2026-10-18 every surface was restyled around the capsule design system (<code>834856d</code>, <code>d4220e9</code>). The following three days were fixes and one consolidation: offline screens as first-class states (spec 29), and every user-facing string moved into one table (<code>838c736</code>, <code>b226f4a</code>).</p>
+      <h3 style="margin-top: 10px;">Why it is in this deck at all</h3>
+      <p class="small">Because “the codebase got a full restyle and nobody touched the routes” is a fact about the architecture, not just about the UI. The restyle was only possible because the redesign left no behaviour behind — routes, props and hooks all stayed put.</p>
+    </div>
+    <div class="panel">
+      <h3>What did not move</h3>
+      <ul>
+        <li>The server, the database, the API contract</li>
+        <li>The Android shell and its download flow</li>
+        <li>The offline cache design</li>
+      </ul>
+      <h3 style="margin-top: 10px;">Where the full story lives</h3>
+      <p class="small">The GUI timeline deck (<code>docs/presentations/design/</code>) covers the restyle surface by surface. This deck records it as the one week where the whole app changed and the architecture did not.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>834856d · d4220e9 · 838c736 · b226f4a · specs/15-gui-redesign.md · specs/15b-post-testing-polish.md · specs/29-offline-resilience.md</span></div>
+</section>
+
+<!-- 9. STAGE 5B -->
+<section class="slide" id="s9">
+  <div class="navtag">09 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 5 · Oct 24–27</span><span class="no">accounts &amp; biometrics</span></div>
+  <h2>Keys on the device,<br>not passwords in the air</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>What was added</h3>
+      <ul>
+        <li>Passkeys (WebAuthn): each device enrolls its own credential; sign-in is an approve-the-prompt gesture (spec 28, <code>8f1555a</code>).</li>
+        <li>An Android vault: the biometric unlock stores the device credential locally, so the phone opens the app offline (<code>d4195ba</code>, <code>84734fa</code>).</li>
+        <li>Lockout and rate-limit rules for failed attempts — with <code>1da2444</code> hardening runtime and dependencies the same week.</li>
+      </ul>
+      <h3 style="margin-top: 10px;">What it is not</h3>
+      <p class="small">Not a replacement for the household password — that stays as the break-glass. Not a second identity system; the passkey proves the device, the profile proves the person.</p>
+    </div>
+    <div class="panel">
+      <h3>What it cost</h3>
+      <p>Four days and two worktrees; the largest single feature between the redesign and the database migration. Honest notes from the record:</p>
+      <ul style="margin-top: 6px;">
+        <li>Device verification was manual — Pixel 4a in the hand, not an automated suite.</li>
+        <li>The first fingerprint path failed on Android; the fix (<code>a67f033</code>) and its test fallout (<code>c0b64fb</code>) both landed 2026-10-29.</li>
+        <li>Personal network details were scrubbed from fixtures before any public deploy (<code>05c4db5</code>) — same week, same hygiene.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-note"><span>8f1555a · d4195ba · 84734fa · 950aa2f · specs/28-accounts-passkeys-biometrics.md · device sign-in verified on Pixel 4a only</span></div>
+</section>
+
+<!-- 10. STAGE 6 -->
+<section class="slide" id="s10">
+  <div class="navtag">10 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 6 · Oct 29–30</span><span class="no">two databases, one model</span></div>
+  <h2>Postgres for production,<br>SQLite for the house</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit" src="assets/era5-postgres.svg" alt="One Prisma data model branching into two histories: a generated SQLite twin for local dev and CI tests, and a PostgreSQL history for the hosted production database on Supabase."><figcaption><b>One model, two histories</b> — drawn from the migration commits of 2026-10-29 (<code>fe297ff</code>…<code>2010130</code>) and ADR 019, which supersedes ADR 001.</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>Why it happened</h3><p class="small">The hosted demo needed a database that survives restarts and deploys on a free tier. SQLite files on ephemeral disks do not. That is the whole reason; it was not a fashion choice.</p></div>
+    <div class="panel"><h3>The rocky day</h3><p class="small">Fourteen commits in one day: the migration, the provider fix, the squashed history, the CI fight, and the marker of a failed deploy cleared the next morning (<code>593ac85</code>). Porting the tests to PostgreSQL was tried and abandoned — it made the suite slower and flakier.</p></div>
+    <div class="panel"><h3>The standing rule</h3><p class="small">Every model change ships a migration in each history. A test (<code>database-schema.test.ts</code>) fails the build if the two schemas drift apart. Production deploys run <code>migrate deploy</code> at container start.</p></div>
+  </div>
+  <div class="footer-note"><span>ADR 019 · one day, 2026-10-29 · production is Supabase (EU) · local dev and CI are SQLite — by design, not by accident</span></div>
+</section>
+
+<!-- 11. STAGE 7 -->
+<section class="slide" id="s11">
+  <div class="navtag">11 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 7 · Nov 2–5</span><span class="no">a second door</span></div>
+  <h2>An operator panel,<br>behind its own lock</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit" src="assets/era6-second-door.svg" alt="Two listeners in one process: the family port 3000 with no admin routes, and a separate admin listener on port 3100, loopback-only, with its own password and cookie."><figcaption><b>Two listeners, one process</b> — drawn from the spec 31 commits (<code>82191ff</code>…<code>2bd0e2e</code>), ADR 022, and ADR 029 (the demo's proxy, gated in spec 37).</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>Why a second listener</h3><p class="small">An admin panel on the family port would share its cookie jar with every browser in the house. A separate listener with its own password and session table means finding the app unlocks nothing about the panel — and vice versa.</p></div>
+    <div class="panel"><h3>The same week, other work</h3><p class="small">OAuth accounts for the public demo (Nov 4 — nine fixes of cookie and redirect debugging) and the production upload path (<code>1f01f2a</code>).</p></div>
+    <div class="panel"><h3>And the GDPR pass</h3><p class="small">On Nov 5 the whole GDPR remediation landed across ten phases (<code>ce4bbc6</code>), driven by the audit that week. The admin panel is what makes that work manageable; it is also new attack surface, which is why it got its own door.</p></div>
+  </div>
+  <div class="footer-note"><span>Spec 31 · ADR 022 · ADR 029 · ce4bbc6 (GDPR, 10 phases) · e17e66b (dependency audit fixes, same week)</span></div>
+</section>
+
+<!-- 12. STAGE 8 -->
+<section class="slide" id="s12">
+  <div class="navtag">12 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 8 · Nov 10–11</span><span class="no">locking the doors</span></div>
+  <h2>The database says no,<br>and devices get identities</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit" src="assets/era7-rls.svg" alt="Supabase on the public internet: the anonymous key gets zero rows because every table has row-level security enabled and no policies. The app connects as the table owner and is unaffected."><figcaption><b>The unused door, bricked up</b> — drawn from <code>d316f99</code> and ADR 026. Supabase's advisor flagged the exposure on 2026-11-08; the fix landed 2026-11-10.</figcaption></figure>
+  <div class="grid grid-2" style="margin-top: 10px;">
+    <div class="panel"><h3>Row-level security, in plain words</h3><p class="small">Supabase gives every project an anonymous key that can reach its tables through an auto-generated API. This app never used that path — so the path was closed entirely: RLS on all 28 tables, zero policies, grants revoked. Verified 28 open → 0 against a real PostgreSQL; a test keeps new tables from shipping without it.</p></div>
+    <div class="panel"><h3>One live session per device (spec 36)</h3><p class="small">Every sign-in used to mint a new session row — fifty sessions for one phone. Now the device's existing session is rotated in place, so the sessions panel lists devices, not events, and “first signed in” stays true. A cleanup pass for the backlog ran in dry-run mode first (<code>a3a5c0b</code>).</p></div>
+  </div>
+  <div class="footer-note"><span>d316f99 · eac8f30 · f3a9116 · 6ead407 · a3a5c0b · specs/35 · specs/36 · ADR 026 · device identity landed one day before the 2026-11-11 review</span></div>
+</section>
+
+<!-- 13. THE 2026-11-11 REVIEW -->
+<section class="slide" id="s13">
+  <div class="navtag">13 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 9 · the 2026-11-11 review</span><span class="no">what the review actually was</span></div>
+  <h2>A fresh pair of eyes,<br>allowed to do nothing</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit" src="assets/review-flow.svg" alt="Five-step pipeline: fresh-context read-only review, candidate findings, an in-repo spec, test-first steps with one commit each, then an honest close-out."><figcaption><b>The method all three reviews share</b> — drawn from the three spec headers (37, 41, 42). The review report for this one is not named in the spec; the findings survive in spec 37.</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>What it was</h3><p class="small">A read-only pass over the whole tree by a reviewer with no investment in the story so far. No fixes, no commits — just findings, each with evidence and a blast radius.</p></div>
+    <div class="panel"><h3>What it found (headline)</h3><p class="small">Nine places where a module's interface was nearly as heavy as its implementation — and knowledge leaked across seams. One recurring shape: <b>a rule was extracted into a tested pure function, and the code that calls it kept its own copy.</b> Appendix A of spec 37 lists 29 findings.</p></div>
+    <div class="panel"><h3>What made it different</h3><p class="small">Most reviews produce opinions. This one produced a dependency-ordered plan — 11 phases, 45 steps — where every step was test-first, one commit, and green at the end. The plan, not the report, is the durable artefact.</p></div>
+  </div>
+  <div class="panel" style="margin-top: 10px;"><p class="small"><b>The three reviews at a glance.</b> 2026-11-11 — pre-release status check → spec 37, 11 phases / 45 steps, entry: “master is clean”, exit: merged f024c6b, verified 2026-11-17. 2026-11-15 — post-aero audit → spec 41, 9 cards / 10 phases, entry: master green at baseline, exit: numbers re-measured, roadmap ticked. 2026-11-16 — post-41 re-audit → spec 42, 9 cards + 1 defect / 11 phases, entry: master green, exit: re-measured, one process-note red push owned. Each report lived in %TEMP%; each spec is the record.</p></div>
+  <div class="footer-note"><span>Trigger: project status before v0.2.0 · findings recorded 2026-11-11 · the spec's own status block (added 2026-11-13) admits the checkboxes were never ticked until reconciliation</span></div>
+</section>
+
+<!-- 14. SPEC 37 THE PLAN -->
+<section class="slide" id="s14">
+  <div class="navtag">14 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 9 · spec 37 — the plan</span><span class="no">nine candidates, one shape</span></div>
+  <h2>The nine candidates</h2>
+  <table class="cmp" style="margin-top: 6px; font-size: 9.5px;">
+    <tr><th>#</th><th>Candidate (as named in the review)</th><th>Where it landed</th></tr>
+    <tr><td>01</td><td>Six request idioms, six guarantee sets — the app has ~8 near-identical private <code>request</code> helpers</td><td>Steps 1.1–1.6 · <code>d1521bb</code>…<code>316eedf</code> · one interface, five guarantees, admin sibling, fetch shim deleted</td></tr>
+    <tr><td>02</td><td>Progress keyed by bare book id — collides across servers (spec 30 union-of-shelves made it live)</td><td>Steps 2.1–2.2 · <code>cee4ba2</code> · server-scoped keys; typecheck gate made it a compile error</td></tr>
+    <tr><td>02b</td><td>Two implementations of the library source, merged by hand in App.tsx</td><td>Steps 3.1–3.3 · <code>70a7972</code> · <code>LibrarySource</code> interface + <code>mergeShelves</code>; App.test.tsx now exists</td></tr>
+    <tr><td>03</td><td>App.tsx is an untested orchestration layer — 1,134 lines, 20 useState, 13 useEffect</td><td>Steps 4.1–4.6 · <code>f254368</code>…<code>c78f975</code> · profile rules, refresh policy, background lock, offline gate, session probe, offline flag — each extracted + tested</td></tr>
+    <tr><td>04</td><td>app.ts is 64 routes + 106 inline Prisma calls in one function; 35 routes schema-less, 6 validating nothing</td><td>Steps 7.1–7.9 · <code>8e10d36</code>…<code>6baa4ad</code> · route table frozen by test, then split into <code>routes/</code> modules; every mutating route declares a schema</td></tr>
+    <tr><td>05</td><td>precedence.ts is dead code — the override rule re-derived at three call sites, re-implemented twice in app.ts</td><td>Steps 5.1–5.2 · ADR 028 · <code>fe0a8cc</code> · one resolver; enriched now beats embedded; legacy <code>metadataSource="user"</code> sentinel retired</td></tr>
+    <tr><td>06</td><td>GDPR tables enumerated three times and already disagreeing — webAuthnChallenge erased but never exported</td><td>Steps 6.1–6.2 · <code>c85fa15</code>, <code>bca51d0</code> · one module + a schema-guard test that reads schema.prisma</td></tr>
+    <tr><td>07</td><td>Copy strings leak into pure logic modules (position.ts, browse.ts, local/*)</td><td>Steps 8.1–8.3 · <code>5c0d9c5</code>…<code>2c66eec</code> · logic returns data, callers render copy</td></tr>
+    <tr><td>08</td><td>The AI feature has one implementation and no seam — and the prompt carries file paths</td><td>Steps 9.1–9.2 · <code>047f9fd</code>, <code>4139fab</code> · injected LLM adapter; server path no longer sent to the model</td></tr>
+    <tr><td>09</td><td>Provider clients in two directories; two <code>similarity</code> functions; Audnexus still in the provider list</td><td>Steps 10.1–10.3 · ADR 030 · <code>5a3f4de</code>, <code>1ff01dd</code>, <code>be00cd1</code> · one home under <code>metadata/</code>; Audnexus left the title-driven interface</td></tr>
+  </table>
+  <div class="grid grid-3" style="margin-top: 8px;">
+    <div class="panel"><h3>Self-imposed rules</h3><p class="small">Test first, observed failing · one step, one commit · tree green at the end of every step · steps ordered by dependency, not severity · server phases run in a different order than the review's numbering (rule extractions before the route split).</p></div>
+    <div class="panel"><h3>ADRs before code</h3><p class="small">Steps 5.1, 7.9 and 10.3 each stopped at “Decision needed” until ADR 028, 029 and 030 were written. Implementing first and ADR-ing after is how ADR 009's drift happened.</p></div>
+    <div class="panel"><h3>Out of scope, explicitly</h3><p class="small">No rewrite of App.tsx/app.ts (2,000 lines can't be reviewed) · no response-shape changes (the phone ships a version behind) · no framework changes · the <code>derived</code> precedence layer stays unbuilt (ADR 009 unresolved, on purpose).</p></div>
+  </div>
+  <div class="panel" style="margin-top: 10px;"><p class="small"><b>Why the plan is ordered by dependency, not severity.</b> Phase 7 (the route split) works by moving <code>app.ts</code> apart. The two rule extractions it would otherwise scatter — the precedence resolver (phase 5) and the personal-data list (phase 6) — land first, so the split moves already-consolidated code. Phase 6 then unblocks the GDPR guard; phase 7.9 needs a decision that gates the whole admin story. Every ordering choice in the table is there for a reason like this — severity would have done security first and produced a worse plan.</p></div>
+  <div class="footer-note"><span>specs/37-architecture-deepening.md · Appendix A maps each finding 1–29 to its fixing step · progress tracker names opencode as claimant on every row</span></div>
+</section>
+
+<!-- 15. SPEC 37 / CANDIDATE 01 -->
+<section class="slide" id="s15">
+  <div class="navtag">15 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 9 · candidate 01</span><span class="no">the client request interface</span></div>
+  <h2>One way to ask,<br>five things it always does</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit-tall" src="assets/request-interface.svg" alt="Before: many private request helpers with different guarantees. After: lib/request.ts with five guarantees, an admin sibling module, and a shared deadline module."><figcaption><b>Candidate 01, before and after</b> — drawn from spec 37 phases 0–1 and the notes in its step 1.2/1.5 (including the double-encoded-body bug the typecheck gate caught).</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>Why the review cared</h3><p class="small">The safety of a request depended on call-site discipline plus a global monkey-patch of <code>window.fetch</code> installed before anything ran. A module was correct only because something else had run first.</p></div>
+    <div class="panel"><h3>What the steps actually did</h3><p class="small">1.1 named and tested the five guarantees · 1.2/1.3 migrated hooks, components and the admin client · the conditional-GET rule moved into the interface · 1.5 made bounded requests correct with no shim installed · 1.6 deleted the shim. <code>ProfileSwitcher</code> got its first test file.</p></div>
+    <div class="panel"><h3>What the family client still has</h3><p class="small"><code>CoverImage</code> keeps its own fetch — media URLs with tokens in the query string, blob bodies, not JSON. Deliberately out of scope, and the spec says so rather than silently folding it in.</p></div>
+  </div>
+  <div class="panel" style="margin-top: 10px;"><p class="small"><b>How to check the five guarantees yourself.</b> Two were proved by deletion — remove <code>credentials: "include"</code> and the authentication test fails; remove the timeout and the bounded test fails. The other three are pinned by construction: the profile header comes from <code>sessionHeaders()</code>, offline mode throws before any fetch happens, and the error vocabulary is <code>copy.ts</code> — the server's prose never reaches the screen. All five tests were written and observed failing before the module existed; <code>request.ts</code> imports no React and touches no DOM.</p></div>
+  <div class="footer-note"><span>d1521bb · 331f336 · 79473e6 · 287e256 · b2b3df3 · 316eedf · the double-encode bug (JSON inside JSON) was found by running tsc, not by reading — spec 37 step 1.2, note</span></div>
+</section>
+
+<!-- 16. SPEC 37 / CANDIDATE 02 -->
+<section class="slide" id="s16">
+  <div class="navtag">16 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 9 · candidate 02</span><span class="no">the live bug the review ordered first</span></div>
+  <h2>Book #7 from your<br>own server… or theirs?</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit-tall" src="assets/key-collision.svg" alt="Before: server A and server B both write progress row 7, overwriting each other. After: the key carries the server id and the collision is impossible."><figcaption><b>The one defect on the page that could lose real listening positions</b> — drawn from spec 37 steps 2.1–2.2 and its notes; landed in <code>cee4ba2</code>. The review called this its top recommendation.</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>Why it was live, not theoretical</h3><p class="small">Spec 30 shipped the union-of-shelves device library in October — after it landed, every phone with two servers had two book #7s, and they raced. The bug shipped in a released shape; the review found it by following the key format, not by user report.</p></div>
+    <div class="panel"><h3>The fix, and the refusal</h3><p class="small">One key format: <code>replicaBookKey(serverId, bookId)</code>, shared with the replica. Legacy bare-id rows are read as a fallback but never copied forward — a legacy row doesn't say which server it's from, and guessing would recreate the bug with extra steps.</p></div>
+    <div class="panel"><h3>The proof</h3><p class="small">Step 2.1's test was observed failing first — and it failed twice, at runtime and at <code>tsc</code> (<code>Expected 2-3 arguments, got 4</code>). Step 2.2 turned it green without touching anything else. That red was the review working as designed.</p></div>
+  </div>
+  <div class="panel" style="margin-top: 10px;"><p class="small"><b>Reproduce it in two minutes.</b> Check out the commit before step 2.1 (<code>git log --oneline -- client/src/local/privateCache.test.ts</code>), run <code>npm test -- privateCache</code> in <code>client/</code> and watch the new test fail — the second write for book #7 overwrites the first because both use the bare id. Then check out <code>cee4ba2</code> and watch it pass. The sibling fix for favourites (per-server keys, same function family) is the same shape — one key, one home, one test.</p></div>
+  <div class="footer-note"><span>CEE4BA2 · spec 30 (specs/30-offline-library-per-server.md) · the same collision was fixed for favourites (X.1) and for the audio file paths — spec 41 card 1, next stage</span></div>
+</section>
+
+<!-- 17. SPEC 37 / SEAM -->
+<section class="slide" id="s17">
+  <div class="navtag">17 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 9 · candidates 02b + 03</span><span class="no">two shelves, one shape</span></div>
+  <h2>Two libraries,<br>one interface</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit-tall" src="assets/library-source-seam.svg" alt="The LibrarySource interface with two adapters — the server shelf and the device shelf — feeding one mergeShelves call."><figcaption><b>Candidate 02 part 2 + candidate 03</b> — drawn from spec 37 steps 3.1–3.3 (<code>70a7972</code>, merged <code>f024c6b</code>). App.tsx's hand-written merge and inline key format are gone.</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>What the review saw</h3><p class="small">Two implementations of one concept — the server shelf and the device shelf — with no shared interface, merged by hand in App.tsx:404–414. Two adapters exist; the seam was “fake” until the interface was real.</p></div>
+    <div class="panel"><h3>What changed</h3><p class="small"><code>local/librarySource.ts</code>: the interface + <code>mergeShelves</code>. Both hooks satisfy it; <code>useDeviceLibrary</code> got its first test file (seven operations); App.test.tsx exists with the two shelf modes pinned.</p></div>
+    <div class="panel"><h3>What it deliberately didn't do</h3><p class="small">No rewrite of the hooks; no new state library; the merge rule is three lines and one key function. The interface was the missing piece, not the logic.</p></div>
+  </div>
+  <div class="panel" style="margin-top: 10px;"><p class="small"><b>The merge rule, exactly as specified.</b> <code>mergeShelves(sources, offline)</code>: the server copy wins a key collision · the device shelf survives for servers the phone cannot reach · when the server answers, the device shelf drops out of the merge. The merge uses <code>replicaBookKey</code> and nothing else — one key format, no inline spellings; the two hooks and <code>App.tsx</code> were each stripped of their private copies (<code>caa5484</code>, <code>316eedf</code>). ServerLibrary.tsx lost props with it — the interface is the contract, not the prop drilling.</p></div>
+  <div class="footer-note"><span>70a7972 · 649b7fc (App-level pin) · caa5484 · App.tsx: 1,134 lines with 20 useState and 13 useEffect at review time — the extraction targets, not a rewrite mandate</span></div>
+</section>
+
+<!-- 18. SPEC 37 / SERVER SPLIT -->
+<section class="slide" id="s18">
+  <div class="navtag">18 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 9 · candidates 04 + 05 + 06</span><span class="no">the server side of the review</span></div>
+  <h2>Three server seams,<br>one pattern each</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit-sm" src="assets/route-split.svg" alt="Before: one buildApp function containing the composition root, auth gate, error handler and 64 handlers. After: route modules under server/src/routes, schemas everywhere, an admin proxy limited to the demo."><figcaption><b>Candidate 04 — the route table</b> — drawn from spec 37 steps 7.1–7.9. The route list was frozen as a test <i>before</i> the move, so “behaviour preserved” is demonstrable, not hoped.</figcaption></figure>
+  <div class="grid grid-2" style="margin-top: 10px;">
+    <figure><img class="diagram" src="assets/precedence-chain.svg" alt="The precedence chain: user override, then enriched, then embedded, with derived reserved. ADR 028."><figcaption><b>Candidate 05 — who wins (ADR 028)</b> — spec 37 steps 5.1–5.2. The dead module became the authority; call-site copies deleted.</figcaption></figure>
+    <figure><img class="diagram" src="assets/personal-data-list.svg" alt="One gdpr/personal-data.ts module feeding the export route, the erasure route and the retention purge, with a schema-guard test."><figcaption><b>Candidate 06 — one list (spec 37 steps 6.1–6.2)</b> — the export, erasure and purge now read one module; a guard test fails the build on drift.</figcaption></figure>
+  </div>
+  <div class="footer-note"><span>8e10d36…6baa4ad · fe0a8cc · c85fa15 · bca51d0 · ADR 028 · ADR 029 (step 7.9: the demo's admin proxy exists only where it was designed to) · ADR 030 (step 10.3: Audnexus out of the provider list)</span></div>
+</section>
+
+<!-- 19. SPEC 37 / CLOSE-OUT -->
+<section class="slide" id="s19">
+  <div class="navtag">19 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 9 · close-out, honestly</span><span class="no">what the spec admits</span></div>
+  <h2>What the plan said,<br>and what happened</h2>
+  <div class="cols cols-2">
+    <div class="panel warn">
+      <h3>What the spec itself admits</h3>
+      <ul>
+        <li>The acceptance checkboxes were never ticked as work landed; the header was rewritten 2026-11-13 rather than risk a stale tracker being believed.</li>
+        <li>Two latent offline bugs surfaced during the partial extraction — the unlock screen was unreachable, and a cache-check wait fell through to the shell. Both fixed in <code>c78f975</code>.</li>
+        <li>E2E was not run for the reconciliation; the six unticked boxes are annotated as E2E-gated or unverified, not done.</li>
+        <li>Step 1.5's premise was wrong as written (~30 call sites still needed the shim) and was rewritten to do the part that was actually true — the shim was deleted in 1.6.</li>
+        <li>The <code>derived</code> precedence layer (ADR 009) was never implemented; ADR 028 records the decision instead.</li>
+      </ul>
+    </div>
+    <div class="panel good">
+      <h3>What the close-out records</h3>
+      <ul>
+        <li>Every phase landed on master; merged as <code>f024c6b</code> (2026-11-13), bringing candidates 1–5 and 9 plus the spec's reconciliation and <code>GLOSSARY.md</code>.</li>
+        <li>Test-first held everywhere it was tried: the key-collision test failed for the right reason twice (runtime + tsc); the schema-guard test found <code>webAuthnChallenge</code> missing from the export; the route table was frozen before the split.</li>
+        <li>The review report itself was never committed; the spec, the commits and the ADRs are the record.</li>
+        <li>Verified against the working tree 2026-11-17 — this is a spec that can be checked, not believed.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>The one-line lesson</h3><p class="small">A review that produces an ordered, honest, test-first plan is worth more than a review that produces a verdict.</p></div>
+    <div class="panel"><h3>What to check yourself</h3><p class="small"><code>git show f024c6b</code> for the merge; <code>git log --grep "spec 37"</code> for the ~60 step commits; <code>specs/37-architecture-deepening.md</code> header for the honest status block.</p></div>
+    <div class="panel"><h3>What it cost</h3><p class="small">Three calendar days (Nov 11–13) plus the review day. Scope stayed: no framework, no response shapes, no rewrites.</p></div>
+  </div>
+  <div class="panel" style="margin-top: 6px;"><p class="small"><b>Audit the spec the way it audited the code.</b> Every claim on this slide and the previous four corresponds to a diff you can read, a test you can run, or a header the spec rewrote when it caught itself lying. Nothing here is believed on authority — that is the point of writing the status block that way, and it is why this deck quotes the header rather than the checkboxes.</p></div>
+  <div class="footer-note"><span>specs/37-architecture-deepening.md · f024c6b · the 2026-11-11 review is the reason the codebase went from “works” to “checkable”</span></div>
+</section>
+
+<!-- 20. STAGE 10 -->
+<section class="slide" id="s20">
+  <div class="navtag">20 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 10 · Nov 12–13</span><span class="no">three additions, one week</span></div>
+  <h2>Kids,<br>an honest OAuth path,<br>and a media proxy</h2>
+  <div class="grid grid-2">
+    <figure><img class="diagram" src="assets/kids-ladder.svg" alt="The age ladder per child account, one server-side visibility predicate used by every book surface, and the same filtering in the offline replica."><figcaption><b>Kids accounts (spec 38)</b> — 2026-11-12. Bands, not birthdates; one predicate; a hidden book answers 404. Provider age guesses are suggestions; an admin always wins.</figcaption></figure>
+    <figure><img class="diagram" src="assets/media-proxy.svg" alt="How the Android app plays media over plain HTTP: an origin-local _media URL intercepted by a native layer that allowlists two route shapes and forwards only the Range header."><figcaption><b>Native media proxy (ADR 031)</b> — 2026-11-12. The WebView's mixed-content rule meant &lt;audio&gt; over plain HTTP LAN died instantly. The fix stays inside the app's own origin.</figcaption></figure>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>Native OAuth (spec 32)</h3><p class="small">Google blocks sign-in inside embedded WebViews, so the Android handoff goes through a system browser tab with a one-time, 60-second code. The deep link carries no token; the session is minted at exchange, by the same call as password sign-in.</p></div>
+    <div class="panel"><h3>Check-price links (spec 39)</h3><p class="small">Buy links are built from a store registry, never show a stored price as current, and hide from child accounts by the same visibility predicate as books (<code>local/kids.ts</code>, later swept in spec 41).</p></div>
+    <div class="panel"><h3>What these share</h3><p class="small">Three doors opened without widening the house: a child's view, a sign-in handoff, a media pipe. Each got its own ADR and its own verification; none loosened an existing rule.</p></div>
+  </div>
+  <div class="panel" style="margin-top: 12px;"><p class="small"><b>Why these three.</b> Of the week's four doors, these three were the ones where the app's promise (“usable by your household, offline, and safe for children”) bent but didn't break. Kids accounts close an Art. 8 GDPR gap with enforcement on every surface, not a UI filter. The media proxy keeps the offline promise playable on plain-HTTP LANs. Native OAuth lets Google sign-in survive a platform that blocks embedded web views — with the smallest possible token footprint (one 60-second, single-use code, exchanged server-side, minted once).</p></div>
+  <div class="footer-note"><span>aa91bbf…6bf608f (kids) · de1bad2…656e58f (OAuth) · 9ab2af3…8205ad9 (media proxy) · 6ff4313…bd27010 (external providers) · ADRs 031–034, 036</span></div>
+</section>
+
+<!-- 21. THE 2026-11-15 AUDIT -->
+<section class="slide" id="s21">
+  <div class="navtag">21 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 11 · the 2026-11-15 audit</span><span class="no">spec 41 — nine cards, ten phases</span></div>
+  <h2>The audit<br>that found the shape again</h2>
+  <div class="cols cols-2r">
+    <div class="panel">
+      <h3>Method, again</h3>
+      <p class="small">Fresh-context review of the tree after spec 37 and the aero merge. Report: <code>architecture-review-2026-11-15-1154.html</code> — kept in <code>%TEMP%</code>, never committed; the findings became spec 41 on the same day.</p>
+      <h3 style="margin-top: 8px;">The nine cards</h3>
+      <table class="cmp" style="margin-top: 4px; font-size: 9px;">
+        <tr><th>Card</th><th>Holding</th></tr>
+        <tr><td>1</td><td><b>Live data bug</b> — offline audio keyed by bare book id; per-server directory fix (next slide)</td></tr>
+        <tr><td>2</td><td>Buy links built outside the store registry — <code>buildBuyLinks</code> now composes it; no URL written twice</td></tr>
+        <tr><td>3</td><td>Age ladder asserted twice — one shared fixture both suites read; fail-closed became contractual</td></tr>
+        <tr><td>4</td><td>Kids buy surfaces decided ad-hoc — one predicate (<code>local/kids.ts</code>); a render sweep proves every surface obeys it</td></tr>
+        <tr><td>5</td><td>GDPR erase/export/guard from three hand-kept lists — now generated from one declarative <code>PERSONAL_DATA_ROWS</code> table</td></tr>
+        <tr><td>6</td><td>Refresh coalescer copied per hook — one shared run in <code>lib/coalesceRefresh</code></td></tr>
+        <tr><td>7</td><td>Shelf refresh did N decrypts for N books — one bulk read + bounded-parallel decrypts</td></tr>
+        <tr><td>8</td><td><code>AccountGate</code> untestable — split into surfaces + useAccountGate state machine</td></tr>
+        <tr><td>9</td><td>Small seams — shared rate limiter; one composite key; tripled line collapsed; listener wiring shared</td></tr>
+      </table>
+    </div>
+    <div class="panel good">
+      <h3>Baseline → outcome (same machine, same day)</h3>
+      <table class="cmp" style="margin-top: 4px; font-size: 9.5px;">
+        <tr><th></th><th>Before</th><th>After</th></tr>
+        <tr><td>Client tests</td><td>895</td><td>936</td></tr>
+        <tr><td>Server tests</td><td>806</td><td>827 (4 skipped)</td></tr>
+        <tr><td>Build</td><td>~26 s</td><td>~13 s</td></tr>
+        <tr><td>App chunk</td><td>279.8 KB</td><td>283.3 KB (+3.5, budgets met)</td></tr>
+        <tr><td>npm audit</td><td>—</td><td>high-severity clean; client 4 low (build toolchain)</td></tr>
+      </table>
+      <h3 style="margin-top: 8px;">Four of the nine cards were the spec-37 shape, recurred</h3>
+      <p class="small">Tested pure module, callers with their own copies: buy links vs the registry, the age ladder, the kids buy surfaces, the refresh coalescer. The 2026-11-15 audit is the proof that deepening work decays without guards — which is why the fixes shipped as fixtures, sweeps and one module each, not as exhortations.</p>
+      <p class="small" style="margin-top: 8px;">Card 1 completes ADR 020 / spec 30 rather than reopening it. No decision in <code>decisions/</code> was contradicted.</p>
+    </div>
+  </div>
+  <div class="grid grid-2" style="margin-top: 10px;">
+    <div class="panel"><h3>The aero merge, for completeness</h3><p class="small">The same week, the design-lab's “aero” line (v1–v4 passes) merged to master (<code>8476aa2</code> design-lab line → <code>ad56ddd</code> master; plus the rem font-scale fix and a jsdom flake fix). Visual change only — the architecture guards (budgets, both suites, no behaviour move) held through the merge.</p></div>
+    <div class="panel"><h3>What the audit refused to do</h3><p class="small">No reopening of decisions · no response-shape changes (the phone may be a version behind) · no rewrites — Phase 8 splits AccountGate without redesigning it · no new dependencies (the one hash uses an already-client-side library) · roadmap item 41 ticked 2026-11-15 with all numbers re-measured.</p></div>
+  </div>
+  <div class="footer-note"><span>specs/41-audit-remediation.md · a151e74…959690a · merged to master · Phase 10 close-out: all numbers re-measured, roadmap item 41 ticked 2026-11-15</span></div>
+</section>
+
+<!-- 22. SPEC 41 DETAIL -->
+<section class="slide" id="s22">
+  <div class="navtag">22 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 11 · spec 41 in detail</span><span class="no">card 1 and card 6</span></div>
+  <h2>The data bug,<br>and the refresh storm</h2>
+  <div class="grid grid-2">
+    <figure><img class="diagram" src="assets/srv-clobber.svg" alt="Before: audio files shared a folder per bare book id, so two servers clobbered each other. After: per-server hashed directories; hostnames never touch disk."><figcaption><b>Card 1 — per-server audio directories</b> — <code>2e43e92</code>…<code>18f6eb8</code>. Rows and files now agree on whose copy of book #7 this is. <code>bookDir(serverId)</code> hashes the serverId — a LAN hostname never lands on disk or in a backup.</figcaption></figure>
+    <figure><img class="diagram" src="assets/coalescer.svg" alt="Before: every refresh trigger fired its own run. After: one in-flight run; other triggers join it; one bulk read with bounded-parallel decrypts."><figcaption><b>Card 6 — one refresh coalescer</b> — <code>82bc5b0</code>. Six refresh triggers used to each fire; now one run is shared. Card 7 rode with it: the shelf refresh is one bulk read + parallel decrypts (<code>0e31df5</code>).</figcaption></figure>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>Card 5 — GDPR, generated</h3><p class="small">Erasure, export and the schema guard are now generated from one declarative <code>PERSONAL_DATA_ROWS</code> table (with an erase strategy and a select per row). The guard widened to demand exactly that, so the list is complete by test, not by diligence. <code>f80d307</code>.</p></div>
+    <div class="panel"><h3>Card 8 — AccountGate split</h3><p class="small">JSX chrome over an <code>accountGate</code> surfaces component and a <code>useAccountGate</code> state machine (<code>727125c</code>). Not redesigned — split, testable, same behaviour.</p></div>
+    <div class="panel"><h3>Card 9 — small seams, swept</h3><p class="small">Buy-context rate limiting moved onto the shared bounded limiter (9.1); one spelling of the composite cover key (9.2); one <code>resolveSessionProfileId</code> (9.3); listener wiring shared between family and admin (9.4).</p></div>
+  </div>
+  <div class="panel" style="margin-top: 10px;"><p class="small"><b>Why this card deserves a whole slide.</b> The rows and the files were telling two different stories about who owns book #7: <code>&lt;serverId&gt;#&lt;bookId&gt;</code> in the replica table, <code>books/7/…</code> on the filesystem. Spec 30 decided the row key; nobody carried the decision down to the files — the audit caught the half-finished decision two releases later, because it walked the tree from the disk upwards instead of trusting the spec to have been implemented fully.</p></div>
+  <div class="footer-note"><span>specs/41-audit-remediation.md steps 1.1–9.4 · Phase 1's commit shape was constraint-forced (noted in spec) · Phase 3's fixture lives in test-fixtures/ because root test/ is gitignored</span></div>
+</section>
+
+<!-- 23. THE 2026-11-16 RE-AUDIT -->
+<section class="slide" id="s23">
+  <div class="navtag">23 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 12 · the 2026-11-16 re-audit</span><span class="no">spec 42 — nine cards + one defect</span></div>
+  <h2>Ten days later,<br>the same shape returns</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit-sm" src="assets/wake-budget.svg" alt="Timeline of the wake budget: fast probe, timeout, backoff; one module shared by the Waking screen and the player's stream retry ladder."><figcaption><b>Card 1 — one wake budget</b> — <code>2248029</code>…<code>fc0d49d</code>. The week's wake/retry code existed in three incompatible forms; now FAST_PROBE_MS · WAKE_TIMEOUT_MS · WAKE_BACKOFF_MS have one home, and Retry on the Waking screen works again.</figcaption></figure>
+  <div class="grid grid-2" style="margin-top: 10px;">
+    <div class="panel"><h3>The cards (spec 42, phases 1–10)</h3><ul class="small dense">
+      <li><b>1</b> The wake budget, extracted and tested — WakingServer tested, Retry revived, ChapterPlayer composes the same module</li>
+      <li><b>2</b> The service worker never reloads mid-chapter — update reload gated on idle playback; precached-shell first-visit-offline pinned honestly</li>
+      <li><b>3</b> GDPR self-service works in the household deployment — <code>x-profile-id</code> via requestRaw; <code>boundedFetch</code>-bypass class closed <i>by construction</i>, not discipline</li>
+      <li><b>4</b> <code>/privacy</code> renders in every state — online, waking, precached-shell-offline; pinned by a parity test (and a 9.93 kB lazy chunk)</li>
+      <li><b>5</b> The spec-of-record catches up — specs 29/30 and ADR 020 document the <code>srv-&lt;hash&gt;/</code> file layer</li>
+      <li><b>6</b> The coalescer mints per profile generation — a profile switch retires the old run; a late batch lands nowhere</li>
+      <li><b>7</b> One shelf-scope spelling at every site, pinned by one helper — <code>shelfScopeOf</code></li>
+      <li><b>8</b> <code>ui/primitives.tsx</code> pruned and tested — three dead exports gone; the absorbing surfaces got direct contracts; shellTint gone</li>
+      <li><b>9</b> Family and admin listeners share the seam honestly — broken dist refuses to serve, like admin; admin status no longer advertises a CORS allow-list it doesn't enforce</li>
+      <li><b>10</b> Demo-vs-household predicate joins one home — <code>isDemoExperience</code>, JSON-boundary-checked</li>
+    </ul></div>
+    <div class="panel good">
+      <h3>Close-out (2026-11-16, as measured)</h3>
+      <ul class="small dense">
+        <li>Server suite 828 passed / 4 skipped; client 989/989 across 94 files.</li>
+        <li>App chunk 289.68 kB (gzip 87.34) vs baseline 289.70 — the spec 42 phases added no net weight to the hot chunk; <code>/privacy</code> ships as its own 9.93 kB precached lazy chunk.</li>
+        <li><code>npm audit --audit-level=high</code> clean (server); client 4 low, all in the build toolchain; not taken (breaking downgrade).</li>
+        <li>Known flakes documented, not hidden: scanner.integration.test.ts load timeout; Settings.test.tsx / PasskeySettings.test.tsx under full-suite load — both pass in isolation; LIMITATIONS §5.</li>
+        <li>One process note the spec keeps: <code>8ebf932</code> was pushed red (<code>tsc -b</code> error — vitest does not typecheck); fixed in <code>3126529</code> within the hour; HEAD verified green end to end.</li>
+        <li>Production <code>/privacy</code> with the server cold or waking was left as the deployer's final smoke test — named, not claimed.</li>
+      </ul>
+      <p class="small" style="margin-top: 8px;">Method and report: <code>architecture-review-2026-11-16-1147.html</code> (fresh-context explore), kept in <code>%TEMP%</code>; findings became spec 42 the same day.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>specs/42-re-audit-remediation.md · abfb1fa…c432bae · merged to master · phases 1, 3/4, 5, 8 independent; 4 interacted with 1/2 by design</span></div>
+</section>
+
+<!-- 24. SPEC 42 DETAIL -->
+<section class="slide" id="s24">
+  <div class="navtag">24 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 12 · spec 42 in detail</span><span class="no">the GDPR hole nobody noticed</span></div>
+  <h2>Self-service that<br>silently didn't work</h2>
+  <div class="cols cols-2">
+    <div class="panel warn">
+      <h3>The hole</h3>
+      <p class="small">In the household deployment, <code>/api/me/export</code>, self-erasure and the Art. 16 PATCH didn't work — the client never sent <code>x-profile-id</code>, so the server couldn't tell which resident asked. Nobody noticed because the demo experience (account-based) worked fine, and the household path had no test.</p>
+      <h3 style="margin-top: 8px;">The class, not just the instance</h3>
+      <p class="small">The spec's phrase is exact: <code>boundedFetch</code>-bypass, closed <i>by construction</i> — every personal-data route now goes through the one request interface (<code>requestRaw</code>), and a <code>noBypassFetch</code> sweep test fails the build on orphans. Not "be careful" — impossible to do again.</p>
+    </div>
+    <div class="panel">
+      <h3>The other three, in one line each</h3>
+      <ul class="small">
+        <li><b><code>/privacy</code> blank page on the production demo</b> — compression ate the document and the CSP refused the provider covers; now served by the server document when reachable, the in-app route when not, precached and tested (<code>cd8b94a</code>).</li>
+        <li><b>Family listener 500s on a missing dist</b> — a deploy without <code>client/dist</code> crashed every route; now the listener registers nothing and answers like admin does, honestly labelled (<code>146ea6a</code>).</li>
+        <li><b>The Waking screen lied</b> — Retry enqueued a probe that could never run because the in-flight probe held the gate; forced re-probe now cancels the parked one (<code>bd9fd42</code>).</li>
+      </ul>
+      <h3 style="margin-top: 8px;">Spec 45 rode the same day (2026-11-17)</h3>
+      <p class="small">The next re-audit found the week's fixes had their own failure shape — empty-dump backups, name-based SQL redaction, demo deploys without migrations. Next stage.</p>
+    </div>
+  </div>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>Why nobody noticed</h3><p class="small">The demo deploys exercise account sign-in daily; the household deployment has no automated self-service test at all. The failure was invisible from both directions — too quiet for users, too niche for the suite.</p></div>
+    <div class="panel"><h3>The class it belonged to</h3><p class="small"><code>boundedFetch</code> exists as an escape hatch for deadlines; several call sites used it to skip the request interface entirely. The spec narrowed the blast radius honestly: only routes carrying personal data or session state had to move (<code>ProfileGate</code>, <code>ProfileRegistration</code>, <code>DeviceUnlockSettings</code>, <code>SessionSettings</code>, <code>passkeys</code>, <code>useAccountGate</code>); plain probes like <code>/api/health</code> and <code>/api/config</code> legitimately stay. The sweep test pins the class shut.</p></div>
+    <div class="panel"><h3>The rule it produced</h3><p class="small">Personal-data routes go through <code>requestRaw</code> or they don't ship. The sweep test fails the build on orphans. GDPR self-service is not a feature with a path; it is a guarantee with a gate.</p></div>
+  </div>
+  <div class="footer-note"><span>58ddb6b · 9a91c4e · 287ec2c · 146ea6a · bd9fd42 · specs/42 phases 3, 4, 9, 1 · the household GDPR path was fixed the day before the demo's privacy page was</span></div>
+</section>
+
+<!-- 25. SECURITY REMEDIATION DETAIL -->
+<section class="slide" id="s25">
+  <div class="navtag">25 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 12 · the 2026-11-16 security remediation</span><span class="no">phases 1–4, and the evening pass</span></div>
+  <h2>One audit,<br>executed in phases</h2>
+  <div class="cols cols-2r">
+    <div class="panel">
+      <h3>From the audit's phases (docs/security-remediation-plan-2026-11-16.md)</h3>
+      <table class="cmp" style="font-size: 9px; margin-top: 4px;">
+        <tr><th>Phase</th><th>Items (headline)</th></tr>
+        <tr><td><span class="tag high">Phase 1 — HIGH</span></td><td>SSRF cover download (per-hop validation, DNS check, byte cap, magic bytes) · admin cookie Secure · admin listener binds 127.0.0.1 by default · family cookie SameSite=Lax · helmet everywhere with a real CSP</td></tr>
+        <tr><td><span class="tag med">Phase 2 — MEDIUM</span></td><td>Enrichment gate (child→403, force-gate, canReadMediaItem) · GDPR export completeness · SQL console blocklist expansion (pg_terminate_backend, set_config, dblink…) · child→member role mapping propagated at all sites</td></tr>
+        <tr><td><span class="tag low">Phase 3 — LOW</span></td><td>Trust-proxy and x-forwarded-* handling · OAuth/Discover hardening · client-side href/scheme checks, referrer policy, prod console stripped · Supabase downloads under a byte cap</td></tr>
+        <tr><td><span class="tag low">Phase 4 — accepted</span></td><td>Documented, not code: Caddy admin lockdown, accepted-risk register (R1–R4), production HTTPS guide — the things that are deployment, not source</td></tr>
+      </table>
+      <p class="small" style="margin-top: 8px;">And the evening production-readiness pass closed the remainder: transactional scanner delete/recreate + WAL; refusal of destructive reconciliation on a suspicious walk; OAuth open sign-up gated demo-only server-side; admin password reset now deletes target passkeys; passkey lockout made atomic; real <code>SECURITY.md</code> finally filed.</p>
+    </div>
+    <figure><img class="diagram" src="assets/ssrf-guard.svg" alt="The cover download path with every untrusted-input check: normalize, host validation, DNS check, bounded redirects, byte cap, content-type and magic-byte verification."><figcaption><b>The HIGH finding in full</b> — drawn from the plan's Phase 1 item 1 and <code>8b9b445</code> (+296 lines incl. tests). Every hop re-validated; the body is never buffered whole.</figcaption></figure>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>Count, honestly</h3><p class="small">Four HIGH, a MEDIUM tranche (enrichment gate, GDPR completeness, SQL console blocklist, role mapping), LOW/hygiene items, one accepted-risk phase. The plan rated only the code-fixable items as “fix now”; Phase 4 records what was deliberately not code — deployment hardening, not source. Roughly twenty commits in one day, each with a failing-first test where the behaviour was observable.</p></div>
+    <div class="panel"><h3>The through-line</h3><p class="small">Every fix answers “who may ask, from where, with what shape, and how much may they take?” — auth, network, payload, rate. No finding was about cleverness; they were all about doors left ajar.</p></div>
+    <div class="panel"><h3>Residual risk</h3><p class="small">Named in <code>docs/risk-register.md</code>: R1 no monitoring (host failure found manually) · R2 same-site backup only · R3 <code>SameSite=Lax</code> without double-submit tokens (LAN-trusted household) · R4 the demo is a public beta, not a staffed service. Each has a control, a rationale and a review date (2027-05-16). Not fixed quietly; not forgotten.</p></div>
+  </div>
+  <div class="footer-note"><span>b28bdbf (plan) → 8b9b445 → 53c64fb → 9249929 → 48b243c → 10a57d5 → ffa4464 → 1ab9b63 → df535d9 → 78370b8 → bb4eb21 → ed326d5 → 6546f2a → f8a85b9 → 0ec23c7 → 0e45c44 · 4f960bb … every HIGH had a failing-first test</span></div>
+</section>
+
+<!-- 26. STAGE 13 -->
+<section class="slide" id="s26">
+  <div class="navtag">26 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 13 · Nov 16</span><span class="no">production readiness (specs 43–44)</span></div>
+  <h2>Boring things,<br>done on purpose</h2>
+  <figure style="margin-top: 6px;"><img class="diagram fit" src="assets/backup-flow.svg" alt="Weekly pg_dump, encrypted with age, stored same-site, with pruning only after a verified write — and the hole spec 45 phase 1 fixed."><figcaption><b>The only irreplaceable state, looked after</b> — drawn from <code>e216fc6</code> (spec 43 phase 3) and ADR 037. Deliberately not 3-2-1: no second site exists; the restore drill is the point.</figcaption></figure>
+  <div class="grid grid-3" style="margin-top: 10px;">
+    <div class="panel"><h3>Operations</h3><p class="small">Weekly encrypted same-site dumps · a restore drill (<code>docs/drills.md</code>) · a Render blueprint for the demo (<code>render.yaml</code>) · a five-minute rollback runbook · a smoke script · an eslint gate with react-hooks as errors, in CI.</p></div>
+    <div class="panel"><h3>The honest scope</h3><p class="small">A household release line, not an SRE programme. No SLOs, no monitoring stack — accepted risk R1 in the risk register. The v0.2.0 tag waits for two verified dumps and a drill; it is deliberately untagged.</p></div>
+    <div class="panel"><h3>Spec 44 — offline progress</h3><p class="small">After playing offline, reconnecting pushed nothing back — the next online refresh could overwrite the cache. Now newer cached positions push on reconnect; ties and unparseable values go the server's way. Client clocks are never trusted.</p></div>
+  </div>
+  <div class="footer-note"><span>ca856bc…63af220 · a4116d4 (spec 44) · ADR 037 · specs/43 · specs/44 · docs/backup-restore.md · docs/drills.md · e216fc6 + c3cb897 (Render blueprint)</span></div>
+</section>
+
+<!-- 27. STAGE 14 -->
+<section class="slide" id="s27">
+  <div class="navtag">27 / 33</div>
+  <div class="kicker"><span class="eyebrow">Stage 14 · Nov 17</span><span class="no">spec 45 — claims vs tree</span></div>
+  <h2>The last re-audit,<br>and the paperwork</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>Spec 45 — what the Nov 17 re-audit found</h3>
+      <ul class="small">
+        <li><b>The weekly backup could silently succeed on an empty dump</b> — no <code>pipefail</code> meant a dead database still produced a valid-looking file, and retention would then delete the newest good one. Now: refuses to write, prunes only after a verified write (<code>64a9932</code>).</li>
+        <li>SQL console redaction was by <i>name</i>; now it strips bcrypt- and argon2-shaped <i>values</i> under any alias (<code>b71f43e</code>).</li>
+        <li>The demo deployed before migrations ran — reversed; <code>NODE_VERSION</code> pinned to 24 (<code>e902622</code>).</li>
+        <li>Honest retention everywhere: seven newest, ≈49 days, one story — ADR 037 addendum (<code>544bc09</code>).</li>
+        <li>busy_timeout over-claim corrected in writing — Prisma has no knob; WAL + short transactions are the control; spec 43 amended (<code>58333ac</code>).</li>
+        <li>Passkey lockout answers 429 with the <code>Retry-After</code> the spec promised, pinned by test (<code>14ccde1</code>) · em-dashes corrupted by refactors restored (<code>50d8dee</code>) · every suppression needs a reason and is CI-gated (<code>4017fe5</code>) · offline→online push seam pinned (<code>9f54ade</code>).</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>And then the documentation — 5d67e0f</h3>
+      <p class="small">49 files, +2010/−175: every document reconciled against the code. New: <code>BRIEF.md</code> (the non-technical signpost), <code>docs/diagrams/architecture.svg</code> (next slide), <code>docs/diagrams/api.svg</code> (generated from live route schemas), <code>.env.example</code> rewritten.</p>
+      <h3 style="margin-top: 10px;">After the submission build</h3>
+      <p class="small">Later Nov 17 commits (<code>54bff74</code> this deck's sibling, <code>5ac4290</code>, <code>e17df55</code>, <code>5683adb</code>, <code>605d391</code>) fixed post-submission issues — admin table columns on Postgres, Supavisor-incompatible boot seeds, enrichment fallbacks. The submission build is <code>5d67e0f</code>; master is further along.</p>
+      <h3 style="margin-top: 10px;">Spec 45 close-out</h3>
+      <p class="small"><code>95b9159</code> · roadmap item 45 done 2026-11-17 · the named-and-accepted items stay accepted (no CSP report-to; unordered first-1000 cap; console side-effect edges; over-strip of future columns).</p>
+    </div>
+  </div>
+  <div class="grid grid-3" style="margin-top: 12px;">
+    <div class="panel"><h3>What “claims vs tree” means</h3><p class="small">Spec 45's audit compared the documents to the repository, not to intentions: every claim in ROADMAP, the ADRs and the specs was checked against the tree they described. The gaps it found are the gaps documented here — no more, no less.</p></div>
+    <div class="panel"><h3>The recurring motif</h3><p class="small">All three re-audits (spec 41 → 42 → 45) found the same shape in newer work — the week's own fixes had the failure mode of the week's own fixes. Maturity isn't the absence of the defect; it's a gate that catches it within days.</p></div>
+    <div class="panel"><h3>Where v0.2.0 actually stands</h3><p class="small">Tagged: no. Waiting on: two verified weekly dumps and one restore drill — not on code. The camera is pointed at the process, on purpose.</p></div>
+  </div>
+  <div class="footer-note"><span>3893757…95b9159 · 5d67e0f · specs/45-production-readiness-remediation.md · explicitly a “claims vs tree” audit — documents audited against the code</span></div>
+</section>
+
+<!-- 28. CURRENT ARCHITECTURE -->
+<section class="slide" id="s28">
+  <div class="navtag">28 / 33</div>
+  <div class="kicker"><span class="eyebrow">Current · Nov 17</span><span class="no">master — the system as it ships</span></div>
+  <h2>The architecture<br>as committed</h2>
+  <figure style="margin-top: 6px; flex: 1; min-height: 0;"><img class="diagram" style="max-height: 68vh; object-fit: contain; margin: 0 auto;" src="assets/current-architecture.svg" alt="The current architecture: web PWA and Android Capacitor client, household LAN deployment behind Caddy, public demo on Render with Supabase, one Node.js server with a family listener on 3000 and an admin listener on 3100, PostgreSQL database, read-only media, optional external services."><figcaption><b><code>docs/diagrams/architecture.svg</code>, reproduced unchanged</b> — added in <code>5d67e0f</code>. High-level; the per-route reference is <code>docs/diagrams/api.svg</code> (generated by <code>scripts/generate-api-diagram.cjs</code> from live route schemas).</figcaption></figure>
+  <div class="footer-note"><span>Reproduced, not redrawn · two surfaces (web PWA, Android) · two deployments (household LAN, hosted demo) · one codebase · one database family · every external service optional</span></div>
+</section>
+
+<!-- 29. REDESIGNS COMPARED -->
+<section class="slide" id="s29">
+  <div class="navtag">29 / 33</div>
+  <div class="kicker"><span class="eyebrow">The redesigns</span><span class="no">what moved, what stayed</span></div>
+  <h2>Every structural change,<br>and its rule</h2>
+  <table class="cmp" style="margin-top: 6px; font-size: 9.5px;">
+    <tr><th>When</th><th>Change</th><th>What moved</th><th>What stayed</th></tr>
+    <tr><td>Oct 2</td><td>Scanner consolidation (ADR 005)</td><td>One scanner; pure helpers extracted + tested</td><td>The scan flow, the data, the UI</td></tr>
+    <tr><td>Oct 2</td><td>Single container (5ebc03a)</td><td>Static client serving into Fastify; <code>docker-compose.prod.yml</code>; read-only media mount</td><td>Both apps' code — only how they ship</td></tr>
+    <tr><td>Oct 29</td><td>Dual database (ADR 019)</td><td>Production history → PostgreSQL; SQLite twin generated for dev/CI; drift test</td><td>The model; every query; the household install</td></tr>
+    <tr><td>Nov 2</td><td>Second listener (ADR 022)</td><td>Admin panel on :3100, own password/session, loopback-only</td><td>One process, one Prisma client, one scanner</td></tr>
+    <tr><td>Nov 10</td><td>RLS deny-all (ADR 026)</td><td>Permissions inside Supabase; regression test in the suite</td><td>Every app query — owner role bypasses RLS</td></tr>
+    <tr><td>Nov 11–13</td><td>Spec 37 — the deepening</td><td>Route modules; one request interface; one rule per module; demo-only admin proxy (ADR 029); personal-data module; provider home (ADR 030); precedence resolver (ADR 028)</td><td><code>app.ts</code>/<code>App.tsx</code> wholesale; the API contract; the frameworks; behaviour, by test-first</td></tr>
+    <tr><td>Nov 15</td><td>Spec 41 — the audit</td><td>Per-server audio directories; GDPR executors generated from one table; one coalescer; one kids predicate</td><td>Every public contract; budgets re-met; no reopens of decisions</td></tr>
+    <tr><td>Nov 16</td><td>Spec 42 — the re-audit</td><td>Wake budget module; household GDPR self-service via requestRaw; /privacy parity; generations per profile; envelope primitives tested</td><td>The waking design itself; auth/session/crypto; all out-of-scope by contract</td></tr>
+    <tr><td>Nov 17</td><td>Spec 45 — claims vs tree</td><td>Backup emptiness guard; value-shaped redaction; migration-before-start; CI suppression gate; prose fixes</td><td>Everything named and accepted stays accepted — visibly</td></tr>
+  </table>
+  <p class="small" style="margin-top: 8px;">The pattern: each change moved code or permissions into one well-guarded place and left everything else standing. The three review cycles (37 → 41 → 42) each re-found the same defect shape in newer code — and each time the response was to turn the finding into a fixture, a sweep or a gate, not a resolution to be tidier next time.</p>
+  <div class="panel" style="margin-top: 10px;"><p class="small"><b>Where to read the deep detail in this deck.</b> Spec 37 (the deepening): slides 13–19 — the review itself, the plan, candidate 01 (client request interface), candidate 02 (the live key collision), candidates 02b/03 (the library seam), candidates 04/05/06 (route split, precedence, personal data), and the honest close-out. Spec 41 (the 2026-11-15 audit): slides 21–22 — the nine cards, the live per-server audio bug, the refresh coalescer, generated GDPR executors. Spec 42 (the 2026-11-16 re-audit): slides 23–24 — the wake budget, the household GDPR self-service hole, <code>/privacy</code>. The 2026-11-16 security remediation: slides 25 and 30. Spec 45 (the claims-vs-tree pass): slide 27. The consequences of doing nothing about each finding live in <code>LIMITATIONS.md</code>.</p></div>
+  <div class="footer-note"><span>ADRs 005 · 019 · 022 · 026 · 028 · 029 · 030 · specs 37 · 41 · 42 · 45 — the whole architecture story is these eleven rows</span></div>
+</section>
+
+<!-- 30. SECURITY CHRONOLOGY -->
+<section class="slide" id="s30">
+  <div class="navtag">30 / 33</div>
+  <div class="kicker"><span class="eyebrow">Security, chronologically</span><span class="no">each patch closed a specific door</span></div>
+  <h2>What the security work<br>actually fixed</h2>
+  <table class="cmp" style="margin-top: 6px; font-size: 8.8px;">
+    <tr><th>Date</th><th>Commit(s)</th><th>The door it closed</th></tr>
+    <tr><td>Oct 2</td><td><code>4442789</code></td><td>Path traversal, unbounded ranges, raw error leaks — root confinement (<code>safePath</code>) + first automated security suite (spec 11)</td></tr>
+    <tr><td>Oct 18</td><td><code>e8844ec</code> · <code>3677276</code></td><td>Capacitor origin not allowed; WebView served over http so the LAN server is reachable — the WebView scheme incident</td></tr>
+    <tr><td>Oct 24</td><td><code>1da2444</code></td><td>Outdated, vulnerable runtime and dependencies — hardened as passkeys landed</td></tr>
+    <tr><td>Oct 29</td><td><code>05c4db5</code></td><td>Personal network details in fixtures and copy — scrubbed before any public deploy</td></tr>
+    <tr><td>Nov 4</td><td><code>49c28ad</code>…<code>7066043</code></td><td>OAuth on the public demo — nine fixes: cookie paths, PWA fallback interception, signed-out loops; open sign-up later gated demo-only (Nov 16)</td></tr>
+    <tr><td>Nov 5</td><td><code>e17e66b</code></td><td>Dependency audit findings — applied; agent artifacts ignored</td></tr>
+    <tr><td>Nov 10</td><td><code>d316f99</code></td><td>Supabase tables world-readable with the public anon key — RLS deny-all, 28 tables + sweep (ADR 026)</td></tr>
+    <tr><td>Nov 11</td><td><code>19a0106</code> · <code>7452ef7</code></td><td>Admin proxy reachable in household deploys → demo-only (ADR 029); admin SQL paging parameterized, shared readonly driver</td></tr>
+    <tr><td>Nov 12</td><td><code>de1bad2</code></td><td>OAuth handoff codes: one-time, 60-second TTL, hashed — no tokens in deep links (spec 32)</td></tr>
+    <tr><td>Nov 16</td><td><code>8b9b445</code></td><td><b>SSRF</b> in cover downloads — per-hop validation, DNS check, byte cap, magic bytes (Phase 1 HIGH #1)</td></tr>
+    <tr><td>Nov 16</td><td><code>9249929</code> · <code>53c64fb</code></td><td>No app-level security headers → helmet + CSP everywhere; admin cookie Secure; SameSite=Lax; admin binds 127.0.0.1</td></tr>
+    <tr><td>Nov 16</td><td><code>48b243c</code> · <code>ffa4464</code></td><td>Fail-open dev defaults → fail-closed in production; validation erasure unification; no path leaks in family API</td></tr>
+    <tr><td>Nov 16</td><td><code>10a57d5</code> · <code>ed326d5</code></td><td>GDPR export completeness · SQL console blocklist expanded; credential and hash columns never leave</td></tr>
+    <tr><td>Nov 16</td><td><code>bd0f05e</code> · <code>e33e6b7</code></td><td>Scanner could mass-delete on a suspicious walk — transactional replace + WAL; destructive reconciliation refused</td></tr>
+    <tr><td>Nov 16</td><td><code>6546f2a</code> · <code>f8a85b9</code> · <code>0ec23c7</code></td><td>Open OAuth sign-up → demo-only, server-side; admin reset deletes target passkeys; passkey lockout atomic</td></tr>
+    <tr><td>Nov 16</td><td><code>78370b8</code> · <code>df535d9</code></td><td>Supabase downloads under a byte cap; href/scheme checks, referrer policy, prod console stripping</td></tr>
+    <tr><td>Nov 17</td><td><code>b71f43e</code> · <code>14ccde1</code> · <code>4017fe5</code> · <code>64a9932</code></td><td>Hash redaction by value shape; Retry-After on 429; suppression reasons CI-gated; backup refuses empty dumps</td></tr>
+  </table>
+  <div class="footer-note"><span>Every row names a commit, not a virtue · “hardened” means a specific test exists · accepted residual risks live in docs/risk-register.md (R1–R4) · phases in docs/security-remediation-plan-2026-11-16.md</span></div>
+</section>
+
+<!-- 31. SOURCES -->
+<section class="slide" id="s31">
+  <div class="navtag">31 / 33</div>
+  <div class="kicker"><span class="eyebrow">Sources</span><span class="no">files this deck quotes or shows</span></div>
+  <h2>Where everything came from</h2>
+  <div class="cols cols-2">
+    <div class="panel">
+      <h3>Code and commits (selection)</h3>
+      <ul class="small" style="font-family: Consolas, monospace; line-height: 1.8; font-size: 9.5px;">
+        <li>25d3000 · scaffold · 73163f2 · bootable</li>
+        <li>771731c · 6c32f08 · scanner + playback (Sep 23)</li>
+        <li>f3dca59 · specs/ADRs begin · 467307c · one scanner (Oct 2)</li>
+        <li>99f6dbb · 5ebc03a · 4442789 · the first full system (Oct 2)</li>
+        <li>f414560 · 73487d8 · 86484b5 · 4f960bb · Android (Oct 12–14)</li>
+        <li>834856d · d4220e9 · the restyle (Oct 18)</li>
+        <li>8f1555a · d4195ba · 1da2444 · passkeys (Oct 24)</li>
+        <li>fe297ff … 2010130 · the Postgres day (Oct 29)</li>
+        <li>82191ff … 2bd0e2e · admin panel · ce4bbc6 · GDPR (Nov 2–5)</li>
+        <li>d316f99 · RLS · f3a9116 · device sessions (Nov 10–11)</li>
+        <li>cce3ae5 … f024c6b · spec 37 · the 2026-11-11 review (Nov 11–13)</li>
+        <li>aa91bbf … 6bf608f · kids · de1bad2 … 656e58f · OAuth · 9ab2af3 … 8205ad9 · media proxy (Nov 12)</li>
+        <li>ad56ddd · aero merge · a151e74 … 959690a · spec 41 (Nov 14–15)</li>
+        <li>abfb1fa … c432bae · spec 42 · b28bdbf … 0e45c44 · security · ca856bc … 63af220 · spec 43 (Nov 16)</li>
+        <li>a4116d4 · spec 44 · 3893757 … 95b9159 · spec 45 · 5d67e0f · docs + diagrams (Nov 16–17)</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Review reports and documents</h3>
+      <ul class="small">
+        <li><code>specs/37-architecture-deepening.md</code> — defects, steps, status block, appendices A/B</li>
+        <li><code>architecture-review-2026-11-15-1154.html</code> — the 2026-11-15 report; lived in %TEMP%; never committed (spec 41 Phase 0.3 records this)</li>
+        <li><code>architecture-review-2026-11-16-1147.html</code> — the 2026-11-16 re-audit report; lived in %TEMP%; never committed (spec 42 Phase 0.3 / close-out records this)</li>
+        <li><code>decisions/</code> — 005, 009, 019, 020, 022, 026, 028, 029, 030, 031, 033, 034, 037 quoted here</li>
+        <li><code>specs/</code> — 11, 15, 26, 28, 29, 30, 31, 32, 35, 36, 37, 38, 39, 41, 42, 43, 44, 45</li>
+        <li><code>LIMITATIONS.md</code> §5 (flakes), §6 (items queued into spec 37) — cited where used</li>
+        <li><code>docs/security-remediation-plan-2026-11-16.md</code> · <code>docs/risk-register.md</code> · <code>SECURITY.md</code></li>
+        <li><code>docs/diagrams/architecture.svg</code> · <code>docs/diagrams/api.svg</code> · <code>GLOSSARY.md</code> · <code>BRIEF.md</code> · <code>roadmap.md</code></li>
+        <li><code>specs/evidence/</code> · device photos · device verification notes</li>
+      </ul>
+      <h3 style="margin-top: 8px;">About the diagrams</h3>
+      <p class="small">Stage diagrams were drawn by hand for this deck; each caption names the commits it compresses. The slide 28 diagram is the repository's own, unchanged. Nothing in this deck was generated or retouched by an image model; the SVG diagrams are plain Arial text in boxes, exactly reproducible.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>Everything shown is in the repository except the two %TEMP% review reports, whose findings enter this deck only through the specs written from them</span></div>
+</section>
+
+<!-- 32. LESSONS -->
+<section class="slide" id="s32">
+  <div class="navtag">32 / 33</div>
+  <div class="kicker"><span class="eyebrow">Retrospective</span><span class="no">what the stages share</span></div>
+  <h2>What the stages share</h2>
+  <div class="panel">
+    <ul>
+      <li>Bugs clustered at seams — filesystem → API, browser → WebView, desktop → phone. Every major fix landed where the seam showed, not where the code was tidiest.</li>
+      <li>The changes that mattered structurally were consolidations: one scanner (Oct 2), one model two histories (Oct 29), one module per rule (spec 37), one fixture for both tiers, one row table for GDPR (spec 41). Not features — deletions and merges.</li>
+      <li>Three reviews, three times the same lesson: a tested pure module whose callers keep their own copies is the dominant defect shape. The durable fix is never “be careful” — it is a fixture both suites read, a sweep test, or a generated list.</li>
+      <li>Each review found the next layer in newer code. Spec 37 closed the client/server seams; spec 41 found the same shape in the freshly-merged PWA and GDPR work; spec 42 found it in the wake/retry code written the same week. Deepening decays — so the guards, not the intentions, carry the rule.</li>
+      <li>Security arrived in waves driven by external triggers: the 2026-11-08 Supabase advisor, the 2026-11-11 review, the 2026-11-16 audit. Each wave was a day of fixes; each fix with a failing-first test where practical.</li>
+      <li>Documentation drifted twice — after the Android sprint and by the aero merge — and was reconciled deliberately both times; the final reconciliation (<code>5d67e0f</code>) audited claims against the tree, not against intentions.</li>
+      <li>The v0.2.0 tag is deliberately untagged: it waits for two verified weekly dumps and a restore drill. The project ships its humility as policy.</li>
+    </ul>
+  </div>
+  <div class="footer-note"><span>None of this required a rewrite. Each stage preserved the previous one — and the reviews are the part worth copying, not the fixes.</span></div>
+</section>
+
+<!-- 33. BACK COVER -->
+<section class="slide" id="s33" style="justify-content: center; text-align: center;">
+  <div class="navtag">33 / 33</div>
+  <div class="eyebrow">Back cover</div>
+  <h1 style="margin-top: 14px;">Audiobook Manager</h1>
+  <p style="margin: 16px auto 0; font-size: 17px; max-width: 560px;">Household audiobook server.<br>This deck: the architecture at every stage — including the three reviews that kept it honest.</p>
+  <div class="row" style="justify-content: center; margin-top: 24px;">
+    <span class="chip">docs/presentations/architecture/</span>
+    <span class="chip">24 diagrams + full source list</span>
+    <span class="chip"><span class="kbd">←</span> <span class="kbd">→</span> navigate</span>
+  </div>
+</section>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  const dots = document.querySelector('.progressdots');
+  slides.forEach((s, i) => {
+    const a = document.createElement('a');
+    a.href = '#' + s.id;
+    a.title = 'Slide ' + (i + 1);
+    dots.appendChild(a);
+  });
+  let idx = 0;
+  const bar = document.getElementById('bar');
+  const setBar = () => { bar.style.width = ((idx + 1) / slides.length * 100) + '%'; };
+  const go = (i) => { idx = Math.max(0, Math.min(slides.length - 1, i)); slides[idx].scrollIntoView({ behavior: 'auto', block: 'start' }); setBar(); };
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(idx + 1); }
+    if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(idx - 1); }
+    if (e.key === 'Home') go(0);
+    if (e.key === 'End') go(slides.length - 1);
+  });
+  const obs = new IntersectionObserver((entries) => {
+    for (const entry of entries) if (entry.isIntersecting) { idx = slides.indexOf(entry.target); setBar(); }
+  }, { threshold: 0.5 });
+  slides.forEach((s) => obs.observe(s));
+  setBar();
+</script>
+</body>
+</html>
+

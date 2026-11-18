@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // Era capture harness: renders a historical client/src tree with canned API
-// data, no server required. See docs/presentations/timeline (or the deck) for
+// data, no server required. See docs/presentations/design (or the deck) for
 // usage. Not part of any build.
 export default defineConfig({
   plugins: [react(), tailwindcss()],

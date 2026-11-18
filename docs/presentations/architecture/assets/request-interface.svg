@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="420" fill="#0b1117"/>
+  <text x="600" y="36" text-anchor="middle" font-size="18" font-weight="bold" fill="#f8fafc">Candidate 01 — one request, five guarantees</text>
+  <text x="600" y="54" text-anchor="middle" font-size="10.5" fill="#94a3b8">Spec 37 steps 1.1–1.6 · api.ts said it itself: “the app has ~8 near-identical private request helpers… the test passed and proved nothing.”</text>
+
+  <!-- before -->
+  <rect x="60" y="84" width="470" height="250" rx="10" fill="#1a1410" stroke="#40341f"/>
+  <text x="84" y="114" font-size="11.5" font-weight="bold" fill="#f6c453">BEFORE — every call site picked its own idiom</text>
+  <text x="84" y="142" font-size="10.5" fill="#cbd5e1">~8 private request helpers across the client,</text>
+  <text x="84" y="160" font-size="10.5" fill="#cbd5e1">each with a different set of guarantees:</text>
+  <text x="84" y="188" font-size="10" fill="#94a3b8">• some had timeouts, some would hang forever</text>
+  <text x="84" y="206" font-size="10" fill="#94a3b8">• some sent the profile header, some didn't</text>
+  <text x="84" y="224" font-size="10" fill="#94a3b8">• some threw sentences, some threw status codes</text>
+  <text x="84" y="242" font-size="10" fill="#94a3b8">• safety came from a global fetch monkey-patch</text>
+  <text x="84" y="260" font-size="10" fill="#94a3b8">  installed in main.tsx, before any request ran</text>
+  <text x="84" y="296" font-size="9.5" fill="#f6c453">ProfileSwitcher: no timeout, no try/catch — unhandled rejection on any failure.</text>
+
+  <!-- after -->
+  <rect x="620" y="84" width="520" height="250" rx="10" fill="#101a17" stroke="#1f4034"/>
+  <text x="644" y="114" font-size="11.5" font-weight="bold" fill="#34d399">AFTER — client/src/lib/request.ts</text>
+  <rect x="644" y="126" width="236" height="32" rx="6" fill="#1a2740" stroke="#22d3ee"/>
+  <text x="666" y="147" font-size="11" font-weight="bold" fill="#e2e8f0">request&lt;T&gt;(path, options)</text>
+  <rect x="896" y="126" width="218" height="32" rx="6" fill="#1a2740" stroke="#334155"/>
+  <text x="912" y="147" font-size="10" fill="#cbd5e1">requestRaw — streaming, 304s</text>
+  <text x="644" y="184" font-size="10.5" fill="#cbd5e1">The five guarantees, each pinned by a test:</text>
+  <text x="644" y="208" font-size="10.5" fill="#cbd5e1"><tspan fill="#34d399">1</tspan> · Bounded — a dead host rejects, never hangs</text>
+  <text x="644" y="228" font-size="10.5" fill="#cbd5e1"><tspan fill="#34d399">2</tspan> · Authenticated — cookie (web) or session header (Android)</text>
+  <text x="644" y="248" font-size="10.5" fill="#cbd5e1"><tspan fill="#34d399">3</tspan> · Profile-scoped — x-profile-id on every call</text>
+  <text x="644" y="268" font-size="10.5" fill="#cbd5e1"><tspan fill="#34d399">4</tspan> · One error vocabulary — copy.ts sentences, never server prose</text>
+  <text x="644" y="288" font-size="10.5" fill="#cbd5e1"><tspan fill="#34d399">5</tspan> · Offline-aware — explicit offline mode refuses, doesn't hang</text>
+
+  <!-- footers -->
+  <text x="600" y="372" text-anchor="middle" font-size="10.5" fill="#94a3b8">The admin panel got its own sibling (admin/request.ts) with its own credential; the deadline rule moved to lib/bounded.ts, shared by both bundles.</text>
+  <text x="600" y="392" text-anchor="middle" font-size="10.5" fill="#94a3b8">Step 1.2 found a live bug on the way: three call sites sent JSON-inside-JSON (double-encoded bodies) — caught by the typecheck gate from step 0.1, made unrepresentable by the type.</text>
+</svg>

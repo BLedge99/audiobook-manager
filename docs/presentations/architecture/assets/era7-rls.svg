@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="675" fill="#0b1117"/>
+  <text x="600" y="38" text-anchor="middle" font-size="20" font-weight="bold" fill="#f8fafc">Stage 8 — the database says no (2026-11-10)</text>
+  <text x="600" y="58" text-anchor="middle" font-size="11" fill="#94a3b8">Row-level security turned on for every table, with no policies. ADR 026.</text>
+
+  <!-- supabase -->
+  <rect x="60" y="96" width="1080" height="150" rx="12" fill="#1a1410" stroke="#40341f" stroke-width="2"/>
+  <text x="84" y="130" font-size="12" font-weight="bold" letter-spacing="2" fill="#f6c453">THE PUBLIC INTERNET → SUPABASE</text>
+  <rect x="84" y="150" width="1032" height="68" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="100" y="178" font-size="11" fill="#cbd5e1">Supabase's security advisor (2026-11-08) flagged every public-schema table as open: anyone holding the public anonymous key could read</text>
+  <text x="100" y="198" font-size="11" fill="#cbd5e1">profiles, e-mails, password hashes and the catalogue via the auto-generated REST API. The app never uses that API or that key.</text>
+
+  <!-- the fix -->
+  <rect x="60" y="286" width="500" height="220" rx="10" fill="#101a17" stroke="#1f4034" stroke-width="1.5"/>
+  <text x="84" y="320" font-size="12" font-weight="bold" fill="#34d399">What changed</text>
+  <text x="84" y="346" font-size="11" fill="#cbd5e1">Row-level security enabled on all 28</text>
+  <text x="84" y="364" font-size="11" fill="#cbd5e1">application tables, plus a sweep for any</text>
+  <text x="84" y="382" font-size="11" fill="#cbd5e1">other public table — and zero policies.</text>
+  <text x="84" y="410" font-size="10.5" fill="#94a3b8">No policy = the anonymous and authenticated</text>
+  <text x="84" y="428" font-size="10.5" fill="#94a3b8">roles see and write nothing. Grants revoked</text>
+  <text x="84" y="446" font-size="10.5" fill="#94a3b8">on existing and future objects.</text>
+
+  <rect x="640" y="286" width="500" height="220" rx="10" fill="#131c2b" stroke="#334155" stroke-width="1.5"/>
+  <text x="664" y="320" font-size="12" font-weight="bold" fill="#f8fafc">What did not change</text>
+  <text x="664" y="346" font-size="11" fill="#cbd5e1">The app connects as the table owner,</text>
+  <text x="664" y="364" font-size="11" fill="#cbd5e1">which RLS does not restrict. Every</text>
+  <text x="664" y="382" font-size="11" fill="#cbd5e1">query the app makes works exactly as before.</text>
+  <text x="664" y="410" font-size="10.5" fill="#94a3b8">A regression test fails the suite if a new</text>
+  <text x="664" y="428" font-size="10.5" fill="#94a3b8">table is added without RLS. Rehearsed against</text>
+  <text x="664" y="446" font-size="10.5" fill="#94a3b8">a real PostgreSQL first: 28 open → 0.</text>
+
+  <text x="600" y="560" text-anchor="middle" font-size="11" fill="#cbd5e1">Plain version: the front door to the data was never used, so it was bricked up. The app's own door still works.</text>
+  <text x="600" y="630" text-anchor="middle" font-size="10.5" fill="#64748b">Drawn from d316f99 · eac8f30 (verification query) · ADR 026 · specs/35-production-database-access-control.md · test: server/src/postgres-rls.test.ts</text>
+</svg>

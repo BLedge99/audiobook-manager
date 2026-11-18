@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="675" fill="#0b1117"/>
+  <text x="600" y="38" text-anchor="middle" font-size="20" font-weight="bold" fill="#f8fafc">Stage 7 — a second door (2026-11-02)</text>
+  <text x="600" y="58" text-anchor="middle" font-size="11" fill="#94a3b8">The operator panel lives behind its own listener, its own password and its own cookie. Spec 31, ADR 022.</text>
+
+  <!-- family listener -->
+  <rect x="60" y="100" width="500" height="330" rx="12" fill="#131c2b" stroke="#334155" stroke-width="2"/>
+  <text x="84" y="134" font-size="12" font-weight="bold" letter-spacing="2" fill="#22d3ee">FAMILY LISTENER :3000</text>
+  <text x="84" y="162" font-size="13" font-weight="bold" fill="#f8fafc">The app, as before</text>
+  <rect x="84" y="180" width="452" height="110" rx="8" fill="#1a2740" stroke="#334155"/>
+  <text x="100" y="208" font-size="10.5" fill="#cbd5e1">Every app route lives here</text>
+  <text x="100" y="228" font-size="10.5" fill="#cbd5e1">No admin route exists on this port at all</text>
+  <text x="100" y="248" font-size="10.5" fill="#cbd5e1">/admin answers 404 — not 403, not a login page</text>
+  <text x="100" y="272" font-size="10" fill="#94a3b8">An attacker who finds this origin finds no admin surface</text>
+  <text x="84" y="330" font-size="10.5" fill="#94a3b8">Same process · same Prisma client · same scanner</text>
+  <text x="84" y="350" font-size="10.5" fill="#94a3b8">&#8220;a different door, not a different house&#8221;</text>
+
+  <!-- admin listener -->
+  <rect x="640" y="100" width="500" height="330" rx="12" fill="#131c2b" stroke="#f6c453" stroke-width="2"/>
+  <text x="664" y="134" font-size="12" font-weight="bold" letter-spacing="2" fill="#f6c453">ADMIN LISTENER :3100</text>
+  <text x="664" y="162" font-size="13" font-weight="bold" fill="#f8fafc">The operator panel</text>
+  <rect x="664" y="180" width="452" height="110" rx="8" fill="#1a2740" stroke="#334155"/>
+  <text x="680" y="208" font-size="10.5" fill="#cbd5e1">Separate ADMIN_PANEL_PASSWORD, seeded at boot</text>
+  <text x="680" y="228" font-size="10.5" fill="#cbd5e1">Separate session table, HttpOnly SameSite=Strict cookie</text>
+  <text x="680" y="248" font-size="10.5" fill="#cbd5e1">Read-only dashboard · library controls · SQL console</text>
+  <text x="680" y="272" font-size="10" fill="#94a3b8">DB explorer: allowlisted tables, read-only driver</text>
+  <text x="664" y="330" font-size="10.5" fill="#94a3b8">Published loopback-only on the host by default</text>
+  <text x="664" y="350" font-size="10.5" fill="#94a3b8">Not reachable from the household LAN unless deliberate</text>
+
+  <!-- hosted demo note -->
+  <rect x="60" y="456" width="1080" height="100" rx="10" fill="#101a24" stroke="#1f3a4a"/>
+  <text x="84" y="488" font-size="11.5" font-weight="bold" fill="#e2e8f0">The hosted demo gets a narrower version</text>
+  <text x="84" y="512" font-size="10.5" fill="#cbd5e1">One public port on Render, so a loopback-only proxy on that port forwards /admin and /api/admin/* to the loopback listener. The proxy forwards; it does not</text>
+  <text x="84" y="530" font-size="10.5" fill="#cbd5e1">authorize — the admin listener still checks its own cookie. Household deployments get 404. (Gated to the demo in spec 37, ADR 029.)</text>
+
+  <text x="600" y="610" text-anchor="middle" font-size="10.5" fill="#64748b">Drawn from 82191ff..2bd0e2e (spec 31) · ADR 022 · 19a0106 (proxy gated to the demo, spec 37 step 7.9, ADR 029)</text>
+</svg>

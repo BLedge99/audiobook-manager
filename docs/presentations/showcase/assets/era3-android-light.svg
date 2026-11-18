@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="675" fill="#ffffff"/>
+  <text x="600" y="38" text-anchor="middle" font-size="20" font-weight="bold" fill="#292524">Stage 4 — the phone joins (2026-10-12 → 10-14)</text>
+  <text x="600" y="58" text-anchor="middle" font-size="11" fill="#78716c">The same web app, wrapped for Android. Downloads live on the phone; progress catches up later.</text>
+
+  <!-- phone -->
+  <rect x="60" y="90" width="330" height="470" rx="26" fill="#ffffff" stroke="#d8cbbd" stroke-width="2.5"/>
+  <text x="225" y="126" text-anchor="middle" font-size="12" font-weight="bold" letter-spacing="2" fill="#d9480f">ANDROID PHONE</text>
+
+  <rect x="90" y="150" width="270" height="90" rx="10" fill="#fdecd9" stroke="#e3ddd2"/>
+  <text x="106" y="176" font-size="11.5" font-weight="bold" fill="#292524">Capacitor WebView</text>
+  <text x="106" y="196" font-size="10.5" fill="#44403c">The same web bundle, wrapped</text>
+  <text x="106" y="214" font-size="10.5" fill="#78716c">as an Android app (spec 26)</text>
+
+  <rect x="90" y="258" width="270" height="80" rx="10" fill="#fdecd9" stroke="#e3ddd2"/>
+  <text x="106" y="284" font-size="11.5" font-weight="bold" fill="#292524">Downloads + background audio</text>
+  <text x="106" y="304" font-size="10.5" fill="#44403c">Books stored on the device</text>
+  <text x="106" y="322" font-size="10.5" fill="#78716c">Playback continues with screen off</text>
+
+  <rect x="90" y="356" width="270" height="80" rx="10" fill="#fdecd9" stroke="#e3ddd2"/>
+  <text x="106" y="382" font-size="11.5" font-weight="bold" fill="#292524">IndexedDB read replica</text>
+  <text x="106" y="402" font-size="10.5" fill="#44403c">A local copy of the library,</text>
+  <text x="106" y="420" font-size="10.5" fill="#78716c">so the grid renders with no server</text>
+
+  <!-- server -->
+  <rect x="560" y="150" width="580" height="220" rx="12" fill="#fdf6ee" stroke="#d8cbbd" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="584" y="178" font-size="12" font-weight="bold" letter-spacing="2" fill="#d9480f">HOME SERVER :3000</text>
+  <rect x="584" y="196" width="532" height="150" rx="10" fill="#ffffff" stroke="#e3ddd2"/>
+  <text x="600" y="224" font-size="11.5" font-weight="bold" fill="#292524">The same single container, unchanged</text>
+  <text x="600" y="246" font-size="10.5" fill="#44403c">Browse, Discover, search, tags, shelves (specs 16–25)</text>
+  <text x="600" y="264" font-size="10.5" fill="#44403c">Enrichment: LibriVox · Open Library · Google Books</text>
+  <text x="600" y="282" font-size="10.5" fill="#44403c">Android shell authenticates with a session header</text>
+  <text x="600" y="300" font-size="10.5" fill="#78716c">(86484b5, 4f960bb — the cookie never crossed origins)</text>
+
+  <!-- arrow -->
+  <line x1="390" y1="240" x2="556" y2="240" stroke="#d8cbbd" stroke-width="2" marker-end="url(#a)"/>
+  <text x="473" y="228" text-anchor="middle" font-size="10" fill="#78716c">LAN http</text>
+
+  <!-- notes -->
+  <rect x="560" y="400" width="580" height="160" rx="10" fill="#ffffff" stroke="#e3ddd2"/>
+  <text x="584" y="428" font-size="11.5" font-weight="bold" fill="#292524">What this era actually proved</text>
+  <text x="584" y="452" font-size="10.5" fill="#44403c">• the WebView is not a browser (font boosting, sideways scroll,</text>
+  <text x="584" y="470" font-size="10.5" fill="#44403c">   mixed-content media, lock-screen controls — all fixed on device)</text>
+  <text x="584" y="492" font-size="10.5" fill="#44403c">• a phone that cannot reach the server is a first-class state,</text>
+  <text x="584" y="510" font-size="10.5" fill="#44403c">   not an error (spec 29, later spec 37 made this explicit)</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#78716c"/>
+    </marker>
+  </defs>
+
+  <text x="600" y="630" text-anchor="middle" font-size="10.5" fill="#d8cbbd">Drawn from f414560 (Sprint 1 spike) · 73487d8 (Sprint 2 downloads) · 86484b5 / 4f960bb (Android auth) · c2794a5 (media + downloads) · e7fde76 (offline + first-run)</text>
+</svg>

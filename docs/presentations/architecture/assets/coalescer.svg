@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="420" fill="#0b1117"/>
+  <text x="600" y="36" text-anchor="middle" font-size="18" font-weight="bold" fill="#f8fafc">Spec 41, card 6 — two hooks, one shared refresh</text>
+  <text x="600" y="54" text-anchor="middle" font-size="10.5" fill="#94a3b8">lib/coalesceRefresh · useBrowse and useLibrary were each firing full refreshes; concurrent triggers now ride one run.</text>
+
+  <!-- without -->
+  <rect x="60" y="84" width="480" height="210" rx="10" fill="#1a1410" stroke="#40341f"/>
+  <text x="84" y="114" font-size="11.5" font-weight="bold" fill="#f6c453">WITHOUT — every trigger fires its own run</text>
+  <text x="84" y="142" font-size="10" fill="#cbd5e1">mount · focus · visibility change · profile</text>
+  <text x="84" y="160" font-size="10" fill="#cbd5e1">switch · server-back — each effect refreshed</text>
+  <text x="84" y="178" font-size="10" fill="#cbd5e1">the same shelf independently.</text>
+  <text x="84" y="206" font-size="10" fill="#94a3b8">Duplicate GETs, thundering-herd decrypts</text>
+  <text x="84" y="224" font-size="10" fill="#94a3b8">on a low-power machine, and a subtle race:</text>
+  <text x="84" y="242" font-size="10" fill="#94a3b8">whichever batch landed last won — even if it</text>
+  <text x="84" y="260" font-size="10" fill="#94a3b8">belonged to the previous profile.</text>
+
+  <line x1="540" y1="189" x2="580" y2="189" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- with -->
+  <rect x="590" y="84" width="550" height="210" rx="10" fill="#101a17" stroke="#1f4034"/>
+  <text x="614" y="114" font-size="11.5" font-weight="bold" fill="#34d399">WITH — one in-flight run, everyone joins it</text>
+  <rect x="614" y="132" width="500" height="44" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="630" y="150" font-size="10" fill="#e2e8f0">first trigger → starts the refresh</text>
+  <text x="630" y="166" font-size="9" fill="#94a3b8">any other trigger inside the window joins the same promise</text>
+  <rect x="614" y="188" width="500" height="40" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="630" y="206" font-size="10" fill="#e2e8f0">shelf refresh = one bulk read + parallel decrypts</text>
+  <text x="630" y="222" font-size="9" fill="#94a3b8">no more N× repeated decrypts of the same rows (spec 41 phase 7)</text>
+
+  <text x="600" y="352" text-anchor="middle" font-size="10" fill="#94a3b8">And the tail end was pinned in spec 42 (phase 6): a profile switch now retires the old run's generation, so a late batch from the previous profile lands nowhere.</text>
+  <text x="600" y="372" text-anchor="middle" font-size="10" fill="#94a3b8">Phase 6's premise was corrected mid-flight: the coalescer keys runs by profile generation, not by a bare timer — the race was observable, and the fix was named the same thing everywhere.</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+</svg>

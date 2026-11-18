@@ -1,0 +1,73 @@
+[
+  {
+    "id": "tag-1794949274465",
+    "slideId": "s4",
+    "rectPct": {
+      "x": 24.83,
+      "y": 31.94,
+      "w": 53.19,
+      "h": 45.83
+    },
+    "type": "colour",
+    "instruction": "thisistoosmallhastob3bigg3r",
+    "elements": [
+      {
+        "tag": "figcaption",
+        "id": null,
+        "cls": null,
+        "text": "The shape the household actually uses — one container serving app + API on :3000",
+        "computed": {
+          "background": "rgba(255, 250, 242, 0.94)",
+          "color": "rgb(120, 113, 108)",
+          "fontSize": "11px",
+          "borderColor": "rgb(231, 222, 210) rgb(120, 113, 108) rgb(120, 113, 108)",
+          "width": 1143,
+          "height": 32
+        }
+      },
+      {
+        "tag": "img",
+        "id": null,
+        "cls": "diagram",
+        "text": "",
+        "computed": {
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(41, 37, 36)",
+          "fontSize": "16px",
+          "borderColor": "rgb(41, 37, 36)",
+          "width": 614,
+          "height": 346
+        }
+      },
+      {
+        "tag": "figure",
+        "id": null,
+        "cls": null,
+        "text": "The shape the household actually uses — one container serving app + API on :3000",
+        "computed": {
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(41, 37, 36)",
+          "fontSize": "16px",
+          "borderColor": "rgb(231, 222, 210)",
+          "width": 1145,
+          "height": 379
+        }
+      },
+      {
+        "tag": "section",
+        "id": "s4",
+        "cls": "slide",
+        "text": "04 / 14 THE BUILD · 2 OF 5 OCT 2 One container, one household, one day The shape",
+        "computed": {
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "rgb(41, 37, 36)",
+          "fontSize": "16px",
+          "borderColor": "rgb(41, 37, 36)",
+          "width": 1265,
+          "height": 720
+        }
+      }
+    ],
+    "createdAt": "2026-11-17T21:01:14.475Z"
+  }
+]

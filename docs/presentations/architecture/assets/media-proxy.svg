@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="420" fill="#0b1117"/>
+  <text x="600" y="36" text-anchor="middle" font-size="18" font-weight="bold" fill="#f8fafc">Why the Android app can play over plain HTTP</text>
+  <text x="600" y="54" text-anchor="middle" font-size="10.5" fill="#94a3b8">Spec 26 remote streaming · ADR 031 · the WebView's mixed-content rule, worked around honestly.</text>
+
+  <!-- the problem -->
+  <rect x="60" y="84" width="330" height="234" rx="10" fill="#1a1410" stroke="#40341f"/>
+  <text x="80" y="112" font-size="11.5" font-weight="bold" fill="#f6c453">The problem (seen on a Pixel 4a)</text>
+  <text x="80" y="138" font-size="10.5" fill="#cbd5e1">The app shell loads from https://localhost,</text>
+  <text x="80" y="156" font-size="10.5" fill="#cbd5e1">but the home server speaks plain http.</text>
+  <text x="80" y="182" font-size="10.5" fill="#cbd5e1">Chrome auto-upgrades media requests</text>
+  <text x="80" y="200" font-size="10.5" fill="#cbd5e1">http → https; the server has no certificate;</text>
+  <text x="80" y="218" font-size="10.5" fill="#cbd5e1">the audio element dies instantly.</text>
+  <text x="80" y="248" font-size="10.5" fill="#94a3b8">API calls survived (mixed content allowed);</text>
+  <text x="80" y="266" font-size="10.5" fill="#94a3b8">&lt;audio&gt; did not. Spinner, then silence.</text>
+
+  <!-- the proxy -->
+  <rect x="440" y="84" width="330" height="234" rx="10" fill="#1a2740" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="460" y="112" font-size="11.5" font-weight="bold" fill="#f8fafc">The native proxy</text>
+  <text x="460" y="138" font-size="10.5" fill="#cbd5e1">&lt;audio&gt; points at its own origin:</text>
+  <text x="460" y="162" font-size="10.5" fill="#cbd5e1">https://localhost/_media?url=…</text>
+  <text x="460" y="190" font-size="10.5" fill="#cbd5e1">A native Java layer intercepts the request,</text>
+  <text x="460" y="208" font-size="10.5" fill="#cbd5e1">allowlists only stream/cover routes,</text>
+  <text x="460" y="226" font-size="10.5" fill="#cbd5e1">forwards only the Range header, and</text>
+  <text x="460" y="244" font-size="10.5" fill="#cbd5e1">streams the answer straight through.</text>
+  <text x="460" y="274" font-size="10.5" fill="#94a3b8">Seeking still works. Nothing is buffered whole.</text>
+
+  <!-- the guardrails -->
+  <rect x="820" y="84" width="320" height="234" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="840" y="112" font-size="11.5" font-weight="bold" fill="#f8fafc">The guardrails</text>
+  <text x="840" y="138" font-size="10.5" fill="#cbd5e1">Only two route shapes are proxied —</text>
+  <text x="840" y="156" font-size="10.5" fill="#cbd5e1">everything else answers 400.</text>
+  <text x="840" y="186" font-size="10.5" fill="#cbd5e1">No cookies or origin headers are added;</text>
+  <text x="840" y="204" font-size="10.5" fill="#cbd5e1">the target URL is never logged.</text>
+  <text x="840" y="234" font-size="10.5" fill="#cbd5e1">Verified on hardware: Pixel 4a, plain-HTTP</text>
+  <text x="840" y="252" font-size="10.5" fill="#cbd5e1">LAN, and on the https production demo.</text>
+  <text x="840" y="282" font-size="10.5" fill="#94a3b8">Web browsers are untouched by this path.</text>
+
+  <line x1="390" y1="201" x2="432" y2="201" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="770" y1="201" x2="812" y2="201" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <text x="600" y="378" text-anchor="middle" font-size="10.5" fill="#64748b">Drawn from 9ab2af3 · ad842d5 · 8205ad9 (2026-11-12) · decisions/031-native-media-proxy.md · evidence: adb logcat, phase-0 doc</text>
+</svg>

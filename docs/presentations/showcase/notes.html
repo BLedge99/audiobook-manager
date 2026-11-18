@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audiobook Manager - speaker notes (read before, not during)</title>
+<style>
+  :root {
+    --ground: #f6f2f6;
+    --surface: #ffffff;
+    --sunk: #eae7ef;
+    --ink: #1b1720;
+    --ink-2: #514b5c;
+    --ink-3: #6b6577;
+    --line: #dbd7e2;
+    --rasp: #ff3d71;
+    --rasp-ink: #a80038;
+    --rasp-soft: #ffd8e1;
+    --r-pod-sm: 14px 11px 14px 11px / 11px 14px 11px 14px;
+    --r-shell: 26px 20px 26px 20px / 20px 26px 20px 26px;
+  }
+  @font-face { font-family: "Fredoka"; src: url("assets/fonts/fredoka-latin.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+  @font-face { font-family: "Nunito"; src: url("assets/fonts/nunito-latin.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+  body {
+    background-color: var(--ground);
+    background-image: linear-gradient(180deg, #f9f5f6 0%, #ece7ea 100%);
+    color: var(--ink);
+    font-family: "Nunito", -apple-system, system-ui, sans-serif;
+    max-width: 980px; margin: 0 auto; padding: 32px 24px 80px;
+  }
+  h1 { font-family: "Fredoka", "Nunito", sans-serif; font-weight: 600; font-size: 34px; margin: 0 0 4px; color: var(--ink); }
+  .lede { color: var(--ink-3); margin-bottom: 28px; font-weight: 400; }
+  .lede code { font-family: Consolas, monospace; font-size: 11px; background: var(--sunk); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; color: var(--rasp-ink); }
+  .card { background: var(--surface); border: 2px solid var(--ink); border-left-width: 6px; border-left-color: var(--rasp); border-radius: var(--r-shell); padding: 16px 20px; margin: 14px 0; box-shadow: 0 2px 0 -1px color-mix(in srgb, var(--ink) 16%, transparent), 0 12px 24px -18px color-mix(in srgb, var(--ink) 55%, transparent); }
+  .card h2 { font-family: "Fredoka", "Nunito", sans-serif; font-weight: 600; font-size: 14.5px; margin: 0 0 8px; color: var(--rasp-ink); letter-spacing: 0.3px; }
+  .card p, .card li { font-size: 13.5px; line-height: 1.55; color: var(--ink-2); font-weight: 400; }
+  .card ul { margin-left: 18px; }
+  .open { font-style: italic; color: var(--ink); font-weight: 700; }
+  .danger { background: #fff3ec; border-color: var(--ink); border-left-color: var(--tan, #ff7a18); }
+  .danger h2 { color: #8a3b00; }
+  code { background: var(--sunk); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; font-size: 12px; color: var(--rasp-ink); font-weight: 600; }
+  @media print { .card { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<h1>Audiobook <span style="color: var(--rasp-ink)">Manager</span> - speaker notes</h1>
+<p class="lede">One cue card per slide. Open with the quoted line; the rest is beats, not a script. The talk is allowed to be loose. Total: 5 minutes + Q&amp;A. Deck: <code>index.html</code> · Edit mode: press <code>E</code> in the deck.</p>
+
+<div class="card"><h2>1 · TITLE - 10s</h2><p class="open">“This is Audiobook Manager.”</p><ul><li>One sentence: what it is (household library that runs itself), one breath.</li><li>Do not explain the stack yet.</li></ul></div>
+
+<div class="card"><h2>2 · WHY - 40s</h2><p class="open">“Audiobooks are a mess - four apps and a folder of MP3s.”</p><ul><li>The scene: Audible + Google Play Books + Libri.fm, plus library loans, plus mystery VLC files.</li><li>Nobody could say where any book lived. Copying meant cables and chore work.</li><li>The insight: one server at home, files in, a shared library out - play anywhere, pick up where you left off, downloads when you’re away.</li><li>Who it’s for: audiobook lovers. It runs on a home PC - an always-on Pi or a temporary laptop.</li></ul></div>
+
+<div class="card"><h2>3 · T1 · Sep 22-23 - ~30s</h2><p class="open">“Day one I built a grid of broken covers. Day two it stopped being a toy.”</p><ul><li>Day 1 (Sep 22): scaffold - is browse → pick → press play worth building? Answered that afternoon with placeholders.</li><li>Day 2 (Sep 23): the scanner read real folders; chapter playback arrived the same day.</li></ul></div>
+
+<div class="card"><h2>4 · T2 · Oct 2 - ~30s</h2><p class="open">“The first full system.”</p><ul><li>What landed: one container for app + API on :3000, LAN access, one household password, profiles, resume positions, playback, security suite, docs and ADRs.</li><li>The point: the first thing the household actually used was already most of the product.</li></ul></div>
+
+<div class="card"><h2>5 · T3 · Oct 12-21 - ~30s</h2><p class="open">"Then the phone arrived."</p><ul><li>Oct 12-14: Android shell, downloads, background audio, the session-header auth fix.</li><li>Oct 18: the full visual restyle - one day, every surface; no routes or props moved.</li><li>Oct 19-21: offline screens as first-class states; the copy table (two voices: listener and operator).</li></ul></div>
+
+<div class="card"><h2>6 · T4 · Oct 22-Nov 5 - ~30s</h2><p class="open">“Preparing for the future.”</p><ul><li>Oct 24-27: passkeys + biometrics - each device enrolls its own key (spec 28).</li><li>Oct 29: production moved to hosted Postgres (Supabase); SQLite stayed at home and in CI (ADR 019).</li><li>Nov 2-5: a ten-phase GDPR remediation; an operator panel behind its own door on :3100; OAuth for the public demo.</li></ul></div>
+
+<div class="card"><h2>7 · T5 · Nov 6-12 - ~25s · the architecture review</h2><p class="open">"The architecture review."</p><ul><li><b>Nov 10</b> - Supabase’s advisor flagged every table open via the public anon key; RLS went deny-all on all 28 tables. The app never noticed (owner role bypasses RLS).</li><li><b>Nov 11</b> - one live session per device; the sessions panel lists phones, not sign-in events (spec 36).</li><li><b>Nov 11 → 13</b> - a fresh-context review found one rule copied in three places; ~60 commits consolidated it into single, tested modules - route table split, one client request interface, one offline key format. Merged <code>f024c6b</code> (spec 37).</li><li><b>Nov 12</b> - kids accounts (age bands, one server-side visibility rule) · native deep-link OAuth with a 60-second one-time code · a native media proxy so playback survives plain-HTTP LANs · external check-price links.</li></ul></div>
+
+<div class="card"><h2>8 · T6 · Nov 13-17 - ~25s · the final week</h2><p class="open">"The last week: three audits, and the submission freeze."</p><ul><li><b>Nov 13-14</b> - the design-lab’s “aero” UI merged (<code>ad56ddd</code>): a visual change only; the architecture guards held.</li><li><b>Nov 15</b> - the audit (spec 41): the same spec-37 defect shape four times, plus a live data bug - offline audio keyed by bare book id clobbered across servers. 895→936 / 806→827 tests.</li><li><b>Nov 16</b> - the re-audit (spec 42): the household GDPR button that never worked, the <code>/privacy</code> blank page - plus a same-day security remediation (SSRF, headers, fail-closed).</li><li><b>Nov 16-17</b> - weekly encrypted backups, an eslint gate, offline progress push · the claims-vs-tree re-audit (spec 45) · docs reconciled with the code - the submission build froze at <code>5d67e0f</code> on Nov 17.</li></ul></div>
+
+<div class="card"><h2>9 · BRIDGE - 5s</h2><p class="open">“Enough history. Let me show you the actual thing.”</p><ul><li>Cut the preamble. Be on the site before the sentence finishes.</li></ul></div>
+
+<div class="card"><h2>10 · DEMO - 60s</h2><p class="open">“Signing in on the production site.”</p><ul><li>Flow: sign in → library → open a book → ten seconds of playback → settings glimpse (installed build, connected devices).</li><li>Narrate one detail only (e.g. “the resume position is server-side”).</li><li>If the network dies: play the fallback video. Do not fight the room.</li></ul></div>
+
+<div class="card danger"><h2>10a · IF THE DEMO FAILS</h2><p>Say: “Production is being production - here’s the exact same flow, recorded.” Play the video. Keep going; the room will not remember the failure, only your recovery.</p></div>
+
+<div class="card"><h2>11 · CHALLENGE 1 - ~25s · free tools, finite tokens, ensuring consistency across agents and sessions</h2><p class="open">"The commits themselves became the handoff."</p><ul><li>Our group presentation covered the handoff.md approach - this project used it too, then found better: the commit log as the handoff, with comprehensive multi-phase plans and step-by-step checkboxes, committed per block of work with agent-written messages.</li><li>Why it worked: debugging got easier, documentation stayed reliable, any agent could resume from any commit.</li><li>GitHub CI caught what local missed: a client type error Vitest never typechecks (CI's typecheck gate caught it), a CSS budget overrun nobody noticed locally.</li><li>Numbers: 467 commits and counting · 45 specs · 39 ADRs · 1,983 tests.</li></ul></div>
+
+<div class="card"><h2>12 · CHALLENGE 2 - ~25s · hallucinations</h2><p class="open">"Hallucinations - the three agent mistakes I can point at."</p><ul><li><b>Double-encoded bodies</b> - symptom: every save claimed to work, nothing reached the server. Cause: JSON inside JSON at three call sites. Fix: <code>body</code> typed <code>object</code>; the typecheck gate now refuses the whole class.</li><li><b>Unreachable <code>onEnded</code></b> - symptom: chapter advance green in tests, dead in one-file books. Cause: the branch could never run; tests had fabricated an impossible event order. Fix: deleted it; player rebuilt (ADR 017).</li><li><b>Christmas Carol, recommended as miscellany</b> - symptom: arbitrary Discover suggestions, seeded by the catch-all "misc" genre. Cause: weight-1.0 seed into <code>subject:misc</code>, plus a provider refactor that pooled incompatible fields. Fix: catch-all excluded, deterministic tie-break, tests (<code>31a03a8</code>); pooling reworked, ADR 039 (<code>39ab7e7</code>, <code>605d391</code>, <code>23b1ae9</code>).</li><li>Shape to remember: symptom, cause, fix - every story, every time.</li></ul></div>
+
+<div class="card"><h2>13 · CHALLENGE 3 - ~25s · the offline split</h2><p class="open">"A copy on the phone, not a second server."</p><ul><li>Per-server replica, downloads for the plane, background audio, reconnect push.</li><li>The tension: phones are a version behind, mid-chapter, on a flaky link - sync is a push on reconnect, never a guess mid-play.</li><li>Kids get the same visibility predicate everywhere - server-side, fail-closed, including offline.</li></ul></div>
+
+<div class="card"><h2>14 · TRY IT / Q&amp;A</h2><p class="open">“Try it - here’s the link and the code.”</p><ul><li>Leave this slide up during questions.</li><li>Repo link is your call - swap or drop it if the repo isn’t public.</li><li>Blank on a question? “Great question - let me check the spec for that, it’s all in the repo.”</li></ul></div>
+
+<div class="card"><h2>Q&amp;A - likely questions, crisp answers</h2>
+<ul>
+<li><b>Why a server at all?</b> One library per house, devices come and go, files are read-only - sync is reconciliation by theft of the smallest surface: resume position. The phone is the copy; the server is the truth.</li>
+<li><b>Why not just Audible?</b> Audible has the library and one ecosystem; this reads <i>anything</i> - library loans, friends’ rips, public-domain LibriVox - one place, one progress bar.</li>
+<li><b>What did the agents actually do?</b> Everything from the first scaffold to the last audit - I directed, reviewed, tested and merged; I didn’t write the code by hand. The discipline was the specs, the tests and the reviews.</li>
+<li><b>Did anything ship untested?</b> Honestly: yes - until Nov 16-17. The security remediation day and specs 45 were about exactly that. Suites are 975/1008 now; “done” means green twice, in CI, and verified on hardware where it touches the phone.</li>
+<li><b>How does offline sync work?</b> One-directional push on reconnect; ties go to the server; client clocks are never trusted. (Spec 44.)</li>
+<li><b>What would you change architecturally?</b> Start with the per-server key format on day one (spec 37 step 2 taught the whole codebase to agree on it). Everything else followed from not having it.</li>
+<li><b>Why free models only?</b> Cost was the constraint; the constraint produced the discipline. Rate limits → paperwork → reviews → a codebase that can be audited by a stranger (spec 42). Would I still do it paid? Probably the same, faster.</li>
+</ul></div>
+
+<div class="card"><h2>RUN OF SHOW</h2><p>Title 10 → Why 40 → T1 20 → T2 20 → T3 25 → T4 25 → T5 25 → T6 25 → Bridge 5 → Demo 60 → C1 25 → C2 25 → C3 25 → Try-it 5 ≈ <b>5:00</b>. If you overrun, cut timeline narration first (T1/T2 are the most disposable) - never the demo.</p></div>
+</body>
+</html>

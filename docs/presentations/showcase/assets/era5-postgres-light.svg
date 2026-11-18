@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="675" fill="#ffffff"/>
+  <text x="600" y="38" text-anchor="middle" font-size="20" font-weight="bold" fill="#292524">Stage 6 — two databases, one model (2026-10-29)</text>
+  <text x="600" y="58" text-anchor="middle" font-size="11" fill="#78716c">Production moved to hosted PostgreSQL. Home machines and CI kept SQLite. ADR 019.</text>
+
+  <!-- one model -->
+  <rect x="400" y="96" width="400" height="86" rx="10" fill="#fdecd9" stroke="#d9480f" stroke-width="1.5"/>
+  <text x="600" y="128" text-anchor="middle" font-size="13" font-weight="bold" fill="#292524">One data model</text>
+  <text x="600" y="150" text-anchor="middle" font-size="10.5" fill="#44403c">server/prisma/schema.prisma — the only place the</text>
+  <text x="600" y="168" text-anchor="middle" font-size="10.5" fill="#44403c">shape of the data is defined</text>
+
+  <!-- two branches -->
+  <line x1="470" y1="182" x2="300" y2="252" stroke="#d8cbbd" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="730" y1="182" x2="900" y2="252" stroke="#d8cbbd" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="60" y="252" width="480" height="220" rx="10" fill="#ffffff" stroke="#e3ddd2" stroke-width="1.5"/>
+  <text x="84" y="284" font-size="12" font-weight="bold" fill="#292524">SQLite — home &amp; tests</text>
+  <text x="84" y="310" font-size="11" fill="#44403c">Generated twin of the model, kept in sync</text>
+  <text x="84" y="328" font-size="11" fill="#44403c">by a script; a test fails on drift</text>
+  <text x="84" y="356" font-size="10.5" fill="#78716c">Local development · the test suite builds a</text>
+  <text x="84" y="374" font-size="10.5" fill="#78716c">template database once and copies it per file</text>
+  <text x="84" y="402" font-size="10.5" fill="#78716c">Unchanged workflow for the household install</text>
+
+  <rect x="660" y="252" width="480" height="220" rx="10" fill="#ffffff" stroke="#e3ddd2" stroke-width="1.5"/>
+  <text x="684" y="284" font-size="12" font-weight="bold" fill="#292524">PostgreSQL — production</text>
+  <text x="684" y="310" font-size="11" fill="#44403c">Hosted on Supabase (EU region)</text>
+  <text x="684" y="328" font-size="11" fill="#44403c">One squashed migration history</text>
+  <text x="684" y="356" font-size="10.5" fill="#78716c">Applied automatically at container start</text>
+  <text x="684" y="374" font-size="10.5" fill="#78716c">(prisma migrate deploy)</text>
+  <text x="684" y="402" font-size="10.5" fill="#78716c">A model change needs a migration in each history</text>
+
+  <!-- why -->
+  <rect x="60" y="500" width="1080" height="96" rx="10" fill="#fdf6ee" stroke="#ead9cc"/>
+  <text x="84" y="530" font-size="11.5" font-weight="bold" fill="#292524">Why it went this way</text>
+  <text x="84" y="552" font-size="10.5" fill="#44403c">The hosted demo needed a database that survives restarts on a free tier. Porting the tests to PostgreSQL was tried first and abandoned — 14 integration files</text>
+  <text x="84" y="570" font-size="10.5" fill="#44403c">raced `db push` against one generated client. SQLite stayed for speed and isolation; Postgres became production-only. Same tables, same queries, no dialect-</text>
+  <text x="84" y="588" font-size="10.5" fill="#44403c">specific SQL in application code.</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#78716c"/>
+    </marker>
+  </defs>
+
+  <text x="600" y="640" text-anchor="middle" font-size="10.5" fill="#d8cbbd">Drawn from fe297ff · 4f007ef · f14dbd5 · 86104b7 · 68e0511 · 2010130 (2026-10-29, one day) · ADR 019 supersedes ADR 001</text>
+</svg>

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="675" fill="#0b1117"/>
+  <text x="600" y="38" text-anchor="middle" font-size="20" font-weight="bold" fill="#f8fafc">Stage 3 — the first full system (2026-10-02)</text>
+  <text x="600" y="58" text-anchor="middle" font-size="11" fill="#94a3b8">One container on the home network. Real files in, real pages out. The first shape the household actually used.</text>
+
+  <!-- LAN -->
+  <rect x="40" y="84" width="1120" height="470" rx="12" fill="#0f172a" stroke="#475569" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="64" y="112" font-size="12" font-weight="bold" letter-spacing="2" fill="#22d3ee">HOME NETWORK (LAN)</text>
+
+  <!-- devices -->
+  <rect x="80" y="150" width="230" height="130" rx="10" fill="#131c2b" stroke="#334155" stroke-width="1.5"/>
+  <text x="100" y="178" font-size="12" font-weight="bold" fill="#f8fafc">Phones &amp; laptops</text>
+  <text x="100" y="200" font-size="11" fill="#cbd5e1">Browser opens</text>
+  <text x="100" y="218" font-size="11" fill="#cbd5e1">http://&lt;lan-ip&gt;:3000</text>
+  <text x="100" y="240" font-size="10.5" fill="#94a3b8">One household password</text>
+  <text x="100" y="258" font-size="10.5" fill="#94a3b8">then a profile each</text>
+
+  <!-- the one container -->
+  <rect x="380" y="150" width="560" height="240" rx="10" fill="#131c2b" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="400" y="178" font-size="12" font-weight="bold" fill="#f8fafc">One container :3000 (docker-compose.prod)</text>
+  <text x="400" y="200" font-size="10.5" fill="#94a3b8">Fastify serves the built React app as static files, and the API at the same address</text>
+
+  <rect x="400" y="216" width="240" height="70" rx="8" fill="#1a2740" stroke="#334155"/>
+  <text x="414" y="240" font-size="11" font-weight="bold" fill="#e2e8f0">The app itself</text>
+  <text x="414" y="260" font-size="10" fill="#94a3b8">specs 01–14 in one day:</text>
+  <text x="414" y="276" font-size="10" fill="#94a3b8">scanner · playback · auth · GDPR docs</text>
+
+  <rect x="664" y="216" width="256" height="70" rx="8" fill="#1a2740" stroke="#334155"/>
+  <text x="678" y="240" font-size="11" font-weight="bold" fill="#e2e8f0">The guards</text>
+  <text x="678" y="260" font-size="10" fill="#94a3b8">safePath root confinement</text>
+  <text x="678" y="276" font-size="10" fill="#94a3b8">bounded ranges · schemas · security suite</text>
+
+  <rect x="400" y="300" width="520" height="68" rx="8" fill="#1a2740" stroke="#334155"/>
+  <text x="414" y="324" font-size="11" font-weight="bold" fill="#e2e8f0">One scanner (ADR 005)</text>
+  <text x="414" y="344" font-size="10" fill="#94a3b8">the duplicate implementation was deleted; pure grouping helpers got their own tests</text>
+
+  <!-- media readonly -->
+  <rect x="380" y="420" width="270" height="100" rx="10" fill="#101a24" stroke="#1f3a4a" stroke-width="1.5"/>
+  <text x="400" y="448" font-size="12" font-weight="bold" fill="#f8fafc">Media folder</text>
+  <text x="400" y="470" font-size="10.5" fill="#cbd5e1">Mounted read-only (:ro)</text>
+  <text x="400" y="488" font-size="10.5" fill="#94a3b8">Never written, moved or deleted</text>
+
+  <!-- sqlite -->
+  <rect x="690" y="420" width="250" height="100" rx="10" fill="#101a24" stroke="#1f3a4a" stroke-width="1.5"/>
+  <text x="710" y="448" font-size="12" font-weight="bold" fill="#f8fafc">SQLite (Prisma)</text>
+  <text x="710" y="470" font-size="10.5" fill="#cbd5e1">The one database, everywhere</text>
+  <text x="710" y="488" font-size="10.5" fill="#94a3b8">Profiles · progress · history · settings</text>
+
+  <!-- arrows -->
+  <line x1="310" y1="215" x2="372" y2="215" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="515" y1="390" x2="515" y2="412" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="790" y1="390" x2="790" y2="412" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <text x="600" y="600" text-anchor="middle" font-size="10.5" fill="#64748b">Drawn from 5ebc03a (one container) · 467307c (scanner consolidation, ADR 005) · 4442789 (security suite) · 99f6dbb (household gate) · 5ebc03a</text>
+</svg>

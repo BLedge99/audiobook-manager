@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="420" fill="#0b1117"/>
+  <text x="600" y="36" text-anchor="middle" font-size="18" font-weight="bold" fill="#f8fafc">Candidate 04 — 64 handlers out of one function</text>
+  <text x="600" y="54" text-anchor="middle" font-size="10.5" fill="#94a3b8">Spec 37 steps 7.1–7.9 · the safety net was a test that captured the route table before the move.</text>
+
+  <!-- before -->
+  <rect x="60" y="84" width="430" height="230" rx="10" fill="#1a1410" stroke="#40341f"/>
+  <text x="84" y="114" font-size="11.5" font-weight="bold" fill="#f6c453">BEFORE — buildApp, one function</text>
+  <text x="84" y="140" font-size="10.5" fill="#cbd5e1">Composition root + auth gate + error</text>
+  <text x="84" y="158" font-size="10.5" fill="#cbd5e1">handler + all 64 route handlers, in</text>
+  <text x="84" y="176" font-size="10.5" fill="#cbd5e1">~2,046 lines of one file.</text>
+  <text x="84" y="204" font-size="10" fill="#94a3b8">35 of 60 routes had no schema at all;</text>
+  <text x="84" y="222" font-size="10" fill="#94a3b8">6 of those accepted a body and validated</text>
+  <text x="84" y="240" font-size="10" fill="#94a3b8">nothing (library-roots, scan, progress…)</text>
+  <text x="84" y="270" font-size="9.5" fill="#f6c453">App-level tests proved nothing about the wiring itself.</text>
+
+  <line x1="490" y1="199" x2="530" y2="199" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- after -->
+  <rect x="540" y="84" width="600" height="230" rx="10" fill="#101a17" stroke="#1f4034"/>
+  <text x="564" y="114" font-size="11.5" font-weight="bold" fill="#34d399">AFTER — server/src/routes/</text>
+  <rect x="564" y="128" width="168" height="44" rx="6" fill="#131c2b" stroke="#334155"/><text x="576" y="147" font-size="9.5" fill="#e2e8f0">taxonomy</text><text x="576" y="163" font-size="8.5" fill="#94a3b8">genres + mappings</text>
+  <rect x="744" y="128" width="168" height="44" rx="6" fill="#131c2b" stroke="#334155"/><text x="756" y="147" font-size="9.5" fill="#e2e8f0">discover + wishlist</text><text x="756" y="163" font-size="8.5" fill="#94a3b8">suggestions</text>
+  <rect x="924" y="128" width="200" height="44" rx="6" fill="#131c2b" stroke="#334155"/><text x="936" y="147" font-size="9.5" fill="#e2e8f0">library + membership</text><text x="936" y="163" font-size="8.5" fill="#94a3b8">shelves + add/remove</text>
+  <rect x="564" y="184" width="168" height="44" rx="6" fill="#131c2b" stroke="#334155"/><text x="576" y="203" font-size="9.5" fill="#e2e8f0">enrichment</text><text x="576" y="219" font-size="8.5" fill="#94a3b8">manual enrich via manager</text>
+  <rect x="744" y="184" width="168" height="44" rx="6" fill="#131c2b" stroke="#334155"/><text x="756" y="203" font-size="9.5" fill="#e2e8f0">demo-mode policy</text><text x="756" y="219" font-size="8.5" fill="#94a3b8">one table, one check</text>
+  <rect x="924" y="184" width="200" height="44" rx="6" fill="#131c2b" stroke="#334155"/><text x="936" y="203" font-size="9.5" fill="#e2e8f0">the rest + shared listener</text><text x="936" y="219" font-size="8.5" fill="#94a3b8">wiring, CORS, allow-lists</text>
+  <text x="564" y="252" font-size="10" fill="#cbd5e1">Every mutating route now declares a schema;</text>
+  <text x="564" y="270" font-size="10" fill="#cbd5e1">a test fails the build if one doesn't (1e151e2).</text>
+
+  <text x="600" y="352" text-anchor="middle" font-size="10.5" fill="#94a3b8">The move was proven behaviour-preserving two ways: a test froze the exact route list before extraction, and both suites stayed green at every one of the nine steps.</text>
+  <text x="600" y="372" text-anchor="middle" font-size="10.5" fill="#94a3b8">7.9 added the one decision that mattered: the /admin proxy on the family port now exists only where it was designed to — the hosted demo (ADMIN_PROXY=true). Household: 404. (ADR 029)</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+</svg>

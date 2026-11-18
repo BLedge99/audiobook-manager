@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="675" fill="#0b1117"/>
+  <text x="600" y="38" text-anchor="middle" font-size="20" font-weight="bold" fill="#f8fafc">Stage 1 — the scaffold (2026-09-22)</text>
+  <text x="600" y="58" text-anchor="middle" font-size="11" fill="#94a3b8">Two dev containers, mock data, no accounts. A shape for checking the idea, not a product.</text>
+
+  <!-- your computer dashed container -->
+  <rect x="40" y="84" width="1120" height="420" rx="12" fill="#0f172a" stroke="#475569" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="64" y="112" font-size="12" font-weight="bold" letter-spacing="2" fill="#22d3ee">YOUR COMPUTER (DOCKER COMPOSE)</text>
+
+  <!-- browser -->
+  <rect x="80" y="150" width="220" height="110" rx="10" fill="#131c2b" stroke="#334155" stroke-width="1.5"/>
+  <text x="100" y="178" font-size="12" font-weight="bold" fill="#f8fafc">Browser</text>
+  <text x="100" y="200" font-size="11" fill="#cbd5e1">Opens localhost:5173</text>
+  <text x="100" y="220" font-size="10.5" fill="#94a3b8">Sees a grid of books.</text>
+  <text x="100" y="238" font-size="10.5" fill="#94a3b8">Every cover is broken.</text>
+
+  <!-- vite -->
+  <rect x="380" y="150" width="330" height="110" rx="10" fill="#131c2b" stroke="#334155" stroke-width="1.5"/>
+  <text x="400" y="178" font-size="12" font-weight="bold" fill="#f8fafc">Client container :5173</text>
+  <text x="400" y="200" font-size="11" fill="#cbd5e1">Vite dev server — React + Tailwind</text>
+  <text x="400" y="220" font-size="10.5" fill="#94a3b8">Live reload, mock book data</text>
+  <text x="400" y="238" font-size="10.5" fill="#94a3b8">No network calls that matter yet</text>
+
+  <!-- fastify -->
+  <rect x="790" y="150" width="330" height="110" rx="10" fill="#131c2b" stroke="#334155" stroke-width="1.5"/>
+  <text x="810" y="178" font-size="12" font-weight="bold" fill="#f8fafc">Server container :3000</text>
+  <text x="810" y="200" font-size="11" fill="#cbd5e1">Fastify + Prisma on Node 20</text>
+  <text x="810" y="220" font-size="10.5" fill="#94a3b8">Stub endpoints: /api/scan, /api/audiobooks</text>
+  <text x="810" y="238" font-size="10.5" fill="#94a3b8">Does not read real files yet</text>
+
+  <!-- sqlite -->
+  <rect x="790" y="330" width="330" height="90" rx="10" fill="#101a24" stroke="#1f3a4a" stroke-width="1.5"/>
+  <text x="810" y="358" font-size="12" font-weight="bold" fill="#f8fafc">SQLite file</text>
+  <text x="810" y="380" font-size="10.5" fill="#cbd5e1">/app/data/library.db</text>
+  <text x="810" y="400" font-size="10.5" fill="#94a3b8">Schema only — 107 lines, no data</text>
+
+  <!-- media -->
+  <rect x="380" y="330" width="330" height="90" rx="10" fill="#131c2b" stroke="#334155" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="400" y="358" font-size="12" font-weight="bold" fill="#94a3b8">/data/audiobooks</text>
+  <text x="400" y="380" font-size="10.5" fill="#94a3b8">Mounted read-write, never scanned</text>
+  <text x="400" y="400" font-size="10.5" fill="#94a3b8">The app does not know it exists</text>
+
+  <!-- arrows -->
+  <line x1="300" y1="205" x2="372" y2="205" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="710" y1="205" x2="782" y2="205" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="955" y1="260" x2="955" y2="322" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <text x="600" y="540" text-anchor="middle" font-size="11.5" fill="#cbd5e1">CORS was open to localhost only · no sign-in · no real files · no playback</text>
+  <text x="600" y="562" text-anchor="middle" font-size="11.5" fill="#cbd5e1">The point was one question: is “browse covers → pick a book → press play” worth building?</text>
+  <text x="600" y="620" text-anchor="middle" font-size="10.5" fill="#64748b">Drawn from 25d3000 (git) · nothing in this diagram survived unchanged past 2026-10-02</text>
+</svg>

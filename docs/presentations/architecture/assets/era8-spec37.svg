@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1200" height="675" fill="#0b1117"/>
+  <text x="600" y="38" text-anchor="middle" font-size="20" font-weight="bold" fill="#f8fafc">Stage 9 — the deepening (2026-11-11 → 11-13)</text>
+  <text x="600" y="58" text-anchor="middle" font-size="11" fill="#94a3b8">One rule kept turning up in three places. Spec 37 moved every copy into one module.</text>
+
+  <!-- the shape -->
+  <rect x="60" y="92" width="1080" height="96" rx="10" fill="#1a1410" stroke="#40341f"/>
+  <text x="84" y="124" font-size="11.5" font-weight="bold" fill="#f6c453">THE SHAPE OF THE PROBLEM</text>
+  <text x="84" y="148" font-size="11" fill="#cbd5e1">A rule was written as a pure, tested function — and the code that needed the rule kept its own copy instead of calling it. The tests tested the module;</text>
+  <text x="84" y="166" font-size="11" fill="#cbd5e1">production ran somebody else's copy. Nine such places were found in one review.</text>
+
+  <!-- before / after -->
+  <rect x="60" y="216" width="500" height="250" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="84" y="248" font-size="12" font-weight="bold" fill="#ff5c8a">Before</text>
+  <rect x="84" y="266" width="200" height="54" rx="8" fill="#1a2740" stroke="#334155"/>
+  <text x="98" y="290" font-size="10.5" fill="#e2e8f0">precedence.ts</text>
+  <text x="98" y="308" font-size="10" fill="#94a3b8">pure + tested</text>
+  <rect x="84" y="338" width="130" height="44" rx="8" fill="#1a1410" stroke="#40341f"/>
+  <text x="98" y="356" font-size="10" fill="#f6c453">scanner's copy</text>
+  <text x="98" y="374" font-size="10" fill="#94a3b8">of the rule</text>
+  <rect x="240" y="338" width="130" height="44" rx="8" fill="#1a1410" stroke="#40341f"/>
+  <text x="254" y="356" font-size="10" fill="#f6c453">enricher's copy</text>
+  <text x="254" y="374" font-size="10" fill="#94a3b8">of the rule</text>
+  <rect x="396" y="338" width="130" height="44" rx="8" fill="#1a1410" stroke="#40341f"/>
+  <text x="410" y="356" font-size="10" fill="#f6c453">override's copy</text>
+  <text x="410" y="374" font-size="10" fill="#94a3b8">of the rule</text>
+
+  <rect x="640" y="216" width="500" height="250" rx="10" fill="#101a17" stroke="#1f4034"/>
+  <text x="664" y="248" font-size="12" font-weight="bold" fill="#34d399">After</text>
+  <rect x="664" y="266" width="452" height="54" rx="8" fill="#1a2740" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="678" y="290" font-size="10.5" font-weight="bold" fill="#e2e8f0">One module owns the rule</text>
+  <text x="678" y="308" font-size="10" fill="#94a3b8">server/src/metadata/precedence.ts</text>
+  <line x1="820" y1="320" x2="740" y2="420" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="890" y1="320" x2="890" y2="420" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="960" y1="320" x2="1040" y2="420" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="664" y="420" width="130" height="36" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="678" y="443" font-size="10" fill="#cbd5e1">scanner</text>
+  <rect x="820" y="420" width="130" height="36" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="834" y="443" font-size="10" fill="#cbd5e1">enricher</text>
+  <rect x="976" y="420" width="140" height="36" rx="8" fill="#131c2b" stroke="#334155"/>
+  <text x="990" y="443" font-size="10" fill="#cbd5e1">override action</text>
+
+  <!-- what moved -->
+  <rect x="60" y="492" width="1080" height="96" rx="10" fill="#131c2b" stroke="#334155"/>
+  <text x="84" y="522" font-size="11.5" font-weight="bold" fill="#e2e8f0">What actually moved (and what didn't)</text>
+  <text x="84" y="544" font-size="10.5" fill="#cbd5e1">Route table split into modules · one client request interface · one offline key format · personal-data list in one module · provider clients under metadata/ ·</text>
+  <text x="84" y="562" font-size="10.5" fill="#cbd5e1">admin proxy limited to the demo. NOT rewritten: app.ts and App.tsx wholesale — every step was a move or an extraction, never a from-scratch rewrite.</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <text x="600" y="642" text-anchor="middle" font-size="10.5" fill="#64748b">Drawn from cce3ae5..faf59e5 · merged f024c6b (2026-11-13) · specs/37-architecture-deepening.md · ADRs 028, 029, 030</text>
+</svg>

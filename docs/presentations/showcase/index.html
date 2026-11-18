@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audiobook Manager - a household library that runs itself</title>
+<style>
+/* Audiobook Manager - showcase deck, styled as the app's light room.
+   Tokens lifted from client/src/index.css (light theme) and DESIGN.md. */
+
+@font-face {
+  font-family: "Fredoka";
+  src: url("assets/fonts/fredoka-latin.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Nunito";
+  src: url("assets/fonts/nunito-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+:root {
+  --ground: #f6f2f6;
+  --surface: #ffffff;
+  --sunk: #eae7ef;
+  --ink: #1b1720;
+  --ink-2: #514b5c;
+  --ink-3: #6b6577;
+  --line: #dbd7e2;
+  --rasp: #ff3d71;
+  --rasp-ink: #a80038;
+  --rasp-soft: #ffd8e1;
+  --tan: #ff7a18;
+  --tan-ink: #8a3b00;
+  --mint: #0f9e83;
+  --mint-ink: #04614f;
+  --cobalt: #3345d8;
+  --cobalt-ink: #1b27a8;
+  --r-shell: 26px 20px 26px 20px / 20px 26px 20px 26px;
+  --r-pod: 20px 15px 20px 15px / 15px 20px 15px 20px;
+  --r-pod-sm: 14px 11px 14px 11px / 11px 14px 11px 14px;
+  --stroke: 2px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-pop: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast: 140ms;
+  --t-base: 240ms;
+  --panel-sheen: linear-gradient(180deg, #ffffff 0%, #ffffff 26%, #ddd8e0 112%);
+  --glass-edge: color-mix(in srgb, var(--ink) 28%, transparent);
+  --select-fill: color-mix(in srgb, var(--surface) 62%, transparent);
+  --glass-glow: 0 0 26px -12px color-mix(in srgb, var(--rasp) 30%, transparent);
+  --glass-glow-hot: 0 0 34px -10px color-mix(in srgb, var(--rasp) 42%, transparent);
+  --atmo-stack:
+    radial-gradient(130% 48% at 50% -8%, rgba(255, 214, 205, 0.13) 0%, transparent 58%),
+    linear-gradient(180deg, rgba(255, 148, 116, 0.15) 0%, rgba(226, 152, 168, 0.115) 17%, rgba(247, 243, 246, 0) 40%),
+    radial-gradient(880px 640px at -14% 112%, rgba(101, 115, 197, 0.10) 0%, transparent 62%),
+    linear-gradient(180deg, transparent 55%, rgba(44, 38, 51, 0.07) 100%),
+    radial-gradient(1150px 640px at 78% -16%, rgba(255, 168, 108, 0.21) 0%, transparent 60%),
+    radial-gradient(140% 90% at 50% -30%, #fcf9f8 0%, transparent 55%),
+    linear-gradient(180deg, #f9f5f6 0%, #ece7ea 100%);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background-color: var(--ground);
+  background-image: var(--atmo-stack);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+  color: var(--ink);
+  font-family: "Nunito", -apple-system, system-ui, sans-serif;
+}
+.slide { min-height: 100vh; position: relative; padding: 44px 60px 56px; display: flex; flex-direction: column; }
+.eyebrow { color: var(--rasp-ink); font-family: "Fredoka", "Nunito", sans-serif; font-size: 10.5px; letter-spacing: 3.4px; font-weight: 600; text-transform: uppercase; }
+h1, h2 { font-family: "Fredoka", "Nunito", sans-serif; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+h1 { font-size: clamp(46px, 6.6vw, 78px); line-height: 1.05; }
+h2 { font-size: clamp(28px, 3.8vw, 44px); line-height: 1.12; margin: 10px 0 4px; }
+.sub { font-size: clamp(16px, 1.9vw, 21px); color: var(--ink-2); line-height: 1.4; font-weight: 400; }
+h3 { font-family: "Fredoka", "Nunito", sans-serif; font-size: 15px; font-weight: 600; margin: 12px 0 5px; color: var(--ink); }
+p, li { font-size: 14.5px; line-height: 1.55; color: var(--ink-2); font-weight: 400; }
+ul { margin-left: 20px; } li { margin: 4px 0; }
+b { color: var(--ink); font-weight: 700; }
+code { font-family: Consolas, monospace; font-size: 11.5px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; color: var(--rasp-ink); font-weight: 600; }
+.small { font-size: 12.5px; color: var(--ink-3); font-weight: 400; }
+.cols { display: grid; gap: 26px; align-items: center; }
+.cols-2 { grid-template-columns: 1.05fr 0.95fr; }
+.cols-2r { grid-template-columns: 0.95fr 1.05fr; }
+.panel {
+  background: var(--panel-sheen);
+  border: var(--stroke) solid var(--ink);
+  border-radius: var(--r-shell);
+  padding: 20px 22px;
+  box-shadow:
+    3px 4px 0 -1px color-mix(in srgb, var(--ink) 22%, transparent),
+    0 12px 26px -18px color-mix(in srgb, var(--ink) 70%, transparent);
+}
+.panel-plain {
+  background: var(--surface);
+  border: var(--stroke) solid var(--ink);
+  border-radius: var(--r-pod-sm);
+  padding: 18px 20px;
+  box-shadow: 0 2px 0 -1px color-mix(in srgb, var(--ink) 18%, transparent), 0 10px 22px -18px color-mix(in srgb, var(--ink) 55%, transparent);
+}
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.chip {
+  display: inline-block; border: 1px solid var(--glass-edge); border-radius: 999px; padding: 4px 13px;
+  font-size: 11.5px; color: var(--ink-2); font-weight: 600;
+  background: linear-gradient(160deg, rgba(255,255,255,.65) 0%, rgba(255,255,255,.18) 44%, transparent 72%), var(--select-fill);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+  font-family: "Nunito", sans-serif;
+}
+.chip.hot {
+  border-color: color-mix(in srgb, var(--rasp-ink) 40%, transparent);
+  background: linear-gradient(180deg, #ffe3ea 0%, #ffd2de 100%);
+  color: var(--rasp-ink);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.75), var(--glass-glow);
+}
+.chip.commit { font-family: Consolas, monospace; color: var(--rasp-ink); font-weight: 700; }
+.chip.date { color: var(--tan-ink); border-color: color-mix(in srgb, var(--tan-ink) 30%, transparent); background: #fdf3d8; }
+.bignum { font-family: "Fredoka", sans-serif; font-size: clamp(30px, 4.4vw, 48px); font-weight: 600; color: var(--rasp-ink); line-height: 1; font-variant-numeric: tabular-nums; }
+.statlabel { font-size: 10.5px; letter-spacing: 1.3px; text-transform: uppercase; color: var(--ink-3); font-weight: 700; margin-top: 6px; }
+figure {
+  border: var(--stroke) solid var(--ink); border-radius: var(--r-pod); overflow: hidden; background: var(--surface);
+  box-shadow: 0 2px 0 -1px color-mix(in srgb, var(--ink) 24%, transparent), 0 14px 26px -18px color-mix(in srgb, var(--ink) 72%, transparent);
+  display: flex; flex-direction: column;
+}
+figure figcaption { padding: 9px 14px; font-size: 11px; color: var(--ink-3); background: var(--surface); line-height: 1.4; border-top: 1px solid var(--line); font-weight: 400; }
+figure figcaption b { color: var(--ink); font-weight: 700; }
+img.shot { display: block; width: 100%; }
+img.phone { max-height: 540px; width: auto; margin: 0 auto; }
+img.diagram { display: block; background: transparent; max-height: 48vh; width: auto; max-width: 100%; margin: 0 auto; object-fit: contain; }
+.kicker { display: flex; gap: 14px; align-items: baseline; margin-bottom: 2px; }
+.kicker .no { font-family: "Nunito", sans-serif; color: var(--ink-3); font-size: 11.5px; font-weight: 600; }
+.beat {
+  display: inline-flex; align-items: center; gap: 8px; font-family: "Fredoka", sans-serif; font-size: 10.5px; font-weight: 600;
+  color: var(--rasp-ink); background: #ffe3ea; border: 1px solid color-mix(in srgb, var(--rasp-ink) 35%, transparent); border-radius: 999px; padding: 4px 13px; letter-spacing: .6px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.navtag { position: absolute; top: 16px; right: 24px; font-size: 11px; color: var(--ink-3); font-family: Consolas, monospace; font-weight: 600; }
+#editAffordance {
+  position: fixed; left: 14px; bottom: 14px; z-index: 45;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--line); background: rgba(255,255,255,.4);
+  color: var(--ink-3); font-size: 15px; line-height: 1; cursor: pointer;
+  opacity: 0.16; transition: opacity var(--t-fast) var(--ease);
+}
+#editAffordance:hover { opacity: 1; border-color: var(--glass-edge); }
+body.editing #editAffordance { display: none; }
+.progressdots { position: fixed; right: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 5px; z-index: 40; }
+.progressdots a { width: 7px; height: 7px; border-radius: 50%; background: var(--line); display: block; }
+.progressdots a:hover { background: var(--rasp); }
+.counterbar { position: fixed; left: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--tan), var(--rasp)); width: 0%; z-index: 40; }
+.footer-note { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; font-size: 10.5px; color: var(--ink-3); font-weight: 600; }
+.kbd { border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; font-family: Consolas, monospace; font-size: 11px; background: var(--surface); color: var(--ink-2); }
+.flow li { list-style: none; margin: 10px 0; display: flex; gap: 12px; align-items: flex-start; font-size: 15.5px; }
+.flow .n {
+  flex: 0 0 26px; height: 26px; border-radius: 50%; border: var(--stroke) solid var(--ink);
+  background: radial-gradient(circle at 50% 28%, #ff85a8, var(--rasp) 72%);
+  color: #fff; font-weight: 600; display: flex; align-items: center; justify-content: center; font-size: 13px;
+  box-shadow: inset 0 1.5px 1.5px rgba(255,255,255,.65), 0 2px 0 color-mix(in srgb, var(--ink) 85%, transparent);
+  font-family: "Fredoka", sans-serif;
+}
+.grid { display: grid; gap: 14px; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.qr { width: 168px; border: var(--stroke) solid var(--ink); border-radius: var(--r-pod-sm); background: #fff; padding: 9px; }
+a.link { color: var(--rasp-ink); font-weight: 700; text-decoration: none; border-bottom: 2px solid var(--rasp-soft); }
+a.link:hover { color: var(--rasp); border-bottom-color: var(--rasp); }
+:focus-visible { outline: 3px solid var(--cobalt); outline-offset: 2px; border-radius: 2px; }
+
+/* title slide: the one glossy thing on the page, like the app's play dome */
+.dome-hero {
+  position: absolute;
+  right: 72px;
+  top: 118px;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  border: var(--stroke) solid var(--ink);
+  background: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--rasp) 45%, #ffffff), var(--rasp) 68%);
+  box-shadow:
+    inset 0 3px 3px rgba(255,255,255,.66),
+    inset 0 -6px 12px color-mix(in srgb, var(--rasp-ink) 55%, transparent),
+    0 5px 0 color-mix(in srgb, var(--ink) 88%, transparent),
+    0 18px 32px -18px color-mix(in srgb, var(--rasp) 90%, transparent);
+}
+.dome-hero::after {
+  content: "";
+  position: absolute;
+  left: 47%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-left: 34px solid #fff;
+  border-top: 22px solid transparent;
+  border-bottom: 22px solid transparent;
+}
+
+/* challenge 2: the hallucination tracker, symptom/cause/fix */
+.hall {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 10.5px;
+  background: var(--surface);
+  border: var(--stroke) solid var(--ink);
+  border-radius: var(--r-pod-sm);
+  overflow: hidden;
+  box-shadow: 0 2px 0 -1px color-mix(in srgb, var(--ink) 18%, transparent), 0 12px 22px -18px color-mix(in srgb, var(--ink) 55%, transparent);
+}
+.hall th {
+  background: var(--sunk);
+  border-bottom: var(--stroke) solid var(--ink);
+  padding: 9px 12px;
+  text-align: left;
+  font-family: "Fredoka", sans-serif;
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.4px;
+  color: var(--ink);
+}
+.hall th + th, .hall td + td { border-left: 1px solid var(--line); }
+.hall tr + tr td { border-top: 1px solid var(--line); }
+.hall td {
+  padding: 10px 12px;
+  vertical-align: top;
+  color: var(--ink-2);
+  line-height: 1.5;
+  font-weight: 400;
+}
+.hall td:first-child { font-family: "Fredoka", sans-serif; font-weight: 600; color: var(--ink); }
+.hall code { font-size: 10px; }
+
+/* ===== edit mode (never visible in show mode) ===== */
+#editUi { display: none; }
+body.editing #editUi { display: block; }
+#editToolbar {
+  position: fixed; left: 14px; bottom: 14px; z-index: 100;
+  background: var(--ink); color: #faf7f2; border-radius: var(--r-pod-sm);
+  border: var(--stroke) solid var(--ink);
+  padding: 9px 12px; display: flex; gap: 8px; align-items: center;
+  font-family: "Nunito", sans-serif; font-size: 11.5px; font-weight: 700;
+  box-shadow: 0 3px 0 -1px color-mix(in srgb, var(--ink) 60%, transparent), 0 16px 36px -18px rgba(27,23,32,.8);
+}
+#editToolbar button {
+  background: #2a2630; color: #faf7f2; border: 1px solid #3a3540; border-radius: 999px;
+  padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer;
+  font-family: "Nunito", sans-serif;
+}
+#editToolbar button:hover { background: #3a3540; }
+#editToolbar button.on { background: var(--rasp); border-color: var(--rasp); color: #fff; }
+#editToolbar .count { background: var(--rasp); color: #fff; border-radius: 999px; padding: 1px 8px; font-weight: 800; }
+body.editing [data-editable] { outline: 1.5px dashed var(--rasp); outline-offset: 2px; cursor: text; border-radius: 4px; }
+body.editing [data-editable]:focus { outline: 2.5px solid var(--rasp); }
+#tagLayer { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+body.tagging #tagLayer { pointer-events: auto; cursor: crosshair; }
+#tagRect { position: absolute; border: 2px solid var(--rasp); background: color-mix(in srgb, var(--rasp) 14%, transparent); border-radius: 8px; display: none; }
+#tagPopover {
+  position: fixed; z-index: 110; background: var(--ink); color: #faf7f2; border: var(--stroke) solid var(--ink);
+  border-radius: var(--r-pod-sm); padding: 11px; width: 320px;
+  font-family: "Nunito", sans-serif; font-size: 11.5px; display: none;
+  box-shadow: 0 18px 44px -18px rgba(27,23,32,.9);
+}
+#tagPopover textarea { width: 100%; background: #2a2630; color: #faf7f2; border: 1px solid #3a3540; border-radius: 8px; padding: 8px; font-size: 12px; resize: vertical; min-height: 56px; font-family: "Nunito", sans-serif; }
+#tagPopover select { width: 100%; margin: 6px 0; background: #2a2630; color: #faf7f2; border: 1px solid #3a3540; border-radius: 8px; padding: 6px; font-family: "Nunito", sans-serif; }
+#tagPopover button { width: 100%; background: var(--rasp); color: #fff; border: 0; border-radius: 8px; padding: 8px; font-weight: 800; cursor: pointer; font-family: "Nunito", sans-serif; }
+#tagsPanel { position: fixed; right: 14px; bottom: 14px; z-index: 100; max-width: 380px; max-height: 46vh; overflow: auto; background: var(--ink); color: #faf7f2; border-radius: var(--r-pod-sm); padding: 10px; font-size: 10.5px; display: none; border: var(--stroke) solid var(--ink); }
+body.editing #tagsPanel.has-tags { display: block; }
+#tagsPanel .titem { border: 1px solid #3a3540; border-radius: 8px; padding: 6px 8px; margin: 6px 0; }
+#tagsPanel .titem b { color: var(--rasp-soft); }
+@media print { .slide { min-height: 0; page-break-after: always; padding: 24px 34px; } .progressdots, .counterbar, #editUi { display: none !important; } }
+
+</style>
+</head>
+<body>
+<nav class="progressdots" aria-label="Slides"></nav>
+<div class="counterbar" id="bar"></div>
+<button id="editAffordance" title="Edit mode (E)" aria-label="Toggle edit mode">✎</button>
+
+<div id="deckMarkup">
+<!-- DECK:BEGIN -->
+
+<!-- 1 · TITLE -->
+<section class="slide" id="s1" style="justify-content: center;" data-title="1 · Title">
+  <div class="navtag">01 / 14</div>
+  <div class="eyebrow">Course showcase · <span>Your Name</span></div>
+  <h1 style="margin-top: 18px;">Audiobook<br>Manager</h1>
+  <div class="dome-hero"></div>
+  <p class="sub" style="margin-top: 18px; max-width: 640px;">A household library that runs itself, built with free AI tools in 56 days.</p>
+  <div class="row" style="margin-top: 26px;">
+    <span class="chip hot">56 days · Sep 22 → Nov 17</span>
+    <span class="chip">467 commits</span>
+    <span class="chip">server - browser - android</span>
+  </div>
+  <div class="footer-note"><span>Audiobook Manager · you’ll hear the story, not the stack.</span><span>← → navigate</span></div>
+</section>
+
+<!-- 2 · WHY -->
+<section class="slide" id="s2" data-title="2 · Why">
+  <div class="navtag">02 / 14</div>
+  <div class="kicker"><span class="eyebrow">Why</span><span class="no">the origin story</span></div>
+  <div class="cols cols-2r">
+    <figure><img class="shot" src="assets/hero-library-desktop.png" alt="Audiobook Manager, light theme - the library a household actually sees"><figcaption><b>The app today</b> - one shelf for everyone in the house.</figcaption></figure>
+    <div>
+      <h2>Audiobooks are a mess - four or more apps and a folder of MP3s</h2>
+      <p>Audible, Google Play Books, Libri.fm, and more, plus library loans, files from who-knows-where that only play in VLC. Every book lives somewhere different, and nobody can manage where.</p>
+      <p style="margin-top: 10px;">Copying files means cables and chore-work, and big audiobooks clog device storage. So the fix seemed simple: <b>one server at home manages the files,</b> play anywhere, pick up where you left off across multiple devices, download files to your device for offline listening.</p>
+      <p class="small" style="margin-top: 12px;">Who it’s for: Audiobook lovers. It runs on a home PC, whether that’s an always-on Raspberry Pi, or a temporary laptop hosting.</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>Four apps deep, one folder of “Mum’s rips” - and no single place with the whole collection</span></div>
+</section>
+
+<!-- 3 · TIMELINE T1 -->
+<section class="slide" id="s3" data-title="3 · T1 Sep 22-23">
+  <div class="navtag">03 / 14</div>
+  <div class="kicker"><span class="eyebrow">The build · 1 of 6</span><span class="beat">SEP 22 → 23</span></div>
+  <h2>Prototyping - how a mock up becomes<br>a real library</h2>
+  <div class="cols cols-2" style="margin-top: 6px;">
+    <figure><img class="shot" src="assets/era0-desktop.png" alt="The scaffold, Sep 22: placeholder grid, broken covers"><figcaption><b>Day one</b> - a grid of placeholders and a question: is this loop worth building?</figcaption></figure>
+    <figure><img class="shot" src="assets/eraSep23-desktop.png" alt="The same page with real files behind it, Sep 23"><figcaption><b>Day two</b> - the server learned to scan real folders; the mock went away.</figcaption></figure>
+  </div>
+  <div class="footer-note"><span>Sep 22: scaffold (25d3000) · Sep 23: scanner + chapter playback (771731c, 6c32f08)</span></div>
+</section>
+
+<!-- 4 · TIMELINE T2 -->
+<section class="slide" id="s4" data-title="4 · T2 Oct 2">
+  <div class="navtag">04 / 14</div>
+  <div class="kicker"><span class="eyebrow">The build · 2 of 6</span><span class="beat">OCT 2</span></div>
+  <h2>The first full system</h2>
+  <figure style="margin-top: 8px;"><img class="diagram" style="max-height: 58vh" src="assets/era2-first-system-light.svg" alt="Diagram: phones and laptops on the LAN talk to one container serving both the app and the API; media read-only; SQLite at home"><figcaption><b>The shape the household actually uses</b> - one container serving app + API on :3000, read-only media, one password, profiles, resume positions, tests and docs - all landed Oct 2.</figcaption></figure>
+  <div class="footer-note"><span>5ebc03a (single container) · 467307c (one scanner, ADR 005) · 4442789 (first security suite) · 99f6dbb (household gate)</span></div>
+</section>
+
+<!-- 5 · TIMELINE T3 -->
+<section class="slide" id="s5" data-title="5 · T3 Oct 12-21">
+  <div class="navtag">05 / 14</div>
+  <div class="kicker"><span class="eyebrow">The build · 3 of 6</span><span class="beat">OCT 12 → 21</span></div>
+  <h2>Building the app</h2>
+  <figure style="margin-top: 8px;"><img class="diagram" src="assets/era3-android-light.svg" alt="Diagram: Android Capacitor WebView, downloads on device, IndexedDB replica, connecting over the LAN to the same home server"><figcaption><b>Android first, then everything</b> - Oct 12: the shell, downloads, background audio. Oct 18: a full restyle in a day (the routes never moved). Oct 19-21: offline screens as first-class states.</figcaption></figure>
+  <div class="footer-note"><span>f414560 (Sprint 1) · 73487d8 (Sprint 2) · 834856d + d4220e9 (the restyle) · spec 29 (offline) · spec 25 (enrichment)</span></div>
+</section>
+
+<!-- 6 · TIMELINE T4 -->
+<section class="slide" id="s6" data-title="6 · T4 Oct 22-Nov 5">
+  <div class="navtag">06 / 14</div>
+  <div class="kicker"><span class="eyebrow">The build · 4 of 6</span><span class="beat">OCT 22 → NOV 5</span></div>
+  <h2>Preparing for the future</h2>
+  <figure style="margin-top: 8px;"><img class="diagram" src="assets/era5-postgres-light.svg" alt="Diagram: one data model, two histories - generated SQLite twin for home and tests, PostgreSQL on Supabase for production"><figcaption><b>Production left the house - carefully.</b> The Oct 29 migration to hosted Postgres (SQLite stayed at home and in CI), followed by a ten-phase GDPR pass, and an operator panel behind its own door on :3100.</figcaption></figure>
+  <div class="footer-note"><span>fe297ff…2010130 (Postgres day) · ce4bbc6 (GDPR, 10 phases) · 2bd0e2e (admin listener) · ADR 019 · ADR 022 · 05c4db5 (fixture scrub)</span></div>
+</section>
+
+<!-- 7 · TIMELINE T5 -->
+<section class="slide" id="s7" data-title="7 · T5 Nov 6-12">
+  <div class="navtag">07 / 14</div>
+  <div class="kicker"><span class="eyebrow">The build · 5 of 6</span><span class="beat">NOV 6 → 12</span></div>
+  <h2>The architecture<br>review</h2>
+  <div class="cols cols-2r" style="margin-top: 6px;">
+    <figure><img class="diagram" src="assets/era7-rls-light.svg" alt="Diagram: Supabase on the public internet - the anonymous key gets zero rows because every table has row-level security with no policies; the app connects as the table owner"><figcaption><b>Nov 10 - the database says no</b> - Supabase’s advisor flagged every public table as open (28 of them); RLS went deny-all on all of them. The app was never affected.</figcaption></figure>
+    <div>
+      <p><b>Nov 11</b> - device identity: one live session per device; the sessions panel lists phones, not events (spec 36)</p>
+      <p style="margin-top: 8px;"><b>Nov 11 → 13</b> - a fresh-context review (<span class="chip commit">spec 37</span>) found one rule copied in three places. ~60 commits consolidated it into single, tested modules - the route table split, one client request interface, one offline key format. Merged <code>f024c6b</code></p>
+      <p style="margin-top: 8px;"><b>Nov 12</b> - kids accounts: bands, not birthdates, one server-side visibility rule (hidden books answer 404)</p>
+      <p style="margin-top: 8px;"><b>Nov 12</b> - native OAuth with a 60-second one-time code · a native media proxy so playback survives plain-HTTP LANs · external check-price links, store registry first</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>d316f99 (RLS, ADR 026) · f3a9116 (device sessions) · cce3ae5…f024c6b (spec 37) · aa91bbf…6bf608f (kids) · de1bad2 (OAuth) · 8205ad9 (media proxy)</span></div>
+</section>
+
+<!-- 8 · TIMELINE T6 -->
+<section class="slide" id="s8" data-title="8 · T6 Nov 13-17">
+  <div class="navtag">08 / 14</div>
+  <div class="kicker"><span class="eyebrow">The build · 6 of 6</span><span class="beat">NOV 13 → 17</span></div>
+  <h2>The final<br>week</h2>
+  <div class="cols cols-2r" style="margin-top: 6px;">
+    <figure><img class="diagram" src="assets/review-flow-light.svg" alt="Five-step review pipeline: fresh-context read-only review, candidate cards, an in-repo spec, test-first steps, an honest close-out - repeated three times"><figcaption><b>Three reviews, same method, three specs</b> - 2026-11-11 → spec 37 · 2026-11-15 → spec 41 · 2026-11-16 → spec 42. Each report stayed in <code>%TEMP%</code>; the spec is the record.</figcaption></figure>
+    <div>
+      <p><b>Nov 13-14</b> - the design-lab’s “aero” UI merged (<code>ad56ddd</code>): visual only, guards held</p>
+      <p style="margin-top: 8px;"><b>Nov 15</b> - <b>the audit</b> (spec 41): the same spec-37 defect shape four times, plus a live data bug - offline audio keyed by bare book id clobbered across servers. 895→936 / 806→827 tests</p>
+      <p style="margin-top: 8px;"><b>Nov 16</b> - <b>the re-audit</b> (spec 42): the household GDPR button that never worked, the <code>/privacy</code> blank page - plus a same-day security remediation: SSRF, helmet, fail-closed production</p>
+      <p style="margin-top: 8px;"><b>Nov 16-17</b> - backups, an eslint gate, offline progress push · the claims-vs-tree re-audit (spec 45) · docs reconciled with the code - and the submission build froze at <code>5d67e0f</code>, Nov 17</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>ad56ddd (aero) · a151e74…959690a (spec 41) · abfb1fa…c432bae (spec 42) · b28bdbf…0e45c44 (security) · 3893757…95b9159 (spec 45) · 5d67e0f (submission)</span></div>
+</section>
+
+<!-- 8 · BRIDGE -->
+<section class="slide" id="s9" style="justify-content: center;" data-title="8 · Bridge">
+  <div class="navtag">09 / 14</div>
+  <div class="eyebrow">Bridge</div>
+  <h1 style="font-size: clamp(44px, 6.4vw, 72px); margin-top: 14px;">Enough history.</h1>
+  <p class="sub" style="margin-top: 16px; max-width: 620px;">Let me show you the actual app, deployed as a demo on the production site.</p>
+  <div class="footer-note"><span>The household server is the primary focus - I won’t spin up containers; the browser is the honest view.</span></div>
+</section>
+
+<!-- 9 · DEMO -->
+<section class="slide" id="s10" data-title="9 · Demo">
+  <div class="navtag">10 / 14</div>
+  <div class="kicker"><span class="eyebrow">Live</span><span class="no">on the production deployment</span></div>
+  <h2>Show, don’t tell</h2>
+  <div class="cols cols-2" style="margin-top: 10px;">
+    <div class="panel">
+      <ol class="flow">
+        <li><span class="n">1</span><span>Sign in on <code>audiobook-manager.onrender.com</code></span></li>
+        <li><span class="n">2</span><span>Browse the shelf</span></li>
+        <li><span class="n">3</span><span>Open a book, press play</span></li>
+        <li><span class="n">4</span><span>Have a look at your settings, pick a server, view your connected devices</span></li>
+      </ol>
+    </div>
+    <div class="panel-plain" style="text-align: center; align-items: center; display: flex; flex-direction: column; justify-content: center;">
+      <p class="small" style="font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);">If the network lets me down</p>
+      <p class="sub" style="margin: 12px 0 4px; font-weight: 700;">There’s a video of this exact flow.</p>
+      <img class="qr" src="assets/qr-demo.png" alt="QR code - audiobook-manager.onrender.com">
+      <p class="small" style="margin-top: 10px;">audiobook-manager.onrender.com</p>
+    </div>
+  </div>
+  <div class="footer-note"><span>Sign in with the personal account everyone on the course has · the settings screen names the running build</span></div>
+</section>
+
+<!-- 10 · CHALLENGE 1 -->
+<section class="slide" id="s11" data-title="11 · Challenge 1 - consistency">
+  <div class="navtag">11 / 14</div>
+  <div class="kicker"><span class="eyebrow">Challenge 1 · free tools</span><span class="no">how agents stayed consistent</span></div>
+  <h2 style="font-size: clamp(24px, 3vw, 38px);">Free tools, finite tokens,<br>ensuring consistency across agents and sessions</h2>
+  <div class="cols cols-2" style="margin-top: 8px;">
+    <div class="panel">
+      <p>As I mentioned in our group presentation, we used <code>handoff.md</code> to track progress and tasks, so that every agent understood what to do next. We used it for much of this project too.</p>
+      <p style="margin-top: 10px;">But we found a better way. The repo is nearing 500 commits - not because there’s 50GB of code in here, it’s because the commits themselves became the handoff, a far more reliable and valuable record than handoff.md ever could be.</p>
+      <p style="margin-top: 10px;">We wrote comprehensive multi-phase plans with step-by-step detail, worked through them one block at a time, and committed after each block with an agent-written message. That made debugging easier, and the history became the documentation.</p>
+      <p style="margin-top: 10px;">And GitHub’s CI caught real bugs the local run missed: a client type error Vitest never typechecks (CI’s typecheck gate caught it), a CSS bundle-budget overrun nobody noticed locally.</p>
+    </div>
+    <div class="grid grid-2" style="align-content: center; gap: 12px;">
+      <div class="panel-plain" style="text-align: center;"><div class="bignum">467</div><div class="statlabel">commits and counting</div></div>
+      <div class="panel-plain" style="text-align: center;"><div class="bignum">45</div><div class="statlabel">feature specs</div></div>
+      <div class="panel-plain" style="text-align: center;"><div class="bignum">39</div><div class="statlabel">ADRs</div></div>
+      <div class="panel-plain" style="text-align: center;"><div class="bignum" style="font-size: clamp(26px, 3.4vw, 38px);">1,983</div><div class="statlabel">tests, both suites green</div></div>
+    </div>
+  </div>
+  <div class="footer-note"><span>nearing 500 commits · the log is the handoff · AGENTS.md is the front door</span></div>
+</section>
+
+<!-- 11 · CHALLENGE 2 -->
+<section class="slide" id="s12" data-title="12 · Hallucinations">
+  <div class="navtag">12 / 14</div>
+  <div class="kicker"><span class="eyebrow">Challenge 2 · when the agents were wrong</span><span class="no">symptom, cause, fix</span></div>
+  <h2>Hallucinations</h2>
+  <div class="cols cols-2" style="margin-top: 8px;">
+    <table class="hall">
+      <thead>
+        <tr><th>Story</th><th>What went wrong</th><th>Why (the code)</th><th>The fix</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Double-encoded bodies</td>
+          <td>The app claimed every save worked. Nothing reached the server. Silent no-ops at three call sites.</td>
+          <td>The old helpers took a string body, so three call sites did <code>JSON.stringify()</code>. The new <code>request()</code> serialised it again: JSON inside JSON, and the server read a string where it expected an object.</td>
+          <td><code>body</code> is typed <code>object</code>; that version doesn’t compile. The typecheck gate in <code>make test</code> (spec 37 step 0.1) catches the whole class, not just these three.</td>
+        </tr>
+        <tr>
+          <td>Unreachable <code>onEnded</code></td>
+          <td>Chapter auto-advance was green in tests and dead in one-file books. The playhead just sat at the boundary.</td>
+          <td>The <code>onEnded</code> branch could never be reached for single-file books. The tests had fabricated an event order that never occurs, so the suite “proved” nothing.</td>
+          <td>Deleted the branch; no extra guard. The player was rebuilt around one chapter model (ADR 017).</td>
+        </tr>
+        <tr>
+          <td>Christmas Carol, recommended as miscellany</td>
+          <td>Discover answered arbitrary results. One book seeded the catch-all genre “misc”, and users were handed a junk drawer of suggestions.</td>
+          <td>The <code>misc</code> genre entered the recommendation seed at weight 1.0, so <code>expand()</code> browsed <code>subject:misc</code>. A later agent-co-authored provider refactor pooled incompatible fields and broke Open Library title search.</td>
+          <td>Catch-all excluded from seeds; deterministic tie-break; regression test (<code>31a03a8</code>). Pooling reworked with tests and ADR 039 (<code>39ab7e7</code>). Genre and misc fallbacks restored (<code>605d391</code>, <code>23b1ae9</code>).</td>
+        </tr>
+      </tbody>
+    </table>
+    <figure><img class="shot" src="assets/now-discover-desktop.png" alt="Discover, working - the path that had quietly broken"><figcaption><b>Discover, working</b> - after the fix, in production. The path had quietly broken after every suite said green.</figcaption></figure>
+  </div>
+  <div class="footer-note"><span>Verification isn’t paranoia - it’s Tuesday · specs 37 · 41 · 42 · 45 exist because agents don’t get tired, they get confident</span></div>
+</section>
+
+<!-- 12 · CHALLENGE 3 -->
+<section class="slide" id="s13" data-title="12 · Challenge 3 - the offline split">
+  <div class="navtag">13 / 14</div>
+  <div class="kicker"><span class="eyebrow">Challenge 3 · the Android app</span><span class="no">a replica, not a second server</span></div>
+  <h2>Offline without<br>becoming a second server</h2>
+  <div class="cols cols-2r" style="margin-top: 8px;">
+    <div>
+      <p>The app on the phone is <b>a careful copy</b> of the library, keyed per server; rows and files agree on whose “book #7” it is. It downloads for the plane, plays with the screen off, and pushes progress on reconnect.</p>
+      <p style="margin-top: 10px;">No second database to keep in sync, no duplicate enrichment, no drift to babysit - <b>the server is the source of truth; the phone is its replica</b>. If everything were reimplemented client-side, the server would be pointless; the design keeps exactly enough on the device to feel native, nothing more.</p>
+      <p class="small" style="margin-top: 10px;">Lock-screen controls took real work (media session, WebView); kids accounts get one visibility predicate honoured everywhere, including the offline replica.</p>
+    </div>
+    <figure><img class="phone" src="assets/now-detail-phone.png" alt="Book detail on the phone - chapters, progress, the replica at work"><figcaption><b>The detail view</b> - downloaded, offline, same book anywhere.</figcaption></figure>
+  </div>
+  <div class="footer-note"><span>Specs 26 · 29 · 30 · 38 · 44 · the per-server key fix (cee4ba2) and the per-server audio directories (spec 41 card 1)</span></div>
+</section>
+
+<!-- 13 · LINKS -->
+<section class="slide" id="s14" style="justify-content: center;" data-title="14 · Try it">
+  <div class="navtag">14 / 14</div>
+  <div class="eyebrow">Questions?</div>
+  <h1 style="font-size: clamp(40px, 5.6vw, 64px); margin-top: 14px;">Try it.</h1>
+  <div class="cols cols-2" style="margin-top: 18px; align-items: start;">
+    <div class="panel-plain">
+      <p class="statlabel" style="margin-bottom: 8px;">The production demo</p>
+      <p><a class="link" href="https://audiobook-manager.onrender.com">audiobook-manager.onrender.com</a></p>
+      <p class="statlabel" style="margin: 14px 0 8px;">The repository</p>
+      <p><a class="link" href="https://github.com/BLedge99/audiobook-manager">github.com/BLedge99/audiobook-manager</a></p>
+      <p class="small" style="margin-top: 14px;">467 commits · 45 specs · 39 ADRs · one household</p>
+    </div>
+    <div style="text-align: center;">
+      <img class="qr" style="width: 210px;" src="assets/qr-demo.png" alt="QR code - audiobook-manager.onrender.com">
+    </div>
+  </div>
+</section>
+
+<!-- DECK:END -->
+</div>
+
+<!-- ===== EDIT MODE UI (hidden unless E / ?edit=1) ===== -->
+<div id="editUi" aria-hidden="true">
+  <div id="editToolbar">
+    <span style="font-weight: 800;">EDIT MODE</span>
+    <button id="btnTextMode" class="on" title="Click text to edit in place">✎ Text</button>
+    <button id="btnTagMode" title="Drag a rectangle over anything, tag it with an instruction">▢ Tag</button>
+    <button id="btnListTags">Tags <span class="count" id="tagCount">0</span></button>
+    <button id="btnSaveAll" title="Writes this file back to disk with your edits, plus edits.json">💾 Save</button>
+    <button id="btnExitEdit" title="Esc also exits">✕</button>
+  </div>
+  <div id="tagLayer"><div id="tagRect"></div></div>
+  <div id="tagPopover">
+    <div style="font-weight: 800; margin-bottom: 6px;">Tag this area</div>
+    <textarea id="tagInstruction" placeholder="e.g. make this a darker shade of pink"></textarea>
+    <select id="tagType">
+      <option value="colour">colour</option>
+      <option value="image">image</option>
+      <option value="layout">layout</option>
+      <option value="copy">copy / wording</option>
+      <option value="other">other</option>
+    </select>
+    <button id="btnAddTag">Tag it</button>
+  </div>
+  <div id="tagsPanel"></div>
+</div>
+
+<script>
+/* ===== navigation (both modes) ===== */
+const slides = [...document.querySelectorAll('.slide')];
+const dots = document.querySelector('.progressdots');
+const counterbar = document.getElementById('bar');
+slides.forEach((s, i) => {
+  const a = document.createElement('a');
+  a.href = '#' + s.id; a.title = s.dataset.title || ('Slide ' + (i + 1)); dots.appendChild(a);
+});
+let idx = 0;
+const setBar = () => { counterbar.style.width = ((idx + 1) / slides.length * 100) + '%'; };
+const go = (i) => { idx = Math.max(0, Math.min(slides.length - 1, i)); slides[idx].scrollIntoView({ behavior: 'auto', block: 'start' }); setBar(); };
+window.addEventListener('keydown', (e) => {
+  const editingField = e.target.isContentEditable;
+  if (e.key === 'Escape') { if (document.body.classList.contains('editing')) exitEdit(); return; }
+  if (!editingField && (e.key === 'e' || e.key === 'E')) { toggleEdit(); return; }
+  if (editingField) return;
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(idx + 1); }
+  if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(idx - 1); }
+  if (e.key === 'Home') go(0);
+  if (e.key === 'End') go(slides.length - 1);
+});
+const obs = new IntersectionObserver((entries) => {
+  for (const entry of entries) if (entry.isIntersecting) { idx = slides.indexOf(entry.target); setBar(); }
+}, { threshold: 0.5 });
+slides.forEach((s) => obs.observe(s));
+setBar();
+
+/* ===== edit mode ===== */
+function editableEls() {
+  return [...document.querySelectorAll('#deckMarkup h1, #deckMarkup h2, #deckMarkup h3, #deckMarkup p, #deckMarkup li, #deckMarkup .chip, #deckMarkup figcaption, #deckMarkup .sub, #deckMarkup .statlabel, #deckMarkup .bignum, #deckMarkup .eyebrow')];
+}
+function enterEdit() {
+  document.body.classList.add('editing');
+  editableEls().forEach(el => { el.setAttribute('contenteditable', 'true'); el.setAttribute('data-editable', '1'); el.spellcheck = true; });
+}
+function exitEdit() {
+  document.body.classList.remove('editing', 'tagging');
+  document.querySelectorAll('[contenteditable]').forEach(el => { el.removeAttribute('contenteditable'); el.removeAttribute('data-editable'); el.blur(); });
+}
+function toggleEdit() { document.body.classList.contains('editing') ? exitEdit() : enterEdit(); }
+if (new URLSearchParams(location.search).has('edit')) enterEdit();
+
+/* tagging state */
+const tagLayer = document.getElementById('tagLayer');
+const tagRect = document.getElementById('tagRect');
+const popover = document.getElementById('tagPopover');
+const tagsPanel = document.getElementById('tagsPanel');
+const instructionEl = document.getElementById('tagInstruction');
+const typeEl = document.getElementById('tagType');
+const tagCountEl = document.getElementById('tagCount');
+let tags = [];
+try { tags = JSON.parse(localStorage.getItem('audiobook-manager-deck-tags') || '[]'); } catch { tags = []; }
+let dragStart = null, currentRect = null;
+
+/* affordance: the always-visible corner pencil toggles edit mode */
+document.getElementById('editAffordance')?.addEventListener('click', toggleEdit);
+document.getElementById('btnTextMode').addEventListener('click', (ev) => {
+  document.body.classList.remove('tagging');
+  document.getElementById('btnTextMode').classList.add('on');
+  document.getElementById('btnTagMode').classList.remove('on');
+  ev.stopPropagation();
+});
+document.getElementById('btnTagMode').addEventListener('click', (ev) => {
+  document.body.classList.add('tagging');
+  document.getElementById('btnTagMode').classList.add('on');
+  document.getElementById('btnTextMode').classList.remove('on');
+  ev.stopPropagation();
+});
+document.getElementById('btnExitEdit').addEventListener('click', exitEdit);
+document.getElementById('btnListTags').addEventListener('click', () => tagsPanel.classList.toggle('has-tags'));
+
+function renderTags() {
+  tagCountEl.textContent = String(tags.length);
+  tagsPanel.innerHTML = tags.length
+    ? '<div style="font-weight:800; margin-bottom:4px;">Tagged edits</div>' + tags.map((t, i) =>
+        `<div class="titem"><b>${i + 1}. ${t.slideId}</b> <span style="color:#a8a29e">[${t.type}]</span><br>${escapeHtml(t.instruction)}</div>`).join('')
+    : '<div>No tagged edits yet.</div>';
+  tagsPanel.classList.toggle('has-tags', tags.length > 0);
+  localStorage.setItem('audiobook-manager-deck-tags', JSON.stringify(tags));
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+renderTags();
+
+tagLayer.addEventListener('pointerdown', (e) => {
+  if (!document.body.classList.contains('tagging')) return;
+  dragStart = { x: e.clientX, y: e.clientY };
+  currentRect = { x: e.clientX, y: e.clientY, w: 0, h: 0 };
+  tagRect.style.display = 'block';
+  tagLayer.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+tagLayer.addEventListener('pointermove', (e) => {
+  if (!dragStart) return;
+  currentRect = {
+    x: Math.min(dragStart.x, e.clientX), y: Math.min(dragStart.y, e.clientY),
+    w: Math.abs(e.clientX - dragStart.x), h: Math.abs(e.clientY - dragStart.y),
+  };
+  tagRect.style.left = currentRect.x + 'px'; tagRect.style.top = currentRect.y + 'px';
+  tagRect.style.width = currentRect.w + 'px'; tagRect.style.height = currentRect.h + 'px';
+});
+tagLayer.addEventListener('pointerup', () => {
+  const r = currentRect; dragStart = null;
+  if (!r || r.w < 12 || r.h < 12) { tagRect.style.display = 'none'; return; }
+  popover.style.display = 'block';
+  const px = Math.min(r.x + r.w + 12, window.innerWidth - 340), py = Math.max(12, Math.min(r.y, window.innerHeight - 220));
+  popover.style.left = px + 'px'; popover.style.top = py + 'px';
+  instructionEl.value = ''; instructionEl.focus();
+});
+
+function elementsUnder(r) {
+  const hits = [];
+  const skip = new Set(['tagLayer', 'tagRect']);
+  for (const el of document.querySelectorAll('#deckMarkup *')) {
+    if (el.closest('#editUi')) continue;
+    const b = el.getBoundingClientRect();
+    if (b.width === 0 || b.height === 0) continue;
+    if (b.right < r.x || b.bottom < r.y || b.left > r.x + r.w || b.top > r.y + r.h) continue;
+    const area = b.width * b.height;
+    const cs = getComputedStyle(el);
+    hits.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      cls: (el.getAttribute('class') || '').slice(0, 80) || null,
+      text: (el.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 80),
+      computed: { background: cs.backgroundColor, color: cs.color, fontSize: cs.fontSize, borderColor: cs.borderColor, width: Math.round(b.width), height: Math.round(b.height) },
+      area,
+    });
+  }
+  hits.sort((a, b) => a.area - b.area);
+  return hits.slice(0, 15).map(({ area, ...h }) => h);
+}
+document.getElementById('btnAddTag').addEventListener('click', () => {
+  if (!currentRect) return;
+  const instruction = instructionEl.value.trim();
+  if (instruction) {
+    const px = currentRect.x + 2, py = currentRect.y + 2;
+    let slide = null;
+    for (const s of document.querySelectorAll('#deckMarkup .slide')) {
+      const sr = s.getBoundingClientRect();
+      if (px >= sr.x && px <= sr.x + sr.width && py >= sr.y && py <= sr.y + sr.height) { slide = s; break; }
+    }
+    const slideRect = slide ? slide.getBoundingClientRect() : { x: 0, y: 0, width: 1, height: 1 };
+    tags.push({
+      id: 'tag-' + Date.now(),
+      slideId: slide ? slide.id : 'unknown',
+      rectPct: {
+        x: +(((currentRect.x - slideRect.x) / slideRect.width) * 100).toFixed(2),
+        y: +(((currentRect.y - slideRect.y) / slideRect.height) * 100).toFixed(2),
+        w: +((currentRect.w / slideRect.width) * 100).toFixed(2),
+        h: +((currentRect.h / slideRect.height) * 100).toFixed(2),
+      },
+      type: typeEl.value,
+      instruction,
+      elements: elementsUnder(currentRect),
+      createdAt: new Date().toISOString(),
+    });
+    renderTags();
+  }
+  popover.style.display = 'none';
+  tagRect.style.display = 'none';
+  currentRect = null;
+});
+
+/* save: serialize clean clone back into index.html + download edits.json */
+function cleanCloneHTML() {
+  const clone = document.documentElement.cloneNode(true);
+  clone.classList.remove('editing');
+  clone.querySelector('body')?.classList.remove('editing');
+  clone.querySelectorAll('[contenteditable], [data-editable], [spellcheck]').forEach(el => { el.removeAttribute('contenteditable'); el.removeAttribute('data-editable'); el.removeAttribute('spellcheck'); });
+  // #editUi stays in the file; it is invisible in show mode by design.
+  clone.querySelectorAll('.progressdots').forEach(n => (n.innerHTML = ''));
+  clone.querySelectorAll('#bar').forEach(n => (n.style.width = '0%'));
+  return '<!DOCTYPE html>\n' + clone.outerHTML;
+}
+async function saveAll() {
+  const html = cleanCloneHTML();
+  try {
+    if (window.showSaveFilePicker) {
+      const handle = await window.showSaveFilePicker({ suggestedName: 'index.html', types: [{ description: 'HTML deck', accept: { 'text/html': ['.html'] } }] });
+      const writable = await handle.createWritable();
+      await writable.write(html);
+      await writable.close();
+    } else {
+      const blob = new Blob([html], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'index.html'; a.click();
+      URL.revokeObjectURL(a.href);
+    }
+  } catch (err) { alert('Deck save cancelled or failed: ' + err.message); return; }
+  const editsBlob = new Blob([JSON.stringify(tags, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(editsBlob); a.download = 'edits.json'; a.click();
+  URL.revokeObjectURL(editsBlob);
+}
+document.getElementById('btnSaveAll').addEventListener('click', saveAll);
+</script>
+</body>
+</html>
