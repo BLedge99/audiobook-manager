@@ -1,96 +1,102 @@
 # Video Outline
 
 > **Theme**: TBD at Checkpoint Plan (top pick: `warm-keynote`, or a custom `app-light` theme from the app's tokens — Fredoka + Nunito, cream ground, raspberry accent)
-> **Total length**: ~80s (voiceover ~200 words at natural pace)
-> **Chapters**: 5 / 13 steps
+> **Total length**: ~92s (voiceover ~233 words at natural pace, ~152 wpm)
+> **Chapters**: 5 / 14 steps
 
 ---
 
-## 1. coldopen - the parents problem (2 steps · ~8s)
+## 1. coldopen - the mess (2 steps · ~10s)
 
 **Info pool** (chapter agent pulls as needed for captions / side notes):
-- Quote: "Nobody could say where any book lived" — from the script (showcase slide 2, showcase/index.html)
-- Comparison: many platforms/apps vs one place — from showcase slide 2 (piece 4/platforms + library loans + VLC rips)
-- Caption: "Audible · Google Play Books · Libri.fm · VLC" — showcase slide 2
+- Quote: "Audiobooks are a mess." — script.md §1
+- Quote: "There's no way to unify your library." — script.md §1
+- Comparison: many platforms/apps vs one place — from script.md §1 + showcase/index.html slide 2 (piece 4/platforms + library loans + VLC rips)
+- Caption: "Audible · Google Play Books · Libri.fm · VLC" — showcase slide 2 / script.md §1 (none of them support raw audio files)
 
 **Development plan**:
-- step 1 (~4s) — Full-screen line: four app icons scattered over a dark floor, "Nobody could say where any book lived."
-- step 2 (~4s) — "So I built one." fills the frame, raspberry accent
+- step 1 (~5s) — Full-screen line: "Audiobooks are a mess." Four app icons (Audible / Google Play Books / Libri.fm / VLC) scattered over a dark floor; each one bounces off the same raw audio file
+- step 2 (~5s) — "There's no way to unify your library." → cut to raspberry accent: "So I built one." fills the frame
 
 Voiceover excerpt:
-> "My parents were drowning in audio apps… So I built one."
+> "Audiobooks are a mess. Too many separate platforms, none of which support good old raw audio files. There's no way to unify your library."
 
 ---
 
-## 2. the-fix - point it at the folders (3 steps · ~16s)
+## 2. the-fix - point it at your files (3 steps · ~21s)
 
 **Info pool**:
-- Quote: "Audiobook Manager is an app for a household." — article.md §What it is
-- Process: folders in → scanned files → covers/descriptions/series/progress out — article.md §What it is
-- API facts: Open Library + LibriVox (no key), Google Books (optional key) — article.md §Which API it uses
+- Quote: "Point Audiobook Manager at your audiobook files and it does the rest." — script.md §2
+- Process: files in → read → covers/descriptions fetched (Open Library + Google Books) → series grouped → per-book positions tracked — script.md §2
+- API facts (as voiced): Open Library + Google Books — script.md §2. For accuracy: LibriVox is also in the provider order — article.md §Which API it uses. Keep the on-screen caption to the two the script names
+- Fact: it tracks playback position "for each and every book you listen to, so you can always pick up where you left off" — script.md §2
 - Fact: runs on an always-on home machine — article.md §The idea, and §Who it is for
 
 **Development plan**:
-- step 1 (~5s) — "Point Audiobook Manager at the folders your books live in." A directory listing assembles itself on screen (N-level tree)
-- step 2 (~7s) — Scan sweep: tags read → covers fetched (Open Library / Google Books / LibriVox) → series grouped → resume positions appear
-- step 3 (~4s) — "It does the rest." The library grid resolves
+- step 1 (~6s) — "Point Audiobook Manager at your audiobook files." A directory tree assembles itself on screen (N-level tree)
+- step 2 (~9s) — Scan sweep: files read → covers & descriptions fetched (Open Library / Google Books) → series grouped → a position marker lands on every in-progress book
+- step 3 (~6s) — "It does the rest." The library grid resolves; caption "always pick up where you left off"
 
 Voiceover excerpt:
-> "…it does the rest: reads the files, fetches covers and descriptions…"
+> "So I built one. Point Audiobook Manager at your audiobook files and it does the rest: reads the files, fetches covers and descriptions…"
 
 ---
 
-## 3. inside - a shelf for everyone (4 steps · ~32s)
+## 3. inside - covers, cards and one shelf per person (4 steps · ~38s)
 
 **Info pool**:
-- Fact: each profile keeps its own place, favourites, history — article.md §Main features (One profile each)
-- Fact: adult sets age band per child; too-grown-up books don't show — article.md §Main features (Kids, gently)
-- Fact: on Android, books are taken with the phone; progress catches up on reconnect — article.md §Main features (Works away from home)
-- Feature notes: chapters, speed, sleep timer; grid of covers; continue listening; shelves by genre and series; typed search — article.md §Main features (Browse / Press play)
-- Source figure: detail dialog with player + chapters; phone mock screens — showcase/assets/now-detail-phone.png
+- Fact: books are displayed as covers on shelves by genre and series, with a "Continue listening" row — script.md §3 + article.md §Main features (Browse your books)
+- Fact / Press play: "a card opens showing the player, as well as the book's chapters, and information" — script.md §3 + article.md §Main features (Press play)
+- Fact: progress is synced **via the remote server** — script.md §3. Stop on the phone, carry on on the laptop
+- Fact: every household member gets their own profile; kids accounts set an age band, so inappropriate books don't show — script.md §3 + article.md §Main features (One profile each / Kids, gently)
+- Fact: on Android, books can be downloaded offline — "listening position is saved locally and progress is synced when you're back" — script.md §3 + article.md §Main features (Works away from home)
+- Feature notes: chapters, speed, sleep timer; typed search — article.md §Main features (Browse / Press play)
+- Source figure: detail card dialog with player + chapters (phone mock) — showcase/assets/now-detail-phone.png
 
 **Development plan**:
-- step 1 (~7s) — Grid of covers; the "continue listening" row surfaces first, one card foreground ("Picks up where you left off" as on-screen caption) (mock copy)
-- step 2 (~7s) — Play / chapters / sleep timer inset — the detail dialog; chapter list + timer glyph (mock UI)
-- step 3 (~6s) — Adult profile vs kids profile side by side; books with age 14+ do not appear for the child; band badge on the kid's profile (mock copy)
-- step 4 (~12s) — Phone outline, offline mode on: a book card downloads checkmark; progress bar fills offline; on reconnect a sync sweep pushes the position back
+- step 1 (~9s) — Grid of covers on shelves sorted by genre/series; the "Continue listening" row surfaces first; on-screen caption "Books are displayed as covers, sorted on shelves by genre and series"
+- step 2 (~10s) — "Press play" — the card opens: player, chapters, and book information; chapter list + sleep timer glyph (mock UI / now-detail-phone.png)
+- step 3 (~7s) — Adult profile vs kids profile side by side; age band badge on the kid's profile; too-grown-up books absent from the kid's grid (mock copy)
+- step 4 (~12s) — Cross-device: phone stops mid-chapter, laptop picks it up (position pushed via the remote server). Then Android outline, offline mode on: download checkmark appears on a card, the progress bar fills offline; on reconnect, a sync sweep pushes the position back
 
 Voiceover excerpt:
-> "Everyone in the house gets their own profile… the kids get an age band…"
+> "Books are displayed as covers, sorted on shelves by genre and series… Everyone in the house gets their own profile; kids accounts set an age band…"
 
 ---
 
-## 4. the-fine-print - the boring details (2 steps · ~12s)
+## 4. the-fine-print - the boring details (3 steps · ~17s)
 
 **Info pool**:
-- Fact: files stay read-only — article.md §What it is ("The files themselves are treated as read-only")
-- Fact: no adverts, no subscriptions, nothing leaves your network unless you look covers up — article.md §The idea
-- Fact: shipped Sept 22 → Nov 17 2026, 467 commits — git log
-- Fact: GDPR-compliant export/erase; encrypted backups weekly — specs 41-45 (repo)
+- Fact: files stay read-only — script.md §4 + article.md §What it is ("The files themselves are treated as read-only") and §Privacy and your data
+- Fact: works with the internet off — script.md §4 + article.md §Privacy and your data / §Main features (Better pictures)
+- Fact: online cover lookups send book details only — never anything about your household — script.md §4 + article.md §Privacy and your data / §Which API it uses ("Queries carry book details only")
+- Fact: GDPR retention policy — export and erase on request — script.md §4 + article.md §Privacy and your data (GDPR; specs 44/retention docs; GDPR-AUDIT.md)
+- Fact: shipped Sept 22 → Nov 17 2026, ~470 commits — git log (467+)
 
 **Development plan**:
 - step 1 (~6s) — "The files stay read-only." A folder property panel shows read-only ticks; a book file is untouched in the background
-- step 2 (~6s) — "September → November. 467 commits." Counter ticks up to 467 next to a capsule-outline bookstack
+- step 2 (~6s) — "It works with the internet off." Wi-Fi glyph off; covers still show from cache, a downloaded book plays; caption "online lookups send book details only"
+- step 3 (~5s) — "Erase and export on request." GDPR shield/document glyph; then "September → November. About 470 commits." Counter ticks up beside a capsule-outline bookstack
 
 Voiceover excerpt:
-> "The files stay read-only… Shipped September to November, about 470 commits."
+> "The files stay read-only. It works with the internet off… Data is protected under the GDPR retention policy — erase and export on request."
 
 ---
 
-## 5. try-it - scan the QR (2 steps · ~14s)
+## 5. try-it - scan the QR (2 steps · ~6s)
 
 **Info pool**:
-- Fact: free web demo hosted at audiobook-manager.onrender.com — article.md §What it is (hosted free demo) + showcase/index.html slide 14
-- CTA: scan the QR for the free web demo — script.md
+- Fact: a free web demo of the app is hosted online; it is what the QR points to — script.md §5 + article.md §Which API it uses (hosted demo) + showcase/index.html slide 14 (audiobook-manager.onrender.com — on-screen URL, not voiced)
+- CTA: "Want to see it? Scan the QR for the online web demo and start listening!" — script.md §5
 - Constraint: web works in Safari (no iPhone app) — article.md §What it deliberately does not do
 - Source figure: qr-demo.png — showcase/assets
 
 **Development plan**:
-- step 1 (~8s) — "Scan the QR." The QR fills the frame, phone outline behind it, audiobook-manager.onrender.com in plain Nunito on the side
-- step 2 (~6s) — "Point it at a folder of LibriVox books and it stops looking like a demo." The shelf grid assembles behind the QR
+- step 1 (~4s) — "Want to see it?" The QR fills the frame, phone outline behind it, audiobook-manager.onrender.com in plain Nunito on the side
+- step 2 (~2s) — "Start listening." The QR cracks like a book opening; first cover of a LibriVox shelf rises behind it
 
 Voiceover excerpt:
-> "Want to see it? Scan the QR for the free web demo."
+> "Want to see it? Scan the QR for the online web demo and start listening!"
 
 ---
 
@@ -105,14 +111,15 @@ Voiceover excerpt:
 - eraSep23-desktop.png for reference (Sep 23 scaffold: hero + folders + grid) — showcase/assets ✓
 
 ### 3. inside
-- now-detail-phone.png (detail dialog) — showcase/assets ✓
+- now-detail-phone.png (detail card: player + chapters + info) — showcase/assets ✓
 - hero-library-phone.png (phone mock) — showcase/assets ✓
 - era3-android-light.svg (Android outline) — showcase/assets ✓
-- Kids/profile side-by-side and offline downloads — CSS illustration required
+- Kids/profile side-by-side, cross-device hand-off, offline downloads — CSS illustration required
 
 ### 4. the-fine-print
 - assets/fonts/Fredoka + Nunito — showcase/assets/fonts ✓
 - README commit counter — CSS counter + capsule line-art
+- Wi-Fi-off and GDPR export/erase glyphs (shield / document) — build (CSS/SVG)
 
 ### 5. try-it
 - qr-demo.png — showcase/assets ✓

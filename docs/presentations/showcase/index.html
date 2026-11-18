@@ -326,7 +326,10 @@ body.editing #tagsPanel.has-tags { display: block; }
   <div class="navtag">04 / 14</div>
   <div class="kicker"><span class="eyebrow">The build · 2 of 6</span><span class="beat">OCT 2</span></div>
   <h2>The first full system</h2>
-  <figure style="margin-top: 8px;"><img class="diagram" style="max-height: 58vh" src="assets/era2-first-system-light.svg" alt="Diagram: phones and laptops on the LAN talk to one container serving both the app and the API; media read-only; SQLite at home"><figcaption><b>The shape the household actually uses</b> - one container serving app + API on :3000, read-only media, one password, profiles, resume positions, tests and docs - all landed Oct 2.</figcaption></figure>
+  <div class="cols cols-2" style="margin-top: 8px;">
+    <figure><img class="diagram" style="max-height: 52vh" src="assets/era2-first-system-light.svg" alt="Diagram: phones and laptops on the LAN talk to one container serving both the app and the API; media read-only; SQLite at home"><figcaption><b>The shape the household actually uses</b> - one container serving app + API on :3000, read-only media, one password, profiles, resume positions, tests and docs - all landed Oct 2.</figcaption></figure>
+    <figure><img class="shot" src="assets/eraSep23-desktop.png" alt="Sep 23 build: Browse your books, folders above an all-titles grid"><figcaption><b>The library page at that point</b> - the last capture that survives (Sep 23, <code>771731c</code>). On Oct 2 a password gate sat in front of this grid and per-person resume positions joined it; no capture of that exact build was kept.</figcaption></figure>
+  </div>
   <div class="footer-note"><span>5ebc03a (single container) · 467307c (one scanner, ADR 005) · 4442789 (first security suite) · 99f6dbb (household gate)</span></div>
 </section>
 
@@ -335,7 +338,17 @@ body.editing #tagsPanel.has-tags { display: block; }
   <div class="navtag">05 / 14</div>
   <div class="kicker"><span class="eyebrow">The build · 3 of 6</span><span class="beat">OCT 12 → 21</span></div>
   <h2>Building the app</h2>
-  <figure style="margin-top: 8px;"><img class="diagram" src="assets/era3-android-light.svg" alt="Diagram: Android Capacitor WebView, downloads on device, IndexedDB replica, connecting over the LAN to the same home server"><figcaption><b>Android first, then everything</b> - Oct 12: the shell, downloads, background audio. Oct 18: a full restyle in a day (the routes never moved). Oct 19-21: offline screens as first-class states.</figcaption></figure>
+  <div class="cols cols-2" style="margin-top: 8px;">
+    <figure><img class="diagram" style="max-height: 52vh" src="assets/era3-android-light.svg" alt="Diagram: Android Capacitor WebView, downloads on device, IndexedDB replica, connecting over the LAN to the same home server"><figcaption><b>Android first, then everything</b> - Oct 12: the shell, downloads, background audio. Oct 18: a full restyle in a day (the routes never moved). Oct 19-21: offline screens as first-class states.</figcaption></figure>
+    <div>
+      <div class="grid grid-3" style="gap: 10px; align-items: start;">
+        <figure><img class="shot" src="assets/eraSep23-phone.png" alt="Sep 23 prototype: full-width Scan library CTA, folders above an all-titles grid"><figcaption><b>Sep 23</b> - the prototype: full-width Scan CTA, folders above the books.</figcaption></figure>
+        <figure><img class="shot" src="assets/eraA-phone.png" alt="Oct 17 pre-restyle build: tabs wrap to two rows, Continue listening below the fold"><figcaption><b>Oct 17</b> - the pre-restyle build: tabs wrap to two rows, Continue listening sits below the fold.</figcaption></figure>
+        <figure><img class="shot" src="assets/gen0-phone-library-light.png" alt="After the restyle: search and chip rail, book cards with covers, dock navigation"><figcaption><b>Oct 18 onwards</b> - the restyle (gen-0): dock navigation, Continue listening first.</figcaption></figure>
+      </div>
+      <p class="small" style="margin-top: 10px;">Same phone width, same fixture books - three passes at the phone UI: prototype, pre-restyle, restyle.</p>
+    </div>
+  </div>
   <div class="footer-note"><span>f414560 (Sprint 1) · 73487d8 (Sprint 2) · 834856d + d4220e9 (the restyle) · spec 29 (offline) · spec 25 (enrichment)</span></div>
 </section>
 
@@ -344,7 +357,10 @@ body.editing #tagsPanel.has-tags { display: block; }
   <div class="navtag">06 / 14</div>
   <div class="kicker"><span class="eyebrow">The build · 4 of 6</span><span class="beat">OCT 22 → NOV 5</span></div>
   <h2>Preparing for the future</h2>
-  <figure style="margin-top: 8px;"><img class="diagram" src="assets/era5-postgres-light.svg" alt="Diagram: one data model, two histories - generated SQLite twin for home and tests, PostgreSQL on Supabase for production"><figcaption><b>Production left the house - carefully.</b> The Oct 29 migration to hosted Postgres (SQLite stayed at home and in CI), followed by a ten-phase GDPR pass, and an operator panel behind its own door on :3100.</figcaption></figure>
+  <div class="cols cols-2" style="margin-top: 8px;">
+    <figure><img class="diagram" style="max-height: 52vh" src="assets/era5-postgres-light.svg" alt="Diagram: one data model, two histories - generated SQLite twin for home and tests, PostgreSQL on Supabase for production"><figcaption><b>Production left the house - carefully.</b> The Oct 29 migration to hosted Postgres (SQLite stayed at home and in CI), followed by a ten-phase GDPR pass, and an operator panel behind its own door on :3100.</figcaption></figure>
+    <figure><img class="shot" src="assets/gen0-desktop-library-light.png" alt="After the restyle: light aero capsule design, dock navigation, Continue listening first"><figcaption><b>The library at the time</b> - the Oct 18 restyle build, captured Nov 14 (gen-0); unchanged by later work. Production left the house around it; the household's view barely noticed.</figcaption></figure>
+  </div>
   <div class="footer-note"><span>fe297ff…2010130 (Postgres day) · ce4bbc6 (GDPR, 10 phases) · 2bd0e2e (admin listener) · ADR 019 · ADR 022 · 05c4db5 (fixture scrub)</span></div>
 </section>
 
@@ -445,26 +461,38 @@ body.editing #tagsPanel.has-tags { display: block; }
   <div class="cols cols-2" style="margin-top: 8px;">
     <table class="hall">
       <thead>
-        <tr><th>Story</th><th>What went wrong</th><th>Why (the code)</th><th>The fix</th></tr>
+        <tr><th>Story</th><th>What went wrong</th><th>What fixed it</th><th>Why the agent missed it</th></tr>
       </thead>
       <tbody>
         <tr>
-          <td>Double-encoded bodies</td>
-          <td>The app claimed every save worked. Nothing reached the server. Silent no-ops at three call sites.</td>
-          <td>The old helpers took a string body, so three call sites did <code>JSON.stringify()</code>. The new <code>request()</code> serialised it again: JSON inside JSON, and the server read a string where it expected an object.</td>
-          <td><code>body</code> is typed <code>object</code>; that version doesn’t compile. The typecheck gate in <code>make test</code> (spec 37 step 0.1) catches the whole class, not just these three.</td>
+          <td>Saves that didn't save</td>
+          <td>Listening progress didn't save.</td>
+          <td>The save path now refuses anything but a plain object - caught at build time (spec 37 step 0.1).</td>
+          <td>Tests exercised the helper as written; the boundary between caller and server was never checked.</td>
         </tr>
         <tr>
-          <td>Unreachable <code>onEnded</code></td>
-          <td>Chapter auto-advance was green in tests and dead in one-file books. The playhead just sat at the boundary.</td>
-          <td>The <code>onEnded</code> branch could never be reached for single-file books. The tests had fabricated an event order that never occurs, so the suite “proved” nothing.</td>
-          <td>Deleted the branch; no extra guard. The player was rebuilt around one chapter model (ADR 017).</td>
+          <td>Playback stalled at chapter ends</td>
+          <td>Playback stopped at the end of each chapter.</td>
+          <td>Deleted the impossible branch; the player was rebuilt around one chapter model (ADR 017).</td>
+          <td>Tests invented an event order that never occurs, so the suite proved nothing.</td>
         </tr>
         <tr>
-          <td>Christmas Carol, recommended as miscellany</td>
-          <td>Discover answered arbitrary results. One book seeded the catch-all genre “misc”, and users were handed a junk drawer of suggestions.</td>
-          <td>The <code>misc</code> genre entered the recommendation seed at weight 1.0, so <code>expand()</code> browsed <code>subject:misc</code>. A later agent-co-authored provider refactor pooled incompatible fields and broke Open Library title search.</td>
-          <td>Catch-all excluded from seeds; deterministic tie-break; regression test (<code>31a03a8</code>). Pooling reworked with tests and ADR 039 (<code>39ab7e7</code>). Genre and misc fallbacks restored (<code>605d391</code>, <code>23b1ae9</code>).</td>
+          <td>The "misc" junk drawer</td>
+          <td>Discover recommended the "miscellany" bin for everything.</td>
+          <td>Catch-all genre excluded from seeds, deterministic order (<code>31a03a8</code>); the search pool broken by the fix was reworked (<code>39ab7e7</code>) and the fallbacks restored (<code>605d391</code>, <code>23b1ae9</code>).</td>
+          <td>Each fix solved its symptom; nobody re-read what the fix broke next.</td>
+        </tr>
+        <tr>
+          <td>Offline mode, six rounds of fixes in three weeks</td>
+          <td>The app hung on "Connecting…" forever, and soft-locked when you switched accounts.</td>
+          <td>Offline became a first-class state - the app never dead-ends (spec 29); each failure got its own fix.</td>
+          <td>Every test ran with good Wi-Fi. The failures only happen on bad networks and cold starts.</td>
+        </tr>
+        <tr>
+          <td>Covers that never loaded</td>
+          <td>Cover art never loaded on the phone.</td>
+          <td>Cache gate removed; provider covers allowed in the security policy; self-heal on startup.</td>
+          <td>Covers loaded on the dev machine. The failure lived in the device's cache and the host's security rules.</td>
         </tr>
       </tbody>
     </table>
