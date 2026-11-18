@@ -163,6 +163,9 @@ body.editing #editAffordance { display: none; }
 .grid-2 { grid-template-columns: 1fr 1fr; }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .qr { width: 168px; border: var(--stroke) solid var(--ink); border-radius: var(--r-pod-sm); background: #fff; padding: 9px; }
+.demo-video { display: block; width: 100%; max-height: 50vh; background: #000; }
+.qr-line { display: flex; gap: 14px; align-items: center; justify-content: center; margin-top: 14px; }
+.qr-line .qr { width: 96px; padding: 6px; }
 a.link { color: var(--rasp-ink); font-weight: 700; text-decoration: none; border-bottom: 2px solid var(--rasp-soft); }
 a.link:hover { color: var(--rasp); border-bottom-color: var(--rasp); }
 :focus-visible { outline: 3px solid var(--cobalt); outline-offset: 2px; border-radius: 2px; }
@@ -421,12 +424,15 @@ body.editing #tagsPanel.has-tags { display: block; }
         <li><span class="n">4</span><span>Have a look at your settings, pick a server, view your connected devices</span></li>
       </ol>
     </div>
-    <div class="panel-plain" style="text-align: center; align-items: center; display: flex; flex-direction: column; justify-content: center;">
-      <p class="small" style="font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);">If the network lets me down</p>
-      <p class="sub" style="margin: 12px 0 4px; font-weight: 700;">There’s a video of this exact flow.</p>
-      <img class="qr" src="assets/qr-demo.png" alt="QR code - audiobook-manager.onrender.com">
-      <p class="small" style="margin-top: 10px;">audiobook-manager.onrender.com</p>
-    </div>
+    <figure>
+      <video class="demo-video" controls playsinline preload="metadata" poster="video/phonewithcaptions-poster.png" src="video/phonewithcaptions.mp4"></video>
+      <figcaption><b>The flow, recorded on the phone</b> - Google sign-in to synced progress, offline downloads, and the server switch. Played here from the repo, no network needed.</figcaption>
+    </figure>
+  </div>
+  <div class="qr-line">
+    <p class="small" style="font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--ink-3);">Or open it on your phone</p>
+    <img class="qr" src="assets/qr-demo.png" alt="QR code - audiobook-manager.onrender.com">
+    <p class="small">audiobook-manager.onrender.com</p>
   </div>
   <div class="footer-note"><span>Sign in with the personal account everyone on the course has · the settings screen names the running build</span></div>
 </section>
